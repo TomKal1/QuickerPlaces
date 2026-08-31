@@ -1,0 +1,32 @@
+<Application x:Class="QuickerPlaces.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ThemeMode="Dark">
+    <!--
+        No StartupUri: App.xaml.cs constructs MainWindow itself so it can
+        inject MainViewModel/AppSettings via constructor. ShutdownMode is
+        left at its WPF default (OnLastWindowClose) — QuickerPlaces always
+        has exactly one window and closing it should exit the app (SI §1),
+        so the default behavior is exactly what's wanted, unlike the tray-
+        capable template this was forked from.
+
+        ThemeMode="Dark" is WPF's built-in Fluent theming (added in .NET 9,
+        no package needed) — without it, the window's title bar is drawn by
+        Windows using its own default chrome, which on a system with
+        "show accent color on title bars" turned on can render as a bright
+        accent color that clashes with everything below it (this is what
+        produced a red title bar over an otherwise dark/violet app). With
+        it, Windows draws a native dark title bar via DWM to match. It does
+        not affect anything client-side — every control type this template
+        styles in Theme.xaml is found in Application.Resources before WPF
+        ever falls back to Fluent's own defaults, so this only changes the
+        title bar, not the rest of the UI.
+    -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

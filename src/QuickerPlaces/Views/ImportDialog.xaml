@@ -1,0 +1,66 @@
+<Window x:Class="QuickerPlaces.Views.ImportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="Import Places"
+        Height="480" Width="560"
+        MinHeight="320" MinWidth="440"
+        WindowStartupLocation="CenterOwner"
+        d:DesignHeight="480" d:DesignWidth="560">
+    <!--
+        SI §6.6 — MainViewModel has already read the chosen file and
+        filtered out anything colliding with the current store (by alias
+        or resource, case-insensitive) before this dialog ever opens, so
+        every row shown here is guaranteed importable. Layout mirrors
+        ExportDialog.xaml closely, since the two flows are near-identical.
+    -->
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="These places don't collide with anything you already have. Choose which ones to bring in."
+                   FontSize="14" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button x:Name="SelectAllButton" Content="Select All" Margin="0,0,8,0" Click="SelectAllButton_Click" />
+            <Button x:Name="SelectNoneButton" Content="Select None" Click="SelectNoneButton_Click" />
+        </StackPanel>
+
+        <DataGrid x:Name="ItemsGrid" Grid.Row="2"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="" Width="36">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
+                                      HorizontalAlignment="Center" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Alias" Binding="{Binding Alias}" Width="*" IsReadOnly="True" />
+                <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="70" IsReadOnly="True" />
+                <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" IsReadOnly="True" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{StaticResource Status.Error}"
+                   TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" />
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button x:Name="CancelButton" Content="Cancel" Margin="0,0,8,0" IsCancel="True" Click="CancelButton_Click" />
+            <Button x:Name="ImportButton" Content="Import" Style="{StaticResource Button.Primary}" Click="ImportButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

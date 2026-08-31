@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>QuickerPlaces</RootNamespace>
+    <AssemblyName>QuickerPlaces</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+
+    <!--
+      ImplicitUsings is OFF, carried forward from the SystemApp template.
+      The template originally also turned on UseWindowsForms for a tray
+      icon's NotifyIcon, which made ImplicitUsings actively dangerous
+      (System.Windows.* vs System.Windows.Forms/System.Drawing collide on
+      short names like Application, MessageBox, Color). QuickerPlaces has
+      no tray icon and no WinForms dependency (folder picking uses
+      Microsoft.Win32.OpenFolderDialog, a native WPF API), so that hazard
+      no longer applies — this is now just a style choice: every file
+      declares its own explicit `using`s rather than relying on the SDK's
+      implicit global set, which keeps each file's dependencies visible at
+      a glance.
+    -->
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <Company>QuickerPlaces</Company>
+    <Product>QuickerPlaces</Product>
+
+    <!--
+      Embeds AppIcon.ico as the compiled exe's Win32 icon resource — what
+      Explorer, the taskbar (running and pinned), and Alt+Tab show by
+      default. This alone does NOT make it available to XAML via a pack
+      URI, hence the separate <Resource> item below, which is what lets
+      Theme.xaml's global Window style set Icon="pack://application:,,,/
+      Resources/AppIcon.ico" for every window at runtime.
+    -->
+    <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\AppIcon.ico" />
+  </ItemGroup>
+
+</Project>

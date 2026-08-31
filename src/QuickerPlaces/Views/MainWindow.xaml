@@ -1,0 +1,209 @@
+<Window x:Class="QuickerPlaces.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:converters="clr-namespace:QuickerPlaces.Converters"
+        mc:Ignorable="d"
+        Title="{Binding AppName}"
+        Height="650" Width="1000"
+        MinHeight="200" MinWidth="700"
+        WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded"
+        d:DesignHeight="650" d:DesignWidth="1000">
+
+    <Window.Resources>
+        <converters:BoolToGridLengthConverter x:Key="BoolToGridLengthConverter" />
+        <converters:CollectionCountToVisibilityConverter x:Key="CollectionCountToVisibilityConverter" />
+
+        <!--
+            Shared per-row/per-bubble context menu content. A ContextMenu is
+            shown in its own Popup, not the visual/logical tree it's
+            attached to, so its content can't reach the row/bubble via
+            ordinary DataContext inheritance — every binding below goes
+            through PlacementTarget explicitly instead (deliberately not
+            relying on ContextMenu's own DataContext at all, which is a
+            well-known WPF gray area): Tag on the row/bubble is bound to
+            the window's MainViewModel for the Command half, and
+            PlacementTarget.DataContext (the row/bubble's own PlaceViewModel)
+            supplies the CommandParameter half.
+        -->
+        <ContextMenu x:Key="PlaceContextMenu">
+            <MenuItem Header="Open"
+                      Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      FontWeight="Bold" />
+            <MenuItem Header="Rename Alias"
+                      Command="{Binding PlacementTarget.Tag.RenameAliasCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Edit Path/URL"
+                      Command="{Binding PlacementTarget.Tag.EditResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Toggle Favourite"
+                      Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <Separator />
+            <MenuItem Header="Remove"
+                      Command="{Binding PlacementTarget.Tag.RemoveCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+        </ContextMenu>
+
+        <!-- SI §6.4 — a bubble's own right-click menu offers removal directly, without going back to the grid. Open is included too, for convenience. -->
+        <ContextMenu x:Key="BubbleContextMenu">
+            <MenuItem Header="Open"
+                      Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      FontWeight="Bold" />
+            <MenuItem Header="Remove from Favourites"
+                      Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+        </ContextMenu>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <!--
+                RowDefinition isn't a FrameworkElement, so it doesn't inherit
+                DataContext the way a normal element does — a plain
+                "{Binding IsGridExpanded}" here would silently fail to find
+                a source. Binding via ElementName to the root Grid sidesteps
+                that (it resolves by name in the XAML namescope, then reads
+                *that* element's DataContext explicitly), which is the
+                standard, reliable way to data-bind a RowDefinition.
+            -->
+            <RowDefinition Height="{Binding DataContext.IsGridExpanded, ElementName=RootGrid, Converter={StaticResource BoolToGridLengthConverter}}" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: monogram glyph, app name + subheader, add/export/import action row -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Width="32" Height="32" CornerRadius="10"
+                    Background="{StaticResource Accent}" VerticalAlignment="Top">
+                <TextBlock Text="{Binding Monogram}" FontWeight="Bold" FontSize="14"
+                           Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding AppName}" FontSize="22" FontWeight="Bold" />
+                <TextBlock Text="{Binding SubHeaderText}" FontSize="13"
+                           Foreground="{StaticResource Text.Secondary}" Margin="0,2,0,0" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Import..." Command="{Binding ImportCommand}" Margin="0,0,8,0" />
+                <Button Content="Export..." Command="{Binding ExportCommand}" Margin="0,0,16,0" />
+                <Button Content="Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" />
+                <Button Content="Add URL" Command="{Binding AddUrlCommand}" Style="{StaticResource Button.Primary}" />
+            </StackPanel>
+        </Grid>
+
+        <!--
+            Favourites (SI §6.4) — one-click bubbles above the grid. Each
+            bubble is a Button styled as a pill (Button.Bubble); clicking it
+            opens the place, matching a grid row's double-click. Drag to
+            reorder is handled in code-behind (Bubble_PreviewMouseMove
+            starts the drag; FavouritesPanel_Drop computes the new index
+            and calls MainViewModel.MoveFavourite).
+        -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <TextBlock Text="Right-click a place below and choose &quot;Toggle Favourite&quot; to pin it here."
+                       Foreground="{StaticResource Text.Faint}" FontStyle="Italic"
+                       Visibility="{Binding FavouritePlaces.Count, Converter={StaticResource CollectionCountToVisibilityConverter}}" />
+
+            <ItemsControl x:Name="FavouritesItemsControl" ItemsSource="{Binding FavouritePlaces}"
+                          AllowDrop="True" DragOver="FavouritesItemsControl_DragOver" Drop="FavouritesItemsControl_Drop">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Content="{Binding Alias}"
+                                Style="{StaticResource Button.Bubble}"
+                                Tag="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext}"
+                                ContextMenu="{StaticResource BubbleContextMenu}"
+                                Command="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.OpenCommand}"
+                                CommandParameter="{Binding}"
+                                PreviewMouseLeftButtonDown="Bubble_PreviewMouseLeftButtonDown"
+                                PreviewMouseMove="Bubble_PreviewMouseMove" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+        <!-- Grid collapse toggle -->
+        <Grid Grid.Row="2" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="All Places" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+
+            <Button Grid.Column="1" Command="{Binding ToggleGridCommand}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                        <Setter Property="Content" Value="Hide List" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsGridExpanded}" Value="False">
+                                <Setter Property="Content" Value="Show List" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
+
+        <!--
+            Places grid (SI §6.3). Collapsible via the row's bound Height
+            (Row 3 above) rather than just Visibility, so collapsing it
+            actually reclaims the vertical space for the window instead of
+            leaving a blank gap (see BoolToGridLengthConverter's remarks).
+        -->
+        <DataGrid Grid.Row="3"
+                  ItemsSource="{Binding Places}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False">
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="Tag" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext}" />
+                    <Setter Property="ContextMenu" Value="{StaticResource PlaceContextMenu}" />
+                    <EventSetter Event="MouseDoubleClick" Handler="Row_MouseDoubleClick" />
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Alias" Binding="{Binding Alias}" Width="*" />
+                <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="90" />
+                <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" />
+                <!--
+                    Mode=OneWay is required here, not just decorative:
+                    DataGridCheckBoxColumn's cell (display AND edit) is a
+                    live CheckBox bound via IsChecked, which defaults to
+                    TwoWay in its own property metadata — the column's
+                    IsReadOnly only stops the user from clicking into edit
+                    mode, it doesn't change the binding WPF actually builds.
+                    Text columns don't hit this because their read-only
+                    display element is a plain TextBlock (OneWay by
+                    default); only the editable TextBox — never
+                    instantiated while IsReadOnly — would default TwoWay.
+                    Without an explicit Mode here, binding IsFavourite
+                    (get-only on PlaceViewModel) throws
+                    InvalidOperationException as soon as the column tries
+                    to bind.
+                -->
+                <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" Width="90" IsReadOnly="True" />
+                <DataGridTextColumn Header="Date Added" Binding="{Binding DateAdded, StringFormat={}{0:d}}" Width="110" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</Window>
