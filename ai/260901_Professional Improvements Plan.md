@@ -100,17 +100,26 @@ Requirements:
 - Read `schemaVersion` before binding the store's contents.
 - A version equal to the current version loads normally.
 - A lower known version runs its migration, and the migrated store is only written back after a successful save through the 4.2 path.
-- A version higher than the current build supports is a refusal, not a load: keep the file untouched, tell the user their data was written by a newer version of QuickerPlaces, and offer the same recovery choices as a corrupt file (4.4).
-- A missing or unreadable version field is treated as a corrupt store, not as version 1.
+- A version higher than the current build supports is a refusal, not a load: keep the file untouched, and tell the user their data was written by a newer version of QuickerPlaces. This is a third distinct case, worded and handled separately from both cases in 4.4.
+- A missing or non-numeric version field is damaged content, not version 1. Every store this application has written carries the field.
 - The same gate applies to `settings.json`, where an unreadable version may fall back to defaults because the file holds only window chrome. Document that difference rather than sharing one policy across both files.
 
-#### 4.4 Protect corrupt files
+#### 4.4 Protect corrupt and unreadable files
+
+A failure to load the store has two causes that need opposite responses, and the current `catch` in `LoadFromDisk` cannot tell them apart.
+
+**Damaged content** — the file was read successfully but is not a usable store: malformed JSON, an empty file, a valid document of the wrong shape, or a missing schema version. The data is gone; starting fresh is a reasonable choice, provided the damaged bytes are preserved first.
+
+**A file that could not be read at all** — locked by another process, held open by antivirus, or refused by permissions. The data is very probably intact. Treating this as damage and offering to start with an empty store would destroy good data in response to a problem that may clear in seconds.
 
 Requirements:
 
-- If `places.json` cannot be read, do not allow the first new mutation to overwrite it silently.
-- Preserve the damaged file with a timestamped name such as `places.corrupt-20260901-143000.json` before a fresh store is created.
-- Offer a clear recovery choice: reveal the file, continue with a new empty store, or exit.
+- Classify the failure before showing anything to the user. A JSON parse failure or an unusable document shape is damaged content. An I/O or access failure is an unreadable file.
+- In neither case may the first new mutation overwrite the file (see 4.2's blocked-mutation rule).
+- Damaged content: offer to reveal the file, start with a new empty store, or exit. Preserve the damaged file with a timestamped name such as `places.corrupt-20260901-143000.json` **before** the fresh store is created, and never proceed to a writable state if that preservation failed.
+- An unreadable file: offer to retry the load, reveal the file, or exit. Never offer to start with an empty store, and never rename or write to the file — nothing about this state establishes that the file is damaged.
+- A retry that succeeds proceeds normally, with no trace left behind. Log both the failure and the recovery.
+- Word the two cases differently. "This file could not be read — another program may be using it" and "This file is damaged" lead a user to different actions, and telling someone their data is corrupt when a sync client held the file for two seconds is both wrong and alarming.
 - Never label data as safely saved while recovery is unresolved.
 
 #### 4.5 Diagnostic log
@@ -441,7 +450,9 @@ Minimum service-level coverage:
 - Successful atomic save and reload
 - Save failure does not falsely report success
 - Previous valid file survives a failed replacement
-- Corrupt-file recovery preserves the original bytes
+- Damaged-file recovery preserves the original bytes
+- A file that cannot be opened is classified as unreadable, is never renamed or written to, and offers no empty-store option
+- A retry after a transient lock loads the original data intact
 - Existing schema migration
 - A store written by a newer schema version is refused, and the file is left byte-identical
 - A missing or unreadable schema version is treated as corrupt rather than as version 1
@@ -499,6 +510,7 @@ When implementation begins:
 - Document the portable self-contained release and optional smaller runtime-dependent release.
 - Document the diagnostic log's location, what it records, and its size cap.
 - Document that a store from a newer version of QuickerPlaces is refused rather than downgraded.
+- Explain the difference between a damaged file and one that is temporarily unreadable, and note that hand-editing `places.json` is the most common way to damage it.
 - Document that per-file application choices are not carried by export and do not follow a roaming profile.
 - Update `BUILD_SUMMARY.md`; it currently states that the project was not compiler-verified, which is no longer true.
 
@@ -508,6 +520,7 @@ The planned release is complete when:
 
 - No successful-looking mutation can be silently lost because a save failed.
 - A corrupt store cannot be overwritten without being preserved.
+- A store that merely could not be opened is never renamed, overwritten, or replaced with an empty one.
 - A store written by a newer schema version is refused rather than silently downgraded.
 - Persistence failures leave a diagnostic record the user can find and send on.
 - Only one application instance can write the store.

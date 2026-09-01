@@ -4,6 +4,7 @@ status: ready to implement
 created: 2026-09-01
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.1 to 4.6 (Persistence reliability and recovery)
+last_revised: 2026-09-01 — split a failed load into damaged content and a file that could not be opened (D6)
 ---
 
 # Phase 1 — Persistence reliability and recovery
@@ -29,6 +30,7 @@ Three more gaps sit alongside it:
 | Gap | Where | Consequence today |
 |---|---|---|
 | Corrupt file is not preserved | `LoadFromDisk` (`PlacesService.cs:353`) returns an empty list and sets `LoadFailed` | The user is shown one warning, then the first mutation overwrites the damaged file through the normal save path |
+| Damage and unavailability are indistinguishable | the same `catch` catches `JsonException`, `IOException`, and `UnauthorizedAccessException` alike | A file held open by antivirus or a sync client for two seconds is reported to the user exactly as if their data were destroyed |
 | `schemaVersion` is written but never read | `PlacesStore.SchemaVersion` (`Models/PlacesStore.cs:15`) | A store written by a newer build loads silently and is saved back down-level, dropping fields it did not know about |
 | Nothing prevents two writers | `App.OnStartup` (`App.xaml.cs`) | Two instances each hold a full in-memory list and write the whole file; the second to save wins and discards the first's changes |
 
@@ -36,7 +38,7 @@ Phases 2 and 3 add soft-deleted records and usage counters to this same file. An
 
 ## 2. Scope
 
-**In scope:** the storage seam and test project, transactional saves with a visible failure state, the schema-version gate, corrupt-file quarantine and recovery, the diagnostic log, and single-instance enforcement.
+**In scope:** the storage seam and test project, transactional saves with a visible failure state, the schema-version gate, classification and recovery for a store that will not load, the diagnostic log, and single-instance enforcement.
 
 **Out of scope, deliberately:** any change to validation rules, the export/import file format, the grid, the bubbles, or the dialogs beyond the failure banner and the recovery prompt. `AppSettings`/`SettingsService` keep their save-on-exit, best-effort behaviour (see 5.4 for why) apart from the small version-read change in 5.3.
 
@@ -49,10 +51,11 @@ Phases 2 and 3 add soft-deleted records and usage counters to this same file. An
 | `src/QuickerPlaces/Services/DiagnosticLog.cs` | new | Size-capped plain-text log with one rollover |
 | `src/QuickerPlaces/Services/SingleInstance.cs` | new | Named mutex plus an activation signal for the second launch |
 | `src/QuickerPlaces/Models/PersistenceResult.cs` | new | Save outcome returned alongside `ValidationResult` |
-| `src/QuickerPlaces/Models/StoreLoadOutcome.cs` | new | `Ok` / `NotPresent` / `Corrupt` / `WrittenByNewerVersion` |
+| `src/QuickerPlaces/Models/StoreLoadOutcome.cs` | new | `Ok` / `NotPresent` / `Damaged` / `Unreadable` / `WrittenByNewerVersion` |
 | `src/QuickerPlaces/Services/PlacesService.cs` | changed | Takes `IPlacesStorage`; mutations return a persistence result; load runs the version gate |
 | `src/QuickerPlaces/ViewModels/MainViewModel.cs` | changed | Owns the unsaved-changes banner state, Retry, Show Data Folder, Show Log |
-| `src/QuickerPlaces/Views/MainWindow.xaml` (+ `.cs`) | changed | Adds the banner row; the startup recovery prompt replaces the one-shot notice |
+| `src/QuickerPlaces/Views/RecoveryDialog.xaml` (+ `.cs`) | new | The startup recovery prompt: a message plus two or three custom-labelled choices |
+| `src/QuickerPlaces/Views/MainWindow.xaml` (+ `.cs`) | changed | Adds the banner row; removes the one-shot load-failure notice |
 | `src/QuickerPlaces/App.xaml.cs` | changed | Single-instance gate, log startup, recovery flow before the window shows |
 | `src/QuickerPlaces.Tests/` | new project | xUnit tests for everything in this phase |
 | `src/QuickerPlaces.sln` | changed | Adds the test project |
@@ -72,6 +75,8 @@ These are settled here so they do not get re-litigated during implementation.
 **D4 — The log lives in local application data, never roaming.** `places.json` roams by design; a machine's diagnostic log must not follow the user to another machine and must not bloat a roaming profile.
 
 **D5 — The test project targets `net10.0-windows` and tests services and models only.** It references the WPF project directly. No test constructs a `Window`, so no test needs an STA thread or a message pump.
+
+**D6 — A load failure is classified by its exception before the user sees anything.** `JsonException`, and a document that parses but is not a usable store, mean the content is damaged. `IOException` and `UnauthorizedAccessException` mean the file could not be opened, which says nothing about its contents. The two get different messages and different options, and only the first may lead to quarantine. Classifying at the `catch` is the only place the distinction is available — once the failure is flattened to a boolean, as `LoadFailed` does today, it cannot be recovered. Anything not in either category (an unexpected exception type) is treated as unreadable, because refusing to touch the file is the safe default.
 
 ## 5. Work items
 
@@ -96,7 +101,13 @@ public interface IPlacesStorage
     /// <summary>True if a store file is present. False means first run, not failure.</summary>
     bool Exists { get; }
 
-    /// <summary>Reads the store file's full text. Throws if it cannot be read.</summary>
+    /// <summary>
+    /// Reads the store file's full text. Throws if the file cannot be
+    /// opened or read — that failure is unreadability, not damage, and
+    /// PlacesService classifies it accordingly (D6). Parsing happens above
+    /// this interface, so a damaged document never surfaces as a storage
+    /// exception.
+    /// </summary>
     string Read();
 
     /// <summary>
@@ -167,28 +178,52 @@ Loading becomes: read the text, parse it with `JsonDocument` far enough to read 
 | Condition | Outcome | Effect |
 |---|---|---|
 | No file | `NotPresent` | Empty store, normal operation, first save creates the file |
+| The file cannot be opened or read (`IOException`, `UnauthorizedAccessException`, or any unexpected exception) | `Unreadable` | File untouched, mutations blocked, retry offered. The read never gets as far as the version |
 | Version == current | `Ok` | Deserialize normally |
 | Version < current, known | `Ok` after migration | Migrate in memory; the migrated store is not written until a save succeeds through 5.2 |
-| Version > current | `WrittenByNewerVersion` | File untouched, mutations blocked, recovery prompt shown |
-| Version absent, non-numeric, or the document does not parse | `Corrupt` | Handled by 5.4 |
+| Version > current | `WrittenByNewerVersion` | File untouched, mutations blocked, upgrade advised |
+| Version absent, non-numeric, or the document does not parse | `Damaged` | Quarantine offered, per 5.4 |
 
-The absent-version case is deliberately corrupt rather than "assume version 1": every store this application has ever written includes the field, so a store without one is not a v1 store, it is a damaged or foreign file.
+Two notes on the edges. The absent-version case is deliberately damaged rather than "assume version 1": every store this application has ever written includes the field, so a store without one is not a v1 store, it is a damaged or foreign file. And the classification happens at the `catch`, per D6 — reading the file and parsing it are separate `try` blocks, because a failure to open and a failure to parse are different answers.
 
 `settings.json` gets the version read too, but keeps a different policy — an unusable settings file falls back to defaults silently, as it does today, because it holds only window bounds and a grid toggle. That asymmetry is intentional and belongs in the user guide; it is noted here so it is not "fixed" later by someone making the two services consistent for its own sake.
 
-### 5.4 Corrupt-file protection and recovery (parent 4.4)
+### 5.4 Recovery from a store that will not load (parent 4.4)
 
-On a `Corrupt` or `WrittenByNewerVersion` outcome, `PlacesService` starts empty, sets `RecoveryState`, and refuses mutations (D3). The damaged file is **not** quarantined at load time — quarantine happens only when the user explicitly chooses to continue with a new empty store. A user who chooses Exit must find their file exactly as it was.
+On `Damaged`, `Unreadable`, or `WrittenByNewerVersion`, `PlacesService` starts empty, sets `RecoveryState`, and refuses mutations (D3). `App.OnStartup` resolves the state before the main window is shown. Three outcomes, three sets of options — the differences are the point of this section, not incidental wording.
 
-`App.OnStartup` resolves this before the main window is shown, via `MessageForm`:
+This needs a new `RecoveryDialog`, not `MessageForm`. `MessageFormButtons` offers only fixed OK/Cancel/Yes/No sets (`Models/MessageFormButtons.cs`), and "Start with an empty list" must never be a button a user reaches for by muscle memory while reading "Yes". `RecoveryDialog` takes a message and an ordered list of labelled choices, returns the chosen one, and follows `MessageForm`'s existing structure and `Theme.xaml` styling so it does not read as a foreign dialog. The destructive choice is never the default button, and closing the dialog by its title bar is equivalent to Exit — never to a choice that writes.
 
-- **Show me the file** — reveals it in Explorer with the file selected, then asks again. This is the only option that does not resolve the state.
-- **Start with an empty list** — quarantines the damaged file to `places.corrupt-yyyyMMdd-HHmmss.json`, logs the quarantine path, and resolves the state so the application is usable. If quarantine itself fails, the state stays unresolved and the failure is shown; it must never proceed to a writable state having failed to preserve the original.
+`App.OnStartup` shows it in a loop: the reveal-file and failed-retry choices return to the dialog, and only a resolved state or Exit leaves it.
+
+**`Damaged` — the file was read but is not a usable store.**
+
+> QuickerPlaces couldn't read your saved places. The file appears to be damaged. *(path)*
+
+- **Show me the file** — reveals it in Explorer with the file selected, then asks again. Does not resolve the state.
+- **Start with an empty list** — quarantines the damaged file to `places.corrupt-yyyyMMdd-HHmmss.json`, logs the quarantine path, and resolves the state. If the quarantine itself fails, the state stays unresolved and the failure is shown: never proceed to a writable state having failed to preserve the original.
 - **Exit** — closes without writing anything.
 
-The wording differs between the two cases: a corrupt file says the file could not be read; a newer-version file says the data was written by a newer version of QuickerPlaces and offers upgrading as the first suggestion. Two causes, two messages, one flow.
+**`Unreadable` — the file could not be opened.**
 
-This replaces the current one-shot `MessageForm` notice driven by `PlacesLoadFailed` in `MainWindow.Window_Loaded` (`Views/MainWindow.xaml.cs:27`), which should be removed rather than left alongside it.
+> QuickerPlaces couldn't open your saved places. Another program may be using the file, or it may not have permission to read it. Your data is most likely fine. *(path)*
+
+- **Try again** — re-runs the load. On success the application proceeds normally with the real data and nothing is left behind; the failure and the recovery are both logged. On failure, ask again.
+- **Show me the file** — reveals it in Explorer, then asks again.
+- **Exit** — closes without writing anything.
+
+There is deliberately **no empty-store option here, and no quarantine.** Nothing about this state establishes that the file is damaged, and a sync client or antivirus holding it for a few seconds is a more likely explanation than data loss. Renaming or replacing the file in response would destroy intact data. This is the single most important asymmetry in Phase 1: it is the only path where a wrong decision loses data the user still had.
+
+**`WrittenByNewerVersion` — the file is fine, this build is too old.**
+
+> These saved places were written by a newer version of QuickerPlaces. Update QuickerPlaces to open them. *(path)*
+
+- **Exit** — the recommended action, listed first.
+- **Show me the file** — reveals it, then asks again.
+
+No empty-store option and no quarantine, for the same reason: the data is intact and a newer build can read it. (This settles what was open question 2 in the first draft of this document.) A user who genuinely wants to start over can move the file themselves, having been shown exactly where it is.
+
+All three replace the current one-shot `MessageForm` notice driven by `PlacesLoadFailed` in `MainWindow.Window_Loaded` (`Views/MainWindow.xaml.cs:27`), which should be removed rather than left alongside them.
 
 ### 5.5 Diagnostic log (parent 4.5)
 
@@ -226,13 +261,19 @@ Known limitation, accepted for this phase: Windows foreground-activation rules m
 | 6 | Real `FilePlacesStorage` write leaves `places.bak.json` holding the previous contents | Previous valid file survives replacement | `TempDirectory` |
 | 7 | No `.tmp` file remains after a failed write | Temp cleanup | Target path held open with `FileShare.None` |
 | 8 | Two writes use different temp names | Unique temp naming | Intercepted in a storage subclass |
-| 9 | Unparseable JSON yields `Corrupt` and leaves the file byte-identical | Corrupt file is not overwritten | Garbage contents |
+| 9 | Unparseable JSON yields `Damaged` and leaves the file byte-identical | Damaged file is not overwritten | Garbage contents |
 | 10 | Mutations are refused while recovery is unresolved | D3 | as above |
 | 11 | Quarantine renames the file and its bytes match the original | Recovery preserves data | `TempDirectory` |
 | 12 | Quarantine never overwrites an existing quarantine file | Same-second double recovery | Pre-created target |
 | 13 | `schemaVersion` above current yields `WrittenByNewerVersion`, file untouched | Parent 4.3 | `"schemaVersion": 99` |
-| 14 | Missing or non-numeric `schemaVersion` is `Corrupt`, not v1 | 5.3 | Field removed |
+| 14 | Missing or non-numeric `schemaVersion` is `Damaged`, not v1 | 5.3 | Field removed |
 | 15 | A migrated store is not written to disk until a save succeeds | 5.3 | `FailEveryWrite`; assert `WriteCount == 0` after load |
+| 15a | An `IOException` on read yields `Unreadable`, not `Damaged` | D6 | Fake storage throws `IOException` |
+| 15b | An `UnauthorizedAccessException` on read yields `Unreadable` | D6 | Fake storage throws it |
+| 15c | An unexpected exception type on read yields `Unreadable`, not `Damaged` | D6's safe default | Fake storage throws `InvalidOperationException` |
+| 15d | An `Unreadable` outcome never quarantines and never writes | The asymmetry in 5.4 | Real `FilePlacesStorage` over a file held with `FileShare.None`; assert the file's bytes and name are unchanged and no quarantine file exists |
+| 15e | A retry after the lock is released loads the original places intact | 5.4's retry path | Release the handle between the two load calls |
+| 15f | A `WrittenByNewerVersion` outcome never quarantines and never writes | 5.4 | `"schemaVersion": 99` over `TempDirectory`; assert the directory contains exactly one file afterwards |
 | 16 | Existing v1 file with today's exact shape loads with every field intact | No regression for current users | Fixture file committed to the test project |
 | 17 | Alias and resource duplicate rules still hold | No regression from the refactor | — |
 | 18 | Favourite renumbering stays dense across remove and toggle | No regression from the refactor | — |
@@ -247,6 +288,7 @@ Manual verification, on Windows, recorded in the phase's closing commit message:
 
 - Deny write permission on `places.json`, add a place, confirm the banner appears, the place stays on screen, and Retry succeeds after permission is restored.
 - Corrupt `places.json` by hand, launch, walk all three recovery options, confirm the quarantine file appears and the original bytes survive.
+- Hold `places.json` open from another program, launch, confirm the message says the file could not be opened rather than that it is damaged, that no empty-store option is offered, and that Try Again recovers the real data once the handle is released.
 - Set `schemaVersion` to 99, launch, confirm the newer-version message and that the file is unchanged afterwards.
 - Launch a second instance while the first is minimized, and again while it is behind another window.
 - Pull a USB drive mid-session with the store on it, if a removable path is testable — otherwise note it as untested.
@@ -260,7 +302,7 @@ Each step should build and have green tests before the next begins. This is also
 2. **Diagnostic log.** `DiagnosticLog`, wired to startup and exit only. Tests 21, 22. Doing this before the save rewrite means the save rewrite has somewhere to report to.
 3. **Transactional saves.** `PersistenceResult`, `Persist`, `HasUnsavedChanges`, `RetrySave`, mutation signatures. Tests 2 to 8, 19, 20. No UI yet.
 4. **Banner UI.** `MainViewModel` state and commands, `MainWindow.xaml` row, Retry / Show Data Folder / Show Log.
-5. **Version gate and recovery.** `StoreLoadOutcome`, the gate, quarantine, the startup recovery flow; remove the old one-shot notice. Tests 9 to 15.
+5. **Version gate and recovery.** `StoreLoadOutcome`, the failure classification (D6), the gate, quarantine, and the three startup recovery flows; remove the old one-shot notice. Tests 9 to 15f. Write 15a to 15f before the recovery UI, not after: they are what stops the `Unreadable` path from quietly acquiring an empty-store button later.
 6. **Single instance.** `SingleInstance`, `App.OnStartup` gate and activation. Manual verification, and the phase's manual checklist recorded in the commit message.
 
 Commit messages follow the repository's existing style: what changed and why, with the WPF- or platform-specific reason spelled out where one drove the decision.
@@ -268,11 +310,12 @@ Commit messages follow the repository's existing style: what changed and why, wi
 ## 8. Phase 1 definition of done
 
 - No mutation can report success while its data is unwritten; a failed save is visible, persistent, and retryable.
-- A corrupt or newer-version store cannot be overwritten, and choosing to start fresh preserves the original bytes under a timestamped name.
+- A damaged store cannot be overwritten, and choosing to start fresh preserves the original bytes under a timestamped name.
+- A store that could not be opened, or that came from a newer version, is never renamed, written to, or replaced with an empty one, and its message says so.
 - The schema version is read on every load, and an unknown future version is refused rather than silently downgraded.
 - Only one instance per user per machine can write the store.
 - Persistence failures leave a bounded diagnostic record that contains no place aliases or destinations.
-- All 22 tests pass, and the manual checklist in section 6 has been walked on Windows.
+- All 28 tests pass, and the manual checklist in section 6 has been walked on Windows.
 - `BUILD_SUMMARY.md` records the phase, and the user guide covers the banner, the recovery prompt, and the log's location.
 
 ## 9. Open questions
@@ -280,5 +323,4 @@ Commit messages follow the repository's existing style: what changed and why, wi
 These do not block starting on section 7 step 1, but they should be settled before step 5.
 
 1. **Backup file visibility.** `places.bak.json` sits next to `places.json` in the user's data folder. Leave it visible, or move both backup and quarantine files into a `backups\` subfolder? A subfolder is tidier; a sibling file is easier to talk a user through recovering over the phone.
-2. **Recovery choice for the newer-version case.** "Start with an empty list" is offered for a corrupt file. For a file written by a newer QuickerPlaces, is that option appropriate at all, or should the only choices be reveal and exit, so the user is pushed toward upgrading rather than toward quarantining data a newer build could still read?
-3. **Log retention.** 256 KB with one rollover is a guess. If the log is meant to survive long enough to diagnose an intermittent failure that happens weekly, it wants to be larger.
+2. **Log retention.** 256 KB with one rollover is a guess. If the log is meant to survive long enough to diagnose an intermittent failure that happens weekly, it wants to be larger.
