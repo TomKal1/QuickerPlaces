@@ -15,6 +15,8 @@ The planned release adds:
 - A seven-day Recently Deleted area with immediate Undo
 - Last-opened and open-count usage information
 - Support for files, including PDFs, alongside folders and URLs
+- User-defined file tabs for professional formats such as `.trc`, `.rvt`, `.rfa`, and `.rte`
+- Configurable default, prompted, specific-application, and per-file opening policies
 - Explicit multi-folder import with a review step
 - Simple search across aliases, types, and destinations
 - Remembered grid sorting
@@ -30,6 +32,7 @@ The following are intentionally excluded:
 - Tags, categories, workspaces, cloud sync, or accounts.
 - File previews, PDF rendering, or document editing.
 - Complex usage analytics.
+- Automatic version detection for every proprietary file format. Version-aware integrations may be added individually when a supported vendor API exists.
 - Retargeting the application to classic .NET Framework.
 - CI as a prerequisite for the feature release. Focused automated tests come first; CI may be added later as a small follow-up.
 
@@ -208,17 +211,109 @@ The file option uses the native Windows open-file dialog and defaults the alias 
 
 For this release, preserve exported metadata to keep export/import round trips lossless.
 
-### Phase 5 — Explicit multi-folder import
+### Phase 5 — User-defined file tabs and opening policies
+
+Custom file tabs are saved views over existing `PlaceType.File` records. A file is stored only once and may appear in **All Documents** plus any custom tab whose extension rules match it.
+
+#### 4.17 Custom tab definitions
+
+Add a **New File Tab...** workflow with:
+
+- User-defined tab name
+- One or more normalized, case-insensitive extensions
+- Optional icon or compact monogram
+- Default sort mode: Recent, Frequent, A-Z, Path, or Date Added
+- Opening policy
+
+Example definitions:
+
+```json
+{
+  "name": "TRACE 700",
+  "extensions": [".trc"],
+  "openBehavior": "systemDefault"
+}
+```
+
+```json
+{
+  "name": "Revit",
+  "extensions": [".rvt", ".rfa", ".rte"],
+  "openBehavior": "askEachTime"
+}
+```
+
+Requirements:
+
+- Normalize extensions to a leading period and a consistent case before saving.
+- Reject empty definitions and duplicate extensions within the same tab.
+- Allow an extension to appear in more than one tab if the user deliberately chooses that arrangement.
+- Editing or deleting a tab never deletes its files.
+- Custom tabs do not scan the filesystem; they filter files deliberately saved in QuickerPlaces.
+- Store tab definitions and machine-specific application choices separately from portable place data where appropriate.
+
+#### 4.18 Opening policies
+
+Support these policies:
+
+1. **Windows default** — invoke the file through the current Windows file association.
+2. **Ask each time** — present compatible configured applications plus Windows default before opening.
+3. **Specific application** — use one user-selected executable for the tab.
+4. **Remember per file** — use a file-level application/version override when present, then fall back to the tab policy.
+
+Opening priority:
+
+1. Per-file remembered application/version
+2. Tab-level specific application or prompt policy
+3. Windows default association
+
+Requirements:
+
+- Query Windows for the current handler and show the detected application name where possible.
+- Do not change Windows file associations from QuickerPlaces.
+- If no handler exists, show a clear message with an option to use Windows **Open with** or configure an application.
+- Validate that a configured executable still exists before every launch.
+- If it has been removed, prompt again rather than silently choosing a different application.
+- Application paths and installed-version choices are machine-specific and should not be treated as portable export data.
+- Continue recording Last Opened and Open Count only after a launch is accepted.
+- Warn or prohibit unsafe executable/script extension tab definitions unless the user explicitly confirms the risk.
+
+#### 4.19 Revit-safe opening
+
+Revit requires special care because RVT-family files are not backward-compatible and Windows normally has only one default `.rvt` handler. Opening an older model in a newer Revit release may upgrade it; once saved, it cannot be reopened by the older release.
+
+Initial implementation:
+
+- Default a newly created Revit tab to **Ask each time**.
+- Discover installed Revit releases using supported installation information where possible.
+- Present **Windows default** and detected releases as explicit choices.
+- Allow **Remember for this file** so a particular model consistently uses the chosen release.
+- Display the remembered Revit release in the file's details or tooltip.
+- If that release is no longer installed, stop and ask; never silently fall forward to a newer release.
+- Do not promise that choosing an executable can fully automate model opening until the launch behavior for each supported Revit release is verified. If necessary, launch the selected Revit release and instruct the user to open the model from within it.
+
+Later optional Revit adapter:
+
+- Use Autodesk's supported `BasicFileInfo.Extract` capability to inspect `.rvt`, `.rfa`, and `.rte` saved-version metadata without opening the model.
+- Keep Autodesk assemblies out of the generic QuickerPlaces process. Use a separately versioned helper/adapter compatible with the installed Revit runtime.
+- Treat inspection failure or forward-incompatible metadata as **Unknown version**, never as permission to choose the newest Revit automatically.
+- Match the detected saved version to an installed release and show the decision before launch.
+- Test workshared, local, central, family, template, cloud-connected, and future-version failure cases before enabling automatic selection by default.
+- Do not parse undocumented RVT internals or private Autodesk history files.
+
+The generic custom-tab feature must ship independently of this optional adapter. `.trc` and other normally associated formats should work through Windows default handling without vendor-specific code.
+
+### Phase 6 — Explicit multi-folder import
 
 Add an **Import Folders...** command. This is separate from JSON import and does not attempt to read Explorer's internal pin database.
 
-#### 4.17 Selection
+#### 4.20 Selection
 
 - Use the native `Microsoft.Win32.OpenFolderDialog` with multiselect enabled.
 - Nothing is added immediately after selection.
 - If practical, initialize the dialog at the user's last folder-import location.
 
-#### 4.18 Review dialog
+#### 4.21 Review dialog
 
 Show every selected folder before committing it.
 
@@ -239,9 +334,9 @@ Requirements:
 
 This provides a deliberate way to bring across folders currently visible in Explorer or Quick Access without depending on undocumented Windows data.
 
-### Phase 6 — Search and retrieval polish
+### Phase 7 — Search and retrieval polish
 
-#### 4.19 Search
+#### 4.22 Search
 
 Add one compact search field above the grid.
 
@@ -252,18 +347,18 @@ Add one compact search field above the grid.
 - Start each launch unfiltered; do not persist search text.
 - Search affects the main grid only, not the favourite bubbles.
 
-#### 4.20 Small professional refinements
+#### 4.23 Small professional refinements
 
 - Add **Copy Destination** to row and bubble context menus.
 - Show the full destination in a tooltip when grid text is truncated.
 - Add sensible keyboard access keys and shortcuts for Add, Open, Search, Rename, Favourite, and Remove.
 - Ensure every mouse-only action has a keyboard-accessible alternative.
 
-### Phase 7 — Distribution
+### Phase 8 — Distribution
 
 Keep the application on .NET 10 LTS and add repeatable publish profiles.
 
-#### 4.21 Recommended release artifact
+#### 4.24 Recommended release artifact
 
 Publish a Windows x64 artifact that is:
 
@@ -276,7 +371,7 @@ The result should be a single `QuickerPlaces.exe` that runs without a separately
 
 Also consider an optional smaller framework-dependent x64 download for users who already have the .NET 10 Desktop Runtime.
 
-#### 4.22 Verification
+#### 4.25 Verification
 
 - Test the published executable on a clean supported Windows environment without the .NET 10 runtime installed.
 - Verify icon, startup time, AppData paths, import/export dialogs, and shell launching.
@@ -303,6 +398,13 @@ Minimum service-level coverage:
 - Soft deletion, undo, restore conflicts, and seven-day expiry
 - Open-count and last-opened updates
 - Failed opens do not update usage
+- Custom-tab extension normalization and matching
+- Editing or deleting a custom tab does not mutate or delete places
+- Opening-policy precedence: per-file override, tab policy, then Windows default
+- Missing configured applications stop and prompt instead of silently falling back
+- Machine-specific application paths are excluded from portable place exports
+- Revit remembered-version behavior and missing-version handling
+- Revit adapter failures return Unknown rather than selecting a newer release
 - Multiple incoming folder collisions within the same import batch
 - Lossless export/import of the current schema
 - Single-instance coordination where it can be tested reliably
@@ -314,6 +416,10 @@ Manual WPF verification:
 - Search filtering and clearing
 - Recently Deleted dialog behavior
 - Multi-folder review and validation
+- Custom tab creation, editing, deletion, sorting, and overlapping extension filters
+- Windows-default, ask-each-time, specific-application, and per-file launch flows
+- TRACE 700 `.trc` handling on a machine with and without a registered default application
+- Side-by-side Revit release selection without accidental model upgrade
 - Missing/offline file and folder messages
 - High-DPI and multi-monitor window restoration
 - Published single-file execution on a clean machine
@@ -324,6 +430,10 @@ When implementation begins:
 
 - Update the README status and correct references to the actual SI filename.
 - Update the user guide for Recently Deleted, files, usage columns, search, and folder import.
+- Document custom file tabs, extension matching, and every opening policy.
+- Explain that custom tabs filter saved QuickerPlaces files and do not scan the computer.
+- Document that application/version choices are local to each machine.
+- Add a prominent Revit warning explaining version upgrades and the scope of any optional version-detection adapter.
 - Document the exact meaning of Open Count: launches initiated by QuickerPlaces.
 - Document the seven-day retention rule and restore-conflict behavior.
 - Document the portable self-contained release and optional smaller runtime-dependent release.
@@ -339,9 +449,12 @@ The planned release is complete when:
 - Deleted places are recoverable for seven days.
 - Usage statistics are accurate for successful QuickerPlaces launches and sortable.
 - Folders, files, and HTTP(S) URLs can be added and opened safely.
+- Users can create, edit, and remove extension-based file tabs without duplicating or deleting underlying files.
+- Files can use Windows default, prompted, tab-specific, or remembered per-file application choices.
+- Missing configured applications never cause a silent fallback to another version.
+- Revit models are not silently opened in a newer release when a remembered release is unavailable.
 - Users can deliberately import multiple folders through a visible review flow.
 - The grid can be searched and remembers its sort.
 - Existing user data migrates without loss.
 - Core persistence and migration behavior has automated coverage.
 - A self-contained single-file Windows x64 build has been verified on a clean environment.
-
