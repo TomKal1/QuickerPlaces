@@ -1,8 +1,10 @@
 # QuickerPlaces — Professional Improvements Implementation Plan
 
-**Status:** planned for a later release  
+**Status:** planned; Phase 1 is ready to implement  
 **Created:** 2026-09-01  
-**Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager
+**Last revised:** 2026-09-01 — split into two releases, reordered Phase 1 so the test seam comes first, added the schema-version gate and the diagnostic log, fixed the timestamp and file-layout decisions  
+**Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
+**Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
 ## 1. Product direction
 
@@ -22,6 +24,16 @@ The planned release adds:
 - Remembered grid sorting
 - A self-contained, single-file Windows release
 
+### 1.1 Release split
+
+This is more work than one release should carry, so it ships as two.
+
+**Release 1 — Phases 1 to 4, 6, and 7.** Persistence reliability, Recently Deleted, usage tracking and sorting, general file support, multi-folder import, and search. Every item is self-contained, none depends on a third-party application being installed, and the set is enough to justify a release on its own.
+
+**Release 2 — Phase 5.** User-defined file tabs, opening policies, and Revit-safe opening. This is the largest phase, the only one carrying vendor risk, and the only one whose correctness depends on software that is not present on the build machine. Holding it back keeps that risk out of the release that rewrites persistence.
+
+Phase 8 (distribution) applies to both: Release 1 establishes the publish profiles and the clean-machine verification, and Release 2 repeats the verification.
+
 ## 2. Explicit non-goals
 
 The following are intentionally excluded:
@@ -35,6 +47,7 @@ The following are intentionally excluded:
 - Automatic version detection for every proprietary file format. Version-aware integrations may be added individually when a supported vendor API exists.
 - Retargeting the application to classic .NET Framework.
 - CI as a prerequisite for the feature release. Focused automated tests come first; CI may be added later as a small follow-up.
+- Coordinating writes between machines. `places.json` lives in roaming application data, so a roaming domain profile signed in on two machines at once can still produce a last-writer-wins result. The single-instance work in 4.6 deliberately guarantees one writer per machine, not one writer per user.
 
 ## 3. Technical direction
 
@@ -44,14 +57,26 @@ The following are intentionally excluded:
 - Preserve compatibility with existing `places.json` and `settings.json` files through explicit schema migration.
 - Prefer deliberate, visible commands and review dialogs over hidden interactions.
 - Keep all user data local.
+- Use `DateTimeOffset` in UTC for every persisted timestamp, and convert the existing local `DateTime DateAdded` during the first schema migration that touches the record. Mixing an unqualified local `DateTime` with UTC offsets makes sorting and export round trips wrong across a daylight-saving boundary, and the conversion is cheap while there is only one such field.
+- Split persisted state by portability rather than by feature: `places.json` and the custom tab definitions are portable user data, while application paths, chosen product versions, and window chrome are machine-local. Section 4.19 fixes the file layout.
 
 ## 4. Recommended implementation order
 
 ### Phase 1 — Persistence reliability and recovery
 
-This phase must precede features that add more stored state.
+This phase must precede features that add more stored state. Within the phase, the storage seam and test project come first: sections 4.2 to 4.6 describe failure behaviour that cannot be verified by using the application normally, so the ability to inject a failure has to exist before the behaviour is written.
 
-#### 4.1 Make saves transactional and observable
+A separate, file-level plan for this phase is maintained in `ai/260901_Phase 1 Detailed Plan.md`.
+
+#### 4.1 Establish the storage seam and test project
+
+- Add a `QuickerPlaces.Tests` project to the solution.
+- Give the places service an injectable storage abstraction that owns reading, writing, and replacing the store file.
+- Production continues to use the existing AppData locations through a default implementation.
+- Tests use isolated temporary directories and never touch real user data.
+- Provide a test implementation that can fail a read or a write on demand, so the requirements below are testable.
+
+#### 4.2 Make saves transactional and observable
 
 Current mutations update memory before `SaveToDisk` silently ignores write failures. Replace this with an explicit result-based persistence flow.
 
@@ -61,11 +86,25 @@ Requirements:
 - If a save fails, restore the previous in-memory state or keep the proposed state clearly marked as unsaved.
 - Show a persistent, non-modal error in the main window with at least **Retry** and **Show Data Folder** actions.
 - Do not dismiss the error merely because another command was attempted.
-- Preserve the previous valid data file until the replacement succeeds.
+- Preserve the previous valid data file until the replacement succeeds. Prefer a replace operation that writes a named backup copy of the outgoing file rather than a plain overwriting move, so a failure part-way through leaves a recoverable copy on disk.
+- Flush the temporary file to durable storage before it replaces the live file. An atomic rename guarantees that the file is never half-written; it does not guarantee that the new contents reached the disk before a power loss.
 - Use a unique temporary file name so stale files or another process cannot collide with it.
-- Log or retain enough error detail for troubleshooting without exposing a raw exception as the only user message.
+- Record enough error detail in the diagnostic log (4.5) for troubleshooting, without exposing a raw exception as the only user message.
 
-#### 4.2 Protect corrupt files
+#### 4.3 Gate the schema version on load
+
+`PlacesStore.SchemaVersion` is currently written on every save and never read back. A store written by a newer build therefore loads silently into an older build and is saved back down-level, discarding any field the older build does not know about. Phase 2 increments this version, so the gate must exist before then.
+
+Requirements:
+
+- Read `schemaVersion` before binding the store's contents.
+- A version equal to the current version loads normally.
+- A lower known version runs its migration, and the migrated store is only written back after a successful save through the 4.2 path.
+- A version higher than the current build supports is a refusal, not a load: keep the file untouched, tell the user their data was written by a newer version of QuickerPlaces, and offer the same recovery choices as a corrupt file (4.4).
+- A missing or unreadable version field is treated as a corrupt store, not as version 1.
+- The same gate applies to `settings.json`, where an unreadable version may fall back to defaults because the file holds only window chrome. Document that difference rather than sharing one policy across both files.
+
+#### 4.4 Protect corrupt files
 
 Requirements:
 
@@ -74,7 +113,19 @@ Requirements:
 - Offer a clear recovery choice: reveal the file, continue with a new empty store, or exit.
 - Never label data as safely saved while recovery is unresolved.
 
-#### 4.3 Prevent concurrent writers
+#### 4.5 Diagnostic log
+
+Sections 4.2 to 4.4 require error detail that the user is not shown directly, and the application currently writes no log of any kind.
+
+Requirements:
+
+- Write a plain-text log beside the data files in the local application data folder, not the roaming one.
+- Record startup, load outcome including the schema version read, save failures with exception detail, corrupt-file quarantines, and single-instance activations.
+- Never record place aliases or destinations at levels above the failure detail needed to explain the failure itself.
+- Cap the file at a small fixed size with a single rollover, so an unattended failure loop cannot fill the disk.
+- Add **Show Log** alongside the existing **Show Data Folder** action.
+
+#### 4.6 Prevent concurrent writers
 
 QuickerPlaces should be a single-instance desktop application.
 
@@ -83,16 +134,11 @@ Requirements:
 - Use a named mutex or equivalent single-instance mechanism.
 - A second launch should activate the existing window and then exit.
 - Verify that the mechanism works when the first instance is minimized or behind another window.
-
-#### 4.4 Make storage testable
-
-- Allow the places service to receive a storage location or small storage abstraction.
-- Production continues to use the existing AppData locations.
-- Tests use isolated temporary directories and never touch real user data.
+- This protects one machine only. `places.json` lives in roaming application data, so a roaming profile used on two machines at once remains outside the guarantee — see the non-goals in section 2.
 
 ### Phase 2 — Seven-day Recently Deleted
 
-#### 4.5 Data model
+#### 4.7 Data model
 
 Add an optional `DeletedAt` timestamp to a place. Use `DateTimeOffset` in UTC for new persisted timestamps.
 
@@ -101,14 +147,16 @@ Add an optional `DeletedAt` timestamp to a place. Use `DateTimeOffset` in UTC fo
 
 Increment the places schema version and migrate existing records with `DeletedAt = null`.
 
-#### 4.6 Removal workflow
+This is the first migration to touch the record, so it also converts the existing `DateAdded` from a local `DateTime` to a UTC `DateTimeOffset`, per section 3. Values written before the conversion carry no offset and are interpreted as local time on the machine performing the migration; record that assumption in the migration and in the log.
+
+#### 4.8 Removal workflow
 
 - Rename the destructive action from **Remove** to **Move to Recently Deleted** or retain **Remove** with explanatory confirmation text.
 - Removing a place immediately removes it from the grid and favourites.
 - Show a short-lived confirmation with an **Undo** action.
 - Undo restores the exact place, including favourite status and ordering where possible.
 
-#### 4.7 Recently Deleted dialog
+#### 4.9 Recently Deleted dialog
 
 Add a small dialog accessible from the main window's secondary menu.
 
@@ -128,7 +176,7 @@ Actions:
 
 Permanent deletion must require confirmation.
 
-#### 4.8 Expiration and conflicts
+#### 4.10 Expiration and conflicts
 
 - Purge records after seven full days, preferably on successful startup and before a normal save.
 - Never purge from a store that failed to load or migrate correctly.
@@ -137,7 +185,7 @@ Permanent deletion must require confirmation.
 
 ### Phase 3 — Usage tracking and sorting
 
-#### 4.9 Data model
+#### 4.11 Data model
 
 Add:
 
@@ -146,22 +194,23 @@ Add:
 
 Migrate existing records with null/zero defaults.
 
-#### 4.10 Recording an open
+#### 4.12 Recording an open
 
-- Increment usage only after Windows accepts the shell launch request.
+- Increment usage only after Windows accepts the shell launch request. Concretely, that means both of the following held: the pre-launch existence check passed for a folder or file destination, and the shell execute call returned without throwing.
+- A shell execute call that returns successfully proves only that Windows accepted the verb. It does not prove that a handler application opened the destination, and nothing available to QuickerPlaces does. Treat the two conditions above as the definition of a recorded open, and say so in the user guide.
 - A failed or cancelled open does not change the statistics.
 - Statistics describe launches initiated through QuickerPlaces, not all Windows activity for that destination.
 - Persist the usage update immediately through the reliable save path.
 - Do not automatically change favourite state or favourite order.
 
-#### 4.11 Grid presentation
+#### 4.13 Grid presentation
 
 - Add sortable **Last Opened** and **Opens** columns.
 - Replace **Date Added** with **Last Opened** in the default visible layout.
 - Keep Date Added available if optional column visibility is implemented; otherwise omit it from the default grid without deleting the stored value.
 - Never-opened destinations should sort consistently and display an em dash or `Never`.
 
-#### 4.12 Remember sorting
+#### 4.14 Remember sorting
 
 Persist the active sort column and direction in `settings.json`.
 
@@ -178,13 +227,13 @@ Path/URL sorting already works through the DataGrid; this work makes the selecte
 
 ### Phase 4 — General file support
 
-#### 4.13 Place type
+#### 4.15 Place type
 
 Extend `PlaceType` with `File`. Update labels from **Path / URL** to **Destination** where that produces clearer UI.
 
 Files include PDFs, Office documents, images, text files, and other user-selected documents. QuickerPlaces launches them through the Windows default application; it does not inspect or render them.
 
-#### 4.14 Add workflow
+#### 4.16 Add workflow
 
 Replace the two prominent add buttons with one **Add...** control that offers:
 
@@ -194,7 +243,7 @@ Replace the two prominent add buttons with one **Add...** control that offers:
 
 The file option uses the native Windows open-file dialog and defaults the alias to the filename without its extension. The user can edit the alias before saving.
 
-#### 4.15 Validation and opening
+#### 4.17 Validation and opening
 
 - Folder destinations must be fully qualified paths.
 - File destinations must be fully qualified file paths.
@@ -203,7 +252,7 @@ The file option uses the native Windows open-file dialog and defaults the alias 
 - Imports must validate enum values and destination formats before presenting candidates.
 - Imported JSON must not be able to disguise an executable or custom protocol as a URL.
 
-#### 4.16 Import/export compatibility
+#### 4.18 Import/export compatibility
 
 - Export includes the new type and schema version.
 - Existing Folder/URL exports continue to import.
@@ -215,7 +264,7 @@ For this release, preserve exported metadata to keep export/import round trips l
 
 Custom file tabs are saved views over existing `PlaceType.File` records. A file is stored only once and may appear in **All Documents** plus any custom tab whose extension rules match it.
 
-#### 4.17 Custom tab definitions
+#### 4.19 Custom tab definitions
 
 Add a **New File Tab...** workflow with:
 
@@ -250,9 +299,14 @@ Requirements:
 - Allow an extension to appear in more than one tab if the user deliberately chooses that arrangement.
 - Editing or deleting a tab never deletes its files.
 - Custom tabs do not scan the filesystem; they filter files deliberately saved in QuickerPlaces.
-- Store tab definitions and machine-specific application choices separately from portable place data where appropriate.
+- Store tab definitions and machine-specific application choices in separate files from portable place data, using this layout:
+  - `places.json` — roaming, portable. Place records only.
+  - `tabs.json` — roaming, portable. Tab names, extensions, icons, default sort, and the opening *policy* (which of the four behaviours applies), but never an executable path.
+  - `applications.local.json` — local, machine-specific. Resolved executable paths, detected product versions, and per-file remembered application choices, keyed by place identifier.
+- A per-file remembered choice is therefore machine-local: the same file opened on another machine falls back to the tab policy. This is deliberate, since an executable path from another machine is not meaningful and may not exist.
+- Export never includes `applications.local.json` content, so a shared or backed-up export can never carry a local executable path.
 
-#### 4.18 Opening policies
+#### 4.20 Opening policies
 
 Support these policies:
 
@@ -278,7 +332,7 @@ Requirements:
 - Continue recording Last Opened and Open Count only after a launch is accepted.
 - Warn or prohibit unsafe executable/script extension tab definitions unless the user explicitly confirms the risk.
 
-#### 4.19 Revit-safe opening
+#### 4.21 Revit-safe opening
 
 Revit requires special care because RVT-family files are not backward-compatible and Windows normally has only one default `.rvt` handler. Opening an older model in a newer Revit release may upgrade it; once saved, it cannot be reopened by the older release.
 
@@ -307,13 +361,13 @@ The generic custom-tab feature must ship independently of this optional adapter.
 
 Add an **Import Folders...** command. This is separate from JSON import and does not attempt to read Explorer's internal pin database.
 
-#### 4.20 Selection
+#### 4.22 Selection
 
 - Use the native `Microsoft.Win32.OpenFolderDialog` with multiselect enabled.
 - Nothing is added immediately after selection.
 - If practical, initialize the dialog at the user's last folder-import location.
 
-#### 4.21 Review dialog
+#### 4.23 Review dialog
 
 Show every selected folder before committing it.
 
@@ -336,7 +390,7 @@ This provides a deliberate way to bring across folders currently visible in Expl
 
 ### Phase 7 — Search and retrieval polish
 
-#### 4.22 Search
+#### 4.24 Search
 
 Add one compact search field above the grid.
 
@@ -347,7 +401,7 @@ Add one compact search field above the grid.
 - Start each launch unfiltered; do not persist search text.
 - Search affects the main grid only, not the favourite bubbles.
 
-#### 4.23 Small professional refinements
+#### 4.25 Small professional refinements
 
 - Add **Copy Destination** to row and bubble context menus.
 - Show the full destination in a tooltip when grid text is truncated.
@@ -358,7 +412,7 @@ Add one compact search field above the grid.
 
 Keep the application on .NET 10 LTS and add repeatable publish profiles.
 
-#### 4.24 Recommended release artifact
+#### 4.26 Recommended release artifact
 
 Publish a Windows x64 artifact that is:
 
@@ -371,7 +425,7 @@ The result should be a single `QuickerPlaces.exe` that runs without a separately
 
 Also consider an optional smaller framework-dependent x64 download for users who already have the .NET 10 Desktop Runtime.
 
-#### 4.25 Verification
+#### 4.27 Verification
 
 - Test the published executable on a clean supported Windows environment without the .NET 10 runtime installed.
 - Verify icon, startup time, AppData paths, import/export dialogs, and shell launching.
@@ -380,7 +434,7 @@ Also consider an optional smaller framework-dependent x64 download for users who
 
 ## 5. Automated test plan
 
-Tests should be added alongside the relevant phases. CI can be introduced later once the tests provide useful coverage.
+Tests are added alongside the relevant phases, on the seam established in 4.1. CI can be introduced later once the tests provide useful coverage. The full Phase 1 test list, including how each failure is injected, is in `ai/260901_Phase 1 Detailed Plan.md`.
 
 Minimum service-level coverage:
 
@@ -389,7 +443,10 @@ Minimum service-level coverage:
 - Previous valid file survives a failed replacement
 - Corrupt-file recovery preserves the original bytes
 - Existing schema migration
-- Unsupported future schema handling
+- A store written by a newer schema version is refused, and the file is left byte-identical
+- A missing or unreadable schema version is treated as corrupt rather than as version 1
+- A migrated store is not written back to disk until a save succeeds
+- Local `DateAdded` values convert to UTC once, and a second migration pass does not shift them again
 - Alias and resource duplicate rules
 - Fully qualified folder/file validation
 - Allowed and rejected URL schemes
@@ -398,11 +455,14 @@ Minimum service-level coverage:
 - Soft deletion, undo, restore conflicts, and seven-day expiry
 - Open-count and last-opened updates
 - Failed opens do not update usage
+- A destination that no longer exists fails its pre-launch check and does not update usage
+- The diagnostic log rolls over at its size cap instead of growing without limit
 - Custom-tab extension normalization and matching
 - Editing or deleting a custom tab does not mutate or delete places
 - Opening-policy precedence: per-file override, tab policy, then Windows default
 - Missing configured applications stop and prompt instead of silently falling back
 - Machine-specific application paths are excluded from portable place exports
+- Tab definitions round trip through export while resolved executable paths do not
 - Revit remembered-version behavior and missing-version handling
 - Revit adapter failures return Unknown rather than selecting a newer release
 - Multiple incoming folder collisions within the same import batch
@@ -437,6 +497,9 @@ When implementation begins:
 - Document the exact meaning of Open Count: launches initiated by QuickerPlaces.
 - Document the seven-day retention rule and restore-conflict behavior.
 - Document the portable self-contained release and optional smaller runtime-dependent release.
+- Document the diagnostic log's location, what it records, and its size cap.
+- Document that a store from a newer version of QuickerPlaces is refused rather than downgraded.
+- Document that per-file application choices are not carried by export and do not follow a roaming profile.
 - Update `BUILD_SUMMARY.md`; it currently states that the project was not compiler-verified, which is no longer true.
 
 ## 7. Definition of done
@@ -445,6 +508,8 @@ The planned release is complete when:
 
 - No successful-looking mutation can be silently lost because a save failed.
 - A corrupt store cannot be overwritten without being preserved.
+- A store written by a newer schema version is refused rather than silently downgraded.
+- Persistence failures leave a diagnostic record the user can find and send on.
 - Only one application instance can write the store.
 - Deleted places are recoverable for seven days.
 - Usage statistics are accurate for successful QuickerPlaces launches and sortable.
