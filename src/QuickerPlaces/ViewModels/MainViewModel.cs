@@ -25,6 +25,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly PlacesService _placesService;
 
     private bool _isGridExpanded;
+    private bool _hasUnsavedChanges;
+    private string? _persistenceMessage;
 
     public MainViewModel(AppSettings settings, PlacesService placesService)
     {
@@ -52,8 +54,19 @@ public sealed class MainViewModel : ObservableObject
         ExportCommand = new RelayCommand(Export, () => Places.Count > 0);
         ImportCommand = new RelayCommand(Import);
         ToggleGridCommand = new RelayCommand(() => IsGridExpanded = !IsGridExpanded);
+        RetrySaveCommand = new RelayCommand(RetrySave);
+        ShowDataFolderCommand = new RelayCommand(ShowDataFolder);
+        ShowLogCommand = new RelayCommand(ShowLog);
 
         RebuildFavourites();
+
+        // Establishes the banner's initial state from whatever
+        // PlacesService already knows (normally nothing — the constructor
+        // above only loads and never persists — but this keeps
+        // RefreshPersistenceState as the single place that ever sets
+        // HasUnsavedChanges/PersistenceMessage, rather than leaving their
+        // initial false/null values as an unstated special case).
+        RefreshPersistenceState();
     }
 
     public string AppName => AppInfo.Name;
@@ -74,6 +87,26 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref _isGridExpanded, value);
     }
 
+    /// <summary>
+    /// Backs the unsaved-changes banner's visibility. Set only from
+    /// RefreshPersistenceState, which reads it straight from
+    /// PlacesService.HasUnsavedChanges rather than from any individual
+    /// command's returned PersistenceResult — see RefreshPersistenceState's
+    /// remarks for why that distinction matters.
+    /// </summary>
+    public bool HasUnsavedChanges
+    {
+        get => _hasUnsavedChanges;
+        private set => SetProperty(ref _hasUnsavedChanges, value);
+    }
+
+    /// <summary>The banner's message text. Null exactly when HasUnsavedChanges is false — see RefreshPersistenceState.</summary>
+    public string? PersistenceMessage
+    {
+        get => _persistenceMessage;
+        private set => SetProperty(ref _persistenceMessage, value);
+    }
+
     public RelayCommand AddFolderCommand { get; }
     public RelayCommand AddUrlCommand { get; }
     public RelayCommand OpenCommand { get; }
@@ -84,12 +117,22 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ExportCommand { get; }
     public RelayCommand ImportCommand { get; }
     public RelayCommand ToggleGridCommand { get; }
+    public RelayCommand RetrySaveCommand { get; }
+    public RelayCommand ShowDataFolderCommand { get; }
+    public RelayCommand ShowLogCommand { get; }
 
     public string PlacesFilePath => _placesService.PlacesFilePath;
 
     private void AddPlace(PlaceType type)
     {
+        // PlaceFormDialog discards the PersistenceResult from TryAdd
+        // internally (it only needs the ValidationResult to decide whether
+        // to close), so the banner state has to be re-read from
+        // PlacesService afterward rather than from a result passed back
+        // here — there isn't one.
         var created = PlaceFormDialog.ShowAdd(type, _placesService);
+        RefreshPersistenceState();
+
         if (created is null)
             return;
 
@@ -135,6 +178,7 @@ public sealed class MainViewModel : ObservableObject
             return;
 
         var renamed = PlaceFormDialog.ShowRenameAlias(place.Model, _placesService);
+        RefreshPersistenceState();
         if (renamed)
             place.Refresh();
     }
@@ -145,6 +189,7 @@ public sealed class MainViewModel : ObservableObject
             return;
 
         var edited = PlaceFormDialog.ShowEditResource(place.Model, _placesService);
+        RefreshPersistenceState();
         if (edited)
             place.Refresh();
     }
@@ -154,10 +199,8 @@ public sealed class MainViewModel : ObservableObject
         if (place is null)
             return;
 
-        // The returned PersistenceResult isn't consumed here — a banner
-        // that reads it is a later step. PlacesService.HasUnsavedChanges
-        // is the durable state that survives until then.
-        _placesService.ToggleFavourite(place.Model);
+        var persistence = _placesService.ToggleFavourite(place.Model);
+        RefreshPersistenceState(persistence);
         place.Refresh();
         RebuildFavourites();
     }
@@ -174,9 +217,8 @@ public sealed class MainViewModel : ObservableObject
         if (confirm != MessageFormResult.Yes)
             return;
 
-        // As above — the PersistenceResult is discarded here; the banner
-        // that would read it is a later step.
-        _placesService.Remove(place.Model);
+        var persistence = _placesService.Remove(place.Model);
+        RefreshPersistenceState(persistence);
         Places.Remove(place);
         RebuildFavourites();
     }
@@ -218,7 +260,11 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        // ImportDialog discards CommitImport's PersistenceResult the same
+        // way PlaceFormDialog does, so this refreshes from PlacesService
+        // afterward rather than from a returned result.
         var imported = ImportDialog.Show(candidates, _placesService);
+        RefreshPersistenceState();
         if (imported.Count == 0)
             return;
 
@@ -260,9 +306,8 @@ public sealed class MainViewModel : ObservableObject
         targetIndex = Math.Clamp(targetIndex, 0, ordered.Count);
         ordered.Insert(targetIndex, dragged);
 
-        // As above — the PersistenceResult is discarded here; the banner
-        // that would read it is a later step.
-        _placesService.SetFavouriteOrder(ordered.Select(vm => vm.Model).ToList());
+        var persistence = _placesService.SetFavouriteOrder(ordered.Select(vm => vm.Model).ToList());
+        RefreshPersistenceState(persistence);
 
         FavouritePlaces.Clear();
         foreach (var place in ordered)
@@ -276,5 +321,92 @@ public sealed class MainViewModel : ObservableObject
     public void PersistToSettings()
     {
         _settings.IsGridExpanded = IsGridExpanded;
+    }
+
+    /// <summary>
+    /// Retries the current in-memory store's save (plan 5.2) and refreshes
+    /// the banner from the outcome.
+    /// </summary>
+    private void RetrySave()
+    {
+        var persistence = _placesService.RetrySave();
+        RefreshPersistenceState(persistence);
+    }
+
+    /// <summary>Reveals places.json in Explorer, pre-selected — the "Show Data Folder" banner action.</summary>
+    private void ShowDataFolder() => ExplorerReveal.Reveal(_placesService.PlacesFilePath);
+
+    /// <summary>
+    /// Opens the diagnostic log with its associated app — the "Show Log"
+    /// banner action. DiagnosticLog creates its file lazily on first
+    /// write, so on a machine where nothing has failed yet the file may
+    /// not exist: launching a missing path would throw, and revealing an
+    /// empty (or not-yet-created) logs folder would just be confusing, so
+    /// this says plainly that there's nothing to show yet instead.
+    /// </summary>
+    private void ShowLog()
+    {
+        var logPath = DiagnosticLog.LogFilePath;
+
+        if (!File.Exists(logPath))
+        {
+            MessageForm.Show("Nothing has been logged yet.", AppName);
+            return;
+        }
+
+        try
+        {
+            // UseShellExecute so Windows opens it with whatever the user
+            // has associated with .log files — the same approach Open()
+            // uses for a place's own resource.
+            Process.Start(new ProcessStartInfo(logPath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageForm.Show(
+                $"Couldn't open the log file:\n{ex.Message}",
+                AppName, MessageFormButtons.OK, MessageFormIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// The single place that ever sets HasUnsavedChanges/PersistenceMessage
+    /// (plan 5.2). HasUnsavedChanges is always read straight from
+    /// PlacesService.HasUnsavedChanges — never assigned from a returned
+    /// PersistenceResult's Saved flag — because PersistenceResult.Ok() is
+    /// also what a mutation rejected by validation returns (see its doc
+    /// comment: nothing was attempted, so nothing failed to persist).
+    /// Assigning from a returned result directly would clear an existing
+    /// banner the moment the user typed an invalid alias into an unrelated
+    /// dialog. PlacesService.HasUnsavedChanges only ever changes inside
+    /// Persist(), so reading it here is the one source of truth for
+    /// "is there an unsaved change" — a real successful save is the only
+    /// thing that can turn it false.
+    ///
+    /// <paramref name="result"/> is the PersistenceResult from a mutation
+    /// that just ran directly (ToggleFavourite, Remove, SetFavouriteOrder,
+    /// RetrySave) and supplies the banner's message text when it failed
+    /// just now. The dialog-mediated mutations (AddPlace, RenameAlias,
+    /// EditResource, Import) discard their PersistenceResult inside the
+    /// dialog and call this with no argument — when there is still an
+    /// unsaved change but no fresh failure message to show, this falls
+    /// back to a standing sentence naming the store file rather than
+    /// leaving the banner blank or reusing a stale message from a
+    /// different failure.
+    /// </summary>
+    private void RefreshPersistenceState(PersistenceResult? result = null)
+    {
+        HasUnsavedChanges = _placesService.HasUnsavedChanges;
+
+        if (!HasUnsavedChanges)
+        {
+            PersistenceMessage = null;
+            return;
+        }
+
+        if (result is { Saved: false, UserMessage: { } message })
+            PersistenceMessage = message;
+        else if (PersistenceMessage is null)
+            PersistenceMessage = $"Some changes to \"{_placesService.PlacesFilePath}\" haven't been saved yet.";
     }
 }

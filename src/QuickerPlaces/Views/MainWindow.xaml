@@ -14,6 +14,18 @@
     <Window.Resources>
         <converters:BoolToGridLengthConverter x:Key="BoolToGridLengthConverter" />
         <converters:CollectionCountToVisibilityConverter x:Key="CollectionCountToVisibilityConverter" />
+        <!--
+            The unsaved-changes banner's visibility (plan 5.2) is a plain
+            bool -> Visibility mapping with no special "collapsed still
+            reserves space" wrinkle the way BoolToGridLengthConverter's
+            row does, so this reuses WPF's own BooleanToVisibilityConverter
+            (System.Windows.Controls, resolved through the default
+            presentation xmlns — no converters: prefix needed) rather than
+            writing a near-duplicate custom one. Declared here, alongside
+            the other converters, the same way, so it reads as part of the
+            same set rather than a special case.
+        -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
 
         <!--
             Shared per-row/per-bubble context menu content. A ContextMenu is
@@ -61,6 +73,8 @@
 
     <Grid x:Name="RootGrid" Margin="16">
         <Grid.RowDefinitions>
+            <!-- Row 0: unsaved-changes banner (plan 5.2). Auto height, so a Collapsed banner takes no space. -->
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -76,8 +90,46 @@
             <RowDefinition Height="{Binding DataContext.IsGridExpanded, ElementName=RootGrid, Converter={StaticResource BoolToGridLengthConverter}}" />
         </Grid.RowDefinitions>
 
+        <!--
+            Unsaved-changes banner (plan 5.2). Non-modal and it must never
+            steal focus — Focusable="False" here is a requirement, not a
+            style choice: this can appear while the user is mid-interaction
+            elsewhere in the window (e.g. right after a failed save
+            triggered by an edit), and a banner that yanked keyboard focus
+            on appearance would interrupt whatever they were doing. Nothing
+            inside it calls .Focus() either, so it never grabs focus on its
+            own. Bound through BoolToVisibilityConverter rather than a
+            code-behind toggle, consistent with how the DataGrid's own
+            collapsed state (the bound RowDefinition below) is driven
+            entirely from the view model.
+        -->
+        <Border Grid.Row="0" Margin="0,0,0,12" Padding="12,10" CornerRadius="10"
+                Background="{StaticResource Bg.Elevated}"
+                BorderBrush="{StaticResource Status.Warning}"
+                BorderThickness="1"
+                Focusable="False"
+                Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{Binding PersistenceMessage}"
+                           Foreground="{StaticResource Status.Warning}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Button Content="Retry" Command="{Binding RetrySaveCommand}"
+                            Style="{StaticResource Button.Primary}" Margin="0,0,8,0" />
+                    <Button Content="Show Data Folder" Command="{Binding ShowDataFolderCommand}" Margin="0,0,8,0" />
+                    <Button Content="Show Log" Command="{Binding ShowLogCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Header: monogram glyph, app name + subheader, add/export/import action row -->
-        <Grid Grid.Row="0" Margin="0,0,0,16">
+        <Grid Grid.Row="1" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -112,7 +164,7 @@
             starts the drag; FavouritesPanel_Drop computes the new index
             and calls MainViewModel.MoveFavourite).
         -->
-        <Grid Grid.Row="1" Margin="0,0,0,12">
+        <Grid Grid.Row="2" Margin="0,0,0,12">
             <TextBlock Text="Right-click a place below and choose &quot;Toggle Favourite&quot; to pin it here."
                        Foreground="{StaticResource Text.Faint}" FontStyle="Italic"
                        Visibility="{Binding FavouritePlaces.Count, Converter={StaticResource CollectionCountToVisibilityConverter}}" />
@@ -140,7 +192,7 @@
         </Grid>
 
         <!-- Grid collapse toggle -->
-        <Grid Grid.Row="2" Margin="0,0,0,8">
+        <Grid Grid.Row="3" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -164,11 +216,11 @@
 
         <!--
             Places grid (SI §6.3). Collapsible via the row's bound Height
-            (Row 3 above) rather than just Visibility, so collapsing it
+            (Row 4 above) rather than just Visibility, so collapsing it
             actually reclaims the vertical space for the window instead of
             leaving a blank gap (see BoolToGridLengthConverter's remarks).
         -->
-        <DataGrid Grid.Row="3"
+        <DataGrid Grid.Row="4"
                   ItemsSource="{Binding Places}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"

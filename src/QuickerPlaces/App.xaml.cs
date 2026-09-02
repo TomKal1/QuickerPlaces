@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
@@ -23,6 +22,23 @@ public partial class App : Application
 
         DiagnosticLog.Info($"{AppInfo.Name} starting.");
 
+        // Plan 5.6: the single-instance gate runs before any service is
+        // constructed — before SettingsService, before PlacesService.
+        // That ordering is the entire guarantee that a second launch
+        // never reads or writes either store: it is not enforced by
+        // anything PlacesService or SettingsService do themselves, only
+        // by this method never reaching their constructors when the
+        // mutex isn't acquired.
+        var singleInstance = SingleInstance.TryAcquire();
+        if (singleInstance is null)
+        {
+            // TryAcquire has already signalled the running instance's
+            // activation event and logged why. Nothing else to do here —
+            // shut down immediately, before touching a single file.
+            Shutdown();
+            return;
+        }
+
         // Local variables rather than fields, deliberately: they're
         // captured by the Closing lambda below, and (unlike fields)
         // Nullable's flow analysis can prove a captured local is never
@@ -42,6 +58,7 @@ public partial class App : Application
         if (!ResolveStoreRecovery(placesService))
         {
             DiagnosticLog.Info($"{AppInfo.Name} exiting from the startup recovery prompt without loading places.");
+            singleInstance.Dispose();
             Shutdown();
             return;
         }
@@ -49,11 +66,48 @@ public partial class App : Application
         var mainViewModel = new MainViewModel(settings, placesService);
 
         var mainWindow = new MainWindow(mainViewModel, settings);
+
+        // A second launch attempt signals SingleInstance's activation
+        // event instead of starting up (above); this callback is what the
+        // first, already-running instance does about it. It fires on a
+        // thread-pool thread (RegisterWaitForSingleObject), so every touch
+        // of mainWindow below has to be marshalled onto the UI thread
+        // first — Dispatcher.Invoke rather than BeginInvoke because there
+        // is nothing further in this callback that needs to run
+        // concurrently with it.
+        singleInstance.RegisterActivationHandler(() => Dispatcher.Invoke(() =>
+        {
+            DiagnosticLog.Info($"{AppInfo.Name} activated by a second launch attempt.");
+
+            if (mainWindow.WindowState == WindowState.Minimized)
+                mainWindow.WindowState = WindowState.Normal;
+
+            // Known limitation (plan 5.6): Windows' foreground-activation
+            // rules mean Activate() called from what the OS sees as a
+            // background process (this callback isn't running in
+            // response to direct user input) may only flash the taskbar
+            // button rather than actually raise the window — Windows
+            // deliberately restricts which processes may steal
+            // foreground focus, precisely to stop background apps from
+            // doing this. The standard mitigation is a brief Topmost
+            // toggle: forcing the window to the top of the z-order this
+            // way doesn't request foreground activation, so it isn't
+            // subject to the same restriction. This is accepted as-is
+            // per the plan — if manual testing on Windows finds it
+            // unreliable, that should be recorded as a known limitation
+            // in the phase's closing commit message, not worked around
+            // with a P/Invoke SetForegroundWindow call.
+            mainWindow.Topmost = true;
+            mainWindow.Topmost = false;
+            mainWindow.Activate();
+        }));
+
         mainWindow.Closing += (_, _) =>
         {
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
             DiagnosticLog.Info($"{AppInfo.Name} exiting cleanly.");
+            singleInstance.Dispose();
         };
 
         mainWindow.Show();
@@ -84,7 +138,7 @@ public partial class App : Application
             switch (choice)
             {
                 case RecoveryChoice.ShowFile:
-                    RevealInExplorer(placesService.PlacesFilePath);
+                    ExplorerReveal.Reveal(placesService.PlacesFilePath);
                     continue; // Never resolves the state — ask again.
 
                 case RecoveryChoice.StartEmpty:
@@ -175,31 +229,4 @@ public partial class App : Application
             })
     };
 
-    /// <summary>
-    /// Reveals the store file in Explorer with it pre-selected.
-    ///
-    /// Windows gotcha, and the reason this uses the legacy Arguments
-    /// string rather than the tidier ArgumentList: Explorer's switch is
-    /// literally "/select,<path>" — the path must be attached to the
-    /// comma with no space between them. ArgumentList joins its entries
-    /// with spaces, so passing "/select," and the path as two entries
-    /// produces "/select, C:\...\places.json", which Explorer does not
-    /// recognize as a selection request; it silently opens the default
-    /// Documents view instead, leaving the user staring at the wrong
-    /// folder during a recovery prompt. One pre-quoted argument string is
-    /// the only shape that works here.
-    /// </summary>
-    private static void RevealInExplorer(string path)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\""));
-        }
-        catch
-        {
-            // Failing to open Explorer must never crash or block the
-            // recovery flow — the dialog already shows the path in text,
-            // so the user can still navigate there by hand.
-        }
-    }
 }
