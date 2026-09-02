@@ -14,9 +14,9 @@ public sealed class PlacesServiceValidationTests
     public void DuplicateAlias_IsRejectedCaseInsensitively()
     {
         var service = NewService();
-        Assert.True(service.TryAdd("Docs", PlaceType.Folder, @"C:\Docs", out _).Success);
+        Assert.True(service.TryAdd("Docs", PlaceType.Folder, @"C:\Docs", out _, out _).Success);
 
-        var result = service.TryAdd("docs", PlaceType.Folder, @"C:\OtherDocs", out var created);
+        var result = service.TryAdd("docs", PlaceType.Folder, @"C:\OtherDocs", out var created, out _);
 
         Assert.False(result.Success);
         Assert.Null(created);
@@ -26,9 +26,9 @@ public sealed class PlacesServiceValidationTests
     public void DuplicateResource_SameType_IsRejectedCaseInsensitively()
     {
         var service = NewService();
-        Assert.True(service.TryAdd("Docs", PlaceType.Url, "https://example.com/docs", out _).Success);
+        Assert.True(service.TryAdd("Docs", PlaceType.Url, "https://example.com/docs", out _, out _).Success);
 
-        var result = service.TryAdd("Docs2", PlaceType.Url, "HTTPS://EXAMPLE.COM/DOCS", out var created);
+        var result = service.TryAdd("Docs2", PlaceType.Url, "HTTPS://EXAMPLE.COM/DOCS", out var created, out _);
 
         Assert.False(result.Success);
         Assert.Null(created);
@@ -46,9 +46,9 @@ public sealed class PlacesServiceValidationTests
         // resource string be used for both PlaceTypes in this test.
         const string resource = @"C:\Shared\Data";
 
-        Assert.True(service.TryAdd("AsUrl", PlaceType.Url, resource, out _).Success);
+        Assert.True(service.TryAdd("AsUrl", PlaceType.Url, resource, out _, out _).Success);
 
-        var result = service.TryAdd("AsFolder", PlaceType.Folder, resource, out var created);
+        var result = service.TryAdd("AsFolder", PlaceType.Folder, resource, out var created, out _);
 
         Assert.True(result.Success);
         Assert.NotNull(created);
@@ -58,13 +58,13 @@ public sealed class PlacesServiceValidationTests
     public void EditingAPlace_DoesNotCollideWithItself()
     {
         var service = NewService();
-        service.TryAdd("Docs", PlaceType.Folder, @"C:\Docs", out var created);
+        service.TryAdd("Docs", PlaceType.Folder, @"C:\Docs", out var created, out _);
         var place = created!;
 
-        var renameResult = service.TryRenameAlias(place, "Docs");
+        var renameResult = service.TryRenameAlias(place, "Docs", out _);
         Assert.True(renameResult.Success);
 
-        var resourceResult = service.TryEditResource(place, @"C:\Docs");
+        var resourceResult = service.TryEditResource(place, @"C:\Docs", out _);
         Assert.True(resourceResult.Success);
     }
 }

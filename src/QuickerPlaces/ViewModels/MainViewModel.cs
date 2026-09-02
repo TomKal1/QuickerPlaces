@@ -162,6 +162,9 @@ public sealed class MainViewModel : ObservableObject
         if (place is null)
             return;
 
+        // The returned PersistenceResult isn't consumed here — a banner
+        // that reads it is a later step. PlacesService.HasUnsavedChanges
+        // is the durable state that survives until then.
         _placesService.ToggleFavourite(place.Model);
         place.Refresh();
         RebuildFavourites();
@@ -179,6 +182,8 @@ public sealed class MainViewModel : ObservableObject
         if (confirm != MessageFormResult.Yes)
             return;
 
+        // As above — the PersistenceResult is discarded here; the banner
+        // that would read it is a later step.
         _placesService.Remove(place.Model);
         Places.Remove(place);
         RebuildFavourites();
@@ -263,6 +268,8 @@ public sealed class MainViewModel : ObservableObject
         targetIndex = Math.Clamp(targetIndex, 0, ordered.Count);
         ordered.Insert(targetIndex, dragged);
 
+        // As above — the PersistenceResult is discarded here; the banner
+        // that would read it is a later step.
         _placesService.SetFavouriteOrder(ordered.Select(vm => vm.Model).ToList());
 
         FavouritePlaces.Clear();

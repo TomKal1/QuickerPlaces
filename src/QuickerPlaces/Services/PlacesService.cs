@@ -164,17 +164,29 @@ public sealed class PlacesService
     // writes through to disk immediately (SI §5).
     // ---------------------------------------------------------------
 
-    public ValidationResult TryAdd(string alias, PlaceType type, string resource, out Place? created)
+    public ValidationResult TryAdd(string alias, PlaceType type, string resource, out Place? created, out PersistenceResult persistence)
     {
         created = null;
 
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
         var aliasResult = ValidateAlias(alias);
         if (!aliasResult.Success)
+        {
+            // Nothing was mutated, so there is nothing that failed to
+            // persist — the caller's ValidationResult.Success is what
+            // tells it to stop, not this.
+            persistence = PersistenceResult.Ok();
             return aliasResult;
+        }
 
         var resourceResult = ValidateResource(resource, type);
         if (!resourceResult.Success)
+        {
+            persistence = PersistenceResult.Ok();
             return resourceResult;
+        }
 
         var place = new Place
         {
@@ -187,37 +199,52 @@ public sealed class PlacesService
         };
 
         _places.Add(place);
-        SaveToDisk();
+        persistence = Persist();
 
         created = place;
         return ValidationResult.Ok();
     }
 
-    public ValidationResult TryRenameAlias(Place place, string newAlias)
+    public ValidationResult TryRenameAlias(Place place, string newAlias, out PersistenceResult persistence)
     {
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
         var result = ValidateAlias(newAlias, excluding: place);
         if (!result.Success)
+        {
+            persistence = PersistenceResult.Ok();
             return result;
+        }
 
         place.Alias = newAlias.Trim();
-        SaveToDisk();
+        persistence = Persist();
         return ValidationResult.Ok();
     }
 
-    public ValidationResult TryEditResource(Place place, string newResource)
+    public ValidationResult TryEditResource(Place place, string newResource, out PersistenceResult persistence)
     {
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
         var result = ValidateResource(newResource, place.Type, excluding: place);
         if (!result.Success)
+        {
+            persistence = PersistenceResult.Ok();
             return result;
+        }
 
         place.Resource = newResource.Trim();
-        SaveToDisk();
+        persistence = Persist();
         return ValidationResult.Ok();
     }
 
     /// <summary>Turns favouriting on/off. Turning on appends to the end of the favourite order; turning off renumbers the remaining favourites so FavouriteOrder stays a dense 0..n-1 sequence.</summary>
-    public void ToggleFavourite(Place place)
+    public PersistenceResult ToggleFavourite(Place place)
     {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
         if (place.IsFavourite)
         {
             place.IsFavourite = false;
@@ -233,24 +260,30 @@ public sealed class PlacesService
             // without needing a separate "any favourites yet" branch.
         }
 
-        SaveToDisk();
+        return Persist();
     }
 
     /// <summary>Reassigns FavouriteOrder for every current favourite to match <paramref name="orderedFavourites"/> (0-based, dense). Used after a bubble drag-reorder.</summary>
-    public void SetFavouriteOrder(IReadOnlyList<Place> orderedFavourites)
+    public PersistenceResult SetFavouriteOrder(IReadOnlyList<Place> orderedFavourites)
     {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
         for (var i = 0; i < orderedFavourites.Count; i++)
             orderedFavourites[i].FavouriteOrder = i;
 
-        SaveToDisk();
+        return Persist();
     }
 
-    public void Remove(Place place)
+    public PersistenceResult Remove(Place place)
     {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
         _places.Remove(place);
         if (place.IsFavourite)
             RenumberFavourites();
-        SaveToDisk();
+        return Persist();
     }
 
     private void RenumberFavourites()
@@ -316,9 +349,18 @@ public sealed class PlacesService
     /// store at commit time (defensive — the store could in principle have
     /// changed since the preview was shown) and silently skips any that no
     /// longer pass.
+    ///
+    /// Persists once for the whole batch (test 19), not once per record —
+    /// D2's whole-store write makes per-record saves both wasteful and
+    /// pointless. A failed persist still leaves every successfully-added
+    /// record in memory (D1, test 20): the import is not rolled back just
+    /// because the disk write that reports it failed.
     /// </summary>
-    public List<Place> CommitImport(IEnumerable<Place> selectedCandidates)
+    public (List<Place> imported, PersistenceResult persistence) CommitImport(IEnumerable<Place> selectedCandidates)
     {
+        if (IsMutationBlocked(out var blocked))
+            return (new List<Place>(), blocked);
+
         var imported = new List<Place>();
 
         foreach (var candidate in selectedCandidates)
@@ -342,10 +384,8 @@ public sealed class PlacesService
             imported.Add(place);
         }
 
-        if (imported.Count > 0)
-            SaveToDisk();
-
-        return imported;
+        var persistence = imported.Count > 0 ? Persist() : PersistenceResult.Ok();
+        return (imported, persistence);
     }
 
     // ---------------------------------------------------------------
@@ -383,25 +423,134 @@ public sealed class PlacesService
     /// disk, then replaces the real file in one filesystem operation, so a
     /// crash or power-loss mid-write can never leave a truncated or
     /// half-written places.json behind (SI §5).
+    ///
+    /// On failure this deliberately does NOT roll back the in-memory
+    /// change that triggered it (D1). Rolling back would throw away
+    /// whatever the user just typed, and it would leave RetrySave with
+    /// nothing to retry — the whole point of keeping the proposed state in
+    /// memory is that Retry can re-serialize and rewrite it verbatim.
+    /// HasUnsavedChanges is what stops the application from claiming a
+    /// change is safely stored; it is not a rollback signal.
     /// </summary>
-    private void SaveToDisk()
+    private PersistenceResult Persist()
     {
         try
         {
             var store = new PlacesStore { Places = _places };
             var json = JsonSerializer.Serialize(store, JsonOptions);
             _storage.Write(json);
+
+            HasUnsavedChanges = false;
+            return PersistenceResult.Ok();
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort persistence: a save failure (disk full, file
-            // locked by another process, etc.) shouldn't crash the app or
-            // block the in-memory change the user just made — it just
-            // means that one change might not survive an unclean exit.
-            //
-            // This silent catch is deliberately still here — turning save
-            // failures into a visible, retryable banner (D1) is a later
-            // step of this phase (5.2), not this one.
+            // Broad catch is intentional: the storage layer can throw
+            // IOException (disk full, file locked by another process),
+            // UnauthorizedAccessException (permissions), or anything else
+            // a filesystem can raise. Whatever it is, the point of this
+            // step is that it is never swallowed — it becomes a returned
+            // PersistenceResult the caller must look at, and a logged
+            // diagnostic entry.
+            HasUnsavedChanges = true;
+
+            // Privacy rule (DiagnosticLog remarks / plan 5.5): name the
+            // store path and the record count, never a place's alias or
+            // resource. The count and path are enough to diagnose "why
+            // didn't my data save" without writing anyone's data to a
+            // second, less-protected file.
+            DiagnosticLog.Error(
+                $"Failed to save {_places.Count} place(s) to {_storage.StoreFilePath}",
+                ex);
+
+            var message = $"Couldn't save your places to \"{_storage.StoreFilePath}\". {ex.Message}";
+            return PersistenceResult.Fail(message);
         }
     }
+
+    /// <summary>
+    /// True once a mutation has changed the in-memory store but the change
+    /// has not yet reached disk — set by a failed Persist(), cleared by the
+    /// next successful one (including a successful RetrySave()). This is
+    /// the seam a later step's banner reads; nothing here shows it to the
+    /// user directly.
+    /// </summary>
+    public bool HasUnsavedChanges { get; private set; }
+
+    /// <summary>
+    /// Re-serializes and rewrites the whole in-memory store. Safe to call
+    /// with no queue of pending operations to replay: D2's whole-store
+    /// writes make every save idempotent — there is only ever "the current
+    /// state", never a sequence of deltas — and D1 keeps the user's most
+    /// recent change in memory, so there is something for Retry to
+    /// actually retry.
+    /// </summary>
+    public PersistenceResult RetrySave()
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        return Persist();
+    }
+
+    /// <summary>
+    /// D3 — true when the store must not be written to until the user
+    /// resolves a startup recovery prompt (a corrupt file, or one written
+    /// by a newer version). Nothing in this file sets this true yet: the
+    /// classification that would (the schema-version gate and load-failure
+    /// classification, D6) is a later step of this phase. The guard below
+    /// is wired ahead of that step so every mutation already refuses to
+    /// run while this is true, rather than a later step having to retrofit
+    /// the check into seven methods and risk missing one.
+    /// </summary>
+    public bool IsRecoveryUnresolved { get; private set; }
+
+    /// <summary>The message every mutation returns while <see cref="IsRecoveryUnresolved"/> is true. Set together with it.</summary>
+    public string? RecoveryBlockedMessage { get; private set; }
+
+    /// <summary>
+    /// Test-only: simulates the version gate (a later step) having left
+    /// recovery unresolved, so this step's guard — that a mutation while
+    /// unresolved makes no in-memory change and writes nothing — can be
+    /// proven before that gate exists. Production code must never call
+    /// this; the real setter is the later step's load-failure
+    /// classification.
+    /// </summary>
+    public void MarkRecoveryUnresolvedForTests(string message)
+    {
+        IsRecoveryUnresolved = true;
+        RecoveryBlockedMessage = message;
+    }
+
+    /// <summary>
+    /// D3's guard: every mutation calls this first. If recovery is
+    /// unresolved, the mutation makes no in-memory change at all and
+    /// returns a failure carrying the recovery message — the one case in
+    /// this phase where a mutation is rejected outright rather than
+    /// accepted and banner-flagged, because a damaged or foreign file must
+    /// never be overwritten by a normal edit.
+    /// </summary>
+    private bool IsMutationBlocked(out PersistenceResult blocked)
+    {
+        if (IsRecoveryUnresolved)
+        {
+            blocked = PersistenceResult.Fail(BlockedMessage());
+            return true;
+        }
+
+        blocked = default;
+        return false;
+    }
+
+    /// <summary>
+    /// The text a blocked mutation reports. Falls back to a generic
+    /// sentence rather than dereferencing RecoveryBlockedMessage with a
+    /// null-forgiving operator: the two properties are only ever set
+    /// together today, but a later step adds the real setter, and a
+    /// missed assignment there should degrade to a vague message rather
+    /// than a NullReferenceException in front of a user whose data is
+    /// already in trouble.
+    /// </summary>
+    private string BlockedMessage()
+        => RecoveryBlockedMessage ?? "Your saved places need attention before changes can be saved.";
 }

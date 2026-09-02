@@ -14,7 +14,7 @@ public sealed class PlacesServiceRoundTripTests
         var storage = new FakePlacesStorage();
         var service = new PlacesService(storage);
 
-        var result = service.TryAdd("Docs", PlaceType.Folder, @"C:\Docs", out var created);
+        var result = service.TryAdd("Docs", PlaceType.Folder, @"C:\Docs", out var created, out _);
 
         Assert.True(result.Success);
         Assert.NotNull(created);

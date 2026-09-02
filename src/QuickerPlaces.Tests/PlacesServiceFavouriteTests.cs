@@ -12,9 +12,9 @@ public sealed class PlacesServiceFavouriteTests
     private static PlacesService NewServiceWithThreePlaces(out Place a, out Place b, out Place c)
     {
         var service = new PlacesService(new FakePlacesStorage());
-        service.TryAdd("A", PlaceType.Folder, @"C:\A", out var placeA);
-        service.TryAdd("B", PlaceType.Folder, @"C:\B", out var placeB);
-        service.TryAdd("C", PlaceType.Folder, @"C:\C", out var placeC);
+        service.TryAdd("A", PlaceType.Folder, @"C:\A", out var placeA, out _);
+        service.TryAdd("B", PlaceType.Folder, @"C:\B", out var placeB, out _);
+        service.TryAdd("C", PlaceType.Folder, @"C:\C", out var placeC, out _);
         a = placeA!;
         b = placeB!;
         c = placeC!;

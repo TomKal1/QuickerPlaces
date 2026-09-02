@@ -137,7 +137,12 @@ public partial class PlaceFormDialog : Window
 
     private bool TryCommitAdd()
     {
-        var result = _placesService.TryAdd(AliasTextBox.Text, _type, ResourceTextBox.Text, out var created);
+        // The persistence outcome (did the save reach disk) is deliberately
+        // not surfaced here — this dialog's job stays "did validation
+        // pass". HasUnsavedChanges on PlacesService is the durable record
+        // of a failed save; a later step's banner reads it there rather
+        // than this dialog carrying its own copy of the failure.
+        var result = _placesService.TryAdd(AliasTextBox.Text, _type, ResourceTextBox.Text, out var created, out _);
         if (!result.Success)
         {
             ShowError(result.ErrorMessage!);
@@ -150,7 +155,7 @@ public partial class PlaceFormDialog : Window
 
     private bool TryCommitRename()
     {
-        var result = _placesService.TryRenameAlias(_editingPlace!, AliasTextBox.Text);
+        var result = _placesService.TryRenameAlias(_editingPlace!, AliasTextBox.Text, out _);
         if (!result.Success)
         {
             ShowError(result.ErrorMessage!);
@@ -163,7 +168,7 @@ public partial class PlaceFormDialog : Window
 
     private bool TryCommitEditResource()
     {
-        var result = _placesService.TryEditResource(_editingPlace!, ResourceTextBox.Text);
+        var result = _placesService.TryEditResource(_editingPlace!, ResourceTextBox.Text, out _);
         if (!result.Success)
         {
             ShowError(result.ErrorMessage!);

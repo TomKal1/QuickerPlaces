@@ -71,7 +71,12 @@ public partial class ImportDialog : Window
             return;
         }
 
-        ImportedPlaces = _placesService.CommitImport(selected);
+        // The persistence outcome isn't surfaced here for the same reason
+        // as PlaceFormDialog: PlacesService.HasUnsavedChanges is the
+        // durable record a later step's banner reads from, so this dialog
+        // doesn't need its own copy of it.
+        var (imported, _) = _placesService.CommitImport(selected);
+        ImportedPlaces = imported;
         DialogResult = true;
     }
 
