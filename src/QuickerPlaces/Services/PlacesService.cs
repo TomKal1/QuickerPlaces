@@ -50,16 +50,18 @@ public sealed class PlacesService
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    private readonly string _placesFilePath;
+    private readonly IPlacesStorage _storage;
     private readonly List<Place> _places;
 
-    public PlacesService()
+    /// <summary>Builds the production service over the real, roaming AppData store — unchanged from before the storage seam existed, so App.xaml.cs needs no changes.</summary>
+    public PlacesService() : this(FilePlacesStorage.ForDefaultLocation())
     {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var folder = Path.Combine(root, AppInfo.Publisher, AppInfo.Name);
-        Directory.CreateDirectory(folder);
-        _placesFilePath = Path.Combine(folder, "places.json");
+    }
 
+    /// <summary>Builds the service over any IPlacesStorage — the seam a test uses to exercise load/save behaviour without touching a real disk.</summary>
+    public PlacesService(IPlacesStorage storage)
+    {
+        _storage = storage;
         (_places, LoadFailed) = LoadFromDisk();
     }
 
@@ -74,7 +76,7 @@ public sealed class PlacesService
     public bool LoadFailed { get; }
 
     /// <summary>Full path to places.json — handy for a "Reveal in Explorer" menu item.</summary>
-    public string PlacesFilePath => _placesFilePath;
+    public string PlacesFilePath => _storage.StoreFilePath;
 
     /// <summary>Snapshot of all stored places, in stored order. Callers that need live updates should go through MainViewModel's ObservableCollection instead.</summary>
     public IReadOnlyList<Place> Places => _places;
@@ -354,10 +356,10 @@ public sealed class PlacesService
     {
         try
         {
-            if (!File.Exists(_placesFilePath))
+            if (!_storage.Exists)
                 return (new List<Place>(), false);
 
-            var json = File.ReadAllText(_placesFilePath);
+            var json = _storage.Read();
             var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
             return (store?.Places ?? new List<Place>(), false);
         }
@@ -366,16 +368,21 @@ public sealed class PlacesService
             // Corrupt or unreadable places file — start from an empty list
             // rather than crashing the app on launch (SI §5). The file on
             // disk is left as-is; LoadFailed lets the UI tell the user.
+            //
+            // This still lumps "damaged" and "could not be opened" into one
+            // boolean — that distinction (D6) is a later step of this
+            // phase, not this one, which is scoped to moving the existing
+            // File.* calls behind IPlacesStorage with no behaviour change.
             return (new List<Place>(), true);
         }
     }
 
     /// <summary>
-    /// Writes places.json atomically: serialize to a temp file in the same
-    /// directory, then replace the real file in one filesystem operation
-    /// (File.Move with overwrite, which uses an atomic rename/replace on
-    /// Windows) so a crash or power-loss mid-write can never leave a
-    /// truncated or half-written places.json behind (SI §5).
+    /// Writes places.json atomically via IPlacesStorage.Write, which
+    /// serializes to a temp file in the same directory, flushes it to
+    /// disk, then replaces the real file in one filesystem operation, so a
+    /// crash or power-loss mid-write can never leave a truncated or
+    /// half-written places.json behind (SI §5).
     /// </summary>
     private void SaveToDisk()
     {
@@ -383,10 +390,7 @@ public sealed class PlacesService
         {
             var store = new PlacesStore { Places = _places };
             var json = JsonSerializer.Serialize(store, JsonOptions);
-
-            var tempPath = _placesFilePath + ".tmp";
-            File.WriteAllText(tempPath, json);
-            File.Move(tempPath, _placesFilePath, overwrite: true);
+            _storage.Write(json);
         }
         catch
         {
@@ -394,6 +398,10 @@ public sealed class PlacesService
             // locked by another process, etc.) shouldn't crash the app or
             // block the in-memory change the user just made — it just
             // means that one change might not survive an unclean exit.
+            //
+            // This silent catch is deliberately still here — turning save
+            // failures into a visible, retryable banner (D1) is a later
+            // step of this phase (5.2), not this one.
         }
     }
 }

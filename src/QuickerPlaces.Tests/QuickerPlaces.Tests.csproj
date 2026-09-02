@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>QuickerPlaces.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+
+    <!-- ImplicitUsings off to match QuickerPlaces.csproj's style — every file declares its own explicit usings. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <IsPackable>false</IsPackable>
+
+    <!--
+      UseWPF is on even though no test here constructs a Window (D5): the
+      referenced QuickerPlaces assembly is built against WindowsBase /
+      PresentationCore / PresentationFramework, and without UseWPF this
+      project wouldn't pull those framework references in. The service and
+      model types the tests actually touch don't need WPF themselves, but
+      the referenced assembly does, so they have to be resolvable both at
+      compile time and when the test host loads the assembly.
+    -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QuickerPlaces\QuickerPlaces.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Fixtures/places.v1.json is read via AppContext.BaseDirectory at test
+      time (not as an embedded resource), so it needs to land next to the
+      test assembly in the output directory. Every test that reads it does
+      so the same way — see PlacesStoreFixtureTests.
+    -->
+    <None Update="Fixtures\places.v1.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
