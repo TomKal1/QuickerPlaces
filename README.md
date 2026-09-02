@@ -2,14 +2,14 @@
 
 A lightweight Windows desktop utility for storing and quickly opening remembered "places" — folder paths and URLs — under a memorable alias. Part of the **QuickerLinks** project: a better path launcher than Quick Links.
 
-> **Status:** early build. Functional end-to-end, two runtime bugs found via testing and fixed (see [`ai/BUILD_SUMMARY.md`](ai/BUILD_SUMMARY.md)), but not yet exercised through every feature in a full test pass. Expect rough edges.
+> **Status:** early build. Functional end-to-end, two runtime bugs found via testing and fixed (see [`ai/BUILD_SUMMARY.md`](ai/BUILD_SUMMARY.md)). Phase 1 (persistence reliability and recovery — failed saves are now reported instead of swallowed, a damaged or unreadable store is handled safely and recovered from, and only one instance runs at a time) has been implemented, but **has not yet been built or tested on Windows** — no .NET SDK is available in this environment. `dotnet build`, `dotnet test`, and a manual verification pass are required before treating it as done; see `ai/BUILD_SUMMARY.md` for the full checklist. Expect rough edges.
 
 ## What it does
 
 - Save a folder path or a URL under a unique **alias**, with validation that blocks duplicate aliases and duplicate paths/URLs before they're saved.
 - Browse everything in a sortable grid — right-click a row for **Open**, **Rename Alias**, **Edit Path/URL**, **Toggle Favourite**, or **Remove**; double-click to open.
 - Pin your most-used places as one-click **favourite bubbles** above the grid, drag-and-drop to reorder them, and collapse the grid entirely when you just want the bubbles.
-- Everything is written to disk immediately as you work — no save button, no "unsaved changes."
+- Everything is written to disk immediately as you work — no save button. If a save ever fails, the change stays on screen and a banner says so, with a Retry that rewrites it; QuickerPlaces never claims a change is stored when it isn't.
 - **Export** any subset of your places to a JSON file to share or back up, and **import** from one — anything that would collide with what you already have is filtered out automatically, before you're ever asked to pick.
 
 ## Getting started
@@ -30,10 +30,11 @@ dotnet run --project QuickerPlaces
 
 ### Where your data lives
 
-- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit.
+- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit. The previous version is kept alongside it as `places.bak.json` on every save.
 - Window layout (size/position, whether the grid is collapsed): `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`.
+- Diagnostic log (save failures, load/recovery outcomes — never place aliases or paths): `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log`.
 
-Both are plain JSON and safe to inspect, back up, or hand-edit if you know what you're doing.
+All plain text and safe to inspect, back up, or hand-edit if you know what you're doing.
 
 ## Repository layout
 
@@ -41,7 +42,8 @@ Both are plain JSON and safe to inspect, back up, or hand-edit if you know what 
 .
 ├── src/                     # the actual application
 │   ├── QuickerPlaces.sln
-│   └── QuickerPlaces/       # WPF project (App, Models, ViewModels, Views, Services, ...)
+│   ├── QuickerPlaces/       # WPF project (App, Models, ViewModels, Views, Services, ...)
+│   └── QuickerPlaces.Tests/ # xUnit tests for the services and models (no UI tests)
 └── ai/                      # how this was built, and why
     ├── QuickerPlaces-SI.md  # the original spec/requirements handoff
     └── BUILD_SUMMARY.md     # what got built, decisions made, bugs found & fixed

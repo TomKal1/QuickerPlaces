@@ -11,7 +11,7 @@ When QuickerPlaces opens you'll see, top to bottom:
 - A **Hide List** / **Show List** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each.
 
-Nothing here needs a save button. Every add, edit, favourite toggle, reorder, or removal is written to disk the moment it happens.
+Nothing here needs a save button. Every add, edit, favourite toggle, reorder, or removal is written to disk the moment it happens — and if that write can't complete for some reason, a banner appears above the favourite bubbles to tell you so (see "The unsaved-changes banner" below).
 
 ## Adding a place
 
@@ -50,6 +50,42 @@ Any place can be a favourite. Toggling **Favourite** (from the grid's right-clic
 
 If you only want the favourite bubbles visible, click **Hide List**. The grid collapses and the window shrinks to make room; click **Show List** to bring it back. This state is remembered between sessions, along with the window's size and position.
 
+## The unsaved-changes banner
+
+If QuickerPlaces can't write a change to disk — the file's permissions changed, another program is holding it open, the disk is full, and so on — a banner appears above the favourite bubbles instead of the app silently pretending everything is fine.
+
+The banner means exactly one thing: **the change you just made is on your screen but not yet on disk.** Nothing is lost — whatever you added, renamed, edited, favourited, reordered, or removed stays exactly as you left it in the app. It just hasn't been written to `places.json` yet.
+
+Three buttons on the banner:
+
+- **Retry** — tries the save again. If whatever was blocking it has cleared up (permission restored, the other program closed the file, disk space freed), the banner disappears and your change is now safely on disk.
+- **Show Data Folder** — opens File Explorer to your `places.json` file, in case you want to check permissions, free up disk space, or see what's going on yourself.
+- **Show Log** — opens the diagnostic log (see below) with whatever program you have associated with `.log` files, so you or someone helping you can see exactly what QuickerPlaces tried and what went wrong.
+
+The banner stays up until a save actually succeeds. Doing something else in the app — adding another place, editing a different one — does **not** make it go away; only a real, successful write to disk clears it. If you're not sure whether a change made it to disk, the banner is the answer: no banner means everything is saved.
+
+## The startup recovery prompt
+
+Occasionally, when QuickerPlaces starts up, it finds that your `places.json` file isn't in a state it can just load normally. When that happens, you'll see a prompt before the main window opens, and it's worth knowing which of three situations you're in, because they're different and QuickerPlaces treats them very differently on purpose:
+
+- **"...couldn't read your saved places. The file appears to be damaged."** The file opened, but what's in it doesn't make sense as a places file — it may have been edited by hand and broken, or corrupted some other way. You get three choices: **Show me the file** (opens Explorer with it selected, then asks again), **Start with an empty list** (only offered here — see below), and **Exit**.
+- **"...couldn't open your saved places. Another program may be using the file, or it may not have permission to read it. Your data is most likely fine."** This is a different, much less worrying situation: QuickerPlaces couldn't even get to your data to check it, most likely because a sync tool, antivirus, or another program briefly has the file open, or a permissions setting is blocking it. Your choices are **Try again** (re-attempts the load — often all you need if you just wait a second and click it), **Show me the file**, and **Exit**.
+- **"These saved places were written by a newer version of QuickerPlaces."** Your file is completely intact — it was just saved by a version of the app newer than the one you're currently running, and this build doesn't know how to safely read fields it doesn't recognize. **Exit** and update QuickerPlaces is the recommended path; **Show me the file** is also offered.
+
+The important thing to notice is that **only the "damaged" prompt ever offers to start fresh.** When QuickerPlaces says it *couldn't open* your file, rather than that it's damaged, your data is most likely completely fine, and QuickerPlaces will not touch, rename, or replace that file no matter which button you click — there is deliberately no "start with an empty list" option for that case, because doing so could throw away data that was never actually at risk. The same is true if the file was written by a newer version: it's intact, this build just can't read it yet, so nothing is offered that would overwrite it.
+
+If you do choose to start fresh from a damaged file, QuickerPlaces doesn't delete the original — it renames it to something like `places.corrupt-20260902-143022.json` right next to where `places.json` normally lives, and tells you (in the log) where it put it. If you or someone technical wants to try to recover data from it by hand later, it's still there.
+
+## Where the log lives
+
+QuickerPlaces keeps a small diagnostic log at `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log`, a plain text file. It records things like startup, whether your places file loaded normally, save failures and why, and recovery choices — the kind of detail useful for figuring out what went wrong if something did.
+
+It's capped at 256 KB and rolls over to a second file (`quickerplaces.1.log`) once it fills up, so it can never grow without bound even if something keeps failing while you leave the app running. It never contains any of your aliases or the folder paths/URLs you've saved — only counts and file paths — so it's safe to share with someone helping you troubleshoot without handing over your actual data.
+
+## Only one QuickerPlaces at a time
+
+QuickerPlaces only allows one running copy per Windows user on a machine. If you try to launch it again while it's already running — from a shortcut, from Explorer, however — the existing window is brought to the front instead of a second copy opening. (If the window happens to be minimized, it's restored first.) This is what keeps two copies from ever fighting over the same `places.json` file and one silently overwriting the other's changes.
+
 ## Exporting places
 
 Click **Export...** to open a checklist of every place you've saved, all checked by default. Uncheck anything you don't want to include, then choose where to save the resulting `.json` file. This is the way to back up your list or hand a set of places to someone else running QuickerPlaces.
@@ -64,17 +100,20 @@ If everything in the file collides with what you already have, you'll see an emp
 
 ## Where your data lives
 
-QuickerPlaces keeps two small JSON files, both plain text and safe to open in a text editor if you're curious or want to back them up manually:
+QuickerPlaces keeps a few small plain-text files, all safe to open in a text editor if you're curious or want to back them up manually:
 
 - **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes.
+- **A backup of the previous version:** `%AppData%\QuickerPlaces\QuickerPlaces\places.bak.json` — QuickerPlaces keeps the previous contents of `places.json` every time it saves, automatically, right next to it. You don't need to do anything to get this; it's just there as an extra safety net.
 - **Window layout** (size, position, whether the grid is collapsed): `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes.
+- **The diagnostic log:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log` — see "Where the log lives" above.
 
-You never need to touch either file by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes.
+You never need to touch any of these files by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes.
 
 ## If something goes wrong
 
 - **First launch, or a missing places file:** QuickerPlaces just starts with an empty list — this is normal, not an error, and your first **Add Folder**/**Add URL** creates the file.
-- **A places file that can't be read** (corrupted, edited by hand and broken, etc.): QuickerPlaces tells you once, on startup, that it couldn't load your saved places, and starts you with an empty list rather than crashing. Your original file is left on disk untouched — it isn't overwritten until you save something new — so if you know your way around JSON, you can inspect and fix it before adding anything new in the app.
+- **A places file that can't be loaded** (damaged, held open by another program, or from a newer version of the app): see "The startup recovery prompt" above — QuickerPlaces asks you what to do rather than guessing, and it never touches your file except when you explicitly choose to start fresh from a genuinely damaged one.
+- **A save that doesn't go through:** see "The unsaved-changes banner" above — your change stays visible and nothing is lost; the banner tells you and lets you retry.
 - **A place that won't open:** you'll get an on-screen message explaining why (folder no longer exists, URL is malformed, etc.) rather than the app freezing or closing.
 
 If you hit anything not covered here, or something that looks like an actual crash, that's worth reporting rather than working around — see `ai/BUILD_SUMMARY.md` for the project's current known-issues status.
