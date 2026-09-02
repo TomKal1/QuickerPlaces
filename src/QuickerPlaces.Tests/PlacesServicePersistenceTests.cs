@@ -182,22 +182,23 @@ public sealed class PlacesServicePersistenceTests
     /// <summary>
     /// Plan test 10 (D3): while recovery is unresolved, every mutation is
     /// refused outright — no in-memory change, no write attempted at all.
-    /// Written against MarkRecoveryUnresolvedForTests, the test-only setter
-    /// this step adds ahead of the version gate that will set the real
-    /// flag in a later step.
+    /// Recovery is put into the unresolved state the same way production
+    /// code does it: by loading a store the version gate classifies as
+    /// Damaged (see PlacesServiceLoadOutcomeTests for the classification
+    /// itself), not through a test-only setter.
     /// </summary>
     [Fact]
     public void MutationsAreRefused_WhileRecoveryIsUnresolved()
     {
-        var service = NewService(out var storage);
-        const string recoveryMessage = "Resolve the recovery prompt before making changes.";
-        service.MarkRecoveryUnresolvedForTests(recoveryMessage);
+        var storage = new FakePlacesStorage { ContentsToReturn = "{ not valid json" };
+        var service = new PlacesService(storage);
+        Assert.True(service.IsRecoveryUnresolved);
 
         var addValidation = service.TryAdd("Docs", PlaceType.Folder, @"C:\Docs", out var created, out var addPersistence);
         Assert.False(addValidation.Success);
         Assert.Null(created);
         Assert.False(addPersistence.Saved);
-        Assert.Equal(recoveryMessage, addPersistence.UserMessage);
+        Assert.Equal(service.RecoveryBlockedMessage, addPersistence.UserMessage);
         Assert.Empty(service.Places);
 
         var removePersistence = service.Remove(new Place { Alias = "X", Type = PlaceType.Folder, Resource = @"C:\X" });

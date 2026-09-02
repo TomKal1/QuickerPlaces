@@ -18,21 +18,6 @@ public partial class MainWindow : Window
         RestoreWindowState(settings);
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e)
-    {
-        // Surfaced once here (rather than from the constructor) so a
-        // loaded, on-screen window exists for MessageForm to center on
-        // (SI §5 — a corrupt places.json shouldn't crash the app, but the
-        // user should still be told their old data didn't just vanish).
-        if (DataContext is MainViewModel { PlacesLoadFailed: true } viewModel)
-        {
-            MessageForm.Show(
-                $"Your saved places couldn't be read and QuickerPlaces has started with an empty list.\n\n" +
-                $"The original file was left untouched at:\n{viewModel.PlacesFilePath}",
-                viewModel.AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
-        }
-    }
-
     private void RestoreWindowState(AppSettings settings)
     {
         if (!double.IsNaN(settings.WindowLeft) && !double.IsNaN(settings.WindowTop))

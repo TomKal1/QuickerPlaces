@@ -9,7 +9,6 @@
         Height="650" Width="1000"
         MinHeight="200" MinWidth="700"
         WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded"
         d:DesignHeight="650" d:DesignWidth="1000">
 
     <Window.Resources>

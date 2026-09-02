@@ -13,7 +13,15 @@ namespace QuickerPlaces.Models;
 /// </summary>
 public sealed class AppSettings
 {
-    public int SchemaVersion { get; set; } = 1;
+    /// <summary>
+    /// The schema version this build writes and expects, mirroring
+    /// PlacesService.CurrentSchemaVersion. See SettingsService.Load for
+    /// the (deliberately different) policy applied when a loaded file's
+    /// SchemaVersion doesn't match.
+    /// </summary>
+    public const int CurrentSchemaVersion = 1;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     // Last known main window bounds, used to restore the window on the next
     // launch. Left/Top of double.NaN means "no saved position yet" (first

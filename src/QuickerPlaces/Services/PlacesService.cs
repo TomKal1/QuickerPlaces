@@ -62,18 +62,35 @@ public sealed class PlacesService
     public PlacesService(IPlacesStorage storage)
     {
         _storage = storage;
-        (_places, LoadFailed) = LoadFromDisk();
+        var (places, outcome) = LoadFromDisk();
+        _places = places;
+        LoadOutcome = outcome;
+
+        // D3: a store that is damaged, could not be opened, or came from a
+        // newer version starts empty and refuses mutations until the
+        // recovery flow (App.xaml.cs) resolves it — see IsMutationBlocked
+        // below. Ok and NotPresent need no recovery state at all.
+        if (RequiresRecovery(outcome))
+            SetRecoveryUnresolved(RecoveryMessageFor(outcome));
     }
 
     /// <summary>
-    /// True if places.json existed but couldn't be read/parsed on startup
-    /// (corrupt or from an incompatible future version). The service still
-    /// starts with an empty list rather than crashing (SI §5) — MainWindow
-    /// surfaces this once via a non-blocking MessageForm notice so the user
-    /// knows their old data didn't silently vanish forever (the corrupt
-    /// file is left on disk, untouched, until the next write overwrites it).
+    /// The current on-disk schema version this build writes and expects.
+    /// Bump only alongside a migration branch in LoadFromDisk (plan 5.3) —
+    /// there are no prior versions yet, so there is nothing to migrate
+    /// today.
     /// </summary>
-    public bool LoadFailed { get; }
+    public const int CurrentSchemaVersion = 1;
+
+    /// <summary>
+    /// What happened the last time the store was loaded — see
+    /// <see cref="StoreLoadOutcome"/> for what each value means and, for
+    /// the three failure values, what the application is and is not
+    /// allowed to do about it. Replaces the old LoadFailed boolean, which
+    /// could not distinguish a damaged file from one that could not be
+    /// opened (D6).
+    /// </summary>
+    public StoreLoadOutcome LoadOutcome { get; private set; }
 
     /// <summary>Full path to places.json — handy for a "Reveal in Explorer" menu item.</summary>
     public string PlacesFilePath => _storage.StoreFilePath;
@@ -392,28 +409,194 @@ public sealed class PlacesService
     // Disk I/O
     // ---------------------------------------------------------------
 
-    private (List<Place>, bool loadFailed) LoadFromDisk()
+    /// <summary>
+    /// Loads and classifies the store (plan 5.3, D6). Reading the file and
+    /// parsing it are two separate try blocks, deliberately: a failure to
+    /// open the file and a failure to make sense of its contents are
+    /// different situations calling for different responses, and D6's
+    /// classification exists only at each catch — once collapsed into one
+    /// boolean (as the pre-Phase-1 LoadFailed did), the distinction cannot
+    /// be recovered later.
+    /// </summary>
+    private (List<Place> places, StoreLoadOutcome outcome) LoadFromDisk()
+    {
+        if (!_storage.Exists)
+        {
+            DiagnosticLog.Info("No existing places store found; starting with an empty list.");
+            return (new List<Place>(), StoreLoadOutcome.NotPresent);
+        }
+
+        string json;
+        try
+        {
+            json = _storage.Read();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} could not be opened.", ex);
+            return (new List<Place>(), StoreLoadOutcome.Unreadable);
+        }
+        catch (Exception ex)
+        {
+            // D6's safe default: any exception type this read did not
+            // specifically anticipate is still classified Unreadable, not
+            // Damaged. Refusing to touch (quarantine, rename, replace) a
+            // file whose failure mode we don't recognize is the safe
+            // choice — see StoreLoadOutcome.Unreadable's remarks.
+            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} could not be opened (unexpected exception type {ex.GetType().Name}).", ex);
+            return (new List<Place>(), StoreLoadOutcome.Unreadable);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            // The absent/non-numeric-version case is deliberately Damaged,
+            // not "assume version 1" (plan 5.3): every store this
+            // application has ever written includes schemaVersion, so a
+            // document without one — or with one that isn't a number — is
+            // not an old-but-valid v1 store. It is damaged, or it is a
+            // file this application never wrote at all.
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("schemaVersion", out var versionElement) ||
+                versionElement.ValueKind != JsonValueKind.Number ||
+                !versionElement.TryGetInt32(out var version))
+            {
+                DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} has no usable schemaVersion; treating as damaged.");
+                return (new List<Place>(), StoreLoadOutcome.Damaged);
+            }
+
+            if (version > CurrentSchemaVersion)
+            {
+                DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} has schemaVersion {version}, newer than this build's {CurrentSchemaVersion}.");
+                return (new List<Place>(), StoreLoadOutcome.WrittenByNewerVersion);
+            }
+
+            var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
+
+            // Both halves of this check matter. A document that is
+            // literally "null" deserializes to a null store; one whose
+            // "places" is explicitly null overwrites PlacesStore's
+            // initializer with null. Neither is a usable store, and
+            // neither throws JsonException — without this check the
+            // Places dereference below would raise a
+            // NullReferenceException straight out of the constructor and
+            // crash the app on launch, which is the exact failure this
+            // phase exists to stop.
+            if (store?.Places is null)
+            {
+                DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} parsed but holds no usable place list; treating as damaged.");
+                return (new List<Place>(), StoreLoadOutcome.Damaged);
+            }
+
+            if (version < CurrentSchemaVersion)
+            {
+                // No prior schema version exists yet (CurrentSchemaVersion
+                // is still 1), so there is nothing to migrate today. This
+                // branch is written now, deliberately empty apart from the
+                // log line, so the next version bump has a documented
+                // place to add a migration step rather than inventing the
+                // gate from scratch. Whatever a future migration produces
+                // here must not be written back to disk until a save
+                // succeeds through the normal Persist() path (plan 5.3,
+                // test 15) — this method never calls _storage.Write.
+                DiagnosticLog.Info($"Migrating places store at {_storage.StoreFilePath} from schemaVersion {version} to {CurrentSchemaVersion} in memory (no-op: no prior versions exist yet).");
+            }
+
+            DiagnosticLog.Info($"Loaded {store.Places.Count} place(s) from {_storage.StoreFilePath} (schemaVersion {version}).");
+            return (store.Places, StoreLoadOutcome.Ok);
+        }
+        catch (JsonException ex)
+        {
+            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} is not valid JSON.", ex);
+            return (new List<Place>(), StoreLoadOutcome.Damaged);
+        }
+    }
+
+    private static bool RequiresRecovery(StoreLoadOutcome outcome)
+        => outcome is StoreLoadOutcome.Damaged or StoreLoadOutcome.Unreadable or StoreLoadOutcome.WrittenByNewerVersion;
+
+    private static string RecoveryMessageFor(StoreLoadOutcome outcome) => outcome switch
+    {
+        StoreLoadOutcome.Damaged => "Your saved places file appears to be damaged. Resolve the recovery prompt before making changes.",
+        StoreLoadOutcome.Unreadable => "Your saved places file could not be opened. Resolve the recovery prompt before making changes.",
+        StoreLoadOutcome.WrittenByNewerVersion => "Your saved places were written by a newer version of QuickerPlaces. Update QuickerPlaces to make changes.",
+        _ => "Your saved places need attention before changes can be saved."
+    };
+
+    /// <summary>
+    /// The "Try again" recovery action for <see cref="StoreLoadOutcome.Unreadable"/>
+    /// (plan 5.4): re-runs the whole load from scratch. On success — the
+    /// file that couldn't be opened a moment ago now can be — the real
+    /// places replace whatever empty/stale in-memory list recovery left
+    /// behind, and the recovery state clears so mutations work normally
+    /// again. On failure the state stays unresolved and the caller (the
+    /// App.xaml.cs recovery loop) asks again. Both outcomes are logged so
+    /// the diagnostic record shows the original failure and, if it
+    /// happened, the successful recovery.
+    /// </summary>
+    public StoreLoadOutcome Reload()
+    {
+        var (places, outcome) = LoadFromDisk();
+
+        _places.Clear();
+        _places.AddRange(places);
+        LoadOutcome = outcome;
+
+        if (RequiresRecovery(outcome))
+        {
+            SetRecoveryUnresolved(RecoveryMessageFor(outcome));
+            DiagnosticLog.Warn($"Reload of {_storage.StoreFilePath} did not resolve the recovery state (outcome: {outcome}).");
+        }
+        else
+        {
+            ClearRecoveryUnresolved();
+            DiagnosticLog.Info($"Reload of {_storage.StoreFilePath} succeeded; recovery resolved.");
+        }
+
+        return outcome;
+    }
+
+    /// <summary>
+    /// The "Start with an empty list" recovery action for
+    /// <see cref="StoreLoadOutcome.Damaged"/> ONLY — never called for
+    /// Unreadable or WrittenByNewerVersion, which must never be
+    /// quarantined (see StoreLoadOutcome's remarks). Quarantines the
+    /// damaged file via IPlacesStorage.Quarantine, logs the quarantine
+    /// path (the one privacy-rule exception — plan 5.5), and resolves the
+    /// recovery state so the empty in-memory store can now be saved
+    /// normally.
+    ///
+    /// If the quarantine itself fails, the original file was NOT moved
+    /// aside, so recovery must not be considered resolved: proceeding to a
+    /// writable state here would risk the next save overwriting a damaged
+    /// file that was never actually preserved. The failure is returned as
+    /// a <see cref="PersistenceResult"/> (Saved: false, with a message)
+    /// rather than a bare bool or a swallowed exception, so a caller
+    /// cannot accidentally ignore it the way a discarded return value
+    /// could be.
+    /// </summary>
+    public PersistenceResult QuarantineAndStartEmpty()
     {
         try
         {
-            if (!_storage.Exists)
-                return (new List<Place>(), false);
+            var quarantinedPath = _storage.Quarantine(DateTimeOffset.Now);
+            DiagnosticLog.Warn($"Quarantined damaged places store to {quarantinedPath}.");
 
-            var json = _storage.Read();
-            var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
-            return (store?.Places ?? new List<Place>(), false);
+            _places.Clear();
+            ClearRecoveryUnresolved();
+            return PersistenceResult.Ok();
         }
-        catch
+        catch (Exception ex)
         {
-            // Corrupt or unreadable places file — start from an empty list
-            // rather than crashing the app on launch (SI §5). The file on
-            // disk is left as-is; LoadFailed lets the UI tell the user.
-            //
-            // This still lumps "damaged" and "could not be opened" into one
-            // boolean — that distinction (D6) is a later step of this
-            // phase, not this one, which is scoped to moving the existing
-            // File.* calls behind IPlacesStorage with no behaviour change.
-            return (new List<Place>(), true);
+            DiagnosticLog.Error($"Failed to quarantine damaged places store at {_storage.StoreFilePath}.", ex);
+
+            // Recovery stays unresolved (IsRecoveryUnresolved is untouched
+            // above on this path) — mutations remain blocked, and the
+            // caller must show this failure rather than proceed.
+            return PersistenceResult.Fail(
+                $"Couldn't set aside the damaged file at \"{_storage.StoreFilePath}\". {ex.Message}");
         }
     }
 
@@ -495,13 +678,13 @@ public sealed class PlacesService
 
     /// <summary>
     /// D3 — true when the store must not be written to until the user
-    /// resolves a startup recovery prompt (a corrupt file, or one written
-    /// by a newer version). Nothing in this file sets this true yet: the
-    /// classification that would (the schema-version gate and load-failure
-    /// classification, D6) is a later step of this phase. The guard below
-    /// is wired ahead of that step so every mutation already refuses to
-    /// run while this is true, rather than a later step having to retrofit
-    /// the check into seven methods and risk missing one.
+    /// resolves a startup recovery prompt (a damaged file, one that could
+    /// not be opened, or one written by a newer version). Set by the
+    /// constructor and Reload() from the load classification
+    /// (StoreLoadOutcome, D6), and cleared by Reload() on a successful
+    /// retry or by QuarantineAndStartEmpty() on a successful quarantine —
+    /// see SetRecoveryUnresolved/ClearRecoveryUnresolved below. Every
+    /// mutation checks this first via IsMutationBlocked.
     /// </summary>
     public bool IsRecoveryUnresolved { get; private set; }
 
@@ -509,17 +692,24 @@ public sealed class PlacesService
     public string? RecoveryBlockedMessage { get; private set; }
 
     /// <summary>
-    /// Test-only: simulates the version gate (a later step) having left
-    /// recovery unresolved, so this step's guard — that a mutation while
-    /// unresolved makes no in-memory change and writes nothing — can be
-    /// proven before that gate exists. Production code must never call
-    /// this; the real setter is the later step's load-failure
-    /// classification.
+    /// The real setter behind <see cref="IsRecoveryUnresolved"/> —
+    /// called by the constructor and Reload() when LoadFromDisk's
+    /// classification (StoreLoadOutcome, D6) says the store is Damaged,
+    /// Unreadable, or WrittenByNewerVersion. Replaces the earlier,
+    /// test-only MarkRecoveryUnresolvedForTests now that a real caller
+    /// exists.
     /// </summary>
-    public void MarkRecoveryUnresolvedForTests(string message)
+    private void SetRecoveryUnresolved(string message)
     {
         IsRecoveryUnresolved = true;
         RecoveryBlockedMessage = message;
+    }
+
+    /// <summary>Clears the recovery-unresolved state — called only after a real successful Reload() or QuarantineAndStartEmpty(), never speculatively.</summary>
+    private void ClearRecoveryUnresolved()
+    {
+        IsRecoveryUnresolved = false;
+        RecoveryBlockedMessage = null;
     }
 
     /// <summary>

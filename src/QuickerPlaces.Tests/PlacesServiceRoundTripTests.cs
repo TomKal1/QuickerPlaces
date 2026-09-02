@@ -24,7 +24,7 @@ public sealed class PlacesServiceRoundTripTests
         // first instance wrote.
         var reloaded = new PlacesService(storage);
 
-        Assert.False(reloaded.LoadFailed);
+        Assert.Equal(StoreLoadOutcome.Ok, reloaded.LoadOutcome);
         var place = Assert.Single(reloaded.Places);
         Assert.Equal(created!.Alias, place.Alias);
         Assert.Equal(created.Type, place.Type);

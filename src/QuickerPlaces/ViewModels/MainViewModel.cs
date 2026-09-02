@@ -85,14 +85,6 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ImportCommand { get; }
     public RelayCommand ToggleGridCommand { get; }
 
-    /// <summary>
-    /// True if the places file couldn't be read on startup. MainWindow
-    /// checks this once (on Loaded) and shows a MessageForm notice — kept
-    /// as a plain property rather than firing the notice from the
-    /// constructor so a themed owner window exists to center the dialog on.
-    /// </summary>
-    public bool PlacesLoadFailed => _placesService.LoadFailed;
-
     public string PlacesFilePath => _placesService.PlacesFilePath;
 
     private void AddPlace(PlaceType type)

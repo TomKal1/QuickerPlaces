@@ -28,7 +28,7 @@ public sealed class PlacesStoreFixtureTests
         var storage = new FakePlacesStorage { ContentsToReturn = json };
         var service = new PlacesService(storage);
 
-        Assert.False(service.LoadFailed);
+        Assert.Equal(StoreLoadOutcome.Ok, service.LoadOutcome);
         Assert.Equal(3, service.Places.Count);
 
         var downloads = service.Places.Single(p => p.Alias == "Downloads");
