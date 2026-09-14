@@ -11,12 +11,15 @@ Working documents for QuickerPlaces: the original brief, the specification built
 | [`BUILD_SUMMARY.md`](BUILD_SUMMARY.md) | How the first build came together, the decisions made resolving the SI against the template, and the bugs found afterwards | Living — append as work lands |
 | [`260901_Professional Improvements Plan.md`](260901_Professional%20Improvements%20Plan.md) | The roadmap: eight phases across two releases, with non-goals, a test plan, and a definition of done | Living — the source of truth for *what* and *why* |
 | [`260901_Phase 1 Detailed Plan.md`](260901_Phase%201%20Detailed%20Plan.md) | File-level and signature-level plan for Phase 1 (persistence reliability) | Ready to implement |
+| [`260914_Folder Activity Tracking Plan.md`](260914_Folder%20Activity%20Tracking%20Plan.md) | File-level plan for Phase 9 (opt-in root folder activity tracking): what Windows can and cannot tell you about folders a user has opened, and the design that follows from it | Design — implement after Phases 1 and 3 |
 
 ## Conventions
 
 **Naming.** `YYMMDD_Title.md`, dated when the document was created, not when it was last touched. `BUILD_SUMMARY.md` and this index are the exceptions: they have no meaningful creation date because they are continuously updated.
 
 **Two levels, deliberately.** The roadmap says what must be true and why. A detailed plan says which files change, in what order, and how each requirement is proven. Only the phase being implemented next gets a detailed plan — one written against code that does not exist yet is stale before it is read.
+
+Phase 9's plan is the deliberate exception, and says so in its own section 0: the Windows research behind it — which APIs exist, what each one actually provides, and what the tracker must never do — was done when the question was raised, and deriving it a second time later would be the larger waste. Its design decisions are settled; its file layout expects a pass against the code as it exists when the phase is reached.
 
 **Every document carries a status.** A reader should be able to tell in one line whether it describes the product's intent, a decision already made, or history kept for context. When a document is superseded, mark it here rather than deleting it.
 

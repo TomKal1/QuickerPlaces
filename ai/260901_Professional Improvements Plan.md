@@ -2,9 +2,9 @@
 
 **Status:** planned; Phase 1 is ready to implement  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-01 — split into two releases, reordered Phase 1 so the test seam comes first, added the schema-version gate and the diagnostic log, fixed the timestamp and file-layout decisions  
+**Last revised:** 2026-09-14 — added Phase 9 (opt-in root folder activity tracking) as a Release 3 candidate, with its own detailed plan; narrowed the usage-analytics non-goal accordingly  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
-**Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
+**Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
 ## 1. Product direction
 
@@ -32,7 +32,9 @@ This is more work than one release should carry, so it ships as two.
 
 **Release 2 — Phase 5.** User-defined file tabs, opening policies, and Revit-safe opening. This is the largest phase, the only one carrying vendor risk, and the only one whose correctness depends on software that is not present on the build machine. Holding it back keeps that risk out of the release that rewrites persistence.
 
-Phase 8 (distribution) applies to both: Release 1 establishes the publish profiles and the clean-machine verification, and Release 2 repeats the verification.
+**Release 3 candidate — Phase 9.** Opt-in root folder activity tracking. It is the only phase that adds a background observer rather than a command the user invokes, and the only one whose value depends on having run for weeks before it shows anything. It is planned in full ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) but deliberately sequenced last: it depends on Phase 1's reliable persistence and on Phase 3 having settled what a recorded open means, and it must not compete with either for attention.
+
+Phase 8 (distribution) applies to all of them: Release 1 establishes the publish profiles and the clean-machine verification, and each later release repeats the verification.
 
 ## 2. Explicit non-goals
 
@@ -43,7 +45,7 @@ The following are intentionally excluded:
 - Automatic favourites or automatic reordering based on usage.
 - Tags, categories, workspaces, cloud sync, or accounts.
 - File previews, PDF rendering, or document editing.
-- Complex usage analytics.
+- Complex usage analytics. Phase 9's activity tracking is the single, bounded exception: it is opt-in per root, local-only, visible while it runs, and exists for the person at the keyboard to read their own week — never for anyone else to read about them (see Phase 9, §8 of its detailed plan). Reading Explorer's own storage remains excluded above regardless.
 - Automatic version detection for every proprietary file format. Version-aware integrations may be added individually when a supported vendor API exists.
 - Retargeting the application to classic .NET Framework.
 - CI as a prerequisite for the feature release. Focused automated tests come first; CI may be added later as a small follow-up.
@@ -441,6 +443,51 @@ Also consider an optional smaller framework-dependent x64 download for users who
 - Do not enable trimming unless the complete WPF application is tested for XAML, reflection, serialization, and resource regressions.
 - Consider code signing before broad public distribution; changing to .NET Framework would not eliminate Windows reputation warnings for an unsigned download.
 
+### Phase 9 — Opt-in root folder activity tracking
+
+Let a user nominate a **root folder** and, from that point forward, record which folders under it they open in File Explorer — how often, for how long, and when — presented as Week, Month, Year and per-day views to support recall and timesheet filling.
+
+Two limits are structural and must be stated in the UI, not just here: Windows keeps no usable retroactive log of opened folders, so a root added today has no history before today; and the tracker sees File Explorer only, while QuickerPlaces is running. The [detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md) sets out what each candidate Windows source actually provides and why none of them yields a past year.
+
+#### 4.28 Observation
+
+- Observe open Explorer windows through the documented `ShellWindows` COM collection. Never watch the file system recursively, and never read Explorer's internal storage.
+- Sample adaptively: faster while an Explorer window is in the foreground, slower when it is not, and not at all while the session is locked, the user is idle, or no Explorer window exists.
+- Run all COM work on a dedicated background STA thread with a timeout. Release every COM wrapper on every pass.
+- Discard non-filesystem shell locations, and discard an ambiguous Explorer-tab sample rather than guessing which tab is frontmost.
+
+#### 4.29 What is recorded
+
+- A folder counts as visited only after a configurable dwell threshold, so folders merely passed through are not credited.
+- Time accrues only while the window is in the foreground and the user has been active within the idle timeout. Lock, suspend, and clock gaps are discarded rather than attributed.
+- Recorded time means *time an Explorer window on this folder was in the foreground while the user was active*. It is a prompt for filling in a timesheet, not a measure of billable work, and must never be presented as one.
+
+#### 4.30 Rollup, configured per root
+
+- `RootChild` (default): credit the root's immediate child.
+- `Exact`: credit the observed folder itself.
+- `Depth(n)`: credit the ancestor n levels below the root.
+
+#### 4.31 Storage and retention
+
+- Configuration in `settings.json`; recorded activity in its own machine-local `activity.json` with its own schema version.
+- Buffer in memory and flush periodically; never write through on every sample, and never let an activity write delay or endanger a places save.
+- Day-level detail for a configurable window (default 90 days), folded into monthly totals beyond it, so a rolling year view stays complete and the file stays small.
+
+#### 4.32 Presentation
+
+- A separate Activity window: root selector, Week/Month/Year/Day, and a sortable grid of folder, visits, time, and last opened.
+- A heat map of when the work happened, with a text alternative.
+- **Add as Place** on any row, through the existing validation.
+- Copy and CSV export for timesheets, always user-initiated.
+
+#### 4.33 Consent, visibility, and removal
+
+- Nothing is recorded before an explicit per-root opt-in that first states what is and is not recorded, where it is stored, and that it never leaves the machine.
+- A tracking indicator is visible whenever tracking is active.
+- Deleting a root deletes its recorded data in the same operation; disabling one is offered separately.
+- Optional, off by default, and reversible: minimize to tray and start with Windows, without which a week's coverage is too partial to trust.
+
 ## 5. Automated test plan
 
 Tests are added alongside the relevant phases, on the seam established in 4.1. CI can be introduced later once the tests provide useful coverage. The full Phase 1 test list, including how each failure is injected, is in `ai/260901_Phase 1 Detailed Plan.md`.
@@ -536,3 +583,5 @@ The planned release is complete when:
 - Existing user data migrates without loss.
 - Core persistence and migration behavior has automated coverage.
 - A self-contained single-file Windows x64 build has been verified on a clean environment.
+
+Phase 9, when it is reached, adds: a nominated root records the user's own Explorer activity under it from the moment they opt in; the Week, Month, Year and Day views and the heat map are populated from that data; the measured performance budget in its detailed plan has been met on Windows; and disabling or deleting a root stops tracking and removes the data.
