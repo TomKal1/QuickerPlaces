@@ -2,7 +2,7 @@
 
 **Status:** planned; Phase 1 is ready to implement  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-14 — added Phase 9 (opt-in root folder activity tracking) as a Release 3 candidate, with its own detailed plan; narrowed the usage-analytics non-goal accordingly  
+**Last revised:** 2026-09-15 — capped Phase 9's longest period at a month, which removes its monthly downsampling tier  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
@@ -445,9 +445,11 @@ Also consider an optional smaller framework-dependent x64 download for users who
 
 ### Phase 9 — Opt-in root folder activity tracking
 
-Let a user nominate a **root folder** and, from that point forward, record which folders under it they open in File Explorer — how often, for how long, and when — presented as Week, Month, Year and per-day views to support recall and timesheet filling.
+Let a user nominate a **root folder** and, from that point forward, record which folders under it they open in File Explorer — how often, for how long, and when — presented as Week, Month and per-day views to support recall and timesheet filling.
 
-Two limits are structural and must be stated in the UI, not just here: Windows keeps no usable retroactive log of opened folders, so a root added today has no history before today; and the tracker sees File Explorer only, while QuickerPlaces is running. The [detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md) sets out what each candidate Windows source actually provides and why none of them yields a past year.
+A month is the longest period offered. Anything longer needs a second, coarser storage tier and a heat map too wide to read, and would sit empty for most of the feature's life — the detailed plan's D16 has the reasoning.
+
+Two limits are structural and must be stated in the UI, not just here: Windows keeps no usable retroactive log of opened folders, so a root added today has no history before today; and the tracker sees File Explorer only, while QuickerPlaces is running. The [detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md) sets out what each candidate Windows source actually provides and why none of them yields any past period at all.
 
 #### 4.28 Observation
 
@@ -472,11 +474,11 @@ Two limits are structural and must be stated in the UI, not just here: Windows k
 
 - Configuration in `settings.json`; recorded activity in its own machine-local `activity.json` with its own schema version.
 - Buffer in memory and flush periodically; never write through on every sample, and never let an activity write delay or endanger a places save.
-- Day-level detail for a configurable window (default 90 days), folded into monthly totals beyond it, so a rolling year view stays complete and the file stays small.
+- Store day-level records only, and sum every period from them. Keep a configurable retention window (default 62 days, so a full previous month is always available) and delete older days outright. No rollup tier, no downsampling, one source of truth per period.
 
 #### 4.32 Presentation
 
-- A separate Activity window: root selector, Week/Month/Year/Day, and a sortable grid of folder, visits, time, and last opened.
+- A separate Activity window: root selector, Week/Month/Day, and a sortable grid of folder, visits, time, and last opened.
 - A heat map of when the work happened, with a text alternative.
 - **Add as Place** on any row, through the existing validation.
 - Copy and CSV export for timesheets, always user-initiated.
@@ -584,4 +586,4 @@ The planned release is complete when:
 - Core persistence and migration behavior has automated coverage.
 - A self-contained single-file Windows x64 build has been verified on a clean environment.
 
-Phase 9, when it is reached, adds: a nominated root records the user's own Explorer activity under it from the moment they opt in; the Week, Month, Year and Day views and the heat map are populated from that data; the measured performance budget in its detailed plan has been met on Windows; and disabling or deleting a root stops tracking and removes the data.
+Phase 9, when it is reached, adds: a nominated root records the user's own Explorer activity under it from the moment they opt in; the Week, Month and Day views and the heat map are populated from that data; the measured performance budget in its detailed plan has been met on Windows; and disabling or deleting a root stops tracking and removes the data.

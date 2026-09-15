@@ -4,7 +4,7 @@ status: design — not ready to implement until Phases 1 to 3 have landed
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
-last_revised: 2026-09-14 — first version
+last_revised: 2026-09-15 — longest period is a month, not a year (D16); monthly downsampling removed with it
 ---
 
 # Phase 9 — Opt-in root folder activity tracking
@@ -13,13 +13,13 @@ last_revised: 2026-09-14 — first version
 
 This is the file-level and signature-level plan for Phase 9 of the [Professional Improvements Plan](260901_Professional%20Improvements%20Plan.md). The parent plan states *what* must be true; this document states *which files change, in what order, and how each requirement is proven*.
 
-It breaks the `ai/README.md` convention that only the next phase gets a detailed plan, and does so deliberately: the design question — *can the application record the folders a user has opened under a chosen root, over a week, a month and a year?* — was asked and answered in full now, and the answer contains enough Windows-specific detail (what the platform does and does not provide, and what the tracker must never do) that writing it down later would mean deriving it twice. Treat sections 1 and 4 as settled; expect section 5's file layout to need a pass against the code as it actually exists when the phase is reached.
+It breaks the `ai/README.md` convention that only the next phase gets a detailed plan, and does so deliberately: the design question — *can the application record the folders a user has opened under a chosen root, over a week and a month?* — was asked and answered in full now, and the answer contains enough Windows-specific detail (what the platform does and does not provide, and what the tracker must never do) that writing it down later would mean deriving it twice. Treat sections 1 and 4 as settled; expect section 5's file layout to need a pass against the code as it actually exists when the phase is reached.
 
 Nothing in this document should be implemented before Phase 1 (persistence reliability) and Phase 3 (usage tracking) have landed. Phase 3 defines what an "open" means and establishes the honesty standard this feature depends on.
 
 ## 1. What this feature is, and what it cannot be
 
-The user picks a **root folder**. From that moment on, QuickerPlaces records which folders under that root they visit in File Explorer, how often, and for how long — and presents that as a Week / Month / Year view, a per-day breakdown to help with a timesheet, and a heat map of when the work happened.
+The user picks a **root folder**. From that moment on, QuickerPlaces records which folders under that root they visit in File Explorer, how often, and for how long — and presents that as a Week or Month view, a per-day breakdown to help with a timesheet, and a heat map of when the work happened. A month is the longest period the feature offers; D16 says why.
 
 Two limits are structural, not implementation shortcuts, and both must be stated in the UI rather than buried here.
 
@@ -33,15 +33,15 @@ Two limits are structural, not implementation shortcuts, and both must be stated
 | Directory `LastWriteTime` | Changes only when an entry is added, removed or renamed directly in that folder. Not browsing; not editing a file in a subfolder. A weak activity proxy at best. |
 | USN change journal, audit policy | Real, but a change log rather than an access log, requires administrator rights, and wraps. |
 
-So a root added today produces a full year view a year from now. The Year period is shown from the date tracking started, labelled with that date, and the empty periods say *"no data yet — tracking started on <date>"* rather than showing a misleading zero.
+So a root added today produces a full Month view a month from now. Every period is shown from the date tracking started, labelled with that date, and a partial or empty period says *"no data yet — tracking started on <date>"* rather than showing a misleading zero.
 
 **Coverage is File Explorer, while QuickerPlaces is running.** The tracker observes shell windows. It does not see the file-open dialog inside Revit or Word, a third-party file manager, or anything that happens while the application is closed. Section 5.6 adds an optional tray/startup mode so "while running" can mean "all day", but the limit remains and the UI says so.
 
 ## 2. Scope
 
-**In scope:** opt-in per-root tracking with a configurable rollup, a dwell threshold before a visit counts, foreground-and-active time accounting, a local activity store with retention and downsampling, Week/Month/Year and per-day views, a heat map, CSV export for timesheets, **Add as Place** from any tracked folder, and a purge.
+**In scope:** opt-in per-root tracking with a configurable rollup, a dwell threshold before a visit counts, foreground-and-active time accounting, a local activity store with a flat day-level retention window, Week, Month and per-day views, a heat map, CSV export for timesheets, **Add as Place** from any tracked folder, and a purge.
 
-**Out of scope, deliberately:** reading Explorer's internal storage in any form; tracking anything outside a root the user explicitly added; tracking file *contents*, file names, or applications; any transmission of activity data anywhere; automatic creation of Places; automatic favourites or reordering (parent §2 keeps that non-goal); and any form of reporting designed for a second person to read. This is a tool for the person using the computer to see their own work. Section 8 states what that constrains.
+**Out of scope, deliberately:** any period longer than a month (D16), and the downsampling machinery that would need; reading Explorer's internal storage in any form; tracking anything outside a root the user explicitly added; tracking file *contents*, file names, or applications; any transmission of activity data anywhere; automatic creation of Places; automatic favourites or reordering (parent §2 keeps that non-goal); and any form of reporting designed for a second person to read. This is a tool for the person using the computer to see their own work. Section 8 states what that constrains.
 
 ## 3. Product constraints
 
@@ -77,7 +77,7 @@ These are settled here so they do not get re-litigated during implementation.
 | `Exact` | `C:\Jobs\Acme\Drawings\Rev3` — the folder itself |
 | `Depth(n)` | the ancestor `n` levels below the root; `Depth(1)` is `RootChild` |
 
-`RootChild` is the default because it produces a short, stable list that stays readable for a year without search. `Exact` is the honest answer to "what did I actually open" and is the right choice for a shallow root.
+`RootChild` is the default because it produces a short, stable list that stays readable across a month without search. `Exact` is the honest answer to "what did I actually open" and is the right choice for a shallow root.
 
 **D9 — A visit must survive a dwell threshold before it counts.** Default 5 seconds, configurable per root. Walking down a tree to reach one folder must not credit every folder passed through. Time accrues from the moment the threshold is met, not retroactively from arrival — under-counting by a few seconds is preferable to crediting folders that were only transited.
 
@@ -92,6 +92,8 @@ These are settled here so they do not get re-litigated during implementation.
 **D14 — Ambiguous Explorer tabs are skipped rather than guessed.** Windows 11's tabbed Explorer can surface multiple entries sharing one window handle, with no documented way to tell which tab is frontmost. When more than one candidate maps to the foreground handle and they disagree, the sample is discarded. Losing a sample is a rounding error; attributing an hour to the wrong job is a wrong timesheet.
 
 **D15 — Paths are normalized, and mapped drives are the user's call.** Comparison against a root is case-insensitive, separator- and trailing-separator-insensitive, and done on the full-path form. `J:\Jobs` and `\\server\share\Jobs` are *not* silently unified — the tracker does not resolve mapped drives behind the user's back. A root may instead carry an optional list of equivalent prefixes the user adds explicitly.
+
+**D16 — A month is the longest period, and there are no rollups below it.** Decided 2026-09-15, replacing the original Week/Month/Year set. A Year view sounds free and is not: it forces a second, coarser storage tier, fold-at-the-boundary arithmetic, two representations of the same period that can disagree, and a heat map with 366 columns that has to be aggregated before it can be read. It also over-promises — a year of data only exists after a year of running (§1), so the view would be empty or misleading for most of the feature's life. A month covers what the feature is actually for: remembering last week, and filling in a timesheet at a month end. Day-level records with a flat retention window answer every offered period by summation, from one source of truth.
 
 ## 5. Work items
 
@@ -134,21 +136,20 @@ Shape, elided:
         "hours": [0,0,0,0,0,0,0,0,420,3180,2460, …],   // 24 ints, seconds, root-level heat map
         "folders": { "C:\\Jobs\\Acme": { "s": 4321, "v": 7, "last": "2026-09-14T15:41:00Z" } }
       }
-    },
-    "months": {
-      "2026-06": { "s": 190800, "folders": { "C:\\Jobs\\Acme": { "s": 61200, "v": 143 } } }
     }
   }]
 }
 ```
 
-Day-level detail is kept for 90 days; older days fold into `months`, which is kept for 13 months so a rolling Year view is always complete. Per-day totals for the folders actually touched that day are small — a busy day is tens of folders, not hundreds — and the hour histogram is deliberately **root-level only**. A day-by-hour grid *per folder* is what makes this feature expensive: 24 buckets × 366 days × 200 folders is tens of megabytes of JSON for a view nobody asked for. Root-level hours answer "when do I work"; day-level folder totals answer "what did I work on"; together they cover both views at a few hundred KB a year.
+Days are the only granularity stored, and every period is summed from them. Detail is kept for a retention window of 62 days by default — two months, so a full previous month is always available on any day of the current one — and days older than that are deleted outright. There are no monthly rollups and no downsampling, which is the practical dividend of D16: no fold-at-the-boundary arithmetic, no two sources of truth for the same period, and nothing to get wrong at a month end.
+
+Per-day totals for the folders actually touched that day are small — a busy day is tens of folders, not hundreds — and the hour histogram is deliberately **root-level only**. A day-by-hour grid *per folder* is what makes this feature expensive: 24 buckets × every day × every folder is megabytes of JSON for a view nobody asked for. Root-level hours answer "when do I work"; day-level folder totals answer "what did I work on"; together they cover both views in a few hundred KB.
 
 Pruning runs at load and once a day thereafter, inside the flush, never on the UI thread.
 
 ### 5.3 Configuration (parent 4.30)
 
-`AppSettings` gains a `TrackedRoots` list and the schema version increments. Per root: `RootId`, `Path`, `Enabled`, `Rollup` (`RootChild` | `Exact` | `Depth`), `Depth`, `DwellThresholdSeconds` (default 5), `IdleTimeoutMinutes` (default 5), `EquivalentPrefixes` (D15), and `DayDetailRetentionDays` (default 90).
+`AppSettings` gains a `TrackedRoots` list and the schema version increments. Per root: `RootId`, `Path`, `Enabled`, `Rollup` (`RootChild` | `Exact` | `Depth`), `Depth`, `DwellThresholdSeconds` (default 5), `IdleTimeoutMinutes` (default 5), `EquivalentPrefixes` (D15), and `DayDetailRetentionDays` (default 62).
 
 Settings are still saved on exit (Phase 1, 5.4 out-of-scope note) — but adding, disabling or deleting a root saves immediately, because losing a root the user just configured, or worse, resurrecting one they just deleted, is not acceptable at any reliability level.
 
@@ -156,10 +157,10 @@ Settings are still saved on exit (Phase 1, 5.4 out-of-scope note) — but adding
 
 A separate **Activity** window, opened from the main window; the main window keeps its current shape, gaining only the tracking indicator (§3) and the menu entry.
 
-- Root selector; period toggle **Week / Month / Year**; a **Day** view with a date picker.
+- Root selector; period toggle **Week / Month**; a **Day** view with a date picker.
 - Grid: Folder, Visits, Time, Last opened. Sortable. Time formatted `3h 12m`, never a raw seconds count.
 - **Add as Place** on any row, routed through the existing `PlacesService.TryAdd` with the folder name as the default alias, and the existing validation and conflict messages. This is the action that makes it a QuickerPlaces feature rather than analytics.
-- Heat map: day × hour grid for the selected period, from the root-level histogram, with a legend and a text alternative — a grid of coloured squares that only means something to a sighted user at full colour is not acceptable as the only presentation of the data.
+- Heat map: day × hour grid for the selected period — at most 31 columns, which is why it stays legible without aggregation — from the root-level histogram, with a legend and a text alternative — a grid of coloured squares that only means something to a sighted user at full colour is not acceptable as the only presentation of the data.
 - **Copy for timesheet** and **Export CSV**: the selected period's rows, day-stamped. User-initiated, always; nothing is written outside the data folder unless the user picks a destination.
 - Empty and pre-tracking states carry the "tracking started on <date>" wording from §1.
 
@@ -189,7 +190,7 @@ These are acceptance criteria, measured on Windows before the phase is called do
 | `explorer.exe` handle count growth over an 8-hour session | none attributable to QuickerPlaces (D4) |
 | QuickerPlaces private bytes growth, same session | < 10 MB |
 | Timer wakeups while idle or locked | zero (D2) |
-| `activity.json` after one year, one root, daily use | < 2 MB |
+| `activity.json` at steady state, one root, daily use, 62-day window | < 500 KB |
 | UI thread blocked by tracking | never (D5) |
 
 If the first three cannot be met, the event-driven probe (D3) moves from "later swap" to "required", rather than the budget moving.
@@ -211,7 +212,7 @@ Unit tests, `FolderActivityTracker` against scripted snapshots and a fake clock 
 Store tests, against a temp directory using the existing `TempDirectory` fake:
 
 - Buffered writes flush on interval, on idle, and on exit; nothing is lost across a clean shutdown.
-- Days older than the retention window fold into monthly totals with matching sums; months older than 13 are dropped.
+- Days older than the retention window are deleted; days inside it are untouched; a period query spanning the boundary returns only what is still stored, and says so rather than reporting a low total as fact.
 - Round-trip of a document with unicode paths, a day with no folders, and a root with no days.
 - A malformed or unreadable `activity.json` is quarantined and tracking restarts empty — it never blocks startup and never touches `places.json`. Activity data is not user-authored content; there is no recovery dialog for it.
 - Purging a root removes every trace of it from the document.
@@ -247,7 +248,7 @@ Steps 1 and 2 are the phase's real content and are fully testable in isolation. 
 
 ## 10. Definition of done
 
-- A user can add a root, choose its rollup and thresholds, and see Week, Month, Year and Day views populated from their own Explorer use.
+- A user can add a root, choose its rollup and thresholds, and see Week, Month and Day views populated from their own Explorer use.
 - Every measure in section 6 has been taken on Windows and recorded.
 - Every unit test in section 7 passes; every manual item has been performed and its result written down.
 - Nothing is recorded before an explicit opt-in, the indicator is visible whenever tracking is active, and deleting a root deletes its data.
@@ -256,7 +257,7 @@ Steps 1 and 2 are the phase's real content and are fully testable in isolation. 
 
 ## 11. Open questions
 
-1. **Does `Exact` need a floor?** A root with thousands of leaf folders makes the Year view unreadable under `Exact`. Options: cap the stored folder count per root per day, roll the tail into an "other" bucket, or leave it and rely on Phase 7's search. Recommend deciding after real data exists; the store shape supports all three.
+1. **Does `Exact` need a floor?** A root with thousands of leaf folders makes the Month view long under `Exact`. Less pressing now that a month is the longest period, but still real. Options: cap the stored folder count per root per day, roll the tail into an "other" bucket, or leave it and rely on Phase 7's search. Recommend deciding after real data exists; the store shape supports all three.
 2. **Should a Place that is opened through QuickerPlaces also feed the activity store?** Phase 3 already counts those opens on the Place itself. Double-counting in two places with two different definitions would be confusing; not counting them leaves a gap when the user launches from a bubble rather than Explorer. Recommend: the launch opens an Explorer window, which the tracker then sees naturally — verify that is what happens before adding anything.
 3. **Per-root or global tray/startup opt-in?** Section 5.6 treats background coverage as one application-level setting. If a user tracks one root for work and one for a hobby, they may want coverage only for the first. Deferred; the simpler shape ships first.
-4. **Is 90 days of day-level detail the right default?** It is a guess. Revisit once a real `activity.json` has a few months in it.
+4. **Is 62 days the right retention default?** It is the smallest window that always contains a complete previous month. Someone who wants to look back at a quarter would need more, and nothing in the store shape prevents raising it — the cost is linear and small. Revisit once a real `activity.json` has a few months in it.
