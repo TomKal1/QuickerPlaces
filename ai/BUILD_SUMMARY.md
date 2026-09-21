@@ -40,6 +40,8 @@ The build environment for this project has no Windows/.NET SDK available, so not
 
 ## Current status (before Phase 1)
 
+> *Historical — this describes the first build. For the state after Phase 1, see "Verification status" under Phase 1 below.*
+
 Delivered as a working project structure with two real runtime bugs found and fixed via user testing in Visual Studio, plus one binding gotcha caught in review before that. It has **not** been compiler-verified end-to-end in this environment — every fix was applied by careful manual read-through rather than an actual `dotnet build`. Treat it as a strong, mostly-working draft rather than a guaranteed-clean build; the next useful step is a full build + a pass through every feature (add/rename/edit/remove, favourite/reorder, export/import, corrupt-file recovery) in Visual Studio.
 
 ## Phase 1 — Persistence reliability and recovery
@@ -106,13 +108,15 @@ Two test doubles do most of the work: `FakePlacesStorage`, an in-memory `IPlaces
 
 ### Verification status — read this before calling Phase 1 done
 
-**Nothing in Phase 1 has been compiled, and no test has been run.** This environment has no .NET SDK available, the same constraint noted in the "Current status" section above for the original build. Every file was written and reviewed by hand — cross-checked against the plan, against the existing code's conventions, and for obvious mistakes — but that is not a substitute for `dotnet build` and `dotnet test`, and it is not a substitute for actually running the app.
+**Update 2026-09-21 — built and tested; not yet run by hand.** On a Windows machine with the .NET 10 SDK (10.0.401), from `src\`:
 
-Before Phase 1 can be considered done, on a real Windows machine with the .NET 10 SDK:
+1. `dotnet build QuickerPlaces.sln` — succeeded, 0 warnings, 0 errors. **Done.**
+2. `dotnet test QuickerPlaces.sln --no-build` — 41 passed, 0 failed, 0 skipped. **Done.**
+3. The manual checklist below — **not yet walked.** Until it is, Phase 1 is compiler- and test-verified but not proven in the running application.
 
-1. Run `dotnet build QuickerPlaces.sln` and confirm it builds clean.
-2. Run `dotnet test` and confirm all tests in `QuickerPlaces.Tests` pass.
-3. Walk the manual checklist below.
+That leaves the gap the tests cannot close: every test runs on the storage seam and never constructs a `Window`, so the recovery dialogs, the banner, and second-instance activation are unproven. The original note is kept below, because it explains why the checklist exists.
+
+*Original note (written when no .NET SDK was available):* Nothing in Phase 1 had been compiled and no test had been run. Every file was written and reviewed by hand — cross-checked against the plan, against the existing code's conventions, and for obvious mistakes — but that is not a substitute for `dotnet build`, `dotnet test`, or running the app.
 
 ### Manual verification checklist (must be walked on Windows)
 

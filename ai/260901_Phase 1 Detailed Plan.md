@@ -1,10 +1,10 @@
 ---
 title: QuickerPlaces — Phase 1 Detailed Implementation Plan
-status: ready to implement
+status: implemented — builds clean and 41 tests pass (2026-09-21); manual checklist in section 6 not yet walked
 created: 2026-09-01
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.1 to 4.6 (Persistence reliability and recovery)
-last_revised: 2026-09-01 — split a failed load into damaged content and a file that could not be opened (D6)
+last_revised: 2026-09-21 — status updated after the first build and test run; open questions marked settled
 ---
 
 # Phase 1 — Persistence reliability and recovery
@@ -320,7 +320,7 @@ Commit messages follow the repository's existing style: what changed and why, wi
 
 ## 9. Open questions
 
-These do not block starting on section 7 step 1, but they should be settled before step 5.
+*Both settled during implementation; the outcomes are recorded in `BUILD_SUMMARY.md` under "The two open questions from the plan, now settled". Kept here as the record of what was asked.*
 
-1. **Backup file visibility.** `places.bak.json` sits next to `places.json` in the user's data folder. Leave it visible, or move both backup and quarantine files into a `backups\` subfolder? A subfolder is tidier; a sibling file is easier to talk a user through recovering over the phone.
-2. **Log retention.** 256 KB with one rollover is a guess. If the log is meant to survive long enough to diagnose an intermittent failure that happens weekly, it wants to be larger.
+1. **Backup file visibility.** *(Settled: sibling files next to `places.json`.)* `places.bak.json` sits next to `places.json` in the user's data folder. Leave it visible, or move both backup and quarantine files into a `backups\` subfolder? A subfolder is tidier; a sibling file is easier to talk a user through recovering over the phone.
+2. **Log retention.** *(Settled: stays at 256 KB with one rollover.)* 256 KB with one rollover is a guess. If the log is meant to survive long enough to diagnose an intermittent failure that happens weekly, it wants to be larger.

@@ -1,8 +1,8 @@
 # QuickerPlaces — Professional Improvements Implementation Plan
 
-**Status:** planned; Phase 1 is ready to implement  
+**Status:** Phase 1 implemented (builds clean, 41 tests pass; manual checklist outstanding); Phases 2 to 9 planned, and Phase 2 is next  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-15 — capped Phase 9's longest period at a month, which removes its monthly downsampling tier  
+**Last revised:** 2026-09-21 — Phase 1 status updated after its first build and test run  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 

@@ -2,7 +2,7 @@
 
 A lightweight Windows desktop utility for storing and quickly opening remembered "places" — folder paths and URLs — under a memorable alias. Part of the **QuickerLinks** project: a better path launcher than Quick Links.
 
-> **Status:** early build. Functional end-to-end, two runtime bugs found via testing and fixed (see [`ai/BUILD_SUMMARY.md`](ai/BUILD_SUMMARY.md)). Phase 1 (persistence reliability and recovery — failed saves are now reported instead of swallowed, a damaged or unreadable store is handled safely and recovered from, and only one instance runs at a time) has been implemented, but **has not yet been built or tested on Windows** — no .NET SDK is available in this environment. `dotnet build`, `dotnet test`, and a manual verification pass are required before treating it as done; see `ai/BUILD_SUMMARY.md` for the full checklist. Expect rough edges.
+> **Status:** early build. Functional end-to-end, two runtime bugs found via testing and fixed (see [`ai/BUILD_SUMMARY.md`](ai/BUILD_SUMMARY.md)). Phase 1 (persistence reliability and recovery — failed saves are now reported instead of swallowed, a damaged or unreadable store is handled safely and recovered from, and only one instance runs at a time) has been implemented. It builds with no warnings and its 41 automated tests pass (checked 2026-09-21), but **the manual verification pass on Windows has not been done yet** — the recovery dialogs, the unsaved-changes banner and second-instance activation are unproven in the running app; see `ai/BUILD_SUMMARY.md` for the checklist. Expect rough edges.
 
 ## What it does
 
