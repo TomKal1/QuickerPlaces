@@ -12,6 +12,7 @@ Working documents for QuickerPlaces: the original brief, the specification built
 | [`260901_Professional Improvements Plan.md`](260901_Professional%20Improvements%20Plan.md) | The roadmap: eight phases across two releases, with non-goals, a test plan, and a definition of done | Living — the source of truth for *what* and *why* |
 | [`260901_Phase 1 Detailed Plan.md`](260901_Phase%201%20Detailed%20Plan.md) | File-level and signature-level plan for Phase 1 (persistence reliability) | Implemented; builds and 41 tests pass; manual checklist outstanding |
 | [`260914_Folder Activity Tracking Plan.md`](260914_Folder%20Activity%20Tracking%20Plan.md) | File-level plan for Phase 9 (opt-in root folder activity tracking): what Windows can and cannot tell you about folders a user has opened, and the design that follows from it | Design — implement after Phases 1 and 3 |
+| [`260921_Handoff.md`](260921_Handoff.md) | Where to continue: which branch, what is verified, the ordered next steps, the decisions made on the day, and the Phase 1 constraints Phase 2 must build on | Current as of 2026-09-21 — supersede with a new dated hand-off |
 
 ## Conventions
 

@@ -2,7 +2,7 @@
 
 **Status:** Phase 1 implemented (builds clean, 41 tests pass; manual checklist outstanding); Phases 2 to 9 planned, and Phase 2 is next  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-21 — Phase 1 status updated after its first build and test run  
+**Last revised:** 2026-09-21 — Phase 1 status updated after its first build and test run; §4.8 settled the wording of Remove  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
@@ -162,9 +162,9 @@ This is the first migration to touch the record, so it also converts the existin
 
 #### 4.8 Removal workflow
 
-- Rename the destructive action from **Remove** to **Move to Recently Deleted** or retain **Remove** with explanatory confirmation text.
+- Keep the action's label as **Remove**, and drop the current "This can't be undone" confirmation dialog. *(Settled 2026-09-21.)* A modal confirmation guards an irreversible action; this one is now reversible twice over — by Undo immediately and by Recently Deleted for seven days — and a confirmation on a reversible action only trains people to click through it. The confirmation remains, unchanged in purpose, on **Delete selected permanently** and **Empty Recently Deleted** (4.9), which are the irreversible steps. Give the menu item a tooltip saying it moves the place to Recently Deleted, so the label stays short and the behaviour is discoverable.
 - Removing a place immediately removes it from the grid and favourites.
-- Show a short-lived confirmation with an **Undo** action.
+- Show a short-lived, non-modal confirmation with an **Undo** action. Like the unsaved-changes banner, it must never take keyboard focus.
 - Undo restores the exact place, including favourite status and ordering where possible.
 
 #### 4.9 Recently Deleted dialog
