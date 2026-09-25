@@ -37,8 +37,12 @@ public sealed class MainViewModel : ObservableObject
     private string? _statusMessage;
     private bool _statusOffersUndo;
 
-    // Most recent removal on top. Session-only: undo history isn't saved.
-    private readonly Stack<RemovedPlace> _removedPlaces = new();
+    // Most recent removal on top. Session-only: undo history isn't saved;
+    // after a restart, Recently Deleted is the way back (D19). Holds the
+    // removed records themselves: their list slot and bubble slot are in
+    // the record now (D7, D9), so a copy of either here could only go
+    // stale (D10).
+    private readonly Stack<Place> _undoStack = new();
 
     // Hides the status bar a few seconds after its last message. Ctrl+Z
     // still works after it's gone; the bar is just a reminder.
@@ -85,7 +89,7 @@ public sealed class MainViewModel : ObservableObject
         ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
         OpenDataFolderCommand = new RelayCommand(() => ExplorerReveal.Reveal(_placesService.PlacesFilePath));
         CopyResourceCommand = new RelayCommand(parameter => CopyResource(parameter as PlaceViewModel));
-        UndoRemoveCommand = new RelayCommand(UndoRemove, () => _removedPlaces.Count > 0);
+        UndoRemoveCommand = new RelayCommand(UndoRemove, () => _undoStack.Count > 0);
         DismissStatusCommand = new RelayCommand(() => ShowStatus(null));
         RetrySaveCommand = new RelayCommand(RetrySave);
         ShowLogCommand = new RelayCommand(ShowLog);
@@ -349,52 +353,67 @@ public sealed class MainViewModel : ObservableObject
         RefreshPersistenceState(persistence);
 
         // Blocked by an unresolved recovery (not normally reachable: the
-        // window only opens once recovery is resolved) — nothing changed.
-        if (removed is null)
+        // window only opens once recovery is resolved), or already removed
+        // — nothing changed, so there is nothing to offer Undo for.
+        if (!removed)
             return;
 
         Places.Remove(place);
         RebuildFavourites();
 
-        _removedPlaces.Push(removed);
+        _undoStack.Push(place.Model);
         UndoRemoveCommand.RaiseCanExecuteChanged();
         ShowStatus($"Removed \"{place.Alias}\".", offerUndo: true);
     }
 
     private void UndoRemove()
     {
-        if (_removedPlaces.Count == 0)
+        if (_undoStack.Count == 0)
             return;
 
-        var removed = _removedPlaces.Pop();
+        var place = _undoStack.Pop();
         UndoRemoveCommand.RaiseCanExecuteChanged();
 
-        var result = _placesService.TryRestore(removed, out var persistence);
+        // A place that has since left Recently Deleted (purged after seven
+        // days, or deleted permanently) fails here with "no longer in
+        // Recently Deleted", and is dropped like any other failure below.
+        var result = _placesService.TryRestore(place, out var persistence);
         RefreshPersistenceState(persistence);
         if (!result.Success)
         {
             // Dropped from the stack, not kept: leaving it would jam Ctrl+Z
             // on this one entry and make every older removal unreachable.
             // The message says so, so the next Ctrl+Z moving on isn't a surprise.
-            var next = _removedPlaces.Count > 0 ? "\n\nCtrl+Z will now restore the place removed before it." : string.Empty;
+            var next = _undoStack.Count > 0 ? "\n\nCtrl+Z will now restore the place removed before it." : string.Empty;
             MessageForm.Show((result.ErrorMessage ?? "That place can't be restored.") + next,
                 AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
             return;
         }
 
-        // PlacesService reinserted it at its old position; mirror that so
-        // Places stays in the same order as the stored list.
-        var restored = new PlaceViewModel(removed.Place);
-        Places.Insert(Math.Clamp(removed.Index, 0, Places.Count), restored);
+        InsertRestored(place);
         foreach (var favourite in Places.Where(p => p.IsFavourite))
             favourite.Refresh();
 
-        ClearSearchIfHidden(removed.Place);
+        ClearSearchIfHidden(place);
         RebuildFavourites();
 
-        ShowStatus(_removedPlaces.Count > 0
-            ? $"Restored \"{removed.Place.Alias}\". Ctrl+Z restores the one removed before it."
-            : $"Restored \"{removed.Place.Alias}\".");
+        ShowStatus(_undoStack.Count > 0
+            ? $"Restored \"{place.Alias}\". Ctrl+Z restores the one removed before it."
+            : $"Restored \"{place.Alias}\".");
+    }
+
+    /// <summary>
+    /// Adds a row for a place PlacesService has just restored, at its
+    /// position among the active places (plan 5.3 row 23), so Places stays
+    /// in the same order as the stored list. The record never left its
+    /// stored slot (D7), and Places mirrors the active records in stored
+    /// order, so this is where its row belongs.
+    /// </summary>
+    private void InsertRestored(Place place)
+    {
+        // Places is a fresh snapshot per call (D8): read it once.
+        var index = _placesService.Places.TakeWhile(p => !ReferenceEquals(p, place)).Count();
+        Places.Insert(Math.Clamp(index, 0, Places.Count), new PlaceViewModel(place));
     }
 
     private void CopyResource(PlaceViewModel? place)

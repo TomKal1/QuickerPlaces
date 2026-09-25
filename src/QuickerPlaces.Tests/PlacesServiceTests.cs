@@ -19,7 +19,10 @@ public sealed class PlacesServiceTests : IDisposable
 
     private PlacesService NewService() => NewServiceAt("places.json");
 
-    private PlacesService NewServiceAt(string fileName) => new(new FilePlacesStorage(_temp.Path, fileName));
+    /// <summary>One pinned clock for every service in a test (D12), so DeletedAt and DateAdded never read the machine's.</summary>
+    private readonly ManualTimeProvider _clock = new();
+
+    private PlacesService NewServiceAt(string fileName) => new(new FilePlacesStorage(_temp.Path, fileName), _clock);
 
     /// <summary>An absolute folder path that's fully qualified on whichever OS the tests run on.</summary>
     private string Folder(string name) => Path.Combine(_temp.Path, name);
@@ -32,13 +35,13 @@ public sealed class PlacesServiceTests : IDisposable
         return created!;
     }
 
-    /// <summary>Removes <paramref name="place"/>, asserting it saved, and returns the undo record.</summary>
-    private static RemovedPlace RemoveForUndo(PlacesService service, Place place)
+    /// <summary>Removes <paramref name="place"/>, asserting it saved, and returns what the Undo stack holds: the record itself (D10).</summary>
+    private static Place RemoveForUndo(PlacesService service, Place place)
     {
         var persistence = service.Remove(place, out var removed);
         Assert.True(persistence.Saved, persistence.UserMessage);
-        Assert.NotNull(removed);
-        return removed!;
+        Assert.True(removed);
+        return place;
     }
 
     // -----------------------------------------------------------------
@@ -217,6 +220,7 @@ public sealed class PlacesServiceTests : IDisposable
     // Undo remove
     // -----------------------------------------------------------------
 
+    /// <summary>Phase 2 test 25: Undo returns the same instance to the same list slot, and persists (§4.8).</summary>
     [Fact]
     public void Restore_puts_a_removed_place_back_where_it_was_and_persists()
     {
@@ -227,8 +231,7 @@ public sealed class PlacesServiceTests : IDisposable
         var dateAdded = b.DateAdded;
 
         var removed = RemoveForUndo(service, b);
-        Assert.NotNull(removed);
-        Assert.Equal(1, removed!.Index);
+        Assert.Equal(new[] { "A", "C" }, service.Places.Select(p => p.Alias));
 
         Assert.True(service.TryRestore(removed, out _).Success);
 
@@ -237,6 +240,10 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Equal(dateAdded, b.DateAdded);
         Assert.Equal(new[] { "A", "B", "C" }, NewService().Places.Select(p => p.Alias));
     }
+
+    // Phase 2 test 27: this test and the three after it are the pre-Phase-2
+    // favourite-restore tests, unchanged apart from RemovedPlace -> Place.
+    // D9 persists exactly today's rule, so they must still hold.
 
     [Fact]
     public void Restore_puts_a_favourite_back_at_its_old_bubble_position()
@@ -250,7 +257,7 @@ public sealed class PlacesServiceTests : IDisposable
         service.ToggleFavourite(c);
 
         var removed = RemoveForUndo(service, b);
-        Assert.Equal(1, removed.FavouriteOrder);
+        Assert.Equal(1, removed.FavouriteOrder);   // its remembered slot (D9)
         Assert.Equal(1, c.FavouriteOrder);
 
         Assert.True(service.TryRestore(removed, out _).Success);
@@ -317,6 +324,7 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Equal(new[] { "A", "B", "C", "D" }, service.Places.Select(p => p.Alias));
     }
 
+    /// <summary>Phase 2 test 28: a conflicting restore is refused with the alias or path/URL message, and the place stays in Recently Deleted (D15).</summary>
     [Fact]
     public void Restore_refuses_when_the_alias_or_resource_has_been_reused()
     {
@@ -325,6 +333,7 @@ public sealed class PlacesServiceTests : IDisposable
         var wiki = Add(service, "Wiki", PlaceType.Url, "https://wiki.example.com");
 
         var removedDocs = RemoveForUndo(service, docs);
+        _clock.Advance(TimeSpan.FromMinutes(1));
         var removedWiki = RemoveForUndo(service, wiki);
         Add(service, "docs", PlaceType.Folder, Folder("Other"));
         Add(service, "New Wiki", PlaceType.Url, "https://wiki.example.com");
@@ -337,8 +346,11 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.False(resourceResult.Success);
         Assert.Contains("path/URL", resourceResult.ErrorMessage);
         Assert.Equal(new[] { "docs", "New Wiki" }, service.Places.Select(p => p.Alias));
+        Assert.Equal(new[] { wiki, docs }, service.RecentlyDeleted);
+        Assert.Equal(new[] { "Wiki", "Docs" }, NewService().RecentlyDeleted.Select(p => p.Alias));
     }
 
+    /// <summary>Phase 2 test 29, first half: a second restore is refused rather than duplicating (5.4 step 3).</summary>
     [Fact]
     public void Restore_twice_is_refused_rather_than_duplicating()
     {
@@ -347,19 +359,58 @@ public sealed class PlacesServiceTests : IDisposable
         var removed = RemoveForUndo(service, docs);
 
         Assert.True(service.TryRestore(removed, out _).Success);
-        Assert.False(service.TryRestore(removed, out _).Success);
+        var again = service.TryRestore(removed, out _);
+
+        Assert.False(again.Success);
+        Assert.Contains("already back in the list", again.ErrorMessage);
         Assert.Single(service.Places);
     }
 
+    /// <summary>
+    /// Phase 2 test 29, second half: restoring a record that is no longer in
+    /// the store says it is no longer in Recently Deleted (5.4 step 2).
+    /// Here the instance is the one an earlier session's Undo stack would
+    /// hold after the store was reloaded: a different object from the
+    /// record now in memory, so it is not in the store.
+    /// </summary>
     [Fact]
-    public void Removing_a_place_not_in_the_store_returns_null()
+    public void Restoring_a_place_no_longer_in_the_store_says_so()
     {
         var service = NewService();
         var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
         RemoveForUndo(service, docs);
+        var reloaded = NewService();
 
-        service.Remove(docs, out var removedAgain);
-        Assert.Null(removedAgain);
+        var result = reloaded.TryRestore(docs, out var persistence);
+
+        Assert.False(result.Success);
+        Assert.Contains("no longer in Recently Deleted", result.ErrorMessage);
+        Assert.True(persistence.Saved);
+        Assert.Empty(reloaded.Places);
+        Assert.Single(reloaded.RecentlyDeleted);
+    }
+
+    /// <summary>Phase 2 test 30: removing a place that is not in the store, or is already deleted, reports removed == false and writes nothing.</summary>
+    [Fact]
+    public void Removing_a_place_not_in_the_store_or_already_removed_changes_nothing()
+    {
+        var storage = new FakePlacesStorage();
+        var service = new PlacesService(storage, _clock);
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        RemoveForUndo(service, docs);
+        var deletedAt = docs.DeletedAt;
+        var writes = storage.WriteCount;
+        _clock.Advance(TimeSpan.FromHours(1));
+
+        var againPersistence = service.Remove(docs, out var removedAgain);
+        var strangerPersistence = service.Remove(new Place { Alias = "Stranger", Type = PlaceType.Folder, Resource = Folder("Stranger") }, out var removedStranger);
+
+        Assert.False(removedAgain);
+        Assert.True(againPersistence.Saved);
+        Assert.False(removedStranger);
+        Assert.True(strangerPersistence.Saved);
+        Assert.Equal(deletedAt, docs.DeletedAt);
+        Assert.Equal(writes, storage.WriteCount);
     }
 
     [Fact]

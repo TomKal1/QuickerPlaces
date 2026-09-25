@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
@@ -10,7 +11,8 @@ namespace QuickerPlaces.Tests;
 /// Tests 2 to 5, 19, 20, and D3's guard (plan test 10) from the Phase 1
 /// plan's section 6: a failed save is reported, never rolled back, keeps
 /// the banner state up until a real successful save, and the whole batch
-/// in CommitImport persists exactly once.
+/// in CommitImport persists exactly once. The Phase 2 plan's tests 31 and
+/// 32 extend them to Remove and restore.
 /// </summary>
 public sealed class PlacesServicePersistenceTests
 {
@@ -88,7 +90,11 @@ public sealed class PlacesServicePersistenceTests
         Assert.True(service.HasUnsavedChanges);
     }
 
-    /// <summary>A failed Remove reports not saved and keeps the removal applied in memory (D1).</summary>
+    /// <summary>
+    /// A failed Remove reports not saved and keeps the removal applied in
+    /// memory (D1). Phase 2 test 31: the place stays in Recently Deleted,
+    /// the store is unsaved, and Retry writes it there.
+    /// </summary>
     [Fact]
     public void FailedRemove_ReportsNotSavedAndKeepsTheChangeInMemory()
     {
@@ -96,12 +102,42 @@ public sealed class PlacesServicePersistenceTests
         service.TryAdd("Docs", PlaceType.Folder, TestPaths.Folder(@"Docs"), out var created, out _);
         storage.FailNextWrite = true;
 
-        var persistence = service.Remove(created!, out _);
+        var persistence = service.Remove(created!, out var removed);
 
+        Assert.True(removed);
         Assert.False(persistence.Saved);
         Assert.NotNull(persistence.UserMessage);
         Assert.DoesNotContain(created, service.Places);
+        Assert.Contains(created, service.RecentlyDeleted);
         Assert.True(service.HasUnsavedChanges);
+
+        var retry = service.RetrySave();
+
+        Assert.True(retry.Saved);
+        Assert.False(service.HasUnsavedChanges);
+        Assert.Contains("\"deletedAt\"", storage.LastWritten);
+    }
+
+    /// <summary>Phase 2 test 31, restore half: a failed save after a restore leaves the place restored and the store unsaved (D1) — a forward change, not a rollback.</summary>
+    [Fact]
+    public void FailedRestore_ReportsNotSavedAndKeepsThePlaceRestored()
+    {
+        var service = NewService(out var storage);
+        service.TryAdd("Docs", PlaceType.Folder, TestPaths.Folder(@"Docs"), out var created, out _);
+        service.Remove(created!, out _);
+        storage.FailNextWrite = true;
+
+        var validation = service.TryRestore(created!, out var persistence);
+
+        Assert.True(validation.Success);
+        Assert.False(persistence.Saved);
+        Assert.NotNull(persistence.UserMessage);
+        Assert.Contains(created, service.Places);
+        Assert.Empty(service.RecentlyDeleted);
+        Assert.True(service.HasUnsavedChanges);
+
+        Assert.True(service.RetrySave().Saved);
+        Assert.DoesNotContain("\"deletedAt\"", storage.LastWritten);
     }
 
     /// <summary>A failed ToggleFavourite reports not saved and keeps the flip applied in memory (D1).</summary>
@@ -201,8 +237,19 @@ public sealed class PlacesServicePersistenceTests
         Assert.Equal(service.RecoveryBlockedMessage, addPersistence.UserMessage);
         Assert.Empty(service.Places);
 
-        var removePersistence = service.Remove(new Place { Alias = "X", Type = PlaceType.Folder, Resource = TestPaths.Folder(@"X") }, out _);
+        // Phase 2 test 32: Remove and TryRestore are refused too.
+        var stranger = new Place { Alias = "X", Type = PlaceType.Folder, Resource = TestPaths.Folder(@"X") };
+        var removePersistence = service.Remove(stranger, out var removed);
         Assert.False(removePersistence.Saved);
+        Assert.False(removed);
+        Assert.Null(stranger.DeletedAt);
+
+        stranger.DeletedAt = DateTimeOffset.UnixEpoch;
+        var restoreValidation = service.TryRestore(stranger, out var restorePersistence);
+        Assert.False(restoreValidation.Success);
+        Assert.False(restorePersistence.Saved);
+        Assert.Equal(service.RecoveryBlockedMessage, restorePersistence.UserMessage);
+        Assert.NotNull(stranger.DeletedAt);
 
         var (imported, importPersistence) = service.CommitImport(new List<Place>
         {

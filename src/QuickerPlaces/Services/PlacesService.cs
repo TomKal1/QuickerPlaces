@@ -393,52 +393,66 @@ public sealed class PlacesService
     }
 
     /// <summary>
-    /// Removes <paramref name="place"/>. <paramref name="removed"/> records
-    /// what <see cref="TryRestore"/> needs to put it back exactly where it
-    /// was (list position and favourite position), or is null if nothing
-    /// was removed (blocked by recovery, or not in the store).
+    /// Moves <paramref name="place"/> to Recently Deleted: the same record
+    /// stays in the same list slot with DeletedAt stamped from the clock
+    /// (D7), so a restore — this session's Undo, or Recently Deleted after
+    /// a restart — can put it back exactly. <paramref name="removed"/> is
+    /// false when nothing changed: blocked by recovery (D3), not in the
+    /// store, or already deleted.
     /// </summary>
-    public PersistenceResult Remove(Place place, out RemovedPlace? removed)
+    public PersistenceResult Remove(Place place, out bool removed)
     {
-        removed = null;
+        removed = false;
 
         if (IsMutationBlocked(out var blocked))
             return blocked;
 
-        var index = _places.IndexOf(place);
-        if (index < 0)
+        // Not in the store, or already removed: nothing to change, so
+        // nothing is written and the caller has nothing to offer Undo for.
+        if (!_places.Contains(place) || place.DeletedAt is not null)
             return PersistenceResult.Ok();
 
-        removed = new RemovedPlace(place, index, place.IsFavourite ? place.FavouriteOrder : null);
+        place.DeletedAt = _time.GetUtcNow();
+        removed = true;
 
-        _places.RemoveAt(index);
+        // IsFavourite and FavouriteOrder are left as they were: they are now
+        // the remembered bubble slot a restore returns it to (D9). Only the
+        // active favourites are renumbered, closing the gap it leaves.
         if (place.IsFavourite)
             RenumberFavourites();
+
+        // A failed save leaves it deleted in memory with the banner up (D1).
         return Persist();
     }
 
     /// <summary>
-    /// Undoes a <see cref="Remove"/>: reinserts the same Place at its old
-    /// list position (clamped, if the list has shrunk since) and, if it was
-    /// a favourite, at its old bubble position, shifting later bubbles
-    /// right. Everything else about it (alias, DateAdded...) is unchanged.
-    /// Refuses without changing anything if its alias or path/URL has since
-    /// been reused by another place, since restoring it would create the
-    /// very duplicate the validation rules forbid.
+    /// Un-deletes <paramref name="place"/> exactly as it was: the same
+    /// record, in the list slot it never left (D7), and — if it was a
+    /// favourite — at its remembered bubble slot, clamped to the current
+    /// row, with later bubbles shifted right (D9). Everything else about it
+    /// (alias, DateAdded...) is unchanged.
+    ///
+    /// Refuses without changing anything if it is no longer in Recently
+    /// Deleted (purged, or permanently deleted), is already active, or its
+    /// alias or path/URL is now used by an active place — restoring it
+    /// would create the very duplicate the validation rules forbid, so it
+    /// stays in Recently Deleted for the conflict flow (D15).
     ///
     /// Like every other mutation this is a forward change, not a rollback
-    /// (D1): if the save fails, the restored place stays in memory and the
-    /// unsaved-changes banner offers Retry.
+    /// (D1): if the save fails, the restored place stays active in memory
+    /// and the unsaved-changes banner offers Retry.
     /// </summary>
-    public ValidationResult TryRestore(RemovedPlace removed, out PersistenceResult persistence)
+    public ValidationResult TryRestore(Place place, out PersistenceResult persistence)
     {
         if (IsMutationBlocked(out persistence))
             return ValidationResult.Fail(BlockedMessage());
 
         persistence = PersistenceResult.Ok();
-        var place = removed.Place;
 
-        if (_places.Contains(place))
+        if (!_places.Contains(place))
+            return ValidationResult.Fail($"\"{place.Alias}\" is no longer in Recently Deleted.");
+
+        if (place.DeletedAt is null)
             return ValidationResult.Fail($"\"{place.Alias}\" is already back in the list.");
 
         if (!ValidateAlias(place.Alias).Success)
@@ -447,27 +461,38 @@ public sealed class PlacesService
         if (!ValidateResource(place.Resource, place.Type).Success)
             return ValidationResult.Fail($"Can't restore \"{place.Alias}\": its path/URL is now stored under another alias.");
 
-        _places.Insert(Math.Clamp(removed.Index, 0, _places.Count), place);
-
-        if (removed.FavouriteOrder is { } favouriteOrder)
-        {
-            // Make room at the old position; RenumberFavourites then closes
-            // any gap if favourites were removed in the meantime.
-            foreach (var other in _places.Where(p => p.IsFavourite && !ReferenceEquals(p, place) && p.FavouriteOrder >= favouriteOrder))
-                other.FavouriteOrder++;
-
-            place.IsFavourite = true;
-            place.FavouriteOrder = favouriteOrder;
-            RenumberFavourites();
-        }
-        else
-        {
-            place.IsFavourite = false;
-            place.FavouriteOrder = null;
-        }
-
+        Undelete(place);
         persistence = Persist();
         return ValidationResult.Ok();
+    }
+
+    /// <summary>
+    /// Clears DeletedAt and, for a favourite, returns it to its remembered
+    /// bubble slot (D9): active favourites at or after that slot shift right
+    /// by one, then RenumberFavourites closes any gap left by favourites
+    /// that went in the meantime — so a slot past the end of today's row
+    /// lands at its end. Plan 5.3 row 10: only active favourites shift; a
+    /// deleted record's slot is its own memory and is never moved by
+    /// another place's restore. The record is already in _places, so it is
+    /// excluded by reference.
+    /// </summary>
+    private void Undelete(Place place)
+    {
+        place.DeletedAt = null;
+
+        if (!place.IsFavourite)
+            return;
+
+        if (place.FavouriteOrder is { } slot)
+        {
+            foreach (var other in Active.Where(p => p.IsFavourite && !ReferenceEquals(p, place) && p.FavouriteOrder >= slot))
+                other.FavouriteOrder++;
+        }
+
+        // A favourite with no remembered slot (only a hand-edited file can
+        // hold one) sorts last in RenumberFavourites: a favourite always
+        // comes back as a favourite (D9).
+        RenumberFavourites();
     }
 
     /// <summary>Renumbers the active favourites to a dense 0..n-1. A deleted record keeps its FavouriteOrder untouched: it is the remembered slot a restore returns it to (D9).</summary>
@@ -1005,12 +1030,6 @@ public sealed class PlacesService
     private string BlockedMessage()
         => RecoveryBlockedMessage ?? "Your saved places need attention before changes can be saved.";
 }
-
-/// <summary>A removed place plus where it was, so it can be put back by <see cref="PlacesService.TryRestore"/>.</summary>
-/// <param name="Place">The removed record itself (not a copy).</param>
-/// <param name="Index">Its position in the stored list when it was removed.</param>
-/// <param name="FavouriteOrder">Its bubble position if it was a favourite, otherwise null.</param>
-public sealed record RemovedPlace(Place Place, int Index, int? FavouriteOrder);
 
 /// <summary>Matches import-dedupe keys the same way ValidateResource matches duplicates: same Type, case-insensitive exact Resource.</summary>
 internal sealed class ResourceKeyComparer : IEqualityComparer<(PlaceType Type, string Resource)>
