@@ -58,6 +58,21 @@
     -->
     <FontFamily x:Key="Font.Sans">Segoe UI</FontFamily>
     <FontFamily x:Key="Font.Mono">Consolas, Cascadia Mono, Courier New</FontFamily>
+    <!--
+        Icon glyphs (folder/globe on grid rows and bubbles). Segoe Fluent
+        Icons ships with Windows 11, Segoe MDL2 Assets with Windows 10; both
+        use the same code points, so listing both covers either OS.
+    -->
+    <FontFamily x:Key="Font.Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- A type glyph sitting next to text (grid Alias cell, bubble label). -->
+    <Style x:Key="TextBlock.Glyph" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Icons}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Foreground" Value="{StaticResource Accent.Hover}" />
+    </Style>
 
     <!--
         Window chrome: background + default foreground/font for the whole

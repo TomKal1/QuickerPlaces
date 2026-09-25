@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Unit tests for QuickerPlaces' service layer (validation, persistence,
+    favourites, export/import).
+
+    Deliberately targets plain net10.0 and compiles the UI-free source files
+    in directly (the <Compile Include> links below) rather than adding a
+    ProjectReference to the WPF app. Referencing a UseWPF project would
+    drag in the Microsoft.WindowsDesktop.App framework, which only exists
+    on Windows. Linking the files keeps `dotnet test` working on any OS,
+    including Linux CI. Everything linked here must stay free of
+    System.Windows.* dependencies.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>QuickerPlaces.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\QuickerPlaces\AppInfo.cs" Link="Linked\AppInfo.cs" />
+    <Compile Include="..\QuickerPlaces\Models\AppSettings.cs" Link="Linked\Models\AppSettings.cs" />
+    <Compile Include="..\QuickerPlaces\Models\HotkeyGesture.cs" Link="Linked\Models\HotkeyGesture.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Place.cs" Link="Linked\Models\Place.cs" />
+    <Compile Include="..\QuickerPlaces\Models\PlaceType.cs" Link="Linked\Models\PlaceType.cs" />
+    <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
+    <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+</Project>

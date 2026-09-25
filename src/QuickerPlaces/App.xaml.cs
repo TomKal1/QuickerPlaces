@@ -16,9 +16,20 @@ namespace QuickerPlaces;
 /// </summary>
 public partial class App : Application
 {
+    private SingleInstance? _singleInstance;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Already running: SingleInstance.TryStart has asked that copy to
+        // come to the front, so this one just exits before loading anything.
+        _singleInstance = SingleInstance.TryStart();
+        if (_singleInstance is null)
+        {
+            Shutdown();
+            return;
+        }
 
         // Local variables rather than fields, deliberately: they're
         // captured by the Closing lambda below, and (unlike fields)
@@ -30,13 +41,38 @@ public partial class App : Application
         var placesService = new PlacesService();
         var mainViewModel = new MainViewModel(settings, placesService);
 
-        var mainWindow = new MainWindow(mainViewModel, settings);
-        mainWindow.Closing += (_, _) =>
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService);
+        mainWindow.Closing += (_, e) =>
         {
+            // Last chance for changes that failed to save earlier (file
+            // briefly locked, disk since freed up). If it still fails, let
+            // the user keep the window open and sort the problem out
+            // rather than lose those changes on close.
+            if (!placesService.TrySave())
+            {
+                var closeAnyway = MessageForm.Show(
+                    "Some of your recent changes still couldn't be saved and will be lost if QuickerPlaces closes now.\n\nClose anyway?",
+                    AppInfo.Name, MessageFormButtons.YesNo, MessageFormIcon.Warning, mainWindow);
+
+                if (closeAnyway != MessageFormResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
         };
 
         mainWindow.Show();
+
+        _singleInstance.ListenForShowRequests(Dispatcher, mainWindow.BringToFront);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _singleInstance?.Dispose();
+        base.OnExit(e);
     }
 }

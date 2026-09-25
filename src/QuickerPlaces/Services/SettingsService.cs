@@ -19,17 +19,36 @@ public sealed class SettingsService
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        // AppSettings uses double.NaN for "no saved window position yet",
+        // which System.Text.Json refuses to write by default — without this,
+        // closing the window maximized (or minimized) before it had ever
+        // been closed in its normal state threw inside Save and silently
+        // lost every setting, including the grid's collapsed state.
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
     private readonly string _settingsFilePath;
 
     public SettingsService()
+        : this(DefaultSettingsFilePath())
+    {
+    }
+
+    /// <summary>Backs the service with an explicit file instead of the default %LocalAppData% location — used by the unit tests.</summary>
+    public SettingsService(string settingsFilePath)
+    {
+        _settingsFilePath = settingsFilePath;
+
+        var folder = Path.GetDirectoryName(settingsFilePath);
+        if (!string.IsNullOrEmpty(folder))
+            Directory.CreateDirectory(folder);
+    }
+
+    private static string DefaultSettingsFilePath()
     {
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var folder = Path.Combine(root, AppInfo.Publisher, AppInfo.Name);
-        Directory.CreateDirectory(folder);
-        _settingsFilePath = Path.Combine(folder, "settings.json");
+        return Path.Combine(root, AppInfo.Publisher, AppInfo.Name, "settings.json");
     }
 
     /// <summary>Full path to settings.json.</summary>

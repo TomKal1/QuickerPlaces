@@ -32,7 +32,22 @@ public sealed class PlaceViewModel : ObservableObject
     /// <summary>"Folder" or "URL" — for the DataGrid's Type column.</summary>
     public string TypeLabel => Model.Type == PlaceType.Folder ? "Folder" : "URL";
 
+    /// <summary>
+    /// Icon-font glyph for this place's Type, rendered with the theme's
+    /// Font.Icons family: a folder for Folder, a globe for URL. A fixed
+    /// glyph per type rather than a real favicon / shell icon, since
+    /// fetching favicons would mean contacting every saved URL, which
+    /// QuickerPlaces deliberately never does (SI §3).
+    /// </summary>
+    public string TypeGlyph => GlyphFor(Model.Type);
+
     public string Resource => Model.Resource;
+
+    /// <summary>Hover text for a favourite bubble: the destination, since the bubble itself only shows the alias.</summary>
+    public string ToolTipText => $"{TypeLabel}: {Model.Resource}";
+
+    /// <summary>Segoe Fluent Icons / Segoe MDL2 Assets code points (shared by both fonts).</summary>
+    public static string GlyphFor(PlaceType type) => type == PlaceType.Folder ? "\uE8B7" : "\uE774";
 
     public bool IsFavourite => Model.IsFavourite;
 

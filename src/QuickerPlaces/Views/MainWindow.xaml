@@ -15,6 +15,7 @@
     <Window.Resources>
         <converters:BoolToGridLengthConverter x:Key="BoolToGridLengthConverter" />
         <converters:CollectionCountToVisibilityConverter x:Key="CollectionCountToVisibilityConverter" />
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <!--
             Shared per-row/per-bubble context menu content. A ContextMenu is
@@ -33,6 +34,9 @@
                       Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       FontWeight="Bold" />
+            <MenuItem Header="Copy Path/URL" InputGestureText="Ctrl+C"
+                      Command="{Binding PlacementTarget.Tag.CopyResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Rename Alias"
                       Command="{Binding PlacementTarget.Tag.RenameAliasCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -54,11 +58,41 @@
                       Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       FontWeight="Bold" />
+            <MenuItem Header="Copy Path/URL"
+                      Command="{Binding PlacementTarget.Tag.CopyResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Remove from Favourites"
                       Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
         </ContextMenu>
     </Window.Resources>
+
+    <!--
+        Window-wide keyboard shortcuts. Row-level ones (Enter, F2, Ctrl+E,
+        Ctrl+D, Delete) live in PlacesGrid_PreviewKeyDown instead, so they
+        only act on the grid's selected row and never fire while typing in
+        the search box. Ctrl+F is ApplicationCommands.Find's built-in
+        gesture, handled by the CommandBinding below.
+    -->
+    <Window.InputBindings>
+        <KeyBinding Modifiers="Ctrl" Key="N" Command="{Binding AddFolderCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="U" Command="{Binding AddUrlCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="H" Command="{Binding ToggleGridCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="Z" Command="{Binding UndoRemoveCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="D1" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="0" />
+        <KeyBinding Modifiers="Ctrl" Key="D2" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="1" />
+        <KeyBinding Modifiers="Ctrl" Key="D3" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="2" />
+        <KeyBinding Modifiers="Ctrl" Key="D4" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="3" />
+        <KeyBinding Modifiers="Ctrl" Key="D5" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="4" />
+        <KeyBinding Modifiers="Ctrl" Key="D6" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="5" />
+        <KeyBinding Modifiers="Ctrl" Key="D7" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="6" />
+        <KeyBinding Modifiers="Ctrl" Key="D8" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="7" />
+        <KeyBinding Modifiers="Ctrl" Key="D9" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="8" />
+    </Window.InputBindings>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="ApplicationCommands.Find" Executed="Find_Executed" />
+    </Window.CommandBindings>
 
     <Grid x:Name="RootGrid" Margin="16">
         <Grid.RowDefinitions>
@@ -75,6 +109,8 @@
                 standard, reliable way to data-bind a RowDefinition.
             -->
             <RowDefinition Height="{Binding DataContext.IsGridExpanded, ElementName=RootGrid, Converter={StaticResource BoolToGridLengthConverter}}" />
+            <!-- Status bar ("Removed "Docs". Undo"); collapses to nothing when there's no message. -->
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Header: monogram glyph, app name + subheader, add/export/import action row -->
@@ -98,10 +134,19 @@
             </StackPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Icon-only so the header still fits at the window's MinWidth. -->
+                <Button Content="&#xE713;" FontFamily="{StaticResource Font.Icons}"
+                        Click="SettingsButton_Click" Margin="0,0,8,0"
+                        ToolTip="Settings"
+                        AutomationProperties.Name="Settings" />
+                <Button Content="&#xE838;" FontFamily="{StaticResource Font.Icons}"
+                        Command="{Binding OpenDataFolderCommand}" Margin="0,0,8,0"
+                        ToolTip="Open data folder (where places.json and any backups are kept)"
+                        AutomationProperties.Name="Open data folder" />
                 <Button Content="Import..." Command="{Binding ImportCommand}" Margin="0,0,8,0" />
                 <Button Content="Export..." Command="{Binding ExportCommand}" Margin="0,0,16,0" />
-                <Button Content="Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" />
-                <Button Content="Add URL" Command="{Binding AddUrlCommand}" Style="{StaticResource Button.Primary}" />
+                <Button Content="Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" ToolTip="Add Folder (Ctrl+N)" />
+                <Button Content="Add URL" Command="{Binding AddUrlCommand}" Style="{StaticResource Button.Primary}" ToolTip="Add URL (Ctrl+U)" />
             </StackPanel>
         </Grid>
 
@@ -127,29 +172,70 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Button Content="{Binding Alias}"
-                                Style="{StaticResource Button.Bubble}"
+                        <Button Style="{StaticResource Button.Bubble}"
+                                ToolTip="{Binding ToolTipText}"
                                 Tag="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext}"
                                 ContextMenu="{StaticResource BubbleContextMenu}"
                                 Command="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.OpenCommand}"
                                 CommandParameter="{Binding}"
                                 PreviewMouseLeftButtonDown="Bubble_PreviewMouseLeftButtonDown"
-                                PreviewMouseMove="Bubble_PreviewMouseMove" />
+                                PreviewMouseMove="Bubble_PreviewMouseMove">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding TypeGlyph}" Style="{StaticResource TextBlock.Glyph}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" FontSize="13" />
+                                <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </StackPanel>
+                        </Button>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </Grid>
 
-        <!-- Grid collapse toggle -->
+        <!--
+            Grid header: place count, search box, and the collapse toggle.
+            The search box stays visible while the grid is collapsed;
+            typing into it re-expands the grid (see MainViewModel.SearchText).
+        -->
         <Grid Grid.Row="2" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Column="0" Text="All Places" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="0" Text="{Binding PlacesHeader}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
 
-            <Button Grid.Column="1" Command="{Binding ToggleGridCommand}">
+            <Grid Grid.Column="1" Margin="16,0,8,0" MaxWidth="360" HorizontalAlignment="Right" MinWidth="220">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBox x:Name="SearchBox" Grid.Column="0"
+                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                         PreviewKeyDown="SearchBox_PreviewKeyDown"
+                         ToolTip="Search by alias or path/URL (Ctrl+F). Enter opens the top result; Down moves into the list; Esc clears." />
+                <!-- Placeholder text: hit-test invisible so clicks land on the TextBox underneath. -->
+                <TextBlock Grid.Column="0" Text="Search places (Ctrl+F)" IsHitTestVisible="False"
+                           Margin="9,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Text.Faint}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Button Grid.Column="1" Margin="6,0,0,0" Padding="8,4"
+                        Command="{Binding ClearSearchCommand}" ToolTip="Clear search (Esc)"
+                        Visibility="{Binding IsSearching, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource Font.Icons}" FontSize="10" />
+                </Button>
+            </Grid>
+
+            <Button Grid.Column="2" Command="{Binding ToggleGridCommand}" ToolTip="Hide or show the list (Ctrl+H)">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                         <Setter Property="Content" Value="Hide List" />
@@ -169,41 +255,101 @@
             actually reclaims the vertical space for the window instead of
             leaving a blank gap (see BoolToGridLengthConverter's remarks).
         -->
-        <DataGrid Grid.Row="3"
-                  ItemsSource="{Binding Places}"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  CanUserAddRows="False">
-            <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow">
-                    <Setter Property="Tag" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext}" />
-                    <Setter Property="ContextMenu" Value="{StaticResource PlaceContextMenu}" />
-                    <EventSetter Event="MouseDoubleClick" Handler="Row_MouseDoubleClick" />
+        <Grid Grid.Row="3">
+            <DataGrid x:Name="PlacesGrid"
+                      ItemsSource="{Binding PlacesView}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      SelectionMode="Single"
+                      PreviewKeyDown="PlacesGrid_PreviewKeyDown">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Setter Property="Tag" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext}" />
+                        <Setter Property="ContextMenu" Value="{StaticResource PlaceContextMenu}" />
+                        <EventSetter Event="MouseDoubleClick" Handler="Row_MouseDoubleClick" />
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                    <!-- Template column so the type glyph can sit beside the alias; SortMemberPath keeps header-click sorting by Alias. -->
+                    <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding TypeGlyph}" Style="{StaticResource TextBlock.Glyph}" />
+                                    <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="90" />
+                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" />
+                    <!--
+                        Mode=OneWay is required here, not just decorative:
+                        DataGridCheckBoxColumn's cell (display AND edit) is a
+                        live CheckBox bound via IsChecked, which defaults to
+                        TwoWay in its own property metadata — the column's
+                        IsReadOnly only stops the user from clicking into edit
+                        mode, it doesn't change the binding WPF actually builds.
+                        Text columns don't hit this because their read-only
+                        display element is a plain TextBlock (OneWay by
+                        default); only the editable TextBox — never
+                        instantiated while IsReadOnly — would default TwoWay.
+                        Without an explicit Mode here, binding IsFavourite
+                        (get-only on PlaceViewModel) throws
+                        InvalidOperationException as soon as the column tries
+                        to bind.
+                    -->
+                    <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" Width="90" IsReadOnly="True" />
+                    <DataGridTextColumn Header="Date Added" Binding="{Binding DateAdded, StringFormat={}{0:d}}" Width="110" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Explains an empty grid: nothing saved yet, or nothing matches the search. -->
+            <TextBlock Text="{Binding EmptyGridMessage}" IsHitTestVisible="False"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,48,16,0"
+                       TextWrapping="Wrap" TextAlignment="Center"
+                       Foreground="{StaticResource Text.Faint}" FontStyle="Italic">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding EmptyGridMessage}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Grid>
+
+        <!-- Status bar: a short confirmation after Remove (with Undo), Undo, or Copy. Hidden a few seconds after its last message. -->
+        <Border Grid.Row="4" Margin="0,8,0,0" Padding="12,6" CornerRadius="8"
+                Background="{StaticResource Bg.Elevated}" BorderBrush="{StaticResource Border.Default}" BorderThickness="1">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding StatusMessage}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
                 </Style>
-            </DataGrid.RowStyle>
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Alias" Binding="{Binding Alias}" Width="*" />
-                <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="90" />
-                <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" />
-                <!--
-                    Mode=OneWay is required here, not just decorative:
-                    DataGridCheckBoxColumn's cell (display AND edit) is a
-                    live CheckBox bound via IsChecked, which defaults to
-                    TwoWay in its own property metadata — the column's
-                    IsReadOnly only stops the user from clicking into edit
-                    mode, it doesn't change the binding WPF actually builds.
-                    Text columns don't hit this because their read-only
-                    display element is a plain TextBlock (OneWay by
-                    default); only the editable TextBox — never
-                    instantiated while IsReadOnly — would default TwoWay.
-                    Without an explicit Mode here, binding IsFavourite
-                    (get-only on PlaceViewModel) throws
-                    InvalidOperationException as soon as the column tries
-                    to bind.
-                -->
-                <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" Width="90" IsReadOnly="True" />
-                <DataGridTextColumn Header="Date Added" Binding="{Binding DateAdded, StringFormat={}{0:d}}" Width="110" />
-            </DataGrid.Columns>
-        </DataGrid>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="1" Content="Undo" Margin="8,0,0,0" Padding="10,4"
+                        Command="{Binding UndoRemoveCommand}" ToolTip="Restore it (Ctrl+Z)"
+                        Visibility="{Binding StatusOffersUndo, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <Button Grid.Column="2" Margin="6,0,0,0" Padding="8,4"
+                        Command="{Binding DismissStatusCommand}" ToolTip="Dismiss"
+                        AutomationProperties.Name="Dismiss">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource Font.Icons}" FontSize="10" />
+                </Button>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
