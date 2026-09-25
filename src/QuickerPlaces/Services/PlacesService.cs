@@ -51,17 +51,28 @@ public sealed class PlacesService
     };
 
     private readonly IPlacesStorage _storage;
+    private readonly TimeProvider _time;
     private readonly List<Place> _places;
 
-    /// <summary>Builds the production service over the real, roaming AppData store — unchanged from before the storage seam existed, so App.xaml.cs needs no changes.</summary>
-    public PlacesService() : this(FilePlacesStorage.ForDefaultLocation())
+    /// <summary>Builds the production service over the real, roaming AppData store and the system clock — unchanged from before the storage seam existed, so App.xaml.cs needs no changes.</summary>
+    public PlacesService() : this(FilePlacesStorage.ForDefaultLocation(), TimeProvider.System)
     {
     }
 
-    /// <summary>Builds the service over any IPlacesStorage — the seam a test uses to exercise load/save behaviour without touching a real disk.</summary>
-    public PlacesService(IPlacesStorage storage)
+    /// <summary>
+    /// Builds the service over any IPlacesStorage — the seam a test uses to
+    /// exercise load/save behaviour without touching a real disk — and,
+    /// optionally, any clock (D12). Every timestamp this service stamps or
+    /// compares comes from <paramref name="timeProvider"/>, never from
+    /// DateTime.Now directly, so a test can pin both the instant and the
+    /// local time zone instead of inheriting the machine's.
+    /// </summary>
+    public PlacesService(IPlacesStorage storage, TimeProvider? timeProvider = null)
     {
         _storage = storage;
+        // Assigned before LoadFromDisk: loading is the first thing that
+        // may need the clock.
+        _time = timeProvider ?? TimeProvider.System;
         var (places, outcome) = LoadFromDisk();
         _places = places;
         LoadOutcome = outcome;
@@ -91,6 +102,9 @@ public sealed class PlacesService
     /// opened (D6).
     /// </summary>
     public StoreLoadOutcome LoadOutcome { get; private set; }
+
+    /// <summary>The clock purge decisions use — the Recently Deleted dialog's countdown reads it too, so the two agree (D12).</summary>
+    public DateTimeOffset UtcNow => _time.GetUtcNow();
 
     /// <summary>Full path to places.json — handy for a "Reveal in Explorer" menu item.</summary>
     public string PlacesFilePath => _storage.StoreFilePath;
@@ -711,7 +725,9 @@ public sealed class PlacesService
     {
         try
         {
-            var quarantinedPath = _storage.Quarantine(DateTimeOffset.Now);
+            // Local time from the injected clock (D12): the file name is
+            // for a person reading a folder listing, and a test can pin it.
+            var quarantinedPath = _storage.Quarantine(_time.GetLocalNow());
             DiagnosticLog.Warn($"Quarantined damaged places store to {quarantinedPath}.");
 
             _places.Clear();
