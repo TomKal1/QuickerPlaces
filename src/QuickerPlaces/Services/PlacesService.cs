@@ -507,12 +507,26 @@ public sealed class PlacesService
     // Export / Import (SI §6.5 / §6.6)
     // ---------------------------------------------------------------
 
-    /// <summary>Writes the given places to <paramref name="filePath"/> as a standalone PlacesStore JSON document, replacing any existing file atomically. Returns an error message on failure, or null on success.</summary>
+    /// <summary>
+    /// Writes the given places to <paramref name="filePath"/> as a
+    /// standalone PlacesStore JSON document at the current schema version,
+    /// replacing any existing file atomically. Returns an error message on
+    /// failure, or null on success.
+    ///
+    /// Places in Recently Deleted are left out even if a caller passes them
+    /// (D16): an export is a list the user chose to keep or share, and
+    /// Recently Deleted is a safety net nobody chose. So an export never
+    /// carries a deletedAt key either (Place writes it only when set).
+    /// </summary>
     public string? Export(IEnumerable<Place> places, string filePath)
     {
         try
         {
-            var export = new PlacesStore { SchemaVersion = CurrentSchemaVersion, Places = places.ToList() };
+            var export = new PlacesStore
+            {
+                SchemaVersion = CurrentSchemaVersion,
+                Places = places.Where(p => p is not null && p.DeletedAt is null).ToList()
+            };
             var json = JsonSerializer.Serialize(export, JsonOptions);
             // Atomic for the same reason as places.json: exporting over an
             // earlier backup must never leave a half-written file in its place.
@@ -561,18 +575,62 @@ public sealed class PlacesService
     /// that do NOT collide with anything already stored (SI §6.6 — an
     /// incoming item whose alias or resource collides is excluded before
     /// the user ever sees it as an option). Returns an error message
-    /// instead of candidates if the file can't be read/parsed.
+    /// instead of candidates if the file can't be read/parsed, or was
+    /// written by a newer version (D17).
+    ///
+    /// The version decides how the file is read (D17): missing is treated
+    /// as 1, as import always has; 1 goes through the same
+    /// PlacesStoreMigration as the store, with this service's clock and
+    /// zone, so its dates follow the same rule; 2 is read as is; anything
+    /// newer is refused. Import stays lenient about a missing version where
+    /// the store is strict because the risks differ: the store's gate stops
+    /// a foreign file being loaded and then overwritten, while import is
+    /// additive, reviewed row by row, and never writes the source file.
+    ///
+    /// Records carrying deletedAt are never offered — whether from a
+    /// hand-edited file or a copied places.json, importing one into
+    /// Recently Deleted is meaningless and importing it as active would
+    /// resurrect something deleted elsewhere — and collisions are checked
+    /// against active places only (D15), so a place matching only something
+    /// in Recently Deleted is still offered.
     /// </summary>
     public (List<Place> candidates, string? errorMessage) GetImportCandidates(string filePath)
     {
         try
         {
             var json = File.ReadAllText(filePath);
-            var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
-            var incoming = store?.Places ?? new List<Place>();
+            if (JsonNode.Parse(json, documentOptions: StoreDocumentOptions) is not JsonObject root)
+                return (new List<Place>(), NotAnExportMessage);
+
+            var version = 1;
+            if (root["schemaVersion"] is { } versionNode)
+            {
+                if (versionNode is not JsonValue versionValue ||
+                    versionValue.GetValueKind() != JsonValueKind.Number ||
+                    !versionValue.TryGetValue(out version) ||
+                    version < 1)
+                {
+                    // Below 1 is numeric but no build ever wrote it — the same
+                    // reasoning as the store's gate (plan 5.1).
+                    return (new List<Place>(), NotAnExportMessage);
+                }
+
+                if (version > CurrentSchemaVersion)
+                    return (new List<Place>(), "That file was exported by a newer version of QuickerPlaces. Update QuickerPlaces to import it.");
+            }
+
+            // Import never logs the migration: it changes nothing stored, and
+            // the file itself is never written back.
+            if (version == 1)
+                PlacesStoreMigration.MigrateV1ToV2(root, _time.LocalTimeZone, _time.GetUtcNow());
+
+            var store = root.Deserialize<PlacesStore>(JsonOptions);
+            var incoming = (store?.Places ?? new List<Place>())
+                .Where(p => p is not null && p.DeletedAt is null)
+                .ToList();
 
             var candidates = incoming
-                .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Alias) && !string.IsNullOrWhiteSpace(p.Resource))
+                .Where(p => !string.IsNullOrWhiteSpace(p.Alias) && !string.IsNullOrWhiteSpace(p.Resource))
                 .Where(p => ValidateAlias(p.Alias).Success && ValidateResource(p.Resource, p.Type).Success)
                 .ToList();
 
@@ -602,6 +660,8 @@ public sealed class PlacesService
             return (new List<Place>(), $"Couldn't read that file: {ex.Message}");
         }
     }
+
+    private const string NotAnExportMessage = "That file isn't a QuickerPlaces export.";
 
     /// <summary>
     /// Adds the user-selected import candidates as new Place records (never

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Tests.Fakes;
@@ -480,6 +481,33 @@ public sealed class PlacesServiceTests : IDisposable
         // Imported items arrive as fresh, non-favourite records.
         Assert.All(target.Places, p => Assert.False(p.IsFavourite));
         Assert.Equal(2, NewServiceAt("other.json").Places.Count);
+
+        // Phase 2 test 39: and the export reads as version 2.
+        Assert.Equal(2, JsonNode.Parse(File.ReadAllText(exportFile))!["schemaVersion"]!.GetValue<int>());
+    }
+
+    /// <summary>
+    /// Phase 2 test 33: Export leaves out places in Recently Deleted even
+    /// when the caller passes them, writes schemaVersion 2, and no record
+    /// has a deletedAt key (D16).
+    /// </summary>
+    [Fact]
+    public void Export_leaves_out_deleted_places_even_when_given_them()
+    {
+        var service = NewService();
+        Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var wiki = Add(service, "Wiki", PlaceType.Url, "https://wiki.example.com");
+        Add(service, "Mail", PlaceType.Url, "https://mail.example.com");
+        RemoveForUndo(service, wiki);
+        var exportFile = Path.Combine(_temp.Path, "export.json");
+
+        Assert.Null(service.Export(service.Places.Concat(service.RecentlyDeleted), exportFile));
+
+        var written = JsonNode.Parse(File.ReadAllText(exportFile))!;
+        Assert.Equal(2, written["schemaVersion"]!.GetValue<int>());
+        var places = written["places"]!.AsArray();
+        Assert.Equal(new[] { "Docs", "Mail" }, places.Select(p => p!["alias"]!.GetValue<string>()));
+        Assert.All(places, p => Assert.False(p!.AsObject().ContainsKey("deletedAt")));
     }
 
     [Fact]
@@ -549,6 +577,167 @@ public sealed class PlacesServiceTests : IDisposable
 
         Assert.Null(error);
         Assert.Equal(new[] { "Wiki", "Fine" }, candidates.Select(p => p.Alias));
+    }
+
+    /// <summary>JSON string content for a path, with backslashes escaped.</summary>
+    private static string Json(string path) => path.Replace("\\", "\\\\");
+
+    /// <summary>
+    /// Phase 2 test 34: an export written before Phase 2 — places.v1.json's
+    /// exact shape, offset-less dates — still offers every place, with its
+    /// dates migrated to UTC by the same rule as the store (D17; the clock's
+    /// zone is PlusTen), and the candidates commit.
+    /// </summary>
+    [Fact]
+    public void A_v1_export_offers_every_place_with_utc_dates_and_they_commit()
+    {
+        var exportFile = Path.Combine(_temp.Path, "export.json");
+        File.WriteAllText(exportFile, $$"""
+            {
+              "schemaVersion": 1,
+              "places": [
+                { "alias": "Downloads", "type": "folder", "resource": "{{Json(Folder("Downloads"))}}", "isFavourite": true, "favouriteOrder": 0, "dateAdded": "2026-01-15T09:30:00" },
+                { "alias": "QuickerPlaces Repo", "type": "url", "resource": "https://github.com/example/quickerplaces", "isFavourite": true, "favouriteOrder": 1, "dateAdded": "2026-02-03T14:05:22" },
+                { "alias": "Old Reports", "type": "folder", "resource": "{{Json(Folder("Old Reports"))}}", "isFavourite": false, "favouriteOrder": null, "dateAdded": "2025-11-20T08:12:47" }
+              ]
+            }
+            """);
+        var service = NewService();
+
+        var (candidates, error) = service.GetImportCandidates(exportFile);
+
+        Assert.Null(error);
+        Assert.Equal(new[] { "Downloads", "QuickerPlaces Repo", "Old Reports" }, candidates.Select(p => p.Alias));
+        Assert.Equal(
+            new[]
+            {
+                new DateTimeOffset(2026, 1, 14, 23, 30, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 2, 3, 4, 5, 22, TimeSpan.Zero),
+                new DateTimeOffset(2025, 11, 19, 22, 12, 47, TimeSpan.Zero)
+            },
+            candidates.Select(p => p.DateAdded));
+        Assert.All(candidates, p => Assert.Equal(TimeSpan.Zero, p.DateAdded.Offset));
+
+        var (imported, persistence) = service.CommitImport(candidates);
+        Assert.Equal(3, imported.Count);
+        Assert.True(persistence.Saved);
+        Assert.Equal(3, NewService().Places.Count);
+    }
+
+    /// <summary>
+    /// Phase 2 test 35: records carrying deletedAt in an import file are not
+    /// offered (D17). A v2 document shaped like places.v2.json: only its
+    /// three active records are candidates — including "reports", whose
+    /// deleted namesake "Reports" is simply skipped.
+    /// </summary>
+    [Fact]
+    public void Records_with_deletedAt_in_an_import_file_are_not_offered()
+    {
+        var exportFile = Path.Combine(_temp.Path, "export.json");
+        File.WriteAllText(exportFile, $$"""
+            {
+              "schemaVersion": 2,
+              "places": [
+                { "alias": "Downloads", "type": "folder", "resource": "{{Json(Folder("Downloads"))}}", "isFavourite": true, "favouriteOrder": 0, "dateAdded": "2026-01-14T23:30:00+00:00" },
+                { "alias": "Old Wiki", "type": "url", "resource": "https://wiki.example.com/old", "isFavourite": true, "favouriteOrder": 1, "dateAdded": "2025-06-02T10:15:00+00:00", "deletedAt": "2026-09-20T08:00:00+00:00" },
+                { "alias": "QuickerPlaces Repo", "type": "url", "resource": "https://github.com/example/quickerplaces", "isFavourite": true, "favouriteOrder": 1, "dateAdded": "2026-02-03T04:05:22+00:00" },
+                { "alias": "Reports", "type": "folder", "resource": "{{Json(Folder("Archive Reports"))}}", "isFavourite": false, "favouriteOrder": null, "dateAdded": "2025-11-19T22:12:47+00:00", "deletedAt": "2026-09-24T17:45:00+00:00" },
+                { "alias": "reports", "type": "folder", "resource": "{{Json(Folder("Reports"))}}", "isFavourite": false, "favouriteOrder": null, "dateAdded": "2026-09-24T18:02:10+00:00" }
+              ]
+            }
+            """);
+
+        var (candidates, error) = NewService().GetImportCandidates(exportFile);
+
+        Assert.Null(error);
+        Assert.Equal(new[] { "Downloads", "QuickerPlaces Repo", "reports" }, candidates.Select(p => p.Alias));
+        Assert.All(candidates, p => Assert.Null(p.DeletedAt));
+    }
+
+    /// <summary>
+    /// Phase 2 test 36: a candidate that collides only with a place in
+    /// Recently Deleted is offered and commits (§4.10, D17) — the deleted
+    /// one's later restore is what becomes a conflict.
+    /// </summary>
+    [Fact]
+    public void A_candidate_colliding_only_with_a_deleted_place_is_offered_and_commits()
+    {
+        var service = NewService();
+        var oldDocs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        RemoveForUndo(service, oldDocs);
+        var exportFile = Path.Combine(_temp.Path, "export.json");
+        File.WriteAllText(exportFile, $$"""
+            { "schemaVersion": 2, "places": [ { "alias": "Docs", "type": "folder", "resource": "{{Json(Folder("Docs"))}}" } ] }
+            """);
+
+        var (candidates, error) = service.GetImportCandidates(exportFile);
+        Assert.Null(error);
+        var (imported, _) = service.CommitImport(candidates);
+
+        var docs = Assert.Single(imported);
+        Assert.Equal("Docs", docs.Alias);
+        Assert.NotSame(oldDocs, docs);
+        Assert.Contains(docs, service.Places);
+        Assert.Same(oldDocs, Assert.Single(service.RecentlyDeleted));
+        Assert.False(service.TryRestore(oldDocs, out _).Success);
+    }
+
+    /// <summary>Phase 2 test 37: an import file from a newer version is refused with the newer-version message, and offers nothing (D17).</summary>
+    [Fact]
+    public void An_import_file_from_a_newer_version_is_refused()
+    {
+        var exportFile = Path.Combine(_temp.Path, "export.json");
+        File.WriteAllText(exportFile, """
+            { "schemaVersion": 3, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
+            """);
+
+        var (candidates, error) = NewService().GetImportCandidates(exportFile);
+
+        Assert.Empty(candidates);
+        Assert.Equal("That file was exported by a newer version of QuickerPlaces. Update QuickerPlaces to import it.", error);
+    }
+
+    /// <summary>Phase 2 test 38: an import file without schemaVersion is still read, as version 1 (D17's unchanged leniency).</summary>
+    [Fact]
+    public void An_import_file_without_a_version_still_imports()
+    {
+        var exportFile = Path.Combine(_temp.Path, "export.json");
+        File.WriteAllText(exportFile, """
+            { "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com", "dateAdded": "2026-01-15T09:30:00" } ] }
+            """);
+        var service = NewService();
+
+        var (candidates, error) = service.GetImportCandidates(exportFile);
+
+        Assert.Null(error);
+        var wiki = Assert.Single(candidates);
+        Assert.Equal(new DateTimeOffset(2026, 1, 14, 23, 30, 0, TimeSpan.Zero), wiki.DateAdded);
+        Assert.Single(service.CommitImport(candidates).imported);
+    }
+
+    /// <summary>
+    /// Not a numbered plan test (D17's table): a schemaVersion that is not a
+    /// number is refused as not a QuickerPlaces export. So is one below 1,
+    /// which is numeric but was never written by any build — the store's
+    /// gate treats it the same way (plan 5.1).
+    /// </summary>
+    [Theory]
+    [InlineData("\"2\"")]
+    [InlineData("true")]
+    [InlineData("1.5")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public void An_import_file_with_an_unusable_version_is_refused(string version)
+    {
+        var exportFile = Path.Combine(_temp.Path, "export.json");
+        File.WriteAllText(exportFile, $$"""
+            { "schemaVersion": {{version}}, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
+            """);
+
+        var (candidates, error) = NewService().GetImportCandidates(exportFile);
+
+        Assert.Empty(candidates);
+        Assert.Equal("That file isn't a QuickerPlaces export.", error);
     }
 
     [Fact]
