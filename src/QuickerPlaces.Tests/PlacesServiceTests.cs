@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using QuickerPlaces.Models;
@@ -16,6 +17,8 @@ public sealed class PlacesServiceTests : IDisposable
     private string PlacesFile => _temp.File("places.json");
 
     private PlacesService NewService() => new(PlacesFile);
+
+    private PlacesService NewServiceAt(string fileName) => new(_temp.File(fileName));
 
     /// <summary>An absolute folder path that's fully qualified on whichever OS the tests run on.</summary>
     private string Folder(string name) => Path.Combine(_temp.Path, name);
@@ -51,6 +54,46 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Empty(service.Places);
         Assert.True(service.LoadFailed);
         Assert.Equal("{ this is not json", File.ReadAllText(PlacesFile));
+    }
+
+    [Fact]
+    public void Corrupt_file_is_backed_up_so_the_next_save_cannot_destroy_it()
+    {
+        File.WriteAllText(PlacesFile, "{ this is not json");
+
+        var service = NewService();
+        Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+
+        Assert.NotNull(service.CorruptFileBackupPath);
+        Assert.Equal(_temp.Path, Path.GetDirectoryName(service.CorruptFileBackupPath));
+        Assert.StartsWith("places.corrupt-", Path.GetFileName(service.CorruptFileBackupPath));
+        Assert.Equal("{ this is not json", File.ReadAllText(service.CorruptFileBackupPath!));
+    }
+
+    [Fact]
+    public void Corrupt_file_backup_never_overwrites_an_earlier_backup()
+    {
+        File.WriteAllText(PlacesFile, "first bad file");
+        var first = NewService().CorruptFileBackupPath;
+        File.WriteAllText(PlacesFile, "second bad file");
+        var second = NewService().CorruptFileBackupPath;
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.NotEqual(first, second);
+        Assert.Equal("first bad file", File.ReadAllText(first!));
+        Assert.Equal("second bad file", File.ReadAllText(second!));
+    }
+
+    [Fact]
+    public void Readable_or_missing_file_makes_no_backup()
+    {
+        Assert.Null(NewService().CorruptFileBackupPath);
+
+        Add(NewService(), "Docs", PlaceType.Folder, Folder("Docs"));
+        Assert.Null(NewService().CorruptFileBackupPath);
+
+        Assert.Single(Directory.GetFiles(_temp.Path));
     }
 
     [Fact]
@@ -221,6 +264,197 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Empty(NewService().Places);
     }
 
+    // -----------------------------------------------------------------
+    // Undo remove
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void Restore_puts_a_removed_place_back_where_it_was_and_persists()
+    {
+        var service = NewService();
+        Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        Add(service, "C", PlaceType.Folder, Folder("C"));
+        var dateAdded = b.DateAdded;
+
+        var removed = service.Remove(b);
+        Assert.NotNull(removed);
+        Assert.Equal(1, removed!.Index);
+
+        Assert.True(service.TryRestore(removed).Success);
+
+        Assert.Equal(new[] { "A", "B", "C" }, service.Places.Select(p => p.Alias));
+        Assert.Same(b, service.Places[1]);
+        Assert.Equal(dateAdded, b.DateAdded);
+        Assert.Equal(new[] { "A", "B", "C" }, NewService().Places.Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_puts_a_favourite_back_at_its_old_bubble_position()
+    {
+        var service = NewService();
+        var a = Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        var c = Add(service, "C", PlaceType.Folder, Folder("C"));
+        service.ToggleFavourite(a);
+        service.ToggleFavourite(b);
+        service.ToggleFavourite(c);
+
+        var removed = service.Remove(b)!;
+        Assert.Equal(1, removed.FavouriteOrder);
+        Assert.Equal(1, c.FavouriteOrder);
+
+        Assert.True(service.TryRestore(removed).Success);
+
+        Assert.True(b.IsFavourite);
+        Assert.Equal(new int?[] { 0, 1, 2 }, new[] { a, b, c }.Select(p => p.FavouriteOrder));
+    }
+
+    [Fact]
+    public void Restore_uses_bubble_order_not_list_order_after_a_drag_reorder()
+    {
+        var service = NewService();
+        var a = Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        var c = Add(service, "C", PlaceType.Folder, Folder("C"));
+        service.ToggleFavourite(a);
+        service.ToggleFavourite(b);
+        service.ToggleFavourite(c);
+        service.SetFavouriteOrder(new[] { b, c, a });   // bubbles: B, C, A
+
+        var removed = service.Remove(c)!;              // bubbles: B, A
+        Assert.True(service.TryRestore(removed).Success);
+
+        // C sits later than A in the list, but goes back between B and A.
+        Assert.Equal(new[] { "B", "C", "A" },
+            service.Places.Where(p => p.IsFavourite).OrderBy(p => p.FavouriteOrder).Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_closes_gaps_when_other_favourites_went_in_the_meantime()
+    {
+        var service = NewService();
+        var a = Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        var c = Add(service, "C", PlaceType.Folder, Folder("C"));
+        service.ToggleFavourite(a);
+        service.ToggleFavourite(b);
+        service.ToggleFavourite(c);
+
+        var removedC = service.Remove(c)!;   // was bubble 2
+        service.ToggleFavourite(a);          // unfavourite A: B is now bubble 0
+
+        Assert.True(service.TryRestore(removedC).Success);
+
+        Assert.Equal(0, b.FavouriteOrder);
+        Assert.Equal(1, c.FavouriteOrder);
+        Assert.Null(a.FavouriteOrder);
+    }
+
+    [Fact]
+    public void Removals_restore_in_reverse_order_to_their_original_positions()
+    {
+        var service = NewService();
+        var places = new[] { "A", "B", "C", "D" }.Select(n => Add(service, n, PlaceType.Folder, Folder(n))).ToList();
+
+        var removedB = service.Remove(places[1])!;
+        var removedD = service.Remove(places[3])!;
+        var removedA = service.Remove(places[0])!;
+
+        Assert.True(service.TryRestore(removedA).Success);
+        Assert.True(service.TryRestore(removedD).Success);
+        Assert.True(service.TryRestore(removedB).Success);
+
+        Assert.Equal(new[] { "A", "B", "C", "D" }, service.Places.Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_refuses_when_the_alias_or_resource_has_been_reused()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var wiki = Add(service, "Wiki", PlaceType.Url, "https://wiki.example.com");
+
+        var removedDocs = service.Remove(docs)!;
+        var removedWiki = service.Remove(wiki)!;
+        Add(service, "docs", PlaceType.Folder, Folder("Other"));
+        Add(service, "New Wiki", PlaceType.Url, "https://wiki.example.com");
+
+        var aliasResult = service.TryRestore(removedDocs);
+        var resourceResult = service.TryRestore(removedWiki);
+
+        Assert.False(aliasResult.Success);
+        Assert.Contains("alias", aliasResult.ErrorMessage);
+        Assert.False(resourceResult.Success);
+        Assert.Contains("path/URL", resourceResult.ErrorMessage);
+        Assert.Equal(new[] { "docs", "New Wiki" }, service.Places.Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_twice_is_refused_rather_than_duplicating()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var removed = service.Remove(docs)!;
+
+        Assert.True(service.TryRestore(removed).Success);
+        Assert.False(service.TryRestore(removed).Success);
+        Assert.Single(service.Places);
+    }
+
+    [Fact]
+    public void Removing_a_place_not_in_the_store_returns_null()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        service.Remove(docs);
+
+        Assert.Null(service.Remove(docs));
+    }
+
+    [Fact]
+    public void Failed_save_is_reported_once_and_kept_in_memory_until_a_later_save_works()
+    {
+        var service = NewService();
+        var failures = new List<string>();
+        service.SaveFailed += failures.Add;
+
+        // A directory where places.json should be makes the final
+        // File.Move fail, on any OS, the way a locked file would.
+        Directory.CreateDirectory(PlacesFile);
+
+        Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        Add(service, "Wiki", PlaceType.Url, "https://wiki.example.com");
+
+        Assert.True(service.HasUnsavedChanges);
+        Assert.False(File.Exists(PlacesFile + ".tmp"));
+        Assert.Single(failures);
+        Assert.Contains(PlacesFile, failures[0]);
+        Assert.Equal(2, service.Places.Count);
+        Assert.False(service.TrySave());
+
+        Directory.Delete(PlacesFile);
+
+        Assert.True(service.TrySave());
+        Assert.False(service.HasUnsavedChanges);
+        Assert.Equal(new[] { "Docs", "Wiki" }, NewService().Places.Select(p => p.Alias));
+
+        // A fresh failure after recovering is a new problem, so it's reported again.
+        File.Delete(PlacesFile);
+        Directory.CreateDirectory(PlacesFile);
+        Add(service, "Notes", PlaceType.Folder, Folder("Notes"));
+        Assert.Equal(2, failures.Count);
+    }
+
+    [Fact]
+    public void Try_save_with_nothing_pending_succeeds_without_writing()
+    {
+        var service = NewService();
+
+        Assert.True(service.TrySave());
+        Assert.False(File.Exists(PlacesFile));
+    }
+
     [Fact]
     public void Save_leaves_no_temp_file_behind()
     {
@@ -288,6 +522,36 @@ public sealed class PlacesServiceTests : IDisposable
         // Imported items arrive as fresh, non-favourite records.
         Assert.All(target.Places, p => Assert.False(p.IsFavourite));
         Assert.Equal(2, new PlacesService(_temp.File("other.json")).Places.Count);
+    }
+
+    [Fact]
+    public void Export_replaces_an_existing_file_and_leaves_no_temp_file()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var exportFile = _temp.File("export.json");
+        File.WriteAllText(exportFile, "an older, longer export that must not leave a tail behind");
+
+        Assert.Null(service.Export(new[] { docs }, exportFile));
+
+        Assert.False(File.Exists(exportFile + ".tmp"));
+        var (candidates, error) = NewServiceAt("other.json").GetImportCandidates(exportFile);
+        Assert.Null(error);
+        Assert.Equal("Docs", Assert.Single(candidates).Alias);
+    }
+
+    [Fact]
+    public void Failed_export_returns_an_error_and_cleans_up_its_temp_file()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var exportFile = _temp.File("export.json");
+        Directory.CreateDirectory(exportFile);
+
+        var error = service.Export(new[] { docs }, exportFile);
+
+        Assert.NotNull(error);
+        Assert.False(File.Exists(exportFile + ".tmp"));
     }
 
     [Fact]

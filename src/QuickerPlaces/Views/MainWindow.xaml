@@ -34,6 +34,9 @@
                       Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       FontWeight="Bold" />
+            <MenuItem Header="Copy Path/URL" InputGestureText="Ctrl+C"
+                      Command="{Binding PlacementTarget.Tag.CopyResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Rename Alias"
                       Command="{Binding PlacementTarget.Tag.RenameAliasCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -55,6 +58,9 @@
                       Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       FontWeight="Bold" />
+            <MenuItem Header="Copy Path/URL"
+                      Command="{Binding PlacementTarget.Tag.CopyResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Remove from Favourites"
                       Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -72,6 +78,7 @@
         <KeyBinding Modifiers="Ctrl" Key="N" Command="{Binding AddFolderCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="U" Command="{Binding AddUrlCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="H" Command="{Binding ToggleGridCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="Z" Command="{Binding UndoRemoveCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="D1" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="0" />
         <KeyBinding Modifiers="Ctrl" Key="D2" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="1" />
         <KeyBinding Modifiers="Ctrl" Key="D3" Command="{Binding OpenFavouriteAtCommand}" CommandParameter="2" />
@@ -102,6 +109,8 @@
                 standard, reliable way to data-bind a RowDefinition.
             -->
             <RowDefinition Height="{Binding DataContext.IsGridExpanded, ElementName=RootGrid, Converter={StaticResource BoolToGridLengthConverter}}" />
+            <!-- Status bar ("Removed "Docs". Undo"); collapses to nothing when there's no message. -->
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Header: monogram glyph, app name + subheader, add/export/import action row -->
@@ -125,6 +134,15 @@
             </StackPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Icon-only so the header still fits at the window's MinWidth. -->
+                <Button Content="&#xE713;" FontFamily="{StaticResource Font.Icons}"
+                        Click="SettingsButton_Click" Margin="0,0,8,0"
+                        ToolTip="Settings"
+                        AutomationProperties.Name="Settings" />
+                <Button Content="&#xE838;" FontFamily="{StaticResource Font.Icons}"
+                        Command="{Binding OpenDataFolderCommand}" Margin="0,0,8,0"
+                        ToolTip="Open data folder (where places.json and any backups are kept)"
+                        AutomationProperties.Name="Open data folder" />
                 <Button Content="Import..." Command="{Binding ImportCommand}" Margin="0,0,8,0" />
                 <Button Content="Export..." Command="{Binding ExportCommand}" Margin="0,0,16,0" />
                 <Button Content="Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" ToolTip="Add Folder (Ctrl+N)" />
@@ -303,5 +321,35 @@
                 </TextBlock.Style>
             </TextBlock>
         </Grid>
+
+        <!-- Status bar: a short confirmation after Remove (with Undo), Undo, or Copy. Hidden a few seconds after its last message. -->
+        <Border Grid.Row="4" Margin="0,8,0,0" Padding="12,6" CornerRadius="8"
+                Background="{StaticResource Bg.Elevated}" BorderBrush="{StaticResource Border.Default}" BorderThickness="1">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding StatusMessage}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="1" Content="Undo" Margin="8,0,0,0" Padding="10,4"
+                        Command="{Binding UndoRemoveCommand}" ToolTip="Restore it (Ctrl+Z)"
+                        Visibility="{Binding StatusOffersUndo, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <Button Grid.Column="2" Margin="6,0,0,0" Padding="8,4"
+                        Command="{Binding DismissStatusCommand}" ToolTip="Dismiss"
+                        AutomationProperties.Name="Dismiss">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource Font.Icons}" FontSize="10" />
+                </Button>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

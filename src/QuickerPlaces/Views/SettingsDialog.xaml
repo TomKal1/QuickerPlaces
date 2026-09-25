@@ -1,0 +1,61 @@
+<Window x:Class="QuickerPlaces.Views.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="Settings"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        SizeToContent="Height"
+        Width="460"
+        WindowStartupLocation="CenterOwner"
+        d:DesignHeight="260" d:DesignWidth="460">
+    <!--
+        App settings. For now that's just the global hotkey; window size and
+        the list's collapsed state are remembered automatically and don't
+        need a setting. Same plain themed-Window shape as PlaceFormDialog.
+    -->
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock Text="Shortcut to bring QuickerPlaces to the front" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Text="Works from any app while QuickerPlaces is running. Click the box and press the keys you want, including Ctrl, Alt or Win."
+                       Foreground="{StaticResource Text.Secondary}" TextWrapping="Wrap" FontSize="12" />
+        </StackPanel>
+
+        <!--
+            Read-only so typing never inserts characters: the key handler
+            turns each key press into a hotkey instead. Tab, and Enter/Esc
+            with no modifiers, are let through so the dialog stays usable
+            from the keyboard.
+        -->
+        <TextBox x:Name="HotkeyBox" Grid.Row="1" Margin="0,0,0,8"
+                 IsReadOnly="True" IsReadOnlyCaretVisible="False"
+                 PreviewKeyDown="HotkeyBox_PreviewKeyDown"
+                 PreviewKeyUp="HotkeyBox_PreviewKeyUp"
+                 AutomationProperties.Name="Global shortcut"
+                 ToolTip="Press a key combination. Backspace turns the shortcut off." />
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,14">
+            <Button Content="Reset to Default" Padding="10,4" Margin="0,0,8,0" Click="ResetButton_Click" />
+            <Button Content="Turn Off" Padding="10,4" Click="TurnOffButton_Click" />
+        </StackPanel>
+
+        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{StaticResource Status.Error}"
+                   TextWrapping="Wrap" MaxWidth="412" HorizontalAlignment="Left"
+                   Margin="0,0,0,14" Visibility="Collapsed" />
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Margin="0,0,8,0" IsCancel="True" Click="CancelButton_Click" />
+            <Button Content="Save" Style="{StaticResource Button.Primary}" IsDefault="True" Click="SaveButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,21 +1,144 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuickerPlaces.Models;
+using QuickerPlaces.Services;
 using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views;
 
 public partial class MainWindow : Window
 {
+    private readonly AppSettings _settings;
+    private readonly SettingsService _settingsService;
+    private GlobalHotkey? _globalHotkey;
+    private string? _globalHotkeyError;
+    private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
 
-    public MainWindow(MainViewModel viewModel, AppSettings settings)
+    public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService)
     {
         InitializeComponent();
         DataContext = viewModel;
+        _settings = settings;
+        _settingsService = settingsService;
         RestoreWindowState(settings);
+    }
+
+    // -----------------------------------------------------------------
+    // Global hotkey + bring-to-front. The hotkey needs this window's HWND,
+    // which first exists in OnSourceInitialized; any problem registering
+    // it is held until Window_Loaded, when a notice can be centered on an
+    // on-screen window.
+    // -----------------------------------------------------------------
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        _globalHotkeyError = ApplyGlobalHotkey(_settings.GlobalHotkey);
+    }
+
+    /// <summary>
+    /// Replaces whatever hotkey is registered with <paramref name="setting"/>
+    /// ("Ctrl+Alt+Space"; empty or "None" just unregisters). Returns a
+    /// user-readable error, or null on success. On failure no hotkey is
+    /// left registered.
+    /// </summary>
+    private string? ApplyGlobalHotkey(string? setting)
+    {
+        _globalHotkey?.Dispose();
+        _globalHotkey = null;
+        SetGlobalHotkeyText(null);
+
+        if (HotkeyGesture.IsDisabled(setting))
+            return null;
+
+        if (!HotkeyGesture.TryParse(setting, out var gesture, out var error))
+            return error;
+
+        _globalHotkey = GlobalHotkey.TryRegister(this, gesture, out error);
+        if (_globalHotkey is null)
+            return error;
+
+        _globalHotkey.Pressed += BringToFront;
+        SetGlobalHotkeyText(gesture.ToString());
+        return null;
+    }
+
+    private void SetGlobalHotkeyText(string? text)
+    {
+        if (DataContext is MainViewModel viewModel)
+            viewModel.GlobalHotkeyText = text;
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Paused while the dialog is open: otherwise pressing the current
+        // hotkey in the capture box would fire it instead of recording it.
+        ApplyGlobalHotkey(null);
+
+        var saved = SettingsDialog.Show(this, _settings.GlobalHotkey, ApplyGlobalHotkey);
+        if (saved is null)
+        {
+            // Cancelled: put back what was there. If that fails again, it
+            // was already failing before (and reported at startup).
+            ApplyGlobalHotkey(_settings.GlobalHotkey);
+            return;
+        }
+
+        // Saved now rather than on exit, so a crash can't lose the choice.
+        _settings.GlobalHotkey = saved;
+        PersistWindowState(_settings);
+        _settingsService.Save(_settings);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _globalHotkey?.Dispose();
+        _globalHotkey = null;
+        base.OnClosed(e);
+    }
+
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+
+        // Remembered so BringToFront restores a minimized window to
+        // maximized if that's how it was before, not always to normal.
+        if (WindowState != WindowState.Minimized)
+            _stateBeforeMinimize = WindowState;
+    }
+
+    /// <summary>
+    /// Shows the window in front of everything, restoring it if minimized,
+    /// with the search box focused and its text selected — so the global
+    /// hotkey (or launching the app again) goes straight to "type to find,
+    /// Enter to open".
+    /// </summary>
+    public void BringToFront()
+    {
+        if (WindowState == WindowState.Minimized)
+            WindowState = _stateBeforeMinimize;
+
+        Show();
+        Activate();
+
+        // A modal dialog (Add, Export, a MessageForm...) leaves this window
+        // disabled until it closes, so bring that dialog forward instead of
+        // trying to focus a search box that can't take input.
+        foreach (Window owned in OwnedWindows)
+        {
+            if (owned.IsVisible)
+            {
+                owned.Activate();
+                return;
+            }
+        }
+
+        SearchBox.Focus();
+        SearchBox.SelectAll();
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -26,10 +149,24 @@ public partial class MainWindow : Window
         // user should still be told their old data didn't just vanish).
         if (DataContext is MainViewModel { PlacesLoadFailed: true } viewModel)
         {
+            // The first change the user makes will overwrite places.json,
+            // so point them at the backup copy, which survives that.
+            var whereToFind = viewModel.CorruptFileBackupPath is { } backupPath
+                ? $"A copy of the unreadable file was saved to:\n{backupPath}"
+                : $"QuickerPlaces couldn't make a copy of the file, and your next change will replace it. " +
+                  $"To keep it, copy it somewhere safe before adding anything:\n{viewModel.PlacesFilePath}";
+
             MessageForm.Show(
-                $"Your saved places couldn't be read and QuickerPlaces has started with an empty list.\n\n" +
-                $"The original file was left untouched at:\n{viewModel.PlacesFilePath}",
+                $"Your saved places couldn't be read and QuickerPlaces has started with an empty list.\n\n{whereToFind}",
                 viewModel.AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
+        }
+
+        if (_globalHotkeyError is not null)
+        {
+            MessageForm.Show(
+                $"The shortcut for bringing QuickerPlaces to the front isn't active.\n\n{_globalHotkeyError}\n\n" +
+                "To choose a different one, or turn it off, click the Settings (gear) button at the top of the window.",
+                AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }
 
@@ -139,7 +276,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Row shortcuts, acting on the selected row: Enter opens, F2 renames, Ctrl+E edits the path/URL, Ctrl+D toggles favourite, Delete removes.</summary>
+    /// <summary>Row shortcuts, acting on the selected row: Enter opens, F2 renames, Ctrl+E edits the path/URL, Ctrl+D toggles favourite, Ctrl+C copies the path/URL, Delete removes.</summary>
     private void PlacesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (PlacesGrid.SelectedItem is not PlaceViewModel place || DataContext is not MainViewModel viewModel)
@@ -154,6 +291,8 @@ public partial class MainWindow : Window
             Key.F2 when none => viewModel.RenameAliasCommand,
             Key.E when ctrl => viewModel.EditResourceCommand,
             Key.D when ctrl => viewModel.ToggleFavouriteCommand,
+            // Replaces DataGrid's own Ctrl+C, which copies every cell of the row.
+            Key.C when ctrl => viewModel.CopyResourceCommand,
             Key.Delete when none => viewModel.RemoveCommand,
             _ => null
         };
