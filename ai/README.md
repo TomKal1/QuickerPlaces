@@ -14,6 +14,7 @@ Working documents for QuickerPlaces: the original brief, the specification built
 | [`260914_Folder Activity Tracking Plan.md`](260914_Folder%20Activity%20Tracking%20Plan.md) | File-level plan for Phase 9 (opt-in root folder activity tracking): what Windows can and cannot tell you about folders a user has opened, and the design that follows from it | Design — implement after Phases 1 and 3 |
 | [`260921_Handoff.md`](260921_Handoff.md) | Where to continue as of 2026-09-21, the decisions made that day, and the Phase 1 constraints and traps Phase 2 must build on | Superseded by the 2026-09-25 hand-off for *where to work*; its §5 and §6 still apply |
 | [`260925_Handoff.md`](260925_Handoff.md) | Phase 1 merged with the feature work: work from `main`, what each overlap kept and why, which roadmap items the features already cover, and the next steps | Current as of 2026-09-25 — supersede with a new dated hand-off |
+| [`260925_Phase 2 Detailed Plan.md`](260925_Phase%202%20Detailed%20Plan.md) | File-level and signature-level plan for Phase 2 (seven-day Recently Deleted), written against `main` after the Phase 1 merge: schema v2 and its migration, soft delete and Undo, the Recently Deleted dialog, expiry, and restore conflicts | Plan — not yet implemented |
 
 ## Conventions
 
