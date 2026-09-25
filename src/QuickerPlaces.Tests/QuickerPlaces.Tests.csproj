@@ -1,16 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Unit tests for QuickerPlaces' service layer (validation, persistence,
-    favourites, export/import).
+    Unit tests for QuickerPlaces' services and models (D5 in
+    ai/260901_Phase 1 Detailed Plan.md: no test constructs a Window).
 
     Deliberately targets plain net10.0 and compiles the UI-free source files
     in directly (the <Compile Include> links below) rather than adding a
     ProjectReference to the WPF app. Referencing a UseWPF project would
     drag in the Microsoft.WindowsDesktop.App framework, which only exists
-    on Windows. Linking the files keeps `dotnet test` working on any OS,
-    including Linux CI. Everything linked here must stay free of
-    System.Windows.* dependencies.
+    on Windows, so the tests could then only run there. Linking the files
+    keeps `dotnet test` working on any OS: on a Windows desktop, in Visual
+    Studio, and in a Linux cloud session or CI runner alike.
+
+    The price is that everything linked here must stay free of
+    System.Windows.* — which is D5's rule anyway. A new UI-free service
+    or model the tests need gets a line below; if it won't compile here,
+    it has picked up a WPF dependency it shouldn't have.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -24,9 +29,14 @@
     <Compile Include="..\QuickerPlaces\AppInfo.cs" Link="Linked\AppInfo.cs" />
     <Compile Include="..\QuickerPlaces\Models\AppSettings.cs" Link="Linked\Models\AppSettings.cs" />
     <Compile Include="..\QuickerPlaces\Models\HotkeyGesture.cs" Link="Linked\Models\HotkeyGesture.cs" />
+    <Compile Include="..\QuickerPlaces\Models\PersistenceResult.cs" Link="Linked\Models\PersistenceResult.cs" />
     <Compile Include="..\QuickerPlaces\Models\Place.cs" Link="Linked\Models\Place.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlaceType.cs" Link="Linked\Models\PlaceType.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />
+    <Compile Include="..\QuickerPlaces\Models\StoreLoadOutcome.cs" Link="Linked\Models\StoreLoadOutcome.cs" />
+    <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
+    <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
+    <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
@@ -36,6 +46,18 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Fixtures/places.v1.json is read via AppContext.BaseDirectory at test
+      time (not as an embedded resource), so it needs to land next to the
+      test assembly in the output directory. Every test that reads it does
+      so the same way — see PlacesStoreFixtureTests.
+    -->
+    <None Update="Fixtures\places.v1.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -43,6 +43,8 @@ public sealed class MainViewModel : ObservableObject
     // Hides the status bar a few seconds after its last message. Ctrl+Z
     // still works after it's gone; the bar is just a reminder.
     private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(8) };
+    private bool _hasUnsavedChanges;
+    private string? _persistenceMessage;
 
     public MainViewModel(AppSettings settings, PlacesService placesService)
     {
@@ -81,16 +83,24 @@ public sealed class MainViewModel : ObservableObject
         ToggleGridCommand = new RelayCommand(() => IsGridExpanded = !IsGridExpanded);
         OpenFavouriteAtCommand = new RelayCommand(parameter => OpenFavouriteAt(parameter));
         ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
-        OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
+        OpenDataFolderCommand = new RelayCommand(() => ExplorerReveal.Reveal(_placesService.PlacesFilePath));
         CopyResourceCommand = new RelayCommand(parameter => CopyResource(parameter as PlaceViewModel));
         UndoRemoveCommand = new RelayCommand(UndoRemove, () => _removedPlaces.Count > 0);
         DismissStatusCommand = new RelayCommand(() => ShowStatus(null));
+        RetrySaveCommand = new RelayCommand(RetrySave);
+        ShowLogCommand = new RelayCommand(ShowLog);
 
         _statusTimer.Tick += (_, _) => ShowStatus(null);
 
         RebuildFavourites();
 
-        _placesService.SaveFailed += OnSaveFailed;
+        // Establishes the banner's initial state from whatever
+        // PlacesService already knows (normally nothing — the constructor
+        // above only loads and never persists — but this keeps
+        // RefreshPersistenceState as the single place that ever sets
+        // HasUnsavedChanges/PersistenceMessage, rather than leaving their
+        // initial false/null values as an unstated special case).
+        RefreshPersistenceState();
     }
 
     public string AppName => AppInfo.Name;
@@ -167,6 +177,26 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref _isGridExpanded, value);
     }
 
+    /// <summary>
+    /// Backs the unsaved-changes banner's visibility. Set only from
+    /// RefreshPersistenceState, which reads it straight from
+    /// PlacesService.HasUnsavedChanges rather than from any individual
+    /// command's returned PersistenceResult — see RefreshPersistenceState's
+    /// remarks for why that distinction matters.
+    /// </summary>
+    public bool HasUnsavedChanges
+    {
+        get => _hasUnsavedChanges;
+        private set => SetProperty(ref _hasUnsavedChanges, value);
+    }
+
+    /// <summary>The banner's message text. Null exactly when HasUnsavedChanges is false — see RefreshPersistenceState.</summary>
+    public string? PersistenceMessage
+    {
+        get => _persistenceMessage;
+        private set => SetProperty(ref _persistenceMessage, value);
+    }
+
     public RelayCommand AddFolderCommand { get; }
     public RelayCommand AddUrlCommand { get; }
     public RelayCommand OpenCommand { get; }
@@ -205,38 +235,24 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _statusOffersUndo, value);
     }
 
-    /// <summary>Opens the folder holding places.json (and any places.corrupt-*.json backups) in File Explorer.</summary>
+    /// <summary>Reveals places.json in Explorer — the header's folder button and the unsaved-changes banner's "Show Data Folder". Quarantined places.corrupt-*.json files and places.bak.json sit beside it.</summary>
     public RelayCommand OpenDataFolderCommand { get; }
 
-    /// <summary>
-    /// True if the places file couldn't be read on startup. MainWindow
-    /// checks this once (on Loaded) and shows a MessageForm notice — kept
-    /// as a plain property rather than firing the notice from the
-    /// constructor so a themed owner window exists to center the dialog on.
-    /// </summary>
-    public bool PlacesLoadFailed => _placesService.LoadFailed;
+    public RelayCommand RetrySaveCommand { get; }
+    public RelayCommand ShowLogCommand { get; }
 
     public string PlacesFilePath => _placesService.PlacesFilePath;
 
-    /// <summary>Where a copy of the unreadable places file was saved on startup, or null if none was made. Shown in the load-failure notice.</summary>
-    public string? CorruptFileBackupPath => _placesService.CorruptFileBackupPath;
-
-    /// <summary>
-    /// Warns that a change only exists in memory. Posted to the dispatcher
-    /// rather than shown inline, because the failing save can happen in
-    /// the middle of a dialog's own Save click (PlaceFormDialog,
-    /// ImportDialog); this lets that dialog finish closing first.
-    /// </summary>
-    private void OnSaveFailed(string errorMessage)
-    {
-        Application.Current?.Dispatcher.InvokeAsync(() => MessageForm.Show(
-            errorMessage + "\n\nYour changes are kept while QuickerPlaces stays open, and it will keep trying to save them.",
-            AppName, MessageFormButtons.OK, MessageFormIcon.Warning));
-    }
-
     private void AddPlace(PlaceType type)
     {
+        // PlaceFormDialog discards the PersistenceResult from TryAdd
+        // internally (it only needs the ValidationResult to decide whether
+        // to close), so the banner state has to be re-read from
+        // PlacesService afterward rather than from a result passed back
+        // here — there isn't one.
         var created = PlaceFormDialog.ShowAdd(type, _placesService);
+        RefreshPersistenceState();
+
         if (created is null)
             return;
 
@@ -277,32 +293,13 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void OpenDataFolder()
-    {
-        try
-        {
-            // Highlight places.json itself when it exists; before the first
-            // save there's no file yet, so just open the folder.
-            var startInfo = File.Exists(PlacesFilePath)
-                ? new ProcessStartInfo("explorer.exe", $"/select,\"{PlacesFilePath}\"")
-                : new ProcessStartInfo(Path.GetDirectoryName(PlacesFilePath) ?? PlacesFilePath) { UseShellExecute = true };
-
-            Process.Start(startInfo);
-        }
-        catch (Exception ex)
-        {
-            MessageForm.Show(
-                $"Couldn't open the data folder:\n{ex.Message}",
-                AppName, MessageFormButtons.OK, MessageFormIcon.Error);
-        }
-    }
-
     private void RenameAlias(PlaceViewModel? place)
     {
         if (place is null)
             return;
 
         var renamed = PlaceFormDialog.ShowRenameAlias(place.Model, _placesService);
+        RefreshPersistenceState();
         if (renamed)
         {
             place.Refresh();
@@ -317,6 +314,7 @@ public sealed class MainViewModel : ObservableObject
             return;
 
         var edited = PlaceFormDialog.ShowEditResource(place.Model, _placesService);
+        RefreshPersistenceState();
         if (edited)
         {
             place.Refresh();
@@ -329,7 +327,8 @@ public sealed class MainViewModel : ObservableObject
         if (place is null)
             return;
 
-        _placesService.ToggleFavourite(place.Model);
+        var persistence = _placesService.ToggleFavourite(place.Model);
+        RefreshPersistenceState(persistence);
         place.Refresh();
         RebuildFavourites();
     }
@@ -346,12 +345,16 @@ public sealed class MainViewModel : ObservableObject
         if (confirm != MessageFormResult.Yes)
             return;
 
-        var removed = _placesService.Remove(place.Model);
-        Places.Remove(place);
-        RebuildFavourites();
+        var persistence = _placesService.Remove(place.Model, out var removed);
+        RefreshPersistenceState(persistence);
 
+        // Blocked by an unresolved recovery (not normally reachable: the
+        // window only opens once recovery is resolved) — nothing changed.
         if (removed is null)
             return;
+
+        Places.Remove(place);
+        RebuildFavourites();
 
         _removedPlaces.Push(removed);
         UndoRemoveCommand.RaiseCanExecuteChanged();
@@ -366,7 +369,8 @@ public sealed class MainViewModel : ObservableObject
         var removed = _removedPlaces.Pop();
         UndoRemoveCommand.RaiseCanExecuteChanged();
 
-        var result = _placesService.TryRestore(removed);
+        var result = _placesService.TryRestore(removed, out var persistence);
+        RefreshPersistenceState(persistence);
         if (!result.Success)
         {
             // Dropped from the stack, not kept: leaving it would jam Ctrl+Z
@@ -460,7 +464,11 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        // ImportDialog discards CommitImport's PersistenceResult the same
+        // way PlaceFormDialog does, so this refreshes from PlacesService
+        // afterward rather than from a returned result.
         var imported = ImportDialog.Show(candidates, _placesService);
+        RefreshPersistenceState();
         if (imported.Count == 0)
             return;
 
@@ -534,7 +542,8 @@ public sealed class MainViewModel : ObservableObject
         targetIndex = Math.Clamp(targetIndex, 0, ordered.Count);
         ordered.Insert(targetIndex, dragged);
 
-        _placesService.SetFavouriteOrder(ordered.Select(vm => vm.Model).ToList());
+        var persistence = _placesService.SetFavouriteOrder(ordered.Select(vm => vm.Model).ToList());
+        RefreshPersistenceState(persistence);
 
         FavouritePlaces.Clear();
         foreach (var place in ordered)
@@ -548,5 +557,89 @@ public sealed class MainViewModel : ObservableObject
     public void PersistToSettings()
     {
         _settings.IsGridExpanded = IsGridExpanded;
+    }
+
+    /// <summary>
+    /// Retries the current in-memory store's save (plan 5.2) and refreshes
+    /// the banner from the outcome.
+    /// </summary>
+    private void RetrySave()
+    {
+        var persistence = _placesService.RetrySave();
+        RefreshPersistenceState(persistence);
+    }
+
+    /// <summary>
+    /// Opens the diagnostic log with its associated app — the "Show Log"
+    /// banner action. DiagnosticLog creates its file lazily on first
+    /// write, so on a machine where nothing has failed yet the file may
+    /// not exist: launching a missing path would throw, and revealing an
+    /// empty (or not-yet-created) logs folder would just be confusing, so
+    /// this says plainly that there's nothing to show yet instead.
+    /// </summary>
+    private void ShowLog()
+    {
+        var logPath = DiagnosticLog.LogFilePath;
+
+        if (!File.Exists(logPath))
+        {
+            MessageForm.Show("Nothing has been logged yet.", AppName);
+            return;
+        }
+
+        try
+        {
+            // UseShellExecute so Windows opens it with whatever the user
+            // has associated with .log files — the same approach Open()
+            // uses for a place's own resource.
+            Process.Start(new ProcessStartInfo(logPath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageForm.Show(
+                $"Couldn't open the log file:\n{ex.Message}",
+                AppName, MessageFormButtons.OK, MessageFormIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// The single place that ever sets HasUnsavedChanges/PersistenceMessage
+    /// (plan 5.2). HasUnsavedChanges is always read straight from
+    /// PlacesService.HasUnsavedChanges — never assigned from a returned
+    /// PersistenceResult's Saved flag — because PersistenceResult.Ok() is
+    /// also what a mutation rejected by validation returns (see its doc
+    /// comment: nothing was attempted, so nothing failed to persist).
+    /// Assigning from a returned result directly would clear an existing
+    /// banner the moment the user typed an invalid alias into an unrelated
+    /// dialog. PlacesService.HasUnsavedChanges only ever changes inside
+    /// Persist(), so reading it here is the one source of truth for
+    /// "is there an unsaved change" — a real successful save is the only
+    /// thing that can turn it false.
+    ///
+    /// <paramref name="result"/> is the PersistenceResult from a mutation
+    /// that just ran directly (ToggleFavourite, Remove, TryRestore,
+    /// SetFavouriteOrder, RetrySave) and supplies the banner's message text when it failed
+    /// just now. The dialog-mediated mutations (AddPlace, RenameAlias,
+    /// EditResource, Import) discard their PersistenceResult inside the
+    /// dialog and call this with no argument — when there is still an
+    /// unsaved change but no fresh failure message to show, this falls
+    /// back to a standing sentence naming the store file rather than
+    /// leaving the banner blank or reusing a stale message from a
+    /// different failure.
+    /// </summary>
+    private void RefreshPersistenceState(PersistenceResult? result = null)
+    {
+        HasUnsavedChanges = _placesService.HasUnsavedChanges;
+
+        if (!HasUnsavedChanges)
+        {
+            PersistenceMessage = null;
+            return;
+        }
+
+        if (result is { Saved: false, UserMessage: { } message })
+            PersistenceMessage = message;
+        else if (PersistenceMessage is null)
+            PersistenceMessage = $"Some changes to \"{_placesService.PlacesFilePath}\" haven't been saved yet.";
     }
 }

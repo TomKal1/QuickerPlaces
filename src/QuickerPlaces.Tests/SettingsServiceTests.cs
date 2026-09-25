@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Tests.Fakes;
 using Xunit;
 
 namespace QuickerPlaces.Tests;

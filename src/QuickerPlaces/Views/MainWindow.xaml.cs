@@ -143,24 +143,11 @@ public partial class MainWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        // Surfaced once here (rather than from the constructor) so a
-        // loaded, on-screen window exists for MessageForm to center on
-        // (SI §5 — a corrupt places.json shouldn't crash the app, but the
-        // user should still be told their old data didn't just vanish).
-        if (DataContext is MainViewModel { PlacesLoadFailed: true } viewModel)
-        {
-            // The first change the user makes will overwrite places.json,
-            // so point them at the backup copy, which survives that.
-            var whereToFind = viewModel.CorruptFileBackupPath is { } backupPath
-                ? $"A copy of the unreadable file was saved to:\n{backupPath}"
-                : $"QuickerPlaces couldn't make a copy of the file, and your next change will replace it. " +
-                  $"To keep it, copy it somewhere safe before adding anything:\n{viewModel.PlacesFilePath}";
-
-            MessageForm.Show(
-                $"Your saved places couldn't be read and QuickerPlaces has started with an empty list.\n\n{whereToFind}",
-                viewModel.AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
-        }
-
+        // Surfaced here (rather than from OnSourceInitialized, where the
+        // error is found) so a loaded, on-screen window exists for
+        // MessageForm to center on. A problem loading places.json never
+        // reaches this far: App.xaml.cs resolves it through the recovery
+        // dialog before this window is even created.
         if (_globalHotkeyError is not null)
         {
             MessageForm.Show(

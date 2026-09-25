@@ -9,12 +9,17 @@
         Height="650" Width="1000"
         MinHeight="200" MinWidth="700"
         WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded"
         d:DesignHeight="650" d:DesignWidth="1000">
 
     <Window.Resources>
         <converters:BoolToGridLengthConverter x:Key="BoolToGridLengthConverter" />
         <converters:CollectionCountToVisibilityConverter x:Key="CollectionCountToVisibilityConverter" />
+        <!--
+            Used by the unsaved-changes banner (plan 5.2), the search box's
+            clear button, and the status bar's Undo button: plain
+            bool -> Visibility, with no "collapsed still reserves space"
+            wrinkle the way BoolToGridLengthConverter's row has.
+        -->
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <!--
@@ -96,6 +101,8 @@
 
     <Grid x:Name="RootGrid" Margin="16">
         <Grid.RowDefinitions>
+            <!-- Row 0: unsaved-changes banner (plan 5.2). Auto height, so a Collapsed banner takes no space. -->
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -113,8 +120,46 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!--
+            Unsaved-changes banner (plan 5.2). Non-modal and it must never
+            steal focus — Focusable="False" here is a requirement, not a
+            style choice: this can appear while the user is mid-interaction
+            elsewhere in the window (e.g. right after a failed save
+            triggered by an edit), and a banner that yanked keyboard focus
+            on appearance would interrupt whatever they were doing. Nothing
+            inside it calls .Focus() either, so it never grabs focus on its
+            own. Bound through BooleanToVisibilityConverter rather than a
+            code-behind toggle, consistent with how the DataGrid's own
+            collapsed state (the bound RowDefinition below) is driven
+            entirely from the view model.
+        -->
+        <Border Grid.Row="0" Margin="0,0,0,12" Padding="12,10" CornerRadius="10"
+                Background="{StaticResource Bg.Elevated}"
+                BorderBrush="{StaticResource Status.Warning}"
+                BorderThickness="1"
+                Focusable="False"
+                Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{Binding PersistenceMessage}"
+                           Foreground="{StaticResource Status.Warning}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Button Content="Retry" Command="{Binding RetrySaveCommand}"
+                            Style="{StaticResource Button.Primary}" Margin="0,0,8,0" />
+                    <Button Content="Show Data Folder" Command="{Binding OpenDataFolderCommand}" Margin="0,0,8,0" />
+                    <Button Content="Show Log" Command="{Binding ShowLogCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Header: monogram glyph, app name + subheader, add/export/import action row -->
-        <Grid Grid.Row="0" Margin="0,0,0,16">
+        <Grid Grid.Row="1" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -158,7 +203,7 @@
             starts the drag; FavouritesPanel_Drop computes the new index
             and calls MainViewModel.MoveFavourite).
         -->
-        <Grid Grid.Row="1" Margin="0,0,0,12">
+        <Grid Grid.Row="2" Margin="0,0,0,12">
             <TextBlock Text="Right-click a place below and choose &quot;Toggle Favourite&quot; to pin it here."
                        Foreground="{StaticResource Text.Faint}" FontStyle="Italic"
                        Visibility="{Binding FavouritePlaces.Count, Converter={StaticResource CollectionCountToVisibilityConverter}}" />
@@ -195,7 +240,7 @@
             The search box stays visible while the grid is collapsed;
             typing into it re-expands the grid (see MainViewModel.SearchText).
         -->
-        <Grid Grid.Row="2" Margin="0,0,0,8">
+        <Grid Grid.Row="3" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -251,11 +296,11 @@
 
         <!--
             Places grid (SI §6.3). Collapsible via the row's bound Height
-            (Row 3 above) rather than just Visibility, so collapsing it
+            (Row 4 above) rather than just Visibility, so collapsing it
             actually reclaims the vertical space for the window instead of
             leaving a blank gap (see BoolToGridLengthConverter's remarks).
         -->
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="4">
             <DataGrid x:Name="PlacesGrid"
                       ItemsSource="{Binding PlacesView}"
                       AutoGenerateColumns="False"
@@ -323,7 +368,7 @@
         </Grid>
 
         <!-- Status bar: a short confirmation after Remove (with Undo), Undo, or Copy. Hidden a few seconds after its last message. -->
-        <Border Grid.Row="4" Margin="0,8,0,0" Padding="12,6" CornerRadius="8"
+        <Border Grid.Row="5" Margin="0,8,0,0" Padding="12,6" CornerRadius="8"
                 Background="{StaticResource Bg.Elevated}" BorderBrush="{StaticResource Border.Default}" BorderThickness="1">
             <Border.Style>
                 <Style TargetType="Border">
