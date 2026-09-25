@@ -31,8 +31,25 @@ public partial class App : Application
         var mainViewModel = new MainViewModel(settings, placesService);
 
         var mainWindow = new MainWindow(mainViewModel, settings);
-        mainWindow.Closing += (_, _) =>
+        mainWindow.Closing += (_, e) =>
         {
+            // Last chance for changes that failed to save earlier (file
+            // briefly locked, disk since freed up). If it still fails, let
+            // the user keep the window open and sort the problem out
+            // rather than lose those changes on close.
+            if (!placesService.TrySave())
+            {
+                var closeAnyway = MessageForm.Show(
+                    "Some of your recent changes still couldn't be saved and will be lost if QuickerPlaces closes now.\n\nClose anyway?",
+                    AppInfo.Name, MessageFormButtons.YesNo, MessageFormIcon.Warning, mainWindow);
+
+                if (closeAnyway != MessageFormResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
         };

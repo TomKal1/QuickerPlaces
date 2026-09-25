@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Windows;
 using System.Windows.Data;
 using Microsoft.Win32;
 using QuickerPlaces.Models;
@@ -69,6 +70,8 @@ public sealed class MainViewModel : ObservableObject
         ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
 
         RebuildFavourites();
+
+        _placesService.SaveFailed += OnSaveFailed;
     }
 
     public string AppName => AppInfo.Name;
@@ -157,6 +160,22 @@ public sealed class MainViewModel : ObservableObject
     public bool PlacesLoadFailed => _placesService.LoadFailed;
 
     public string PlacesFilePath => _placesService.PlacesFilePath;
+
+    /// <summary>Where a copy of the unreadable places file was saved on startup, or null if none was made. Shown in the load-failure notice.</summary>
+    public string? CorruptFileBackupPath => _placesService.CorruptFileBackupPath;
+
+    /// <summary>
+    /// Warns that a change only exists in memory. Posted to the dispatcher
+    /// rather than shown inline, because the failing save can happen in
+    /// the middle of a dialog's own Save click (PlaceFormDialog,
+    /// ImportDialog); this lets that dialog finish closing first.
+    /// </summary>
+    private void OnSaveFailed(string errorMessage)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() => MessageForm.Show(
+            errorMessage + "\n\nYour changes are kept while QuickerPlaces stays open, and it will keep trying to save them.",
+            AppName, MessageFormButtons.OK, MessageFormIcon.Warning));
+    }
 
     private void AddPlace(PlaceType type)
     {

@@ -26,9 +26,15 @@ public partial class MainWindow : Window
         // user should still be told their old data didn't just vanish).
         if (DataContext is MainViewModel { PlacesLoadFailed: true } viewModel)
         {
+            // The first change the user makes will overwrite places.json,
+            // so point them at the backup copy, which survives that.
+            var whereToFind = viewModel.CorruptFileBackupPath is { } backupPath
+                ? $"A copy of the unreadable file was saved to:\n{backupPath}"
+                : $"QuickerPlaces couldn't make a copy of the file, and your next change will replace it. " +
+                  $"To keep it, copy it somewhere safe before adding anything:\n{viewModel.PlacesFilePath}";
+
             MessageForm.Show(
-                $"Your saved places couldn't be read and QuickerPlaces has started with an empty list.\n\n" +
-                $"The original file was left untouched at:\n{viewModel.PlacesFilePath}",
+                $"Your saved places couldn't be read and QuickerPlaces has started with an empty list.\n\n{whereToFind}",
                 viewModel.AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }

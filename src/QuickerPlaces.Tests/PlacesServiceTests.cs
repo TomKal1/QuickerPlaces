@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using QuickerPlaces.Models;
@@ -51,6 +52,46 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Empty(service.Places);
         Assert.True(service.LoadFailed);
         Assert.Equal("{ this is not json", File.ReadAllText(PlacesFile));
+    }
+
+    [Fact]
+    public void Corrupt_file_is_backed_up_so_the_next_save_cannot_destroy_it()
+    {
+        File.WriteAllText(PlacesFile, "{ this is not json");
+
+        var service = NewService();
+        Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+
+        Assert.NotNull(service.CorruptFileBackupPath);
+        Assert.Equal(_temp.Path, Path.GetDirectoryName(service.CorruptFileBackupPath));
+        Assert.StartsWith("places.corrupt-", Path.GetFileName(service.CorruptFileBackupPath));
+        Assert.Equal("{ this is not json", File.ReadAllText(service.CorruptFileBackupPath!));
+    }
+
+    [Fact]
+    public void Corrupt_file_backup_never_overwrites_an_earlier_backup()
+    {
+        File.WriteAllText(PlacesFile, "first bad file");
+        var first = NewService().CorruptFileBackupPath;
+        File.WriteAllText(PlacesFile, "second bad file");
+        var second = NewService().CorruptFileBackupPath;
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.NotEqual(first, second);
+        Assert.Equal("first bad file", File.ReadAllText(first!));
+        Assert.Equal("second bad file", File.ReadAllText(second!));
+    }
+
+    [Fact]
+    public void Readable_or_missing_file_makes_no_backup()
+    {
+        Assert.Null(NewService().CorruptFileBackupPath);
+
+        Add(NewService(), "Docs", PlaceType.Folder, Folder("Docs"));
+        Assert.Null(NewService().CorruptFileBackupPath);
+
+        Assert.Single(Directory.GetFiles(_temp.Path));
     }
 
     [Fact]
@@ -219,6 +260,48 @@ public sealed class PlacesServiceTests : IDisposable
         service.Remove(place);
 
         Assert.Empty(NewService().Places);
+    }
+
+    [Fact]
+    public void Failed_save_is_reported_once_and_kept_in_memory_until_a_later_save_works()
+    {
+        var service = NewService();
+        var failures = new List<string>();
+        service.SaveFailed += failures.Add;
+
+        // A directory where places.json should be makes the final
+        // File.Move fail, on any OS, the way a locked file would.
+        Directory.CreateDirectory(PlacesFile);
+
+        Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        Add(service, "Wiki", PlaceType.Url, "https://wiki.example.com");
+
+        Assert.True(service.HasUnsavedChanges);
+        Assert.Single(failures);
+        Assert.Contains(PlacesFile, failures[0]);
+        Assert.Equal(2, service.Places.Count);
+        Assert.False(service.TrySave());
+
+        Directory.Delete(PlacesFile);
+
+        Assert.True(service.TrySave());
+        Assert.False(service.HasUnsavedChanges);
+        Assert.Equal(new[] { "Docs", "Wiki" }, NewService().Places.Select(p => p.Alias));
+
+        // A fresh failure after recovering is a new problem, so it's reported again.
+        File.Delete(PlacesFile);
+        Directory.CreateDirectory(PlacesFile);
+        Add(service, "Notes", PlaceType.Folder, Folder("Notes"));
+        Assert.Equal(2, failures.Count);
+    }
+
+    [Fact]
+    public void Try_save_with_nothing_pending_succeeds_without_writing()
+    {
+        var service = NewService();
+
+        Assert.True(service.TrySave());
+        Assert.False(File.Exists(PlacesFile));
     }
 
     [Fact]

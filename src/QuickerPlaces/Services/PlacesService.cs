@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -72,6 +73,9 @@ public sealed class PlacesService
             Directory.CreateDirectory(folder);
 
         (_places, LoadFailed) = LoadFromDisk();
+
+        if (LoadFailed)
+            CorruptFileBackupPath = BackUpUnreadableFile();
     }
 
     private static string DefaultPlacesFilePath()
@@ -85,10 +89,32 @@ public sealed class PlacesService
     /// (corrupt or from an incompatible future version). The service still
     /// starts with an empty list rather than crashing (SI §5) — MainWindow
     /// surfaces this once via a non-blocking MessageForm notice so the user
-    /// knows their old data didn't silently vanish forever (the corrupt
-    /// file is left on disk, untouched, until the next write overwrites it).
+    /// knows their old data didn't silently vanish forever.
     /// </summary>
     public bool LoadFailed { get; }
+
+    /// <summary>
+    /// When <see cref="LoadFailed"/>, where a copy of the unreadable file was
+    /// saved — or null if even copying it failed. The very next change the
+    /// user makes overwrites places.json, so without this copy their old
+    /// data would be gone the moment they added anything.
+    /// </summary>
+    public string? CorruptFileBackupPath { get; }
+
+    /// <summary>
+    /// True while the most recent change is only in memory because writing
+    /// places.json failed (disk full, file locked, etc.). Cleared by the
+    /// next successful save, whether from another change or <see cref="TrySave"/>.
+    /// </summary>
+    public bool HasUnsavedChanges { get; private set; }
+
+    /// <summary>
+    /// Raised with a user-readable error when a change couldn't be written to
+    /// disk. Only raised on the first failure in a run of failures (i.e. when
+    /// <see cref="HasUnsavedChanges"/> goes from false to true), so a disk
+    /// that stays full doesn't produce a warning for every single edit.
+    /// </summary>
+    public event Action<string>? SaveFailed;
 
     /// <summary>Full path to places.json — handy for a "Reveal in Explorer" menu item.</summary>
     public string PlacesFilePath => _placesFilePath;
@@ -417,6 +443,55 @@ public sealed class PlacesService
     }
 
     /// <summary>
+    /// Copies an unreadable places.json aside as
+    /// places.corrupt-yyyyMMdd-HHmmss.json, next to the original, and
+    /// returns the copy's path (null if it couldn't be copied). A copy
+    /// rather than a move, so places.json itself stays exactly as found
+    /// until the user's next change replaces it.
+    /// </summary>
+    private string? BackUpUnreadableFile()
+    {
+        try
+        {
+            if (!File.Exists(_placesFilePath))
+                return null;
+
+            var folder = Path.GetDirectoryName(_placesFilePath) ?? string.Empty;
+            var name = Path.GetFileNameWithoutExtension(_placesFilePath);
+            var extension = Path.GetExtension(_placesFilePath);
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+
+            var backupPath = Path.Combine(folder, $"{name}.corrupt-{stamp}{extension}");
+            for (var attempt = 2; File.Exists(backupPath); attempt++)
+                backupPath = Path.Combine(folder, $"{name}.corrupt-{stamp}-{attempt}{extension}");
+
+            File.Copy(_placesFilePath, backupPath);
+            return backupPath;
+        }
+        catch
+        {
+            // Unreadable for a reason that also blocks copying it (e.g.
+            // access denied). The notice then just says no copy was made.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Retries writing places.json after an earlier failure — used on exit,
+    /// so a transient failure (file briefly locked by a backup or sync tool)
+    /// doesn't cost the user their last changes. Returns true if everything
+    /// is now on disk.
+    /// </summary>
+    public bool TrySave()
+    {
+        if (!HasUnsavedChanges)
+            return true;
+
+        SaveToDisk();
+        return !HasUnsavedChanges;
+    }
+
+    /// <summary>
     /// Writes places.json atomically: serialize to a temp file in the same
     /// directory, then replace the real file in one filesystem operation
     /// (File.Move with overwrite, which uses an atomic rename/replace on
@@ -433,13 +508,20 @@ public sealed class PlacesService
             var tempPath = _placesFilePath + ".tmp";
             File.WriteAllText(tempPath, json);
             File.Move(tempPath, _placesFilePath, overwrite: true);
+
+            HasUnsavedChanges = false;
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort persistence: a save failure (disk full, file
-            // locked by another process, etc.) shouldn't crash the app or
-            // block the in-memory change the user just made — it just
-            // means that one change might not survive an unclean exit.
+            // A save failure (disk full, file locked by another process,
+            // etc.) shouldn't crash the app or undo the in-memory change
+            // the user just made, but it mustn't be silent either: the
+            // change is lost if the app closes before a later save works.
+            var firstFailure = !HasUnsavedChanges;
+            HasUnsavedChanges = true;
+
+            if (firstFailure)
+                SaveFailed?.Invoke($"Your changes couldn't be saved to:\n{_placesFilePath}\n\n{ex.Message}");
         }
     }
 }
