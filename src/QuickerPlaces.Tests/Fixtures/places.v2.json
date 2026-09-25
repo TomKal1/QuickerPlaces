@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "places": [
+    {
+      "alias": "Downloads",
+      "type": "folder",
+      "resource": "C:\\Users\\Test\\Downloads",
+      "isFavourite": true,
+      "favouriteOrder": 0,
+      "dateAdded": "2026-01-14T23:30:00+00:00"
+    },
+    {
+      "alias": "Old Wiki",
+      "type": "url",
+      "resource": "https://wiki.example.com/old",
+      "isFavourite": true,
+      "favouriteOrder": 1,
+      "dateAdded": "2025-06-02T10:15:00+00:00",
+      "deletedAt": "2026-09-20T08:00:00+00:00"
+    },
+    {
+      "alias": "QuickerPlaces Repo",
+      "type": "url",
+      "resource": "https://github.com/example/quickerplaces",
+      "isFavourite": true,
+      "favouriteOrder": 1,
+      "dateAdded": "2026-02-03T04:05:22+00:00"
+    },
+    {
+      "alias": "Reports",
+      "type": "folder",
+      "resource": "D:\\Archive\\Reports",
+      "isFavourite": false,
+      "favouriteOrder": null,
+      "dateAdded": "2025-11-19T22:12:47+00:00",
+      "deletedAt": "2026-09-24T17:45:00+00:00"
+    },
+    {
+      "alias": "reports",
+      "type": "folder",
+      "resource": "D:\\Reports",
+      "isFavourite": false,
+      "favouriteOrder": null,
+      "dateAdded": "2026-09-24T18:02:10+00:00"
+    }
+  ]
+}

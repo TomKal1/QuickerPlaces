@@ -53,7 +53,12 @@ public sealed class PlaceViewModel : ObservableObject
 
     public int? FavouriteOrder => Model.FavouriteOrder;
 
-    public DateTime DateAdded => Model.DateAdded;
+    /// <summary>
+    /// When the place was added, in local time for the grid's {0:d} column.
+    /// The model holds UTC; binding that directly would show tomorrow's
+    /// date for an evening add east of Greenwich.
+    /// </summary>
+    public DateTime DateAdded => Model.DateAdded.LocalDateTime;
 
     /// <summary>
     /// Raises a property-changed notification for every property on this

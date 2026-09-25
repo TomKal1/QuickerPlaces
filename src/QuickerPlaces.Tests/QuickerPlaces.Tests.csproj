@@ -51,12 +51,16 @@
 
   <ItemGroup>
     <!--
-      Fixtures/places.v1.json is read via AppContext.BaseDirectory at test
-      time (not as an embedded resource), so it needs to land next to the
-      test assembly in the output directory. Every test that reads it does
-      so the same way — see PlacesStoreFixtureTests.
+      Fixtures/places.v1.json and places.v2.json are read via
+      AppContext.BaseDirectory at test time (not as embedded resources), so
+      they need to land next to the test assembly in the output directory.
+      Every test that reads them does so the same way — see
+      PlacesStoreFixtureTests.
     -->
     <None Update="Fixtures\places.v1.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Fixtures\places.v2.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
