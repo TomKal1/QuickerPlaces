@@ -18,6 +18,8 @@ public sealed class PlacesServiceTests : IDisposable
 
     private PlacesService NewService() => new(PlacesFile);
 
+    private PlacesService NewServiceAt(string fileName) => new(_temp.File(fileName));
+
     /// <summary>An absolute folder path that's fully qualified on whichever OS the tests run on.</summary>
     private string Folder(string name) => Path.Combine(_temp.Path, name);
 
@@ -277,6 +279,7 @@ public sealed class PlacesServiceTests : IDisposable
         Add(service, "Wiki", PlaceType.Url, "https://wiki.example.com");
 
         Assert.True(service.HasUnsavedChanges);
+        Assert.False(File.Exists(PlacesFile + ".tmp"));
         Assert.Single(failures);
         Assert.Contains(PlacesFile, failures[0]);
         Assert.Equal(2, service.Places.Count);
@@ -371,6 +374,36 @@ public sealed class PlacesServiceTests : IDisposable
         // Imported items arrive as fresh, non-favourite records.
         Assert.All(target.Places, p => Assert.False(p.IsFavourite));
         Assert.Equal(2, new PlacesService(_temp.File("other.json")).Places.Count);
+    }
+
+    [Fact]
+    public void Export_replaces_an_existing_file_and_leaves_no_temp_file()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var exportFile = _temp.File("export.json");
+        File.WriteAllText(exportFile, "an older, longer export that must not leave a tail behind");
+
+        Assert.Null(service.Export(new[] { docs }, exportFile));
+
+        Assert.False(File.Exists(exportFile + ".tmp"));
+        var (candidates, error) = NewServiceAt("other.json").GetImportCandidates(exportFile);
+        Assert.Null(error);
+        Assert.Equal("Docs", Assert.Single(candidates).Alias);
+    }
+
+    [Fact]
+    public void Failed_export_returns_an_error_and_cleans_up_its_temp_file()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var exportFile = _temp.File("export.json");
+        Directory.CreateDirectory(exportFile);
+
+        var error = service.Export(new[] { docs }, exportFile);
+
+        Assert.NotNull(error);
+        Assert.False(File.Exists(exportFile + ".tmp"));
     }
 
     [Fact]

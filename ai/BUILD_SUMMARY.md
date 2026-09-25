@@ -70,6 +70,11 @@ Two places where the app could lose the user's data without saying so:
 
 Both have regression tests that fail with the fix reverted. The save-failure test makes the write fail on any OS by creating a directory where `places.json` should be.
 
+Two follow-ups in the same area:
+
+- **Export is now atomic too.** It used to call `File.WriteAllText` straight onto the chosen file, so an interrupted export over an earlier backup could leave a truncated file. `Export` and `SaveToDisk` now share `WriteAtomically` (temp file + `File.Move` replace), which also deletes its temp file when the write fails instead of leaving `*.tmp` behind.
+- **Open data folder button.** An icon-only folder button at the left of the header's action row (`OpenDataFolderCommand`) opens the folder holding `places.json` in Explorer, with the file selected when it exists. It's there mainly so the `places.corrupt-*.json` backups are easy to find. It's icon-only because the header already runs out of room near the window's 700px `MinWidth`.
+
 ## Current status
 
-The solution builds cleanly with the compiler, and the service layer is covered by 55 passing unit tests. Everything the UI does on top of that still needs a hands-on pass in Visual Studio on Windows, where it has only been partly exercised so far: dialogs, context menus, double-click, bubble drag-reorder, the grid collapse, window-state restore, the corrupt-file notice, the search box, icon glyphs, and keyboard shortcuts, and now the save-failure warning and close prompt.
+The solution builds cleanly with the compiler, and the service layer is covered by 57 passing unit tests. Everything the UI does on top of that still needs a hands-on pass in Visual Studio on Windows, where it has only been partly exercised so far: dialogs, context menus, double-click, bubble drag-reorder, the grid collapse, window-state restore, the corrupt-file notice, the search box, icon glyphs, and keyboard shortcuts, the save-failure warning and close prompt, and now the data-folder button.

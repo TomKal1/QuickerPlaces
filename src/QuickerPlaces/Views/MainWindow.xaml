@@ -125,6 +125,11 @@
             </StackPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Icon-only so the header still fits at the window's MinWidth. -->
+                <Button Content="&#xE838;" FontFamily="{StaticResource Font.Icons}"
+                        Command="{Binding OpenDataFolderCommand}" Margin="0,0,8,0"
+                        ToolTip="Open data folder (where places.json and any backups are kept)"
+                        AutomationProperties.Name="Open data folder" />
                 <Button Content="Import..." Command="{Binding ImportCommand}" Margin="0,0,8,0" />
                 <Button Content="Export..." Command="{Binding ExportCommand}" Margin="0,0,16,0" />
                 <Button Content="Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" ToolTip="Add Folder (Ctrl+N)" />

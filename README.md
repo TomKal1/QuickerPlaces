@@ -43,7 +43,7 @@ The tests (`src/QuickerPlaces.Tests`) cover the service layer only: validation, 
 - Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit.
 - Window layout (size/position, whether the grid is collapsed): `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`.
 
-Both are plain JSON and safe to inspect, back up, or hand-edit if you know what you're doing.
+Both are plain JSON and safe to inspect, back up, or hand-edit if you know what you're doing. The folder icon in the app's header opens the places folder in File Explorer.
 
 ## Repository layout
 

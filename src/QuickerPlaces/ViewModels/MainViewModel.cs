@@ -68,6 +68,7 @@ public sealed class MainViewModel : ObservableObject
         ToggleGridCommand = new RelayCommand(() => IsGridExpanded = !IsGridExpanded);
         OpenFavouriteAtCommand = new RelayCommand(parameter => OpenFavouriteAt(parameter));
         ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
+        OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
 
         RebuildFavourites();
 
@@ -151,6 +152,9 @@ public sealed class MainViewModel : ObservableObject
 
     public RelayCommand ClearSearchCommand { get; }
 
+    /// <summary>Opens the folder holding places.json (and any places.corrupt-*.json backups) in File Explorer.</summary>
+    public RelayCommand OpenDataFolderCommand { get; }
+
     /// <summary>
     /// True if the places file couldn't be read on startup. MainWindow
     /// checks this once (on Loaded) and shows a MessageForm notice — kept
@@ -216,6 +220,26 @@ public sealed class MainViewModel : ObservableObject
             // resource should never crash the app.
             MessageForm.Show(
                 $"Couldn't open \"{place.Alias}\":\n{ex.Message}",
+                AppName, MessageFormButtons.OK, MessageFormIcon.Error);
+        }
+    }
+
+    private void OpenDataFolder()
+    {
+        try
+        {
+            // Highlight places.json itself when it exists; before the first
+            // save there's no file yet, so just open the folder.
+            var startInfo = File.Exists(PlacesFilePath)
+                ? new ProcessStartInfo("explorer.exe", $"/select,\"{PlacesFilePath}\"")
+                : new ProcessStartInfo(Path.GetDirectoryName(PlacesFilePath) ?? PlacesFilePath) { UseShellExecute = true };
+
+            Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            MessageForm.Show(
+                $"Couldn't open the data folder:\n{ex.Message}",
                 AppName, MessageFormButtons.OK, MessageFormIcon.Error);
         }
     }

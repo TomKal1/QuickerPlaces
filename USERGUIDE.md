@@ -6,7 +6,7 @@ QuickerPlaces is a small always-on-top-of-your-workflow window for storing folde
 
 When QuickerPlaces opens you'll see, top to bottom:
 
-- A header with the app name and four buttons: **Import...**, **Export...**, **Add Folder**, **Add URL**.
+- A header with the app name and five buttons: a folder icon that opens your data folder, **Import...**, **Export...**, **Add Folder**, **Add URL**.
 - A row of **favourite bubbles** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
 - The **All Places** header with a count, a **search box**, and a **Hide List** / **Show List** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
@@ -89,7 +89,7 @@ These act on the selected grid row, when the grid has keyboard focus:
 
 ## Exporting places
 
-Click **Export...** to open a checklist of every place you've saved, all checked by default. Uncheck anything you don't want to include, then choose where to save the resulting `.json` file. This is the way to back up your list or hand a set of places to someone else running QuickerPlaces.
+Click **Export...** to open a checklist of every place you've saved, all checked by default. Uncheck anything you don't want to include, then choose where to save the resulting `.json` file. Saving over an earlier export is safe: the new file is written completely before it replaces the old one, so an interrupted export never leaves a half-written file behind. This is the way to back up your list or hand a set of places to someone else running QuickerPlaces.
 
 ## Importing places
 
@@ -106,7 +106,7 @@ QuickerPlaces keeps two small JSON files, both plain text and safe to open in a 
 - **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes.
 - **Window layout** (size, position, whether the grid is collapsed): `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes.
 
-You never need to touch either file by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes.
+You never need to touch either file by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes. The folder icon at the left of the header opens the folder that holds `places.json` in File Explorer, with the file selected. Any backup copies of an unreadable places file (see below) are in the same folder.
 
 ## If something goes wrong
 

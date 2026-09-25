@@ -312,14 +312,16 @@ public sealed class PlacesService
     // Export / Import (SI §6.5 / §6.6)
     // ---------------------------------------------------------------
 
-    /// <summary>Writes the given places to <paramref name="filePath"/> as a standalone PlacesStore JSON document. Returns an error message on failure, or null on success.</summary>
+    /// <summary>Writes the given places to <paramref name="filePath"/> as a standalone PlacesStore JSON document, replacing any existing file atomically. Returns an error message on failure, or null on success.</summary>
     public string? Export(IEnumerable<Place> places, string filePath)
     {
         try
         {
             var export = new PlacesStore { Places = places.ToList() };
             var json = JsonSerializer.Serialize(export, JsonOptions);
-            File.WriteAllText(filePath, json);
+            // Atomic for the same reason as places.json: exporting over an
+            // earlier backup must never leave a half-written file in its place.
+            WriteAtomically(filePath, json);
             return null;
         }
         catch (Exception ex)
@@ -492,12 +494,37 @@ public sealed class PlacesService
     }
 
     /// <summary>
-    /// Writes places.json atomically: serialize to a temp file in the same
-    /// directory, then replace the real file in one filesystem operation
-    /// (File.Move with overwrite, which uses an atomic rename/replace on
-    /// Windows) so a crash or power-loss mid-write can never leave a
-    /// truncated or half-written places.json behind (SI §5).
+    /// Writes <paramref name="contents"/> to a temp file in the same
+    /// directory, then replaces <paramref name="path"/> with it in one
+    /// filesystem operation (File.Move with overwrite, which uses an atomic
+    /// rename/replace on Windows), so a crash or power-loss mid-write can
+    /// never leave a truncated or half-written file behind (SI §5). On
+    /// failure the temp file is removed and the exception is rethrown.
     /// </summary>
+    private static void WriteAtomically(string path, string contents)
+    {
+        var tempPath = path + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, contents);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch
+            {
+                // Best effort — the original error is the one worth reporting.
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>Writes the full place list to places.json via <see cref="WriteAtomically"/>.</summary>
     private void SaveToDisk()
     {
         try
@@ -505,9 +532,7 @@ public sealed class PlacesService
             var store = new PlacesStore { Places = _places };
             var json = JsonSerializer.Serialize(store, JsonOptions);
 
-            var tempPath = _placesFilePath + ".tmp";
-            File.WriteAllText(tempPath, json);
-            File.Move(tempPath, _placesFilePath, overwrite: true);
+            WriteAtomically(_placesFilePath, json);
 
             HasUnsavedChanges = false;
         }
