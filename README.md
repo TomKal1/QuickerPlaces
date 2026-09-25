@@ -8,6 +8,8 @@ A lightweight Windows desktop utility for storing and quickly opening remembered
 
 - Save a folder path or a URL under a unique **alias**, with validation that blocks duplicate aliases and duplicate paths/URLs before they're saved.
 - Browse everything in a sortable grid — right-click a row for **Open**, **Rename Alias**, **Edit Path/URL**, **Toggle Favourite**, or **Remove**; double-click to open.
+- **Search** the grid as you type, by alias or path/URL. Press Enter to open the top result, so the search box doubles as a quick launcher.
+- Drive everything from the keyboard: Ctrl+F search, Ctrl+N / Ctrl+U add, Ctrl+1–9 open a favourite, plus Enter / F2 / Ctrl+E / Ctrl+D / Delete on the selected row. The full list is in [`USERGUIDE.md`](USERGUIDE.md#keyboard-shortcuts).
 - Pin your most-used places as one-click **favourite bubbles** above the grid, drag-and-drop to reorder them, and collapse the grid entirely when you just want the bubbles.
 - Everything is written to disk immediately as you work — no save button, no "unsaved changes."
 - **Export** any subset of your places to a JSON file to share or back up, and **import** from one — anything that would collide with what you already have is filtered out automatically, before you're ever asked to pick.
@@ -34,7 +36,7 @@ dotnet run --project QuickerPlaces
 dotnet test QuickerPlaces.sln
 ```
 
-The tests (`src/QuickerPlaces.Tests`) cover the service layer only: validation, persistence, favourites, and export/import. They target plain `net10.0`, so they run on any OS. Building the WPF app itself on a non-Windows machine needs `-p:EnableWindowsTargeting=true`.
+The tests (`src/QuickerPlaces.Tests`) cover the service layer only: validation, persistence, favourites, export/import, and the search matching rule. They target plain `net10.0`, so they run on any OS. Building the WPF app itself on a non-Windows machine needs `-p:EnableWindowsTargeting=true`.
 
 ### Where your data lives
 

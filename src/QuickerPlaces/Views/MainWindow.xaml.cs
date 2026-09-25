@@ -93,6 +93,101 @@ public partial class MainWindow : Window
             viewModel.PersistToSettings();
     }
 
+    // -----------------------------------------------------------------
+    // Search box + keyboard shortcuts. Window-wide shortcuts are
+    // KeyBindings in MainWindow.xaml; these handlers cover the ones that
+    // depend on focus (the search box, the grid's selected row).
+    // -----------------------------------------------------------------
+
+    /// <summary>Ctrl+F: jump to the search box, selecting any existing query so typing replaces it.</summary>
+    private void Find_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        SearchBox.Focus();
+        SearchBox.SelectAll();
+    }
+
+    /// <summary>
+    /// Makes the search box a launcher: Enter opens the top result, Down
+    /// moves into the grid to pick a different one, and Esc clears the
+    /// search (or, if it's already empty, hands focus to the grid).
+    /// </summary>
+    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Escape:
+                if (viewModel.IsSearching)
+                    viewModel.SearchText = string.Empty;
+                else
+                    FocusGridRow(PlacesGrid.SelectedIndex);
+                e.Handled = true;
+                break;
+
+            case Key.Enter:
+                if (PlacesGrid.Items.Count > 0 && PlacesGrid.Items[0] is PlaceViewModel top)
+                    viewModel.OpenCommand.Execute(top);
+                e.Handled = true;
+                break;
+
+            case Key.Down:
+                FocusGridRow(0);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>Row shortcuts, acting on the selected row: Enter opens, F2 renames, Ctrl+E edits the path/URL, Ctrl+D toggles favourite, Delete removes.</summary>
+    private void PlacesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (PlacesGrid.SelectedItem is not PlaceViewModel place || DataContext is not MainViewModel viewModel)
+            return;
+
+        var ctrl = Keyboard.Modifiers == ModifierKeys.Control;
+        var none = Keyboard.Modifiers == ModifierKeys.None;
+
+        var command = e.Key switch
+        {
+            Key.Enter when none => viewModel.OpenCommand,
+            Key.F2 when none => viewModel.RenameAliasCommand,
+            Key.E when ctrl => viewModel.EditResourceCommand,
+            Key.D when ctrl => viewModel.ToggleFavouriteCommand,
+            Key.Delete when none => viewModel.RemoveCommand,
+            _ => null
+        };
+
+        if (command is null)
+            return;
+
+        // Handled first: DataGrid's own Enter handling would otherwise
+        // also move the selection down a row.
+        e.Handled = true;
+        command.Execute(place);
+    }
+
+    /// <summary>Selects and keyboard-focuses the grid row at <paramref name="index"/> (clamped; first row if nothing was selected).</summary>
+    private void FocusGridRow(int index)
+    {
+        if (PlacesGrid.Items.Count == 0)
+            return;
+
+        index = System.Math.Clamp(index, 0, PlacesGrid.Items.Count - 1);
+        var item = PlacesGrid.Items[index];
+        PlacesGrid.SelectedItem = item;
+        PlacesGrid.ScrollIntoView(item);
+
+        // Focusing the DataGrid itself only focuses the grid, not a row, so
+        // arrow keys wouldn't move from the selection. Focus the row's
+        // container once it has been generated.
+        PlacesGrid.UpdateLayout();
+        if (PlacesGrid.ItemContainerGenerator.ContainerFromIndex(index) is DataGridRow row)
+            row.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        else
+            PlacesGrid.Focus();
+    }
+
     /// <summary>Double-click on a grid row = Open (SI §6.3), the same action as the row's top context-menu item.</summary>
     private void Row_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {

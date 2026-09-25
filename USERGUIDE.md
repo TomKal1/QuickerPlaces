@@ -8,8 +8,8 @@ When QuickerPlaces opens you'll see, top to bottom:
 
 - A header with the app name and four buttons: **Import...**, **Export...**, **Add Folder**, **Add URL**.
 - A row of **favourite bubbles** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
-- A **Hide List** / **Show List** button that collapses or restores everything below it.
-- The **All Places** grid — every place you've saved, one row each.
+- The **All Places** header with a count, a **search box**, and a **Hide List** / **Show List** button that collapses or restores everything below it.
+- The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
 
 Nothing here needs a save button. Every add, edit, favourite toggle, reorder, or removal is written to disk the moment it happens.
 
@@ -38,6 +38,18 @@ Every row in the **All Places** grid shows the Alias, Type (Folder or URL), the 
 
 If a place can no longer be opened — the folder's been deleted, or the URL is malformed — you'll get a clear message instead of the app crashing or silently doing nothing.
 
+## Searching
+
+Type in the **Search places** box above the grid (or press **Ctrl+F** to jump there) and the grid narrows as you type. A place matches when every word you type appears somewhere in its alias or its path/URL, ignoring case. So `wiki prod` finds an alias "Prod Wiki", and it also finds an alias "Wiki" that points at `https://prod.example.com`. The header shows how many places match, e.g. **All Places (3 of 12)**.
+
+The search box works as a quick launcher:
+
+- **Enter** opens the top result.
+- **Down arrow** moves into the grid so you can pick a different row (then **Enter** opens it).
+- **Esc** clears the search. Pressing it again with the box already empty moves you into the grid.
+
+The ✕ button beside the box also clears it. Searching only filters the grid; your favourite bubbles always stay visible. If the list is hidden, typing a search brings it back. If you add or import a place that the current search would hide, the search is cleared so the new place is visible.
+
 ## Favourites
 
 Any place can be a favourite. Toggling **Favourite** (from the grid's right-click menu, or from a bubble's own right-click menu) adds or removes it from the bubble row above the grid.
@@ -45,10 +57,35 @@ Any place can be a favourite. Toggling **Favourite** (from the grid's right-clic
 - **Click a bubble** to open that place — identical to double-clicking its row.
 - **Drag a bubble** left or right to reorder the row. The order you leave them in is remembered.
 - **Right-click a bubble** for a shortcut menu: **Open**, or **Remove from Favourites** — you don't need to go back to the grid just to unpin something.
+- **Hover over a bubble** to see where it points.
+- **Ctrl+1** to **Ctrl+9** open the first nine bubbles, in their left-to-right order.
 
 ## Hiding the grid
 
 If you only want the favourite bubbles visible, click **Hide List**. The grid collapses and the window shrinks to make room; click **Show List** to bring it back. This state is remembered between sessions, along with the window's size and position.
+
+## Keyboard shortcuts
+
+| Keys | What it does |
+|---|---|
+| **Ctrl+F** | Jump to the search box |
+| **Ctrl+N** | Add Folder |
+| **Ctrl+U** | Add URL |
+| **Ctrl+H** | Hide / show the list |
+| **Ctrl+1** … **Ctrl+9** | Open favourite bubble 1–9 |
+| **Enter** (in search box) | Open the top result |
+| **Down** (in search box) | Move into the grid |
+| **Esc** (in search box) | Clear the search, or move into the grid if it's already empty |
+
+These act on the selected grid row, when the grid has keyboard focus:
+
+| Keys | What it does |
+|---|---|
+| **Enter** | Open |
+| **F2** | Rename Alias |
+| **Ctrl+E** | Edit Path/URL |
+| **Ctrl+D** | Toggle Favourite |
+| **Delete** | Remove (asks first) |
 
 ## Exporting places
 

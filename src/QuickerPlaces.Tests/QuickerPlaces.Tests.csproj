@@ -26,6 +26,7 @@
     <Compile Include="..\QuickerPlaces\Models\Place.cs" Link="Linked\Models\Place.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlaceType.cs" Link="Linked\Models\PlaceType.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
   </ItemGroup>

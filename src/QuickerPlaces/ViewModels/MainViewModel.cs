@@ -1,8 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Windows.Data;
 using Microsoft.Win32;
 using QuickerPlaces.Models;
 using QuickerPlaces.Mvvm;
@@ -25,6 +28,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly PlacesService _placesService;
 
     private bool _isGridExpanded;
+    private string _searchText = string.Empty;
 
     public MainViewModel(AppSettings settings, PlacesService placesService)
     {
@@ -34,6 +38,15 @@ public sealed class MainViewModel : ObservableObject
 
         Places = new ObservableCollection<PlaceViewModel>(_placesService.Places.Select(p => new PlaceViewModel(p)));
         FavouritePlaces = new ObservableCollection<PlaceViewModel>();
+
+        // The grid binds to this filtered view rather than to Places
+        // directly. It's the collection's default view, so the DataGrid's
+        // own column-header sorting keeps working on top of the filter.
+        PlacesView = CollectionViewSource.GetDefaultView(Places);
+        PlacesView.Filter = item => item is PlaceViewModel place && PlaceSearch.Matches(place.Model, SearchText);
+        // Listening on the view (not on Places) means the view has already
+        // re-filtered by the time the header/empty-state text is recomputed.
+        PlacesView.CollectionChanged += (_, _) => RaiseGridStatusChanged();
 
         // Commands must exist before RebuildFavourites() runs below — it
         // calls ExportCommand.RaiseCanExecuteChanged(), and on a fresh
@@ -52,6 +65,8 @@ public sealed class MainViewModel : ObservableObject
         ExportCommand = new RelayCommand(Export, () => Places.Count > 0);
         ImportCommand = new RelayCommand(Import);
         ToggleGridCommand = new RelayCommand(() => IsGridExpanded = !IsGridExpanded);
+        OpenFavouriteAtCommand = new RelayCommand(parameter => OpenFavouriteAt(parameter));
+        ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
 
         RebuildFavourites();
     }
@@ -67,6 +82,49 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Favourited places only, ordered by FavouriteOrder — backs the bubble row above the grid.</summary>
     public ObservableCollection<PlaceViewModel> FavouritePlaces { get; }
+
+    /// <summary>Places filtered by <see cref="SearchText"/> — what the DataGrid actually shows.</summary>
+    public ICollectionView PlacesView { get; }
+
+    /// <summary>The grid's search box text. Every whitespace-separated term must appear in the alias or path/URL (see <see cref="PlaceSearch"/>).</summary>
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetProperty(ref _searchText, value ?? string.Empty))
+            {
+                PlacesView.Refresh();
+                OnPropertyChanged(nameof(IsSearching));
+
+                // Searching a hidden list would be pointless — bring it back.
+                if (IsSearching && !IsGridExpanded)
+                    IsGridExpanded = true;
+            }
+        }
+    }
+
+    public bool IsSearching => !string.IsNullOrWhiteSpace(SearchText);
+
+    private int VisiblePlaceCount => PlacesView.Cast<object>().Count();
+
+    /// <summary>"All Places (12)", or "All Places (3 of 12)" while a search is narrowing the grid.</summary>
+    public string PlacesHeader => IsSearching
+        ? $"All Places ({VisiblePlaceCount} of {Places.Count})"
+        : $"All Places ({Places.Count})";
+
+    /// <summary>Shown over the grid when it has no rows to show, explaining why; null when the grid has rows.</summary>
+    public string? EmptyGridMessage
+    {
+        get
+        {
+            if (Places.Count == 0)
+                return "No places yet. Use Add Folder (Ctrl+N) or Add URL (Ctrl+U) to save your first one.";
+            if (VisiblePlaceCount == 0)
+                return $"No places match \"{SearchText.Trim()}\". Press Esc to clear the search.";
+            return null;
+        }
+    }
 
     public bool IsGridExpanded
     {
@@ -85,6 +143,11 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ImportCommand { get; }
     public RelayCommand ToggleGridCommand { get; }
 
+    /// <summary>Opens the favourite at a 0-based position in the bubble row (Ctrl+1 → "0"). Out-of-range positions do nothing.</summary>
+    public RelayCommand OpenFavouriteAtCommand { get; }
+
+    public RelayCommand ClearSearchCommand { get; }
+
     /// <summary>
     /// True if the places file couldn't be read on startup. MainWindow
     /// checks this once (on Loaded) and shows a MessageForm notice — kept
@@ -102,6 +165,7 @@ public sealed class MainViewModel : ObservableObject
             return;
 
         Places.Add(new PlaceViewModel(created));
+        ClearSearchIfHidden(created);
         // A brand-new place is never a favourite yet, but rebuilding here
         // costs nothing at this scale and keeps this method simple.
         RebuildFavourites();
@@ -144,7 +208,11 @@ public sealed class MainViewModel : ObservableObject
 
         var renamed = PlaceFormDialog.ShowRenameAlias(place.Model, _placesService);
         if (renamed)
+        {
             place.Refresh();
+            // The new alias may no longer match (or may now match) the search.
+            PlacesView.Refresh();
+        }
     }
 
     private void EditResource(PlaceViewModel? place)
@@ -154,7 +222,10 @@ public sealed class MainViewModel : ObservableObject
 
         var edited = PlaceFormDialog.ShowEditResource(place.Model, _placesService);
         if (edited)
+        {
             place.Refresh();
+            PlacesView.Refresh();
+        }
     }
 
     private void ToggleFavourite(PlaceViewModel? place)
@@ -228,8 +299,40 @@ public sealed class MainViewModel : ObservableObject
         foreach (var place in imported)
             Places.Add(new PlaceViewModel(place));
 
+        if (imported.Any(p => !PlaceSearch.Matches(p, SearchText)))
+            SearchText = string.Empty;
+
         RebuildFavourites();
         MessageForm.Show($"{imported.Count} imported.", AppName);
+    }
+
+    private void OpenFavouriteAt(object? parameter)
+    {
+        var index = parameter switch
+        {
+            int i => i,
+            string text when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => -1
+        };
+
+        if (index >= 0 && index < FavouritePlaces.Count)
+            Open(FavouritePlaces[index]);
+    }
+
+    /// <summary>
+    /// A place the user just added should never be invisible because of a
+    /// leftover search, so drop the search if it would hide the new row.
+    /// </summary>
+    private void ClearSearchIfHidden(Place added)
+    {
+        if (!PlaceSearch.Matches(added, SearchText))
+            SearchText = string.Empty;
+    }
+
+    private void RaiseGridStatusChanged()
+    {
+        OnPropertyChanged(nameof(PlacesHeader));
+        OnPropertyChanged(nameof(EmptyGridMessage));
     }
 
     /// <summary>Reprojects FavouritePlaces from Places, ordered by FavouriteOrder. Cheap at this app's scale (SI §9 — hundreds of rows at most), so every mutating command just calls this rather than patching the projection incrementally.</summary>
