@@ -13,9 +13,21 @@ namespace QuickerPlaces.Models;
 /// </summary>
 public sealed class AppSettings
 {
-    // 2: added GlobalHotkey. No migration needed: a version-1 file simply
-    // lacks the field, so it deserializes to the default hotkey.
-    public int SchemaVersion { get; set; } = 2;
+    /// <summary>
+    /// The schema version this build writes and expects, mirroring
+    /// PlacesService.CurrentSchemaVersion. See SettingsService.Load for
+    /// the (deliberately different) policy applied when a loaded file's
+    /// SchemaVersion doesn't match.
+    ///
+    /// 2: added GlobalHotkey. No migration needed: a version-1 file simply
+    /// lacks the field, so it deserializes to the default hotkey. This must
+    /// stay at least 2: builds from main already write 2, and Load resets a
+    /// file newer than this to defaults, silently dropping the user's
+    /// hotkey and window layout.
+    /// </summary>
+    public const int CurrentSchemaVersion = 2;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     // Last known main window bounds, used to restore the window on the next
     // launch. Left/Top of double.NaN means "no saved position yet" (first

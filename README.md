@@ -2,7 +2,7 @@
 
 A lightweight Windows desktop utility for storing and quickly opening remembered "places" — folder paths and URLs — under a memorable alias. Part of the **QuickerLinks** project: a better path launcher than Quick Links.
 
-> **Status:** early build. It compiles cleanly, and the service layer (validation, persistence, favourites, import/export) is covered by unit tests. The UI still hasn't had a full hands-on pass through every feature, so expect rough edges. See [`ai/BUILD_SUMMARY.md`](ai/BUILD_SUMMARY.md) for the bugs found and fixed so far.
+> **Status:** early build. The features (search, hotkey, undo, copy, settings and the rest) have had a hands-on pass on Windows. Phase 1 of the [roadmap](ai/260901_Professional%20Improvements%20Plan.md) (persistence reliability and recovery: failed saves are reported with a Retry banner, a damaged or unreadable store is handled safely, and only one instance runs at a time) is merged in and builds with no warnings, and all 125 automated tests pass, but **its manual verification pass on Windows has not been done yet**: the recovery dialogs and the unsaved-changes banner are unproven in the running app. See `ai/BUILD_SUMMARY.md` for the checklist, and `ai/260921_Handoff.md` for where the roadmap stands.
 
 ## What it does
 
@@ -12,7 +12,7 @@ A lightweight Windows desktop utility for storing and quickly opening remembered
 - Press **Ctrl+Alt+Space** from any app to bring QuickerPlaces to the front with the search box ready, type a few letters, and press Enter to open. Launching it again does the same thing rather than opening a second copy. Change the shortcut in **Settings** (the gear icon).
 - Drive everything from the keyboard: Ctrl+F search, Ctrl+N / Ctrl+U add, Ctrl+1–9 open a favourite, plus Enter / F2 / Ctrl+E / Ctrl+D / Delete on the selected row. The full list is in [`USERGUIDE.md`](USERGUIDE.md#keyboard-shortcuts).
 - Pin your most-used places as one-click **favourite bubbles** above the grid, drag-and-drop to reorder them, and collapse the grid entirely when you just want the bubbles.
-- Everything is written to disk immediately as you work — no save button, no "unsaved changes."
+- Everything is written to disk immediately as you work — no save button. If a save ever fails, the change stays on screen and a banner says so, with a Retry that rewrites it; QuickerPlaces never claims a change is stored when it isn't.
 - **Export** any subset of your places to a JSON file to share or back up, and **import** from one — anything that would collide with what you already have is filtered out automatically, before you're ever asked to pick.
 
 ## Getting started
@@ -41,10 +41,11 @@ The tests (`src/QuickerPlaces.Tests`) cover the service layer only: validation, 
 
 ### Where your data lives
 
-- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit.
+- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit. The previous version is kept alongside it as `places.bak.json` on every save.
 - Window layout (size/position, whether the grid is collapsed) and the global hotkey: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`.
+- Diagnostic log (save failures, load/recovery outcomes — never place aliases or paths): `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log`.
 
-Both are plain JSON and safe to inspect, back up, or hand-edit if you know what you're doing. The folder icon in the app's header opens the places folder in File Explorer.
+All plain text and safe to inspect, back up, or hand-edit if you know what you're doing. The folder icon in the app's header opens the places folder in File Explorer.
 
 ## Repository layout
 
@@ -53,7 +54,7 @@ Both are plain JSON and safe to inspect, back up, or hand-edit if you know what 
 ├── src/                     # the actual application
 │   ├── QuickerPlaces.sln
 │   ├── QuickerPlaces/       # WPF project (App, Models, ViewModels, Views, Services, ...)
-│   └── QuickerPlaces.Tests/ # xUnit tests for the service layer
+│   └── QuickerPlaces.Tests/ # xUnit tests for the services and models (no UI tests)
 └── ai/                      # how this was built, and why
     ├── 260831_Raw brief for SI.txt   # the original one-paragraph request
     ├── 260831_Initial SI brief.md    # the spec/requirements handoff built from it

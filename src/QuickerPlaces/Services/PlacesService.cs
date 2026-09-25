@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -51,73 +50,50 @@ public sealed class PlacesService
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    private readonly string _placesFilePath;
+    private readonly IPlacesStorage _storage;
     private readonly List<Place> _places;
 
-    public PlacesService()
-        : this(DefaultPlacesFilePath())
+    /// <summary>Builds the production service over the real, roaming AppData store — unchanged from before the storage seam existed, so App.xaml.cs needs no changes.</summary>
+    public PlacesService() : this(FilePlacesStorage.ForDefaultLocation())
     {
     }
 
-    /// <summary>
-    /// Backs the service with an explicit file instead of the default
-    /// %AppData% location — used by the unit tests to run against a
-    /// throwaway temp file rather than the user's real places.json.
-    /// </summary>
-    public PlacesService(string placesFilePath)
+    /// <summary>Builds the service over any IPlacesStorage — the seam a test uses to exercise load/save behaviour without touching a real disk.</summary>
+    public PlacesService(IPlacesStorage storage)
     {
-        _placesFilePath = placesFilePath;
+        _storage = storage;
+        var (places, outcome) = LoadFromDisk();
+        _places = places;
+        LoadOutcome = outcome;
 
-        var folder = Path.GetDirectoryName(placesFilePath);
-        if (!string.IsNullOrEmpty(folder))
-            Directory.CreateDirectory(folder);
-
-        (_places, LoadFailed) = LoadFromDisk();
-
-        if (LoadFailed)
-            CorruptFileBackupPath = BackUpUnreadableFile();
-    }
-
-    private static string DefaultPlacesFilePath()
-    {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(root, AppInfo.Publisher, AppInfo.Name, "places.json");
+        // D3: a store that is damaged, could not be opened, or came from a
+        // newer version starts empty and refuses mutations until the
+        // recovery flow (App.xaml.cs) resolves it — see IsMutationBlocked
+        // below. Ok and NotPresent need no recovery state at all.
+        if (RequiresRecovery(outcome))
+            SetRecoveryUnresolved(RecoveryMessageFor(outcome));
     }
 
     /// <summary>
-    /// True if places.json existed but couldn't be read/parsed on startup
-    /// (corrupt or from an incompatible future version). The service still
-    /// starts with an empty list rather than crashing (SI §5) — MainWindow
-    /// surfaces this once via a non-blocking MessageForm notice so the user
-    /// knows their old data didn't silently vanish forever.
+    /// The current on-disk schema version this build writes and expects.
+    /// Bump only alongside a migration branch in LoadFromDisk (plan 5.3) —
+    /// there are no prior versions yet, so there is nothing to migrate
+    /// today.
     /// </summary>
-    public bool LoadFailed { get; }
+    public const int CurrentSchemaVersion = 1;
 
     /// <summary>
-    /// When <see cref="LoadFailed"/>, where a copy of the unreadable file was
-    /// saved — or null if even copying it failed. The very next change the
-    /// user makes overwrites places.json, so without this copy their old
-    /// data would be gone the moment they added anything.
+    /// What happened the last time the store was loaded — see
+    /// <see cref="StoreLoadOutcome"/> for what each value means and, for
+    /// the three failure values, what the application is and is not
+    /// allowed to do about it. Replaces the old LoadFailed boolean, which
+    /// could not distinguish a damaged file from one that could not be
+    /// opened (D6).
     /// </summary>
-    public string? CorruptFileBackupPath { get; }
-
-    /// <summary>
-    /// True while the most recent change is only in memory because writing
-    /// places.json failed (disk full, file locked, etc.). Cleared by the
-    /// next successful save, whether from another change or <see cref="TrySave"/>.
-    /// </summary>
-    public bool HasUnsavedChanges { get; private set; }
-
-    /// <summary>
-    /// Raised with a user-readable error when a change couldn't be written to
-    /// disk. Only raised on the first failure in a run of failures (i.e. when
-    /// <see cref="HasUnsavedChanges"/> goes from false to true), so a disk
-    /// that stays full doesn't produce a warning for every single edit.
-    /// </summary>
-    public event Action<string>? SaveFailed;
+    public StoreLoadOutcome LoadOutcome { get; private set; }
 
     /// <summary>Full path to places.json — handy for a "Reveal in Explorer" menu item.</summary>
-    public string PlacesFilePath => _placesFilePath;
+    public string PlacesFilePath => _storage.StoreFilePath;
 
     /// <summary>Snapshot of all stored places, in stored order. Callers that need live updates should go through MainViewModel's ObservableCollection instead.</summary>
     public IReadOnlyList<Place> Places => _places;
@@ -212,17 +188,29 @@ public sealed class PlacesService
     // writes through to disk immediately (SI §5).
     // ---------------------------------------------------------------
 
-    public ValidationResult TryAdd(string alias, PlaceType type, string resource, out Place? created)
+    public ValidationResult TryAdd(string alias, PlaceType type, string resource, out Place? created, out PersistenceResult persistence)
     {
         created = null;
 
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
         var aliasResult = ValidateAlias(alias);
         if (!aliasResult.Success)
+        {
+            // Nothing was mutated, so there is nothing that failed to
+            // persist — the caller's ValidationResult.Success is what
+            // tells it to stop, not this.
+            persistence = PersistenceResult.Ok();
             return aliasResult;
+        }
 
         var resourceResult = ValidateResource(resource, type);
         if (!resourceResult.Success)
+        {
+            persistence = PersistenceResult.Ok();
             return resourceResult;
+        }
 
         var place = new Place
         {
@@ -235,37 +223,52 @@ public sealed class PlacesService
         };
 
         _places.Add(place);
-        SaveToDisk();
+        persistence = Persist();
 
         created = place;
         return ValidationResult.Ok();
     }
 
-    public ValidationResult TryRenameAlias(Place place, string newAlias)
+    public ValidationResult TryRenameAlias(Place place, string newAlias, out PersistenceResult persistence)
     {
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
         var result = ValidateAlias(newAlias, excluding: place);
         if (!result.Success)
+        {
+            persistence = PersistenceResult.Ok();
             return result;
+        }
 
         place.Alias = newAlias.Trim();
-        SaveToDisk();
+        persistence = Persist();
         return ValidationResult.Ok();
     }
 
-    public ValidationResult TryEditResource(Place place, string newResource)
+    public ValidationResult TryEditResource(Place place, string newResource, out PersistenceResult persistence)
     {
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
         var result = ValidateResource(newResource, place.Type, excluding: place);
         if (!result.Success)
+        {
+            persistence = PersistenceResult.Ok();
             return result;
+        }
 
         place.Resource = newResource.Trim();
-        SaveToDisk();
+        persistence = Persist();
         return ValidationResult.Ok();
     }
 
     /// <summary>Turns favouriting on/off. Turning on appends to the end of the favourite order; turning off renumbers the remaining favourites so FavouriteOrder stays a dense 0..n-1 sequence.</summary>
-    public void ToggleFavourite(Place place)
+    public PersistenceResult ToggleFavourite(Place place)
     {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
         if (place.IsFavourite)
         {
             place.IsFavourite = false;
@@ -281,37 +284,44 @@ public sealed class PlacesService
             // without needing a separate "any favourites yet" branch.
         }
 
-        SaveToDisk();
+        return Persist();
     }
 
     /// <summary>Reassigns FavouriteOrder for every current favourite to match <paramref name="orderedFavourites"/> (0-based, dense). Used after a bubble drag-reorder.</summary>
-    public void SetFavouriteOrder(IReadOnlyList<Place> orderedFavourites)
+    public PersistenceResult SetFavouriteOrder(IReadOnlyList<Place> orderedFavourites)
     {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
         for (var i = 0; i < orderedFavourites.Count; i++)
             orderedFavourites[i].FavouriteOrder = i;
 
-        SaveToDisk();
+        return Persist();
     }
 
     /// <summary>
-    /// Removes <paramref name="place"/> and returns what <see cref="TryRestore"/>
-    /// needs to put it back exactly where it was — list position and
-    /// favourite position — or null if it wasn't in the store.
+    /// Removes <paramref name="place"/>. <paramref name="removed"/> records
+    /// what <see cref="TryRestore"/> needs to put it back exactly where it
+    /// was (list position and favourite position), or is null if nothing
+    /// was removed (blocked by recovery, or not in the store).
     /// </summary>
-    public RemovedPlace? Remove(Place place)
+    public PersistenceResult Remove(Place place, out RemovedPlace? removed)
     {
+        removed = null;
+
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
         var index = _places.IndexOf(place);
         if (index < 0)
-            return null;
+            return PersistenceResult.Ok();
 
-        var removed = new RemovedPlace(place, index, place.IsFavourite ? place.FavouriteOrder : null);
+        removed = new RemovedPlace(place, index, place.IsFavourite ? place.FavouriteOrder : null);
 
         _places.RemoveAt(index);
         if (place.IsFavourite)
             RenumberFavourites();
-        SaveToDisk();
-
-        return removed;
+        return Persist();
     }
 
     /// <summary>
@@ -319,13 +329,22 @@ public sealed class PlacesService
     /// list position (clamped, if the list has shrunk since) and, if it was
     /// a favourite, at its old bubble position, shifting later bubbles
     /// right. Everything else about it (alias, DateAdded...) is unchanged.
-    /// Fails without changing anything if its alias or path/URL has since
+    /// Refuses without changing anything if its alias or path/URL has since
     /// been reused by another place, since restoring it would create the
     /// very duplicate the validation rules forbid.
+    ///
+    /// Like every other mutation this is a forward change, not a rollback
+    /// (D1): if the save fails, the restored place stays in memory and the
+    /// unsaved-changes banner offers Retry.
     /// </summary>
-    public ValidationResult TryRestore(RemovedPlace removed)
+    public ValidationResult TryRestore(RemovedPlace removed, out PersistenceResult persistence)
     {
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
+        persistence = PersistenceResult.Ok();
         var place = removed.Place;
+
         if (_places.Contains(place))
             return ValidationResult.Fail($"\"{place.Alias}\" is already back in the list.");
 
@@ -354,7 +373,7 @@ public sealed class PlacesService
             place.FavouriteOrder = null;
         }
 
-        SaveToDisk();
+        persistence = Persist();
         return ValidationResult.Ok();
     }
 
@@ -384,6 +403,37 @@ public sealed class PlacesService
         catch (Exception ex)
         {
             return $"Couldn't write the export file: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="contents"/> to a temp file beside
+    /// <paramref name="path"/>, then moves it over <paramref name="path"/>
+    /// in one filesystem operation. Used for exports; places.json itself
+    /// goes through IPlacesStorage.Write, which also flushes to disk and
+    /// keeps a .bak copy. On failure the temp file is removed and the
+    /// exception rethrown.
+    /// </summary>
+    private static void WriteAtomically(string path, string contents)
+    {
+        var tempPath = path + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, contents);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch
+            {
+                // Best effort — the original error is the one worth reporting.
+            }
+
+            throw;
         }
     }
 
@@ -442,9 +492,18 @@ public sealed class PlacesService
     /// store at commit time (defensive — the store could in principle have
     /// changed since the preview was shown) and silently skips any that no
     /// longer pass.
+    ///
+    /// Persists once for the whole batch (test 19), not once per record —
+    /// D2's whole-store write makes per-record saves both wasteful and
+    /// pointless. A failed persist still leaves every successfully-added
+    /// record in memory (D1, test 20): the import is not rolled back just
+    /// because the disk write that reports it failed.
     /// </summary>
-    public List<Place> CommitImport(IEnumerable<Place> selectedCandidates)
+    public (List<Place> imported, PersistenceResult persistence) CommitImport(IEnumerable<Place> selectedCandidates)
     {
+        if (IsMutationBlocked(out var blocked))
+            return (new List<Place>(), blocked);
+
         var imported = new List<Place>();
 
         foreach (var candidate in selectedCandidates)
@@ -468,144 +527,352 @@ public sealed class PlacesService
             imported.Add(place);
         }
 
-        if (imported.Count > 0)
-            SaveToDisk();
-
-        return imported;
+        var persistence = imported.Count > 0 ? Persist() : PersistenceResult.Ok();
+        return (imported, persistence);
     }
 
     // ---------------------------------------------------------------
     // Disk I/O
     // ---------------------------------------------------------------
 
-    private (List<Place>, bool loadFailed) LoadFromDisk()
+    /// <summary>
+    /// Loads and classifies the store (plan 5.3, D6). Reading the file and
+    /// parsing it are two separate try blocks, deliberately: a failure to
+    /// open the file and a failure to make sense of its contents are
+    /// different situations calling for different responses, and D6's
+    /// classification exists only at each catch — once collapsed into one
+    /// boolean (as the pre-Phase-1 LoadFailed did), the distinction cannot
+    /// be recovered later.
+    /// </summary>
+    private (List<Place> places, StoreLoadOutcome outcome) LoadFromDisk()
     {
+        if (!_storage.Exists)
+        {
+            DiagnosticLog.Info("No existing places store found; starting with an empty list.");
+            return (new List<Place>(), StoreLoadOutcome.NotPresent);
+        }
+
+        string json;
         try
         {
-            if (!File.Exists(_placesFilePath))
-                return (new List<Place>(), false);
+            json = _storage.Read();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} could not be opened.", ex);
+            return (new List<Place>(), StoreLoadOutcome.Unreadable);
+        }
+        catch (Exception ex)
+        {
+            // D6's safe default: any exception type this read did not
+            // specifically anticipate is still classified Unreadable, not
+            // Damaged. Refusing to touch (quarantine, rename, replace) a
+            // file whose failure mode we don't recognize is the safe
+            // choice — see StoreLoadOutcome.Unreadable's remarks.
+            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} could not be opened (unexpected exception type {ex.GetType().Name}).", ex);
+            return (new List<Place>(), StoreLoadOutcome.Unreadable);
+        }
 
-            var json = File.ReadAllText(_placesFilePath);
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            // The absent/non-numeric-version case is deliberately Damaged,
+            // not "assume version 1" (plan 5.3): every store this
+            // application has ever written includes schemaVersion, so a
+            // document without one — or with one that isn't a number — is
+            // not an old-but-valid v1 store. It is damaged, or it is a
+            // file this application never wrote at all.
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("schemaVersion", out var versionElement) ||
+                versionElement.ValueKind != JsonValueKind.Number ||
+                !versionElement.TryGetInt32(out var version))
+            {
+                DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} has no usable schemaVersion; treating as damaged.");
+                return (new List<Place>(), StoreLoadOutcome.Damaged);
+            }
+
+            if (version > CurrentSchemaVersion)
+            {
+                DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} has schemaVersion {version}, newer than this build's {CurrentSchemaVersion}.");
+                return (new List<Place>(), StoreLoadOutcome.WrittenByNewerVersion);
+            }
+
             var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
+
+            // Both halves of this check matter. A document that is
+            // literally "null" deserializes to a null store; one whose
+            // "places" is explicitly null overwrites PlacesStore's
+            // initializer with null. Neither is a usable store, and
+            // neither throws JsonException — without this check the
+            // Places dereference below would raise a
+            // NullReferenceException straight out of the constructor and
+            // crash the app on launch, which is the exact failure this
+            // phase exists to stop.
+            if (store?.Places is null)
+            {
+                DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} parsed but holds no usable place list; treating as damaged.");
+                return (new List<Place>(), StoreLoadOutcome.Damaged);
+            }
+
+            if (version < CurrentSchemaVersion)
+            {
+                // No prior schema version exists yet (CurrentSchemaVersion
+                // is still 1), so there is nothing to migrate today. This
+                // branch is written now, deliberately empty apart from the
+                // log line, so the next version bump has a documented
+                // place to add a migration step rather than inventing the
+                // gate from scratch. Whatever a future migration produces
+                // here must not be written back to disk until a save
+                // succeeds through the normal Persist() path (plan 5.3,
+                // test 15) — this method never calls _storage.Write.
+                DiagnosticLog.Info($"Migrating places store at {_storage.StoreFilePath} from schemaVersion {version} to {CurrentSchemaVersion} in memory (no-op: no prior versions exist yet).");
+            }
+
             // A hand-edited file can contain a bare `null` in the array;
             // drop it here rather than let it NRE the first grid binding.
-            var places = store?.Places?.Where(p => p is not null).ToList() ?? new List<Place>();
-            return (places, false);
+            var places = store.Places.Where(p => p is not null).ToList();
+
+            DiagnosticLog.Info($"Loaded {places.Count} place(s) from {_storage.StoreFilePath} (schemaVersion {version}).");
+            return (places, StoreLoadOutcome.Ok);
         }
-        catch
+        catch (JsonException ex)
         {
-            // Corrupt or unreadable places file — start from an empty list
-            // rather than crashing the app on launch (SI §5). The file on
-            // disk is left as-is; LoadFailed lets the UI tell the user.
-            return (new List<Place>(), true);
+            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} is not valid JSON.", ex);
+            return (new List<Place>(), StoreLoadOutcome.Damaged);
         }
     }
 
+    private static bool RequiresRecovery(StoreLoadOutcome outcome)
+        => outcome is StoreLoadOutcome.Damaged or StoreLoadOutcome.Unreadable or StoreLoadOutcome.WrittenByNewerVersion;
+
+    private static string RecoveryMessageFor(StoreLoadOutcome outcome) => outcome switch
+    {
+        StoreLoadOutcome.Damaged => "Your saved places file appears to be damaged. Resolve the recovery prompt before making changes.",
+        StoreLoadOutcome.Unreadable => "Your saved places file could not be opened. Resolve the recovery prompt before making changes.",
+        StoreLoadOutcome.WrittenByNewerVersion => "Your saved places were written by a newer version of QuickerPlaces. Update QuickerPlaces to make changes.",
+        _ => "Your saved places need attention before changes can be saved."
+    };
+
     /// <summary>
-    /// Copies an unreadable places.json aside as
-    /// places.corrupt-yyyyMMdd-HHmmss.json, next to the original, and
-    /// returns the copy's path (null if it couldn't be copied). A copy
-    /// rather than a move, so places.json itself stays exactly as found
-    /// until the user's next change replaces it.
+    /// The "Try again" recovery action for <see cref="StoreLoadOutcome.Unreadable"/>
+    /// (plan 5.4): re-runs the whole load from scratch. On success — the
+    /// file that couldn't be opened a moment ago now can be — the real
+    /// places replace whatever empty/stale in-memory list recovery left
+    /// behind, and the recovery state clears so mutations work normally
+    /// again. On failure the state stays unresolved and the caller (the
+    /// App.xaml.cs recovery loop) asks again. Both outcomes are logged so
+    /// the diagnostic record shows the original failure and, if it
+    /// happened, the successful recovery.
     /// </summary>
-    private string? BackUpUnreadableFile()
+    public StoreLoadOutcome Reload()
+    {
+        var (places, outcome) = LoadFromDisk();
+
+        _places.Clear();
+        _places.AddRange(places);
+        LoadOutcome = outcome;
+
+        if (RequiresRecovery(outcome))
+        {
+            SetRecoveryUnresolved(RecoveryMessageFor(outcome));
+            DiagnosticLog.Warn($"Reload of {_storage.StoreFilePath} did not resolve the recovery state (outcome: {outcome}).");
+        }
+        else
+        {
+            ClearRecoveryUnresolved();
+            DiagnosticLog.Info($"Reload of {_storage.StoreFilePath} succeeded; recovery resolved.");
+        }
+
+        return outcome;
+    }
+
+    /// <summary>
+    /// The "Start with an empty list" recovery action for
+    /// <see cref="StoreLoadOutcome.Damaged"/> ONLY — never called for
+    /// Unreadable or WrittenByNewerVersion, which must never be
+    /// quarantined (see StoreLoadOutcome's remarks). Quarantines the
+    /// damaged file via IPlacesStorage.Quarantine, logs the quarantine
+    /// path (the one privacy-rule exception — plan 5.5), and resolves the
+    /// recovery state so the empty in-memory store can now be saved
+    /// normally.
+    ///
+    /// If the quarantine itself fails, the original file was NOT moved
+    /// aside, so recovery must not be considered resolved: proceeding to a
+    /// writable state here would risk the next save overwriting a damaged
+    /// file that was never actually preserved. The failure is returned as
+    /// a <see cref="PersistenceResult"/> (Saved: false, with a message)
+    /// rather than a bare bool or a swallowed exception, so a caller
+    /// cannot accidentally ignore it the way a discarded return value
+    /// could be.
+    /// </summary>
+    public PersistenceResult QuarantineAndStartEmpty()
     {
         try
         {
-            if (!File.Exists(_placesFilePath))
-                return null;
+            var quarantinedPath = _storage.Quarantine(DateTimeOffset.Now);
+            DiagnosticLog.Warn($"Quarantined damaged places store to {quarantinedPath}.");
 
-            var folder = Path.GetDirectoryName(_placesFilePath) ?? string.Empty;
-            var name = Path.GetFileNameWithoutExtension(_placesFilePath);
-            var extension = Path.GetExtension(_placesFilePath);
-            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-
-            var backupPath = Path.Combine(folder, $"{name}.corrupt-{stamp}{extension}");
-            for (var attempt = 2; File.Exists(backupPath); attempt++)
-                backupPath = Path.Combine(folder, $"{name}.corrupt-{stamp}-{attempt}{extension}");
-
-            File.Copy(_placesFilePath, backupPath);
-            return backupPath;
+            _places.Clear();
+            ClearRecoveryUnresolved();
+            return PersistenceResult.Ok();
         }
-        catch
+        catch (Exception ex)
         {
-            // Unreadable for a reason that also blocks copying it (e.g.
-            // access denied). The notice then just says no copy was made.
-            return null;
+            DiagnosticLog.Error($"Failed to quarantine damaged places store at {_storage.StoreFilePath}.", ex);
+
+            // Recovery stays unresolved (IsRecoveryUnresolved is untouched
+            // above on this path) — mutations remain blocked, and the
+            // caller must show this failure rather than proceed.
+            return PersistenceResult.Fail(
+                $"Couldn't set aside the damaged file at \"{_storage.StoreFilePath}\". {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Retries writing places.json after an earlier failure — used on exit,
-    /// so a transient failure (file briefly locked by a backup or sync tool)
-    /// doesn't cost the user their last changes. Returns true if everything
-    /// is now on disk.
+    /// Writes places.json atomically via IPlacesStorage.Write, which
+    /// serializes to a temp file in the same directory, flushes it to
+    /// disk, then replaces the real file in one filesystem operation, so a
+    /// crash or power-loss mid-write can never leave a truncated or
+    /// half-written places.json behind (SI §5).
+    ///
+    /// On failure this deliberately does NOT roll back the in-memory
+    /// change that triggered it (D1). Rolling back would throw away
+    /// whatever the user just typed, and it would leave RetrySave with
+    /// nothing to retry — the whole point of keeping the proposed state in
+    /// memory is that Retry can re-serialize and rewrite it verbatim.
+    /// HasUnsavedChanges is what stops the application from claiming a
+    /// change is safely stored; it is not a rollback signal.
     /// </summary>
-    public bool TrySave()
-    {
-        if (!HasUnsavedChanges)
-            return true;
-
-        SaveToDisk();
-        return !HasUnsavedChanges;
-    }
-
-    /// <summary>
-    /// Writes <paramref name="contents"/> to a temp file in the same
-    /// directory, then replaces <paramref name="path"/> with it in one
-    /// filesystem operation (File.Move with overwrite, which uses an atomic
-    /// rename/replace on Windows), so a crash or power-loss mid-write can
-    /// never leave a truncated or half-written file behind (SI §5). On
-    /// failure the temp file is removed and the exception is rethrown.
-    /// </summary>
-    private static void WriteAtomically(string path, string contents)
-    {
-        var tempPath = path + ".tmp";
-        try
-        {
-            File.WriteAllText(tempPath, contents);
-            File.Move(tempPath, path, overwrite: true);
-        }
-        catch
-        {
-            try
-            {
-                File.Delete(tempPath);
-            }
-            catch
-            {
-                // Best effort — the original error is the one worth reporting.
-            }
-
-            throw;
-        }
-    }
-
-    /// <summary>Writes the full place list to places.json via <see cref="WriteAtomically"/>.</summary>
-    private void SaveToDisk()
+    private PersistenceResult Persist()
     {
         try
         {
             var store = new PlacesStore { Places = _places };
             var json = JsonSerializer.Serialize(store, JsonOptions);
-
-            WriteAtomically(_placesFilePath, json);
+            _storage.Write(json);
 
             HasUnsavedChanges = false;
+            return PersistenceResult.Ok();
         }
         catch (Exception ex)
         {
-            // A save failure (disk full, file locked by another process,
-            // etc.) shouldn't crash the app or undo the in-memory change
-            // the user just made, but it mustn't be silent either: the
-            // change is lost if the app closes before a later save works.
-            var firstFailure = !HasUnsavedChanges;
+            // Broad catch is intentional: the storage layer can throw
+            // IOException (disk full, file locked by another process),
+            // UnauthorizedAccessException (permissions), or anything else
+            // a filesystem can raise. Whatever it is, the point of this
+            // step is that it is never swallowed — it becomes a returned
+            // PersistenceResult the caller must look at, and a logged
+            // diagnostic entry.
             HasUnsavedChanges = true;
 
-            if (firstFailure)
-                SaveFailed?.Invoke($"Your changes couldn't be saved to:\n{_placesFilePath}\n\n{ex.Message}");
+            // Privacy rule (DiagnosticLog remarks / plan 5.5): name the
+            // store path and the record count, never a place's alias or
+            // resource. The count and path are enough to diagnose "why
+            // didn't my data save" without writing anyone's data to a
+            // second, less-protected file.
+            DiagnosticLog.Error(
+                $"Failed to save {_places.Count} place(s) to {_storage.StoreFilePath}",
+                ex);
+
+            var message = $"Couldn't save your places to \"{_storage.StoreFilePath}\". {ex.Message}";
+            return PersistenceResult.Fail(message);
         }
     }
+
+    /// <summary>
+    /// True once a mutation has changed the in-memory store but the change
+    /// has not yet reached disk — set by a failed Persist(), cleared by the
+    /// next successful one (including a successful RetrySave()). This is
+    /// the seam a later step's banner reads; nothing here shows it to the
+    /// user directly.
+    /// </summary>
+    public bool HasUnsavedChanges { get; private set; }
+
+    /// <summary>
+    /// Re-serializes and rewrites the whole in-memory store. Safe to call
+    /// with no queue of pending operations to replay: D2's whole-store
+    /// writes make every save idempotent — there is only ever "the current
+    /// state", never a sequence of deltas — and D1 keeps the user's most
+    /// recent change in memory, so there is something for Retry to
+    /// actually retry.
+    /// </summary>
+    public PersistenceResult RetrySave()
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        return Persist();
+    }
+
+    /// <summary>
+    /// D3 — true when the store must not be written to until the user
+    /// resolves a startup recovery prompt (a damaged file, one that could
+    /// not be opened, or one written by a newer version). Set by the
+    /// constructor and Reload() from the load classification
+    /// (StoreLoadOutcome, D6), and cleared by Reload() on a successful
+    /// retry or by QuarantineAndStartEmpty() on a successful quarantine —
+    /// see SetRecoveryUnresolved/ClearRecoveryUnresolved below. Every
+    /// mutation checks this first via IsMutationBlocked.
+    /// </summary>
+    public bool IsRecoveryUnresolved { get; private set; }
+
+    /// <summary>The message every mutation returns while <see cref="IsRecoveryUnresolved"/> is true. Set together with it.</summary>
+    public string? RecoveryBlockedMessage { get; private set; }
+
+    /// <summary>
+    /// The real setter behind <see cref="IsRecoveryUnresolved"/> —
+    /// called by the constructor and Reload() when LoadFromDisk's
+    /// classification (StoreLoadOutcome, D6) says the store is Damaged,
+    /// Unreadable, or WrittenByNewerVersion. Replaces the earlier,
+    /// test-only MarkRecoveryUnresolvedForTests now that a real caller
+    /// exists.
+    /// </summary>
+    private void SetRecoveryUnresolved(string message)
+    {
+        IsRecoveryUnresolved = true;
+        RecoveryBlockedMessage = message;
+    }
+
+    /// <summary>Clears the recovery-unresolved state — called only after a real successful Reload() or QuarantineAndStartEmpty(), never speculatively.</summary>
+    private void ClearRecoveryUnresolved()
+    {
+        IsRecoveryUnresolved = false;
+        RecoveryBlockedMessage = null;
+    }
+
+    /// <summary>
+    /// D3's guard: every mutation calls this first. If recovery is
+    /// unresolved, the mutation makes no in-memory change at all and
+    /// returns a failure carrying the recovery message — the one case in
+    /// this phase where a mutation is rejected outright rather than
+    /// accepted and banner-flagged, because a damaged or foreign file must
+    /// never be overwritten by a normal edit.
+    /// </summary>
+    private bool IsMutationBlocked(out PersistenceResult blocked)
+    {
+        if (IsRecoveryUnresolved)
+        {
+            blocked = PersistenceResult.Fail(BlockedMessage());
+            return true;
+        }
+
+        blocked = default;
+        return false;
+    }
+
+    /// <summary>
+    /// The text a blocked mutation reports. Falls back to a generic
+    /// sentence rather than dereferencing RecoveryBlockedMessage with a
+    /// null-forgiving operator: the two properties are only ever set
+    /// together today, but a later step adds the real setter, and a
+    /// missed assignment there should degrade to a vague message rather
+    /// than a NullReferenceException in front of a user whose data is
+    /// already in trouble.
+    /// </summary>
+    private string BlockedMessage()
+        => RecoveryBlockedMessage ?? "Your saved places need attention before changes can be saved.";
 }
 
 /// <summary>A removed place plus where it was, so it can be put back by <see cref="PlacesService.TryRestore"/>.</summary>

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "places": [
+    {
+      "alias": "Downloads",
+      "type": "folder",
+      "resource": "C:\\Users\\Test\\Downloads",
+      "isFavourite": true,
+      "favouriteOrder": 0,
+      "dateAdded": "2026-01-15T09:30:00"
+    },
+    {
+      "alias": "QuickerPlaces Repo",
+      "type": "url",
+      "resource": "https://github.com/example/quickerplaces",
+      "isFavourite": true,
+      "favouriteOrder": 1,
+      "dateAdded": "2026-02-03T14:05:22"
+    },
+    {
+      "alias": "Old Reports",
+      "type": "folder",
+      "resource": "D:\\Archive\\Reports\\2024",
+      "isFavourite": false,
+      "favouriteOrder": null,
+      "dateAdded": "2025-11-20T08:12:47"
+    }
+  ]
+}
