@@ -1,10 +1,11 @@
 ---
 title: QuickerPlaces — Phase 2 Detailed Implementation Plan
-status: plan — not yet implemented. Implementing it is gated on the Phase 1 manual checklist (2026-09-21 hand-off, decision 4); writing and reviewing it is not
+status: implemented 2026-09-25 (steps 1–8, ab43db7 to cbde92f, on claude/roadmap-status-4tv9nf, not yet merged) — all 237 tests pass; the UI is compile-verified only, never run; the section 8 checklist has not been walked. Implemented at the user's request ahead of the Phase 1 checklist that the 2026-09-21 hand-off's decision 4 said should gate it. Where the build departs from this plan: BUILD_SUMMARY.md, Phase 2
 created: 2026-09-25
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.7 to 4.10 (Seven-day Recently Deleted)
 builds_on: ai/260925_Handoff.md; ai/260921_Handoff.md §5–§6; ai/BUILD_SUMMARY.md D1–D6 and "Merging Phase 1 with the feature work"
+last_revised: 2026-09-25 — status updated after implementation (step 9); the plan body is unchanged
 ---
 
 # Phase 2 — Seven-day Recently Deleted

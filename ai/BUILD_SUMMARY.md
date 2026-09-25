@@ -89,6 +89,8 @@ The first feature beyond the spec, chosen to lean into the "better path launcher
 
 ## Undo remove, Copy Path/URL, and a Settings dialog
 
+> *Partly superseded by Phase 2 (below): `RemovedPlace` and the Remove confirmation are gone, Undo un-deletes the same record, and the status bar stays 10 seconds when it offers Undo. Copy Path/URL and Settings are unchanged. Kept for the history.*
+
 - **Undo remove.** `PlacesService.Remove` now returns a `RemovedPlace` (the same `Place` object, its list index, and its `FavouriteOrder` if it was a favourite), and `TryRestore` reinserts it there. For a favourite it shifts later bubbles right, then renumbers to close any gap left by favourites removed in the meantime. It refuses, changing nothing, if the alias or path/URL has since been reused, or if the place is already back. `MainViewModel` keeps a session-only stack, so Ctrl+Z (window `KeyBinding`) or the status bar's Undo button restores removals most-recent-first. A refused restore is dropped from the stack with a message that says so. Keeping it would jam Ctrl+Z on that entry and make every older removal unreachable. The Remove confirmation now mentions Ctrl+Z instead of "can't be undone". One test (`Restore_uses_bubble_order_not_list_order_after_a_drag_reorder`) exists because a mutation check showed the favourite shift was untested: with bubbles in list order, a tie in `FavouriteOrder` was broken by list order and hid the missing shift.
 - **Status bar.** A new bottom row in `MainWindow` shows short confirmations ("Removed "Docs".", "Copied the path of "Docs"."), with Undo when it applies and a dismiss button. It hides itself after 8 seconds (`DispatcherTimer`). Undo keeps working through Ctrl+Z after the bar is gone.
 - **Copy Path/URL.** Second item in both context menus, right after Open (the spec's five items keep their relative order), and Ctrl+C on a grid row. That replaces `DataGrid`'s built-in Ctrl+C, which copied every cell. A clipboard held open by another app shows a message instead of throwing.
@@ -209,8 +211,111 @@ Two problems turned up during the merge and were fixed:
 - **Tests wrote to the real log.** `PlacesService`, `FilePlacesStorage` and `SingleInstance` log as they work, and only `DiagnosticLogTests` redirected the log, then reset it to the real `%LocalAppData%` location. So every test run appended to the developer's own `quickerplaces.log`, against the "tests never touch real AppData" rule. A module initializer (`Fakes/TestLogDirectory`) now points the log at a temp folder before any test runs, and `DiagnosticLogTests` switch back to that folder, never to the real one. They also run in their own non-parallel collection, because the log folder is process-wide and a test logging in parallel could land in their folder.
 - **The recovery flow made the old startup notice unreachable.** The feature branch's "your places couldn't be read" notice in `MainWindow.Window_Loaded` was removed, because `App` now resolves any load problem through the recovery dialog before the window exists.
 
+## Phase 2 — Seven-day Recently Deleted
+
+Phase 2 is planned in detail in [`ai/260925_Phase 2 Detailed Plan.md`](260925_Phase%202%20Detailed%20Plan.md). Its decisions D7–D22 are in that plan's section 4 and are not restated here. This section records what actually landed, where the build departs from the plan and why, and what is still unproven.
+
+It was implemented on 2026-09-25 on `claude/roadmap-status-4tv9nf`, one commit per step of the plan's section 10 (`ab43db7` to `cbde92f`). Every deviation below is also recorded in the commit message of the step that made it. **Phase 2 was implemented at the user's explicit request, ahead of the Phase 1 manual checklist**, which decision 4 of `ai/260921_Handoff.md` said should gate it. So Phase 2 is built on save, recovery and banner paths that have still not been exercised in the running app. Both checklists now need walking, Phase 1's first.
+
+### What was built
+
+- **Schema v2** (`PlacesService.CurrentSchemaVersion = 2`). `Place.DateAdded` is a UTC `DateTimeOffset`, and `Place.DeletedAt` is a nullable UTC `DateTimeOffset`, written only when set. `PlacesStoreMigration.MigrateV1ToV2` rewrites a v1 document on the `JsonObject`, before anything is bound to `Place` (D11). It converts a `dateAdded` with an offset or `Z` exactly. It reads an offset-less value as local time in the injected zone, taking the standard offset in a DST gap or overlap. A missing value becomes "now". Anything else throws `JsonException`, so D6 classifies the store `Damaged`. The migration happens in memory only, is logged with counts and the zone id (never an alias or destination), and reaches disk with the next successful save. The load gate treats versions below 1 as `Damaged`. Version 1 is migrated, version 2 is bound directly, and anything newer is `WrittenByNewerVersion`.
+- **One clock.** `PlacesService(IPlacesStorage, TimeProvider? = null)` (D12). `DateAdded`, `DeletedAt`, purge decisions, the migration's zone, the quarantine file name and the dialog's countdown (`PlacesService.UtcNow`) all read it. Tests use `Fakes/ManualTimeProvider` and `Fakes/TestZones`, which are built with `CreateCustomTimeZone` so no test depends on the host's zone.
+- **Soft delete (D7–D10).** `Remove(place, out bool removed)` stamps `DeletedAt` on the same record in the same list slot. Its favourite fields become a remembered bubble slot, and only the active favourites are renumbered. `Places` is now the active records, as a fresh list per call. `RecentlyDeleted` returns the rest, newest first. Every enumeration of the list was given an active-or-deleted treatment (plan 5.3). `RemovedPlace` is gone, and the Undo stack holds `Place`. `TryRestore(place, out persistence)` clears the flag and puts a favourite back in its remembered slot, shifting only active favourites.
+- **Restore conflicts and permanent deletion (D15, D22).** `GetRestoreConflict` names the active place holding the alias, the destination, or both, with a user-facing `Explanation` that is never logged. `TryRestore(place, alias, resource, out persistence)` commits the edit-before-restore flow. `RestoreSelected` restores what is free in one save, newest deletion first, and returns the rest as conflicts. `DeletePermanently` ignores anything that is not deleted, and `EmptyRecentlyDeleted` keeps active places. Each writes once, or not at all when nothing changed, and each checks D3 first.
+- **Expiry (D13, D14).** `RecentlyDeletedPolicy` defines seven full days as 168 hours of elapsed UTC time. Days remaining is the ceiling of the time left, clamped to 0–7: "7 days" … "1 day", then "Expiring" once past expiry but not yet purged (still restorable). `PurgeExpired` runs only after a successful load (the constructor and `Reload`, outcome `Ok`) and at the top of `Persist()`. It returns early while recovery is unresolved, and logs a count and the trigger.
+- **Export and import (D16, D17).** Export filters out deleted places even when given them, and writes version 2. Import reads the version first: missing is treated as 1, 1 is migrated like the store, 2 is read as is, and newer versions are refused with a message. Records carrying `deletedAt` are dropped. Collision checks see active places only.
+- **The UI.** A header bin button (U+E74D; tooltip, and `AutomationProperties.Name="Recently Deleted"`) opens `RecentlyDeletedDialog` (D20). The dialog has an extended-selection grid (Alias with type glyph, Type, Path / URL, Deleted in local time as `g`, and Days remaining with an exact-expiry tooltip), **_Restore selected**, **_Delete selected permanently**, **_Empty Recently Deleted**, and **Close** as both default and cancel button. It shows an empty state and has its own error line. `PlaceFormDialog.ShowRestore` ("Restore Place") is the one conflict flow, shared by Ctrl+Z, the status bar's Undo and Restore selected. `MessageForm.ShowDestructiveConfirm` makes Cancel the default, the cancel button, and the focused button (D18). Remove no longer asks. Its menu item shows "Delete" as its gesture and has a tooltip, and the status bar says "Moved "X" to Recently Deleted." with Undo. The bar stays 10 s with Undo and 8 s otherwise, and pauses under the pointer or keyboard focus (D19). After Delete, the row that took the removed row's place is selected and focused. The empty-grid hint mentions Recently Deleted when it has items.
+
+### Where the build departs from the plan
+
+| Plan | Built | Why |
+|---|---|---|
+| Plan section 6: only `PlacesStoreMigration.cs` and `RecentlyDeletedPolicy.cs` are newly linked into the tests; section 3 lists only a row view model | A second view model, `RecentlyDeletedViewModel`, holds every decision the dialog makes (rows, enabling, confirmation wording, error line, each service call). It is linked into the tests with `RecentlyDeletedRowViewModel`, `PlaceViewModel` and `ObservableObject` | So the dialog's behaviour is tested without a `Window` (D5, D21). Consequence: `PlaceViewModel` and `ObservableObject` must now stay free of `System.Windows.*` (step 8, `648bcaf`) |
+| `ShowRestore(Place, string explanation, PlacesService)` | `ShowRestore(RestoreConflict, PlacesService, Window? owner)`. Focus starts in the field that is in the way (the alias when both are), with its text selected. The explanation is also each field's screen-reader help text | Knowing *which* field conflicts needs the conflict, not its text. The owner centres it over Recently Deleted (`648bcaf`) |
+| Restore selected runs `ShowRestore` for each returned conflict | Each conflict is re-read just before its form opens (`RecentlyDeletedViewModel.CurrentConflict`). One that no longer conflicts is restored directly | An earlier edit in the same batch may have freed or taken an alias or destination (`648bcaf`) |
+| Cancelling Undo's conflict flow shows the reason | The status bar says ""X" is still in Recently Deleted." Only a place that has left Recently Deleted gets the modal message | The reason was on screen a moment before, so a second modal adds nothing (`cbde92f`) |
+| Plan 5.3 row 23: insert at `Places.IndexOf(place)` | `InsertRestored` counts only the active places that already have a row | A batch restore hands back several places, not in list order. The raw index would put a row after siblings that have no row yet (`77e7eba`) |
+| After Recently Deleted closes: insert, `RebuildFavourites`, `RefreshPersistenceState`, `PruneUndoStack` | Also clears a search that would hide a restored place, and hides a status message whose Undo would now restore a different place than the one it names | Found while wiring it in (`cbde92f`) |
+| D17: missing, 1, 2, newer, non-numeric | Also refuses a version below 1, and a document whose root is not an object, as "That file isn't a QuickerPlaces export." | No build wrote such a version, and the store's gate already treats it as unknown (`e96e74b`) |
+| Migration sketch: `JsonValue.TryGetValue<DateTime>` | Values are read through a `JsonElement` | See the `JsonValue` quirk below (`e835a75`) |
+| Confirmations: "Permanently delete {n} place(s)?" | Names the place when there is one ("Permanently delete "Docs"? …"), otherwise "{n} places" | Clearer for the common single case (`648bcaf`) |
+| Access keys on the dialog's buttons | The theme's `Button` and `Button.Primary` templates now set `RecognizesAccessKey`. This is app-wide; no existing label contained an underscore | Without it, "_Restore selected" rendered a literal underscore (`648bcaf`) |
+| Status bar pause and resume (D19) | The pause is also cleared whenever the bar hides | The bar can collapse under its own Dismiss click, and then the `MouseLeave` never comes, which would strand the next message on screen (`cbde92f`) |
+| Section 10 step 4 says the edit flow arrives in step 7; step 8 lists it | Built in step 8 | The plan contradicts itself; step 7 built the service half, step 8 the dialog |
+| D15: "the usual live validation" | Validation on **Restore**, shown in the error line | That is what "usual" means in `PlaceFormDialog`: no mode validates as you type |
+| Plan 5.1: "Every build before this phase refuses the v2 file" | True only for builds with Phase 1's version gate (`main` from the Phase 1 merge, PR #5, onwards) | Builds before that (`main` at PR #3 and earlier) never read `schemaVersion`. They would load a v2 file, show deleted places as ordinary ones (they ignore `deletedAt`), and write it back as v1 without the flag on their next save. Found while writing the documentation. No Phase 2 code can prevent it, so the user guide warns about it |
+
+### Bugs and edge cases found and fixed along the way
+
+1. **Duplicate property names crashed the launch.** `JsonObject` cannot hold a duplicated key. Parsing one threw `ArgumentException`, which D6's catch does not classify, so it escaped the constructor. Both the store and import now parse with `AllowDuplicateProperties = false`, so such a store is `Damaged` and such an import is refused. QuickerPlaces never writes a duplicate key (`7a61718`).
+2. **Dates at the calendar's edge.** An offset-less `"0001-01-01T00:00:00"` (a default `DateTime`), migrated in a zone east of Greenwich, made the `DateTimeOffset` constructor throw `ArgumentOutOfRangeException`, which also escapes D6. The migration now builds the value from clamped ticks (`e835a75`).
+3. **The `JsonValue` parsing quirk.** `JsonValue.TryGetValue<DateTime>` accepts a string node that was *parsed*, but refuses one *built in code*. The migration would have treated the same document differently depending on how it was made. Reading through a `JsonElement` uses System.Text.Json's own ISO 8601 parser either way (`e835a75`).
+4. **A stray `deletedAt` in a v1 record** meant nothing to v1, which ignored unknown properties. After the upgrade it would have meant "removed". The migration drops it, for the store and for v1 imports (`e835a75`, `e96e74b`).
+5. **The old gate let `schemaVersion` 0 through** as if it were current (a `< current` branch). Versions below 1 are now `Damaged` (`7a61718`).
+6. **Batch-restored rows landing out of order** and **a status message stuck on screen**: both are in the table above (`77e7eba`, `cbde92f`).
+
+### Verification status — read this before calling Phase 2 done
+
+**2026-09-25: tested and compile-checked on Linux; not run.**
+
+1. `dotnet test QuickerPlaces.Tests/QuickerPlaces.Tests.csproj` from `src/`: **237 passed**, 0 failed, up from 125. The new classes are `PlacesServiceClockTests`, `PlacesStoreMigrationTests`, `PlacesServiceSchemaV2Tests`, `PlacesServiceSoftDeleteTests`, `PlacesServicePurgeTests`, `PlacesServiceRecentlyDeletedTests`, `RecentlyDeletedPolicyTests`, `RecentlyDeletedRowViewModelTests` and `RecentlyDeletedViewModelTests`. Export, import and log cases extend the existing classes. The commit messages map each step to the plan's numbered tests 1–54, plus extras for the edge cases above.
+2. Time zones: no test reads the machine's zone. The DST cases were also checked against the real `Europe/Berlin` zone, and the suite was run under several `TZ` settings (`e835a75`).
+3. Fixtures: `places.v1.json` is unchanged and now pinned by a SHA-256 of its text. `places.v2.json` is new, frozen and pinned the same way, and a test shows it is exactly what this build writes.
+4. `dotnet build QuickerPlaces/QuickerPlaces.csproj -p:EnableWindowsTargeting=true`: builds with 0 warnings and 0 errors, XAML included. **The app has not been run.** Nothing in the UI half of step 8 has been seen on screen.
+5. The manual checklist below: **not walked**, and neither is Phase 1's.
+
+### Manual verification checklist (must be walked on Windows)
+
+The plan's section 8, merged with the UI checks listed by step 8. Record a result against each item. An item that cannot be tested is recorded as untested, not skipped.
+
+**Upgrade and downgrade**
+
+- [ ] **Upgrade a real file.** Copy a `places.json` written by a pre-Phase-2 build into place and launch. Places, favourites and the Date Added column are unchanged. The file is still `schemaVersion` 1 on disk until the first change. After one change it is 2, with `+00:00` dates, and `places.bak.json` is the v1 file. The log has the migration line with counts and a zone id, and no alias.
+- [ ] **Downgrade refusal.** Start a build that has Phase 1's version gate but predates Phase 2 (`main` at `ca0ac72`) against the v2 file. The newer-version prompt appears, and the file is byte-identical afterwards. (Builds before the Phase 1 merge do not refuse; see the last row of the table above.)
+
+**Header**
+
+- [ ] The bin icon renders (Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on Windows 10). It has its tooltip, and a screen reader announces "Recently Deleted".
+- [ ] The header fits at the 700 px `MinWidth`, and on a high-DPI display.
+
+**Remove and Undo**
+
+- [ ] Remove, from the context menu and with Delete: no confirmation, the row and its bubble go, and the status bar says "Moved "X" to Recently Deleted." with **Undo**. The menu item shows "Delete" as its gesture, and its tooltip.
+- [ ] After Delete, the next row (the previous one, if it was the last) is selected and focused, and Delete again removes it. Removing the last row leaves the focus on the grid, and Ctrl+Z then works.
+- [ ] Status bar: it stays about 10 s with Undo and about 8 s without. Hovering pauses it, and leaving restarts the full interval. Tabbing into it pauses it. It never takes focus when it appears. After dismissing it, a new Remove still times out.
+- [ ] Ctrl+Z after the bar has gone still restores. Undo of a removed favourite puts its bubble back in the same position. So does restoring it from Recently Deleted after closing and reopening the app.
+- [ ] **Undo conflict.** Remove "Docs", add a new "Docs", press Ctrl+Z. Restore Place explains the conflict (a screen reader reads the explanation). Both fields are prefilled, the conflicting field is focused with its text selected, and **Browse...** is there for folders. Restoring with a new alias brings the row back in its old position, bubble slot included. Repeat and **Cancel**: the status bar says it is still in Recently Deleted, and it is in the dialog.
+
+**The Recently Deleted dialog**
+
+- [ ] It opens centred on the main window, with the first row selected and focused, or with **Close** focused when empty.
+- [ ] Deleted shows local time in the user's locale format. The Days remaining tooltip shows the exact expiry. Both headers sort chronologically.
+- [ ] Shift and Ctrl multi-select work. **Restore selected** and **Delete selected permanently** are enabled only with a selection.
+- [ ] Alt+R, Alt+D and Alt+E work and show their underlines. No button anywhere in the app shows a stray underscore.
+- [ ] **Check:** does a plain R, D or E (no Alt), pressed while the dialog's grid has focus, fire an access key? WPF can do this. R would restore the selection (reversible); D and E would only open a confirmation that defaults to Cancel. Record what happens.
+- [ ] Esc closes the dialog. Enter closes it: record whether it does when the grid has focus, where the `DataGrid` may take Enter itself. Delete in its grid does nothing. The whole dialog works from the keyboard, and Tab leaves the grid in one step.
+- [ ] **Restore selected** with a mixed selection: the free places restore at once, each conflict opens Restore Place over the dialog one at a time, and each can be cancelled on its own.
+- [ ] Both confirmations: Enter, Space, Esc and the title-bar X all cancel. The action buttons read "Delete permanently" and "Empty Recently Deleted".
+- [ ] The empty state text shows, with the action buttons disabled.
+- [ ] After closing: restored rows are in their original positions, bubbles are in order, a search that would hide a restored row is cleared, and Ctrl+Z skips places the dialog restored or deleted.
+- [ ] The empty-grid hint mentions Recently Deleted only when it has items.
+
+**Expiry**
+
+- [ ] With the app closed, edit a `deletedAt` in `places.json` to eight days ago, then launch. That record is not in the dialog, the log records one purge "after load", and the file still holds the record until the next change.
+
+**Failures**
+
+- [ ] Deny write permission on `places.json`. A Remove shows the banner, and so does an Undo. Retry clears it once permission returns.
+- [ ] With write permission still denied: each dialog action shows the error line in the dialog, and the banner appears after closing. Restoring permission and using Retry clears both.
+
+### Known issue found, not fixed
+
+**Dates in the main grid ignore the user's locale.** Nothing sets `FrameworkElement.Language`, so WPF formats bindings as en-US: the Date Added column's `{0:d}` shows month/day/year whatever the Windows region is. The Recently Deleted dialog formats its dates in code with `CultureInfo.CurrentCulture`, so the two windows can disagree. This predates Phase 2 and was found in step 8. The usual fix is to override `FrameworkElement.LanguageProperty`'s metadata from `CultureInfo.CurrentCulture.IetfLanguageTag` once at startup. Phase 3's Last Opened column would inherit the problem.
+
 ## Current status
 
-As of 2026-09-25 the solution builds with 0 warnings and 0 errors, and all 125 tests pass on Linux (`dotnet test` from `src/`, with `-p:EnableWindowsTargeting=true` for the WPF project).
+As of 2026-09-25, Phase 1 is on `main`, and Phase 2 is implemented on `claude/roadmap-status-4tv9nf`, which is not yet merged. All 237 tests pass on Linux (`dotnet test QuickerPlaces.Tests/QuickerPlaces.Tests.csproj` from `src/`). The WPF app compiles with 0 warnings and 0 errors (`dotnet build QuickerPlaces/QuickerPlaces.csproj -p:EnableWindowsTargeting=true`). The feature work has had a hands-on pass on Windows. Neither phase has been run in the app.
 
-The feature work (search, icons, shortcuts, the global hotkey and Settings, undo, copy, the status bar) has had a hands-on pass on Windows. Phase 1 still has not: its manual checklist above is the next thing to do, and per `ai/260921_Handoff.md` it gates *implementing* Phase 2 (though not writing its plan). The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.
+Next is to walk the Phase 1 manual checklist on Windows, then Phase 2's (both above), and record the results here. Then fix whatever they find, merge, and write the Phase 3 detailed plan. That plan is deliberately deferred until the checklists are walked, because until then Phase 2 has not landed (`ai/README.md`, "Working on a phase"). Where to pick up is in `ai/260925_Phase 2 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.
