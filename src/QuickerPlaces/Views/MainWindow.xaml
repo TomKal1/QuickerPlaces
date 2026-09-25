@@ -52,7 +52,9 @@
                       Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <Separator />
-            <MenuItem Header="Remove"
+            <!-- No confirmation any more (roadmap §4.8): the tooltip says where it goes and how to get it back. -->
+            <MenuItem Header="Remove" InputGestureText="Delete"
+                      ToolTip="Moves this place to Recently Deleted. Ctrl+Z puts it back, or restore it from Recently Deleted within 7 days."
                       Command="{Binding PlacementTarget.Tag.RemoveCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
         </ContextMenu>
@@ -188,6 +190,11 @@
                         Command="{Binding OpenDataFolderCommand}" Margin="0,0,8,0"
                         ToolTip="Open data folder (where places.json and any backups are kept)"
                         AutomationProperties.Name="Open data folder" />
+                <!-- D20: the window has no menu, so Recently Deleted joins the other two secondary icon buttons. -->
+                <Button Content="&#xE74D;" FontFamily="{StaticResource Font.Icons}"
+                        Command="{Binding ShowRecentlyDeletedCommand}" Margin="0,0,8,0"
+                        ToolTip="Recently Deleted — places you removed in the last 7 days"
+                        AutomationProperties.Name="Recently Deleted" />
                 <Button Content="Import..." Command="{Binding ImportCommand}" Margin="0,0,8,0" />
                 <Button Content="Export..." Command="{Binding ExportCommand}" Margin="0,0,16,0" />
                 <Button Content="Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" ToolTip="Add Folder (Ctrl+N)" />
@@ -367,9 +374,21 @@
             </TextBlock>
         </Grid>
 
-        <!-- Status bar: a short confirmation after Remove (with Undo), Undo, or Copy. Hidden a few seconds after its last message. -->
-        <Border Grid.Row="5" Margin="0,8,0,0" Padding="12,6" CornerRadius="8"
-                Background="{StaticResource Bg.Elevated}" BorderBrush="{StaticResource Border.Default}" BorderThickness="1">
+        <!--
+            Status bar: a short confirmation after Remove (with Undo), Undo,
+            Copy, or Recently Deleted. Hidden 10 s after a message offering
+            Undo, 8 s after any other (D19); held open while the pointer is
+            over it or the keyboard focus is inside it (the three handlers
+            below), so reaching for Undo never races the timer. Like the
+            banner, it never takes focus: Focusable="False" here, and
+            nothing calls Focus() when it appears.
+        -->
+        <Border x:Name="StatusBar" Grid.Row="5" Margin="0,8,0,0" Padding="12,6" CornerRadius="8"
+                Background="{StaticResource Bg.Elevated}" BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
+                Focusable="False"
+                MouseEnter="StatusBar_MouseEnter"
+                MouseLeave="StatusBar_MouseLeave"
+                IsKeyboardFocusWithinChanged="StatusBar_IsKeyboardFocusWithinChanged">
             <Border.Style>
                 <Style TargetType="Border">
                     <Style.Triggers>
