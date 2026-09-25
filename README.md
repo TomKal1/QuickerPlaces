@@ -54,11 +54,12 @@ Both are plain JSON and safe to inspect, back up, or hand-edit if you know what 
 │   ├── QuickerPlaces/       # WPF project (App, Models, ViewModels, Views, Services, ...)
 │   └── QuickerPlaces.Tests/ # xUnit tests for the service layer
 └── ai/                      # how this was built, and why
-    ├── QuickerPlaces-SI.md  # the original spec/requirements handoff
-    └── BUILD_SUMMARY.md     # what got built, decisions made, bugs found & fixed
+    ├── 260831_Raw brief for SI.txt   # the original one-paragraph request
+    ├── 260831_Initial SI brief.md    # the spec/requirements handoff built from it
+    └── BUILD_SUMMARY.md              # what got built, decisions made, bugs found & fixed
 ```
 
-This project was scaffolded and largely written with Claude, working from the spec in `ai/QuickerPlaces-SI.md` against an existing WPF starter template. `ai/BUILD_SUMMARY.md` has the full story — the decisions made resolving the spec against the template, and every bug found and fixed along the way — for anyone (human or AI) picking this back up later.
+This project was scaffolded and largely written with Claude, working from the spec in `ai/260831_Initial SI brief.md` against an existing WPF starter template. `ai/BUILD_SUMMARY.md` has the full story — the decisions made resolving the spec against the template, and every bug found and fixed along the way — for anyone (human or AI) picking this back up later.
 
 ## Tech
 
