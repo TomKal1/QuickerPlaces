@@ -60,6 +60,16 @@ Any place can be a favourite. Toggling **Favourite** (from the grid's right-clic
 - **Hover over a bubble** to see where it points.
 - **Ctrl+1** to **Ctrl+9** open the first nine bubbles, in their left-to-right order.
 
+## Bringing QuickerPlaces up from anywhere
+
+While QuickerPlaces is running, press **Ctrl+Alt+Space** in any app. QuickerPlaces comes to the front (restoring it if it was minimized) with the search box focused, so you can type part of a name and press **Enter** to open it. The subtitle under the app name shows the shortcut when it's active.
+
+Starting QuickerPlaces again while it's already running does the same thing. You only ever get one copy, which also keeps two copies from overwriting each other's saved places.
+
+**Changing the shortcut:** close QuickerPlaces, open `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` in a text editor, and change the `"globalHotkey"` value, for example to `"Ctrl+Alt+Q"` or `"Win+Shift+P"`. Use `"None"` to turn it off. It needs at least one of Ctrl, Alt or Win, plus one key: a letter, a digit, F1–F12, or Space. Close the app first, because it rewrites this file when it exits.
+
+If the shortcut can't be used (another app already has it, or the setting isn't valid), QuickerPlaces tells you when it starts and explains how to pick another. Everything else works normally.
+
 ## Hiding the grid
 
 If you only want the favourite bubbles visible, click **Hide List**. The grid collapses and the window shrinks to make room; click **Show List** to bring it back. This state is remembered between sessions, along with the window's size and position.
@@ -68,6 +78,7 @@ If you only want the favourite bubbles visible, click **Hide List**. The grid co
 
 | Keys | What it does |
 |---|---|
+| **Ctrl+Alt+Space** (from any app) | Bring QuickerPlaces to the front, ready to search |
 | **Ctrl+F** | Jump to the search box |
 | **Ctrl+N** | Add Folder |
 | **Ctrl+U** | Add URL |
@@ -104,7 +115,7 @@ If everything in the file collides with what you already have, you'll see an emp
 QuickerPlaces keeps two small JSON files, both plain text and safe to open in a text editor if you're curious or want to back them up manually:
 
 - **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes.
-- **Window layout** (size, position, whether the grid is collapsed): `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes.
+- **Window layout** (size, position, whether the grid is collapsed) and the **global hotkey**: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes.
 
 You never need to touch either file by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes. The folder icon at the left of the header opens the folder that holds `places.json` in File Explorer, with the file selected. Any backup copies of an unreadable places file (see below) are in the same folder.
 

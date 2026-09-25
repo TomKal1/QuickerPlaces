@@ -1,21 +1,103 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuickerPlaces.Models;
+using QuickerPlaces.Services;
 using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views;
 
 public partial class MainWindow : Window
 {
+    private readonly string? _globalHotkeySetting;
+    private readonly string _settingsFilePath;
+    private GlobalHotkey? _globalHotkey;
+    private string? _globalHotkeyError;
+    private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
 
-    public MainWindow(MainViewModel viewModel, AppSettings settings)
+    public MainWindow(MainViewModel viewModel, AppSettings settings, string settingsFilePath)
     {
         InitializeComponent();
         DataContext = viewModel;
+        _globalHotkeySetting = settings.GlobalHotkey;
+        _settingsFilePath = settingsFilePath;
         RestoreWindowState(settings);
+    }
+
+    // -----------------------------------------------------------------
+    // Global hotkey + bring-to-front. The hotkey needs this window's HWND,
+    // which first exists in OnSourceInitialized; any problem registering
+    // it is held until Window_Loaded, when a notice can be centered on an
+    // on-screen window.
+    // -----------------------------------------------------------------
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        if (HotkeyGesture.IsDisabled(_globalHotkeySetting))
+            return;
+
+        if (!HotkeyGesture.TryParse(_globalHotkeySetting, out var gesture, out _globalHotkeyError))
+            return;
+
+        _globalHotkey = GlobalHotkey.TryRegister(this, gesture, out _globalHotkeyError);
+        if (_globalHotkey is null)
+            return;
+
+        _globalHotkey.Pressed += BringToFront;
+        if (DataContext is MainViewModel viewModel)
+            viewModel.GlobalHotkeyText = gesture.ToString();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _globalHotkey?.Dispose();
+        _globalHotkey = null;
+        base.OnClosed(e);
+    }
+
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+
+        // Remembered so BringToFront restores a minimized window to
+        // maximized if that's how it was before, not always to normal.
+        if (WindowState != WindowState.Minimized)
+            _stateBeforeMinimize = WindowState;
+    }
+
+    /// <summary>
+    /// Shows the window in front of everything, restoring it if minimized,
+    /// with the search box focused and its text selected — so the global
+    /// hotkey (or launching the app again) goes straight to "type to find,
+    /// Enter to open".
+    /// </summary>
+    public void BringToFront()
+    {
+        if (WindowState == WindowState.Minimized)
+            WindowState = _stateBeforeMinimize;
+
+        Show();
+        Activate();
+
+        // A modal dialog (Add, Export, a MessageForm...) leaves this window
+        // disabled until it closes, so bring that dialog forward instead of
+        // trying to focus a search box that can't take input.
+        foreach (Window owned in OwnedWindows)
+        {
+            if (owned.IsVisible)
+            {
+                owned.Activate();
+                return;
+            }
+        }
+
+        SearchBox.Focus();
+        SearchBox.SelectAll();
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -36,6 +118,15 @@ public partial class MainWindow : Window
             MessageForm.Show(
                 $"Your saved places couldn't be read and QuickerPlaces has started with an empty list.\n\n{whereToFind}",
                 viewModel.AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
+        }
+
+        if (_globalHotkeyError is not null)
+        {
+            MessageForm.Show(
+                $"The shortcut for bringing QuickerPlaces to the front isn't active.\n\n{_globalHotkeyError}\n\n" +
+                $"To choose a different one, close QuickerPlaces and change \"globalHotkey\" in:\n{_settingsFilePath}\n\n" +
+                $"For example \"Ctrl+Alt+Q\", or \"None\" to turn it off.",
+                AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }
 

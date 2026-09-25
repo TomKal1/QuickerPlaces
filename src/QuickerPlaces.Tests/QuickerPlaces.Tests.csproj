@@ -23,6 +23,7 @@
   <ItemGroup>
     <Compile Include="..\QuickerPlaces\AppInfo.cs" Link="Linked\AppInfo.cs" />
     <Compile Include="..\QuickerPlaces\Models\AppSettings.cs" Link="Linked\Models\AppSettings.cs" />
+    <Compile Include="..\QuickerPlaces\Models\HotkeyGesture.cs" Link="Linked\Models\HotkeyGesture.cs" />
     <Compile Include="..\QuickerPlaces\Models\Place.cs" Link="Linked\Models\Place.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlaceType.cs" Link="Linked\Models\PlaceType.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />

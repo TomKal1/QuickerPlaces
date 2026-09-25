@@ -13,7 +13,9 @@ namespace QuickerPlaces.Models;
 /// </summary>
 public sealed class AppSettings
 {
-    public int SchemaVersion { get; set; } = 1;
+    // 2: added GlobalHotkey. No migration needed: a version-1 file simply
+    // lacks the field, so it deserializes to the default hotkey.
+    public int SchemaVersion { get; set; } = 2;
 
     // Last known main window bounds, used to restore the window on the next
     // launch. Left/Top of double.NaN means "no saved position yet" (first
@@ -26,4 +28,14 @@ public sealed class AppSettings
 
     /// <summary>Whether the Places DataGrid was expanded (vs. collapsed to just the favourite bubbles) on last close.</summary>
     public bool IsGridExpanded { get; set; } = true;
+
+    /// <summary>
+    /// The system-wide shortcut that brings QuickerPlaces to the front with
+    /// the search box focused, e.g. "Ctrl+Alt+Space" (see
+    /// <see cref="HotkeyGesture.TryParse"/> for the format). Empty or "None"
+    /// turns it off. There's no in-app editor yet: it's changed by editing
+    /// settings.json while the app is closed, since the app rewrites that
+    /// file on exit.
+    /// </summary>
+    public string? GlobalHotkey { get; set; } = HotkeyGesture.Default;
 }

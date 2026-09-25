@@ -30,6 +30,7 @@ public sealed class MainViewModel : ObservableObject
 
     private bool _isGridExpanded;
     private string _searchText = string.Empty;
+    private string? _globalHotkeyText;
 
     public MainViewModel(AppSettings settings, PlacesService placesService)
     {
@@ -79,7 +80,20 @@ public sealed class MainViewModel : ObservableObject
 
     public string Monogram => AppInfo.Monogram;
 
-    public string SubHeaderText => "Your saved folders and links, one click away.";
+    public string SubHeaderText => GlobalHotkeyText is null
+        ? "Your saved folders and links, one click away."
+        : $"Your saved folders and links, one click away. Press {GlobalHotkeyText} from anywhere to search them.";
+
+    /// <summary>The registered global hotkey ("Ctrl+Alt+Space"), or null if none is active. Set by MainWindow once registration succeeds.</summary>
+    public string? GlobalHotkeyText
+    {
+        get => _globalHotkeyText;
+        set
+        {
+            if (SetProperty(ref _globalHotkeyText, value))
+                OnPropertyChanged(nameof(SubHeaderText));
+        }
+    }
 
     /// <summary>All stored places, in insertion order — the DataGrid's built-in column-header sorting covers everything beyond that.</summary>
     public ObservableCollection<PlaceViewModel> Places { get; }

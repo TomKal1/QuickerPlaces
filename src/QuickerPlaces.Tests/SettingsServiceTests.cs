@@ -64,4 +64,26 @@ public sealed class SettingsServiceTests : IDisposable
         Assert.Equal(800, loaded.WindowWidth);
         Assert.Equal(500, loaded.WindowHeight);
     }
+
+    [Fact]
+    public void Global_hotkey_defaults_when_missing_from_an_older_file()
+    {
+        File.WriteAllText(_temp.File("settings.json"), """{ "schemaVersion": 1, "isGridExpanded": false }""");
+
+        var loaded = NewService().Load();
+
+        Assert.Equal(HotkeyGesture.Default, loaded.GlobalHotkey);
+        Assert.False(loaded.IsGridExpanded);
+    }
+
+    [Theory]
+    [InlineData("Ctrl+Shift+Q")]
+    [InlineData("None")]
+    [InlineData(null)]
+    public void Global_hotkey_setting_round_trips(string? hotkey)
+    {
+        NewService().Save(new AppSettings { GlobalHotkey = hotkey });
+
+        Assert.Equal(hotkey, NewService().Load().GlobalHotkey);
+    }
 }
