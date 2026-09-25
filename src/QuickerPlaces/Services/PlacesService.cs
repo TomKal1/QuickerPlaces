@@ -456,11 +456,8 @@ public sealed class PlacesService
 
         persistence = PersistenceResult.Ok();
 
-        if (!_places.Contains(place))
-            return ValidationResult.Fail($"\"{place.Alias}\" is no longer in Recently Deleted.");
-
-        if (place.DeletedAt is null)
-            return ValidationResult.Fail($"\"{place.Alias}\" is already back in the list.");
+        if (!CanBeRestored(place, out var notRestorable))
+            return notRestorable;
 
         if (!ValidateAlias(place.Alias).Success)
             return ValidationResult.Fail($"Can't restore \"{place.Alias}\": that alias is now used by another place.");
@@ -471,6 +468,160 @@ public sealed class PlacesService
         Undelete(place);
         persistence = Persist();
         return ValidationResult.Ok();
+    }
+
+    /// <summary>
+    /// Restores <paramref name="place"/> under a new alias and/or
+    /// destination — the commit of the D15 conflict flow, where the user
+    /// edits whatever an active place now holds. Validation is as for Add,
+    /// against active places; a failure changes nothing and leaves it in
+    /// Recently Deleted. Otherwise it comes back exactly as the plain
+    /// <see cref="TryRestore(Place, out PersistenceResult)"/> would — same
+    /// record, list slot and bubble slot (D7, D9) — with the new values, in
+    /// one save, as a forward change (D1).
+    /// </summary>
+    public ValidationResult TryRestore(Place place, string alias, string resource, out PersistenceResult persistence)
+    {
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
+        persistence = PersistenceResult.Ok();
+
+        if (!CanBeRestored(place, out var notRestorable))
+            return notRestorable;
+
+        // The record is deleted, so it is not among the active places these
+        // check; `excluding` only says so explicitly.
+        var aliasResult = ValidateAlias(alias, excluding: place);
+        if (!aliasResult.Success)
+            return aliasResult;
+
+        var resourceResult = ValidateResource(resource, place.Type, excluding: place);
+        if (!resourceResult.Success)
+            return resourceResult;
+
+        place.Alias = alias.Trim();
+        place.Resource = resource.Trim();
+        Undelete(place);
+        persistence = Persist();
+        return ValidationResult.Ok();
+    }
+
+    /// <summary>
+    /// What stops <paramref name="place"/> being restored as it is — the
+    /// active place now holding its alias and/or the one holding its
+    /// destination (§4.10, D15) — or null if nothing does. Also null for a
+    /// place that is not in Recently Deleted at all (already restored,
+    /// purged, or permanently deleted): there is nothing to edit, and
+    /// TryRestore's own message says why.
+    /// </summary>
+    public RestoreConflict? GetRestoreConflict(Place place)
+    {
+        if (!CanBeRestored(place, out _))
+            return null;
+
+        // The same comparisons as ValidateAlias and ValidateResource, so a
+        // conflict is reported exactly when TryRestore would refuse.
+        var alias = place.Alias.Trim();
+        var resource = place.Resource.Trim();
+        var aliasHeldBy = Active.FirstOrDefault(p => string.Equals(p.Alias, alias, StringComparison.OrdinalIgnoreCase));
+        var resourceHeldBy = Active.FirstOrDefault(p =>
+            p.Type == place.Type &&
+            string.Equals(p.Resource, resource, StringComparison.OrdinalIgnoreCase));
+
+        return aliasHeldBy is null && resourceHeldBy is null
+            ? null
+            : new RestoreConflict(place, aliasHeldBy, resourceHeldBy);
+    }
+
+    /// <summary>
+    /// Restores the selected places that do not conflict, newest deletion
+    /// first (D22), in one save — none if nothing was restored. Conflicts
+    /// are returned for the D15 flow, not skipped, and stay in Recently
+    /// Deleted. Because the restores happen in that order, when two selected
+    /// places share an alias the more recently deleted one comes back and
+    /// the older one is returned as a conflict: the newer copy is the
+    /// likelier one to be wanted. Anything selected that is not in Recently
+    /// Deleted is ignored. Both lists are in restore order.
+    /// </summary>
+    public (List<Place> restored, List<RestoreConflict> conflicts, PersistenceResult persistence) RestoreSelected(IEnumerable<Place> selected)
+    {
+        var restored = new List<Place>();
+        var conflicts = new List<RestoreConflict>();
+
+        if (IsMutationBlocked(out var blocked))
+            return (restored, conflicts, blocked);
+
+        var candidates = selected
+            .Distinct<Place>(ReferenceEqualityComparer.Instance)
+            .Where(p => CanBeRestored(p, out _))
+            .OrderByDescending(p => p.DeletedAt)
+            .ToList();
+
+        foreach (var place in candidates)
+        {
+            // Checked one at a time, after the restores before it, so a
+            // clash between two selected places is caught like any other.
+            if (GetRestoreConflict(place) is { } conflict)
+            {
+                conflicts.Add(conflict);
+                continue;
+            }
+
+            Undelete(place);
+            restored.Add(place);
+        }
+
+        // D22: one whole-store write for the batch, as CommitImport does,
+        // and none at all when nothing changed. A failure keeps every
+        // restore in memory (D1).
+        var persistence = restored.Count > 0 ? Persist() : PersistenceResult.Ok();
+        return (restored, conflicts, persistence);
+    }
+
+    /// <summary>
+    /// Removes the given places from the store for good — the one
+    /// irreversible step (§4.9). Ignores any that are not in Recently
+    /// Deleted, so an active place can never be lost this way. One save,
+    /// or none if nothing changed (D22). A failed save leaves them gone
+    /// from memory and the store unsaved; Retry writes it (D1).
+    /// </summary>
+    public PersistenceResult DeletePermanently(IEnumerable<Place> selected)
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        var doomed = new HashSet<Place>(selected.Where(p => p is not null && p.DeletedAt is not null), ReferenceEqualityComparer.Instance);
+        var deleted = _places.RemoveAll(doomed.Contains);
+
+        return deleted > 0 ? Persist() : PersistenceResult.Ok();
+    }
+
+    /// <summary>Removes every place in Recently Deleted for good, keeping the active ones. One save, or none if it was already empty (D22).</summary>
+    public PersistenceResult EmptyRecentlyDeleted()
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        var deleted = _places.RemoveAll(p => p.DeletedAt is not null);
+
+        return deleted > 0 ? Persist() : PersistenceResult.Ok();
+    }
+
+    /// <summary>
+    /// Plan 5.4 steps 2-3, shared by every restore path: a place not in the
+    /// store any more (purged, or permanently deleted) or one that is
+    /// already active cannot be restored. <paramref name="refusal"/> says
+    /// which, in the words Undo shows the user.
+    /// </summary>
+    private bool CanBeRestored(Place place, out ValidationResult refusal)
+    {
+        refusal = !_places.Contains(place)
+            ? ValidationResult.Fail($"\"{place.Alias}\" is no longer in Recently Deleted.")
+            : place.DeletedAt is null
+                ? ValidationResult.Fail($"\"{place.Alias}\" is already back in the list.")
+                : ValidationResult.Ok();
+        return refusal.Success;
     }
 
     /// <summary>
@@ -1137,6 +1288,45 @@ public sealed class PlacesService
     /// </summary>
     private string BlockedMessage()
         => RecoveryBlockedMessage ?? "Your saved places need attention before changes can be saved.";
+}
+
+/// <summary>
+/// A place in Recently Deleted whose alias and/or destination is now used
+/// by an active place (§4.10), so it cannot be restored as it is. Every
+/// restore path hands this to the same edit-before-restore flow (D15),
+/// which commits through PlacesService.TryRestore(place, alias, resource, …).
+/// </summary>
+/// <param name="Place">The deleted place that cannot be restored as it is.</param>
+/// <param name="AliasHeldBy">The active place now using its alias (case-insensitively), or null.</param>
+/// <param name="ResourceHeldBy">The active place now using its path/URL, or null.</param>
+public sealed record RestoreConflict(Place Place, Place? AliasHeldBy, Place? ResourceHeldBy)
+{
+    /// <summary>
+    /// One or two sentences for the restore dialog, e.g. "\"Docs\" can't be
+    /// restored as it was: another place is now called \"docs\", and
+    /// \"Projects\" now uses its folder path. Change them below, then
+    /// restore." Names the places involved, so it is shown to the user and
+    /// never logged (DiagnosticLog's privacy rule).
+    /// </summary>
+    public string Explanation
+    {
+        get
+        {
+            var destination = Place.Type == PlaceType.Folder ? "folder path" : "URL";
+            var start = $"\"{Place.Alias}\" can't be restored as it was: ";
+
+            if (AliasHeldBy is not null && ReferenceEquals(AliasHeldBy, ResourceHeldBy))
+                return start + $"another place, \"{AliasHeldBy.Alias}\", now has its alias and its {destination}. Change them below, then restore.";
+
+            if (AliasHeldBy is not null && ResourceHeldBy is not null)
+                return start + $"another place is now called \"{AliasHeldBy.Alias}\", and \"{ResourceHeldBy.Alias}\" now uses its {destination}. Change them below, then restore.";
+
+            if (AliasHeldBy is not null)
+                return start + $"another place is now called \"{AliasHeldBy.Alias}\". Change the alias below, then restore.";
+
+            return start + $"\"{ResourceHeldBy?.Alias}\" now uses its {destination}. Change the {destination} below, then restore.";
+        }
+    }
 }
 
 /// <summary>Matches import-dedupe keys the same way ValidateResource matches duplicates: same Type, case-insensitive exact Resource.</summary>

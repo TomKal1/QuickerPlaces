@@ -391,6 +391,23 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Single(reloaded.RecentlyDeleted);
     }
 
+    /// <summary>Phase 2 test 29, permanently deleted: Undo of a place deleted for good from Recently Deleted says it is no longer there, and changes nothing.</summary>
+    [Fact]
+    public void Restoring_a_permanently_deleted_place_says_it_is_no_longer_in_recently_deleted()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        RemoveForUndo(service, docs);
+        Assert.True(service.DeletePermanently(new[] { docs }).Saved);
+
+        var result = service.TryRestore(docs, out _);
+
+        Assert.False(result.Success);
+        Assert.Contains("no longer in Recently Deleted", result.ErrorMessage);
+        Assert.Empty(service.Places);
+        Assert.Empty(service.RecentlyDeleted);
+    }
+
     /// <summary>Phase 2 test 30: removing a place that is not in the store, or is already deleted, reports removed == false and writes nothing.</summary>
     [Fact]
     public void Removing_a_place_not_in_the_store_or_already_removed_changes_nothing()

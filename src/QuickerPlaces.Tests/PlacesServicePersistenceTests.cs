@@ -237,7 +237,7 @@ public sealed class PlacesServicePersistenceTests
         Assert.Equal(service.RecoveryBlockedMessage, addPersistence.UserMessage);
         Assert.Empty(service.Places);
 
-        // Phase 2 test 32: Remove and TryRestore are refused too.
+        // Phase 2 test 32: Remove and both TryRestore overloads are refused too.
         var stranger = new Place { Alias = "X", Type = PlaceType.Folder, Resource = TestPaths.Folder(@"X") };
         var removePersistence = service.Remove(stranger, out var removed);
         Assert.False(removePersistence.Saved);
@@ -249,6 +249,10 @@ public sealed class PlacesServicePersistenceTests
         Assert.False(restoreValidation.Success);
         Assert.False(restorePersistence.Saved);
         Assert.Equal(service.RecoveryBlockedMessage, restorePersistence.UserMessage);
+        var editedValidation = service.TryRestore(stranger, "Y", TestPaths.Folder(@"Y"), out var editedPersistence);
+        Assert.False(editedValidation.Success);
+        Assert.False(editedPersistence.Saved);
+        Assert.Equal("X", stranger.Alias);
         Assert.NotNull(stranger.DeletedAt);
 
         var (imported, importPersistence) = service.CommitImport(new List<Place>

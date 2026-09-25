@@ -407,13 +407,17 @@ public sealed class MainViewModel : ObservableObject
     /// position among the active places (plan 5.3 row 23), so Places stays
     /// in the same order as the stored list. The record never left its
     /// stored slot (D7), and Places mirrors the active records in stored
-    /// order, so this is where its row belongs.
+    /// order, so the row goes after every row whose place comes before it
+    /// there. Counting only places that already have a row keeps this right
+    /// when a batch restore (D22) hands back several places at once, in an
+    /// order that is not the list's.
     /// </summary>
     private void InsertRestored(Place place)
     {
+        var shown = new HashSet<Place>(Places.Select(vm => vm.Model), ReferenceEqualityComparer.Instance);
         // Places is a fresh snapshot per call (D8): read it once.
-        var index = _placesService.Places.TakeWhile(p => !ReferenceEquals(p, place)).Count();
-        Places.Insert(Math.Clamp(index, 0, Places.Count), new PlaceViewModel(place));
+        var index = _placesService.Places.TakeWhile(p => !ReferenceEquals(p, place)).Count(shown.Contains);
+        Places.Insert(index, new PlaceViewModel(place));
     }
 
     private void CopyResource(PlaceViewModel? place)
