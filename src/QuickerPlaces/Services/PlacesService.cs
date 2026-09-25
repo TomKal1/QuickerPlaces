@@ -54,13 +54,30 @@ public sealed class PlacesService
     private readonly List<Place> _places;
 
     public PlacesService()
+        : this(DefaultPlacesFilePath())
     {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var folder = Path.Combine(root, AppInfo.Publisher, AppInfo.Name);
-        Directory.CreateDirectory(folder);
-        _placesFilePath = Path.Combine(folder, "places.json");
+    }
+
+    /// <summary>
+    /// Backs the service with an explicit file instead of the default
+    /// %AppData% location — used by the unit tests to run against a
+    /// throwaway temp file rather than the user's real places.json.
+    /// </summary>
+    public PlacesService(string placesFilePath)
+    {
+        _placesFilePath = placesFilePath;
+
+        var folder = Path.GetDirectoryName(placesFilePath);
+        if (!string.IsNullOrEmpty(folder))
+            Directory.CreateDirectory(folder);
 
         (_places, LoadFailed) = LoadFromDisk();
+    }
+
+    private static string DefaultPlacesFilePath()
+    {
+        var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        return Path.Combine(root, AppInfo.Publisher, AppInfo.Name, "places.json");
     }
 
     /// <summary>
@@ -148,6 +165,13 @@ public sealed class PlacesService
 
         if (path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
             return ValidationResult.Fail("That path contains characters that aren't allowed in a folder path.");
+
+        // A relative path ("Projects", "..\Docs") would be resolved
+        // against whatever the process's working directory happens to be
+        // at Open time, so it'd open a different folder depending on how
+        // the app was launched. Require a drive-rooted or UNC path instead.
+        if (!Path.IsPathFullyQualified(path))
+            return ValidationResult.Fail("Enter a full folder path, including the drive (e.g. C:\\Projects) or network share.");
 
         return ValidationResult.Ok();
     }
@@ -294,11 +318,30 @@ public sealed class PlacesService
             var incoming = store?.Places ?? new List<Place>();
 
             var candidates = incoming
-                .Where(p => !string.IsNullOrWhiteSpace(p.Alias) && !string.IsNullOrWhiteSpace(p.Resource))
+                .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Alias) && !string.IsNullOrWhiteSpace(p.Resource))
                 .Where(p => ValidateAlias(p.Alias).Success && ValidateResource(p.Resource, p.Type).Success)
                 .ToList();
 
-            return (candidates, null);
+            // The file can collide with itself too (hand-edited, or two
+            // exports merged): keep only the first of any repeated alias or
+            // resource, so the checklist never offers an item CommitImport
+            // would then silently skip.
+            var seenAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenResources = new HashSet<(PlaceType, string)>(ResourceKeyComparer.Instance);
+            var distinct = new List<Place>();
+            foreach (var candidate in candidates)
+            {
+                var alias = candidate.Alias.Trim();
+                var resourceKey = (candidate.Type, candidate.Resource.Trim());
+                if (seenAliases.Contains(alias) || seenResources.Contains(resourceKey))
+                    continue;
+
+                seenAliases.Add(alias);
+                seenResources.Add(resourceKey);
+                distinct.Add(candidate);
+            }
+
+            return (distinct, null);
         }
         catch (Exception ex)
         {
@@ -359,7 +402,10 @@ public sealed class PlacesService
 
             var json = File.ReadAllText(_placesFilePath);
             var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
-            return (store?.Places ?? new List<Place>(), false);
+            // A hand-edited file can contain a bare `null` in the array;
+            // drop it here rather than let it NRE the first grid binding.
+            var places = store?.Places?.Where(p => p is not null).ToList() ?? new List<Place>();
+            return (places, false);
         }
         catch
         {
@@ -396,4 +442,16 @@ public sealed class PlacesService
             // means that one change might not survive an unclean exit.
         }
     }
+}
+
+/// <summary>Matches import-dedupe keys the same way ValidateResource matches duplicates: same Type, case-insensitive exact Resource.</summary>
+internal sealed class ResourceKeyComparer : IEqualityComparer<(PlaceType Type, string Resource)>
+{
+    public static readonly ResourceKeyComparer Instance = new();
+
+    public bool Equals((PlaceType Type, string Resource) x, (PlaceType Type, string Resource) y)
+        => x.Type == y.Type && string.Equals(x.Resource, y.Resource, StringComparison.OrdinalIgnoreCase);
+
+    public int GetHashCode((PlaceType Type, string Resource) key)
+        => HashCode.Combine(key.Type, StringComparer.OrdinalIgnoreCase.GetHashCode(key.Resource));
 }

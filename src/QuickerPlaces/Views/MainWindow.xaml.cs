@@ -152,8 +152,14 @@ public partial class MainWindow : Window
         var dropPosition = e.GetPosition(FavouritesItemsControl);
         var targetPlace = FindPlaceUnderPoint(dropPosition);
 
+        // Dropped back onto itself (a short wobble rather than a real
+        // move): leave it where it was. Only a drop on empty space — past
+        // the last bubble, or in a gap — means "move to the end".
+        if (ReferenceEquals(targetPlace, dragged))
+            return;
+
         var items = viewModel.FavouritePlaces;
-        var targetIndex = targetPlace is not null && !ReferenceEquals(targetPlace, dragged)
+        var targetIndex = targetPlace is not null
             ? items.IndexOf(targetPlace)
             : items.Count - 1;
 

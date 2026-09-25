@@ -22,7 +22,7 @@ Click **Add Folder** or **Add URL** in the header. Either opens the same small d
 
 Click **Save**, and the new place appears immediately at the bottom of the grid.
 
-If you enter a folder path, QuickerPlaces checks that it's a syntactically valid path — it does not require the folder to already exist on disk, so you can save a place for a folder you're about to create. A URL is checked for being well-formed but is never contacted or pinged when you save it.
+If you enter a folder path, QuickerPlaces checks that it's a syntactically valid, *full* path. It has to start from a drive (`C:\Projects`) or a network share (`\\server\share`); a relative path like `Projects` is rejected. It does not require the folder to already exist on disk, so you can save a place for a folder you're about to create. A URL is checked for being well-formed but is never contacted or pinged when you save it.
 
 ## Working with a place in the grid
 

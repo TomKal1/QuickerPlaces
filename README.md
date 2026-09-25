@@ -2,7 +2,7 @@
 
 A lightweight Windows desktop utility for storing and quickly opening remembered "places" — folder paths and URLs — under a memorable alias. Part of the **QuickerLinks** project: a better path launcher than Quick Links.
 
-> **Status:** early build. Functional end-to-end, two runtime bugs found via testing and fixed (see [`ai/BUILD_SUMMARY.md`](ai/BUILD_SUMMARY.md)), but not yet exercised through every feature in a full test pass. Expect rough edges.
+> **Status:** early build. It compiles cleanly, and the service layer (validation, persistence, favourites, import/export) is covered by unit tests. The UI still hasn't had a full hands-on pass through every feature, so expect rough edges. See [`ai/BUILD_SUMMARY.md`](ai/BUILD_SUMMARY.md) for the bugs found and fixed so far.
 
 ## What it does
 
@@ -28,6 +28,14 @@ dotnet build QuickerPlaces.sln
 dotnet run --project QuickerPlaces
 ```
 
+### Running the tests
+
+```
+dotnet test QuickerPlaces.sln
+```
+
+The tests (`src/QuickerPlaces.Tests`) cover the service layer only: validation, persistence, favourites, and export/import. They target plain `net10.0`, so they run on any OS. Building the WPF app itself on a non-Windows machine needs `-p:EnableWindowsTargeting=true`.
+
 ### Where your data lives
 
 - Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit.
@@ -41,7 +49,8 @@ Both are plain JSON and safe to inspect, back up, or hand-edit if you know what 
 .
 ├── src/                     # the actual application
 │   ├── QuickerPlaces.sln
-│   └── QuickerPlaces/       # WPF project (App, Models, ViewModels, Views, Services, ...)
+│   ├── QuickerPlaces/       # WPF project (App, Models, ViewModels, Views, Services, ...)
+│   └── QuickerPlaces.Tests/ # xUnit tests for the service layer
 └── ai/                      # how this was built, and why
     ├── QuickerPlaces-SI.md  # the original spec/requirements handoff
     └── BUILD_SUMMARY.md     # what got built, decisions made, bugs found & fixed
