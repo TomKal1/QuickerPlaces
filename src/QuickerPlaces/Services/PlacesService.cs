@@ -94,6 +94,13 @@ public sealed class PlacesService
         // below. Ok and NotPresent need no recovery state at all.
         if (RequiresRecovery(outcome))
             SetRecoveryUnresolved(RecoveryMessageFor(outcome));
+
+        // D14 point 1: only a store that loaded — and migrated, if it had
+        // to — is purged. In memory only, like the migration before it:
+        // loading never writes, so the purge reaches disk with the next
+        // successful save.
+        if (outcome == StoreLoadOutcome.Ok)
+            PurgeExpired("after load");
     }
 
     /// <summary>
@@ -892,6 +899,11 @@ public sealed class PlacesService
         {
             ClearRecoveryUnresolved();
             DiagnosticLog.Info($"Reload of {_storage.StoreFilePath} succeeded; recovery resolved.");
+
+            // D14 point 1 again: a successful reload is a load like the
+            // constructor's, and purges the same way, in memory only.
+            if (outcome == StoreLoadOutcome.Ok)
+                PurgeExpired("after load");
         }
 
         return outcome;
@@ -958,6 +970,12 @@ public sealed class PlacesService
     /// </summary>
     private PersistenceResult Persist()
     {
+        // D14 point 2: every save — RetrySave included — writes a store
+        // without expired records. Like the change that triggered this save,
+        // the purge is not undone if the write below fails (D1); the next
+        // successful save, or Retry, writes the same purged list.
+        PurgeExpired("before save");
+
         try
         {
             // Every record, deleted ones included: this is how Recently
@@ -995,6 +1013,36 @@ public sealed class PlacesService
             var message = $"Couldn't save your places to \"{_storage.StoreFilePath}\". {ex.Message}";
             return PersistenceResult.Fail(message);
         }
+    }
+
+    /// <summary>
+    /// Removes every place whose seven days in Recently Deleted are up at
+    /// the clock's now (RecentlyDeletedPolicy, D13), and returns how many.
+    /// Called from exactly two points (D14): after a successful load (the
+    /// constructor and Reload, trigger "after load") and at the top of
+    /// Persist (trigger "before save"). Nowhere else, so a purge never
+    /// writes on its own.
+    ///
+    /// Roadmap §4.10: never purge from a store that failed to load or
+    /// migrate. That already holds by construction — such a store is empty
+    /// in memory, and D3 blocks every path to Persist — but this checks
+    /// IsRecoveryUnresolved itself, so a later caller cannot break the rule
+    /// by accident.
+    /// </summary>
+    private int PurgeExpired(string trigger)
+    {
+        if (IsRecoveryUnresolved)
+            return 0;
+
+        var now = _time.GetUtcNow();
+        var purged = _places.RemoveAll(p => p.DeletedAt is { } deletedAt && RecentlyDeletedPolicy.IsExpired(deletedAt, now));
+
+        // A count and the trigger only, never which places (DiagnosticLog's
+        // privacy rule).
+        if (purged > 0)
+            DiagnosticLog.Info($"Purged {purged} place(s) from Recently Deleted after seven days ({trigger}).");
+
+        return purged;
     }
 
     /// <summary>
