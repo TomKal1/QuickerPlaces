@@ -41,7 +41,7 @@ public partial class App : Application
         var placesService = new PlacesService();
         var mainViewModel = new MainViewModel(settings, placesService);
 
-        var mainWindow = new MainWindow(mainViewModel, settings, settingsService.SettingsFilePath);
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService);
         mainWindow.Closing += (_, e) =>
         {
             // Last chance for changes that failed to save earlier (file

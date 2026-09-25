@@ -264,6 +264,154 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Empty(NewService().Places);
     }
 
+    // -----------------------------------------------------------------
+    // Undo remove
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void Restore_puts_a_removed_place_back_where_it_was_and_persists()
+    {
+        var service = NewService();
+        Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        Add(service, "C", PlaceType.Folder, Folder("C"));
+        var dateAdded = b.DateAdded;
+
+        var removed = service.Remove(b);
+        Assert.NotNull(removed);
+        Assert.Equal(1, removed!.Index);
+
+        Assert.True(service.TryRestore(removed).Success);
+
+        Assert.Equal(new[] { "A", "B", "C" }, service.Places.Select(p => p.Alias));
+        Assert.Same(b, service.Places[1]);
+        Assert.Equal(dateAdded, b.DateAdded);
+        Assert.Equal(new[] { "A", "B", "C" }, NewService().Places.Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_puts_a_favourite_back_at_its_old_bubble_position()
+    {
+        var service = NewService();
+        var a = Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        var c = Add(service, "C", PlaceType.Folder, Folder("C"));
+        service.ToggleFavourite(a);
+        service.ToggleFavourite(b);
+        service.ToggleFavourite(c);
+
+        var removed = service.Remove(b)!;
+        Assert.Equal(1, removed.FavouriteOrder);
+        Assert.Equal(1, c.FavouriteOrder);
+
+        Assert.True(service.TryRestore(removed).Success);
+
+        Assert.True(b.IsFavourite);
+        Assert.Equal(new int?[] { 0, 1, 2 }, new[] { a, b, c }.Select(p => p.FavouriteOrder));
+    }
+
+    [Fact]
+    public void Restore_uses_bubble_order_not_list_order_after_a_drag_reorder()
+    {
+        var service = NewService();
+        var a = Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        var c = Add(service, "C", PlaceType.Folder, Folder("C"));
+        service.ToggleFavourite(a);
+        service.ToggleFavourite(b);
+        service.ToggleFavourite(c);
+        service.SetFavouriteOrder(new[] { b, c, a });   // bubbles: B, C, A
+
+        var removed = service.Remove(c)!;              // bubbles: B, A
+        Assert.True(service.TryRestore(removed).Success);
+
+        // C sits later than A in the list, but goes back between B and A.
+        Assert.Equal(new[] { "B", "C", "A" },
+            service.Places.Where(p => p.IsFavourite).OrderBy(p => p.FavouriteOrder).Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_closes_gaps_when_other_favourites_went_in_the_meantime()
+    {
+        var service = NewService();
+        var a = Add(service, "A", PlaceType.Folder, Folder("A"));
+        var b = Add(service, "B", PlaceType.Folder, Folder("B"));
+        var c = Add(service, "C", PlaceType.Folder, Folder("C"));
+        service.ToggleFavourite(a);
+        service.ToggleFavourite(b);
+        service.ToggleFavourite(c);
+
+        var removedC = service.Remove(c)!;   // was bubble 2
+        service.ToggleFavourite(a);          // unfavourite A: B is now bubble 0
+
+        Assert.True(service.TryRestore(removedC).Success);
+
+        Assert.Equal(0, b.FavouriteOrder);
+        Assert.Equal(1, c.FavouriteOrder);
+        Assert.Null(a.FavouriteOrder);
+    }
+
+    [Fact]
+    public void Removals_restore_in_reverse_order_to_their_original_positions()
+    {
+        var service = NewService();
+        var places = new[] { "A", "B", "C", "D" }.Select(n => Add(service, n, PlaceType.Folder, Folder(n))).ToList();
+
+        var removedB = service.Remove(places[1])!;
+        var removedD = service.Remove(places[3])!;
+        var removedA = service.Remove(places[0])!;
+
+        Assert.True(service.TryRestore(removedA).Success);
+        Assert.True(service.TryRestore(removedD).Success);
+        Assert.True(service.TryRestore(removedB).Success);
+
+        Assert.Equal(new[] { "A", "B", "C", "D" }, service.Places.Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_refuses_when_the_alias_or_resource_has_been_reused()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var wiki = Add(service, "Wiki", PlaceType.Url, "https://wiki.example.com");
+
+        var removedDocs = service.Remove(docs)!;
+        var removedWiki = service.Remove(wiki)!;
+        Add(service, "docs", PlaceType.Folder, Folder("Other"));
+        Add(service, "New Wiki", PlaceType.Url, "https://wiki.example.com");
+
+        var aliasResult = service.TryRestore(removedDocs);
+        var resourceResult = service.TryRestore(removedWiki);
+
+        Assert.False(aliasResult.Success);
+        Assert.Contains("alias", aliasResult.ErrorMessage);
+        Assert.False(resourceResult.Success);
+        Assert.Contains("path/URL", resourceResult.ErrorMessage);
+        Assert.Equal(new[] { "docs", "New Wiki" }, service.Places.Select(p => p.Alias));
+    }
+
+    [Fact]
+    public void Restore_twice_is_refused_rather_than_duplicating()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        var removed = service.Remove(docs)!;
+
+        Assert.True(service.TryRestore(removed).Success);
+        Assert.False(service.TryRestore(removed).Success);
+        Assert.Single(service.Places);
+    }
+
+    [Fact]
+    public void Removing_a_place_not_in_the_store_returns_null()
+    {
+        var service = NewService();
+        var docs = Add(service, "Docs", PlaceType.Folder, Folder("Docs"));
+        service.Remove(docs);
+
+        Assert.Null(service.Remove(docs));
+    }
+
     [Fact]
     public void Failed_save_is_reported_once_and_kept_in_memory_until_a_later_save_works()
     {

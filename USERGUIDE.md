@@ -6,7 +6,7 @@ QuickerPlaces is a small always-on-top-of-your-workflow window for storing folde
 
 When QuickerPlaces opens you'll see, top to bottom:
 
-- A header with the app name and five buttons: a folder icon that opens your data folder, **Import...**, **Export...**, **Add Folder**, **Add URL**.
+- A header with the app name and six buttons: a gear icon for **Settings**, a folder icon that opens your data folder, **Import...**, **Export...**, **Add Folder**, **Add URL**.
 - A row of **favourite bubbles** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
 - The **All Places** header with a count, a **search box**, and a **Hide List** / **Show List** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
@@ -31,10 +31,11 @@ Every row in the **All Places** grid shows the Alias, Type (Folder or URL), the 
 - **Double-click a row** to open it — a folder opens in File Explorer, a URL opens in your default browser.
 - **Right-click a row** for the full menu:
   - **Open** — same as double-click.
+  - **Copy Path/URL** — puts the folder path or URL on the clipboard, ready to paste into another app.
   - **Rename Alias** — change just the name; the same uniqueness check from adding applies.
   - **Edit Path/URL** — change just the destination; the same duplicate check applies.
   - **Toggle Favourite** — pin it to (or unpin it from) the bubble row above the grid.
-  - **Remove** — deletes it. There's no undo, so double-check before confirming.
+  - **Remove** — deletes it, after asking. A bar under the list confirms it with an **Undo** button, and **Ctrl+Z** does the same. Undo puts the place back exactly where it was, including its spot among your favourites. You can undo several removals in a row, most recent first, for as long as QuickerPlaces stays open. If you've since reused that alias or path/URL for another place, undo explains why it can't restore it.
 
 If a place can no longer be opened — the folder's been deleted, or the URL is malformed — you'll get a clear message instead of the app crashing or silently doing nothing.
 
@@ -56,7 +57,7 @@ Any place can be a favourite. Toggling **Favourite** (from the grid's right-clic
 
 - **Click a bubble** to open that place — identical to double-clicking its row.
 - **Drag a bubble** left or right to reorder the row. The order you leave them in is remembered.
-- **Right-click a bubble** for a shortcut menu: **Open**, or **Remove from Favourites** — you don't need to go back to the grid just to unpin something.
+- **Right-click a bubble** for a shortcut menu: **Open**, **Copy Path/URL**, or **Remove from Favourites** — you don't need to go back to the grid just to unpin something.
 - **Hover over a bubble** to see where it points.
 - **Ctrl+1** to **Ctrl+9** open the first nine bubbles, in their left-to-right order.
 
@@ -66,9 +67,11 @@ While QuickerPlaces is running, press **Ctrl+Alt+Space** in any app. QuickerPlac
 
 Starting QuickerPlaces again while it's already running does the same thing. You only ever get one copy, which also keeps two copies from overwriting each other's saved places.
 
-**Changing the shortcut:** close QuickerPlaces, open `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` in a text editor, and change the `"globalHotkey"` value, for example to `"Ctrl+Alt+Q"` or `"Win+Shift+P"`. Use `"None"` to turn it off. It needs at least one of Ctrl, Alt or Win, plus one key: a letter, a digit, F1–F12, or Space. Close the app first, because it rewrites this file when it exits.
+**Changing the shortcut:** click the gear icon at the top of the window to open **Settings**. Click the shortcut box and press the keys you want, for example Ctrl+Alt+Q. It needs at least one of Ctrl, Alt or Win, plus one other key. **Reset to Default** goes back to Ctrl+Alt+Space, and **Turn Off** (or Backspace in the box) disables it. Click **Save** and the new shortcut works straight away. If another app already uses that combination, Settings tells you and stays open so you can pick another.
 
-If the shortcut can't be used (another app already has it, or the setting isn't valid), QuickerPlaces tells you when it starts and explains how to pick another. Everything else works normally.
+If the saved shortcut can't be used when QuickerPlaces starts (another app has taken it since), you'll get a message saying so, and everything else works normally. Pick a new one in Settings.
+
+The shortcut is stored as `"globalHotkey"` in `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`, so you can also edit it there while QuickerPlaces is closed.
 
 ## Hiding the grid
 
@@ -83,6 +86,7 @@ If you only want the favourite bubbles visible, click **Hide List**. The grid co
 | **Ctrl+N** | Add Folder |
 | **Ctrl+U** | Add URL |
 | **Ctrl+H** | Hide / show the list |
+| **Ctrl+Z** | Undo the last Remove (repeat to undo earlier ones) |
 | **Ctrl+1** … **Ctrl+9** | Open favourite bubble 1–9 |
 | **Enter** (in search box) | Open the top result |
 | **Down** (in search box) | Move into the grid |
@@ -96,6 +100,7 @@ These act on the selected grid row, when the grid has keyboard focus:
 | **F2** | Rename Alias |
 | **Ctrl+E** | Edit Path/URL |
 | **Ctrl+D** | Toggle Favourite |
+| **Ctrl+C** | Copy Path/URL |
 | **Delete** | Remove (asks first) |
 
 ## Exporting places

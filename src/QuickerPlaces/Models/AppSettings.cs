@@ -33,9 +33,9 @@ public sealed class AppSettings
     /// The system-wide shortcut that brings QuickerPlaces to the front with
     /// the search box focused, e.g. "Ctrl+Alt+Space" (see
     /// <see cref="HotkeyGesture.TryParse"/> for the format). Empty or "None"
-    /// turns it off. There's no in-app editor yet: it's changed by editing
-    /// settings.json while the app is closed, since the app rewrites that
-    /// file on exit.
+    /// turns it off. Changed in the Settings dialog, which saves straight
+    /// away; hand edits to settings.json need the app closed, since it
+    /// rewrites the file on exit.
     /// </summary>
     public string? GlobalHotkey { get; set; } = HotkeyGesture.Default;
 }

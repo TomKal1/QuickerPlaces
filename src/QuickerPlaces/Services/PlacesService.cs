@@ -293,12 +293,69 @@ public sealed class PlacesService
         SaveToDisk();
     }
 
-    public void Remove(Place place)
+    /// <summary>
+    /// Removes <paramref name="place"/> and returns what <see cref="TryRestore"/>
+    /// needs to put it back exactly where it was — list position and
+    /// favourite position — or null if it wasn't in the store.
+    /// </summary>
+    public RemovedPlace? Remove(Place place)
     {
-        _places.Remove(place);
+        var index = _places.IndexOf(place);
+        if (index < 0)
+            return null;
+
+        var removed = new RemovedPlace(place, index, place.IsFavourite ? place.FavouriteOrder : null);
+
+        _places.RemoveAt(index);
         if (place.IsFavourite)
             RenumberFavourites();
         SaveToDisk();
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Undoes a <see cref="Remove"/>: reinserts the same Place at its old
+    /// list position (clamped, if the list has shrunk since) and, if it was
+    /// a favourite, at its old bubble position, shifting later bubbles
+    /// right. Everything else about it (alias, DateAdded...) is unchanged.
+    /// Fails without changing anything if its alias or path/URL has since
+    /// been reused by another place, since restoring it would create the
+    /// very duplicate the validation rules forbid.
+    /// </summary>
+    public ValidationResult TryRestore(RemovedPlace removed)
+    {
+        var place = removed.Place;
+        if (_places.Contains(place))
+            return ValidationResult.Fail($"\"{place.Alias}\" is already back in the list.");
+
+        if (!ValidateAlias(place.Alias).Success)
+            return ValidationResult.Fail($"Can't restore \"{place.Alias}\": that alias is now used by another place.");
+
+        if (!ValidateResource(place.Resource, place.Type).Success)
+            return ValidationResult.Fail($"Can't restore \"{place.Alias}\": its path/URL is now stored under another alias.");
+
+        _places.Insert(Math.Clamp(removed.Index, 0, _places.Count), place);
+
+        if (removed.FavouriteOrder is { } favouriteOrder)
+        {
+            // Make room at the old position; RenumberFavourites then closes
+            // any gap if favourites were removed in the meantime.
+            foreach (var other in _places.Where(p => p.IsFavourite && !ReferenceEquals(p, place) && p.FavouriteOrder >= favouriteOrder))
+                other.FavouriteOrder++;
+
+            place.IsFavourite = true;
+            place.FavouriteOrder = favouriteOrder;
+            RenumberFavourites();
+        }
+        else
+        {
+            place.IsFavourite = false;
+            place.FavouriteOrder = null;
+        }
+
+        SaveToDisk();
+        return ValidationResult.Ok();
     }
 
     private void RenumberFavourites()
@@ -550,6 +607,12 @@ public sealed class PlacesService
         }
     }
 }
+
+/// <summary>A removed place plus where it was, so it can be put back by <see cref="PlacesService.TryRestore"/>.</summary>
+/// <param name="Place">The removed record itself (not a copy).</param>
+/// <param name="Index">Its position in the stored list when it was removed.</param>
+/// <param name="FavouriteOrder">Its bubble position if it was a favourite, otherwise null.</param>
+public sealed record RemovedPlace(Place Place, int Index, int? FavouriteOrder);
 
 /// <summary>Matches import-dedupe keys the same way ValidateResource matches duplicates: same Type, case-insensitive exact Resource.</summary>
 internal sealed class ResourceKeyComparer : IEqualityComparer<(PlaceType Type, string Resource)>

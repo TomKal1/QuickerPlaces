@@ -11,19 +11,19 @@ namespace QuickerPlaces.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly string? _globalHotkeySetting;
-    private readonly string _settingsFilePath;
+    private readonly AppSettings _settings;
+    private readonly SettingsService _settingsService;
     private GlobalHotkey? _globalHotkey;
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
 
-    public MainWindow(MainViewModel viewModel, AppSettings settings, string settingsFilePath)
+    public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService)
     {
         InitializeComponent();
         DataContext = viewModel;
-        _globalHotkeySetting = settings.GlobalHotkey;
-        _settingsFilePath = settingsFilePath;
+        _settings = settings;
+        _settingsService = settingsService;
         RestoreWindowState(settings);
     }
 
@@ -37,20 +37,61 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+        _globalHotkeyError = ApplyGlobalHotkey(_settings.GlobalHotkey);
+    }
 
-        if (HotkeyGesture.IsDisabled(_globalHotkeySetting))
-            return;
+    /// <summary>
+    /// Replaces whatever hotkey is registered with <paramref name="setting"/>
+    /// ("Ctrl+Alt+Space"; empty or "None" just unregisters). Returns a
+    /// user-readable error, or null on success. On failure no hotkey is
+    /// left registered.
+    /// </summary>
+    private string? ApplyGlobalHotkey(string? setting)
+    {
+        _globalHotkey?.Dispose();
+        _globalHotkey = null;
+        SetGlobalHotkeyText(null);
 
-        if (!HotkeyGesture.TryParse(_globalHotkeySetting, out var gesture, out _globalHotkeyError))
-            return;
+        if (HotkeyGesture.IsDisabled(setting))
+            return null;
 
-        _globalHotkey = GlobalHotkey.TryRegister(this, gesture, out _globalHotkeyError);
+        if (!HotkeyGesture.TryParse(setting, out var gesture, out var error))
+            return error;
+
+        _globalHotkey = GlobalHotkey.TryRegister(this, gesture, out error);
         if (_globalHotkey is null)
-            return;
+            return error;
 
         _globalHotkey.Pressed += BringToFront;
+        SetGlobalHotkeyText(gesture.ToString());
+        return null;
+    }
+
+    private void SetGlobalHotkeyText(string? text)
+    {
         if (DataContext is MainViewModel viewModel)
-            viewModel.GlobalHotkeyText = gesture.ToString();
+            viewModel.GlobalHotkeyText = text;
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Paused while the dialog is open: otherwise pressing the current
+        // hotkey in the capture box would fire it instead of recording it.
+        ApplyGlobalHotkey(null);
+
+        var saved = SettingsDialog.Show(this, _settings.GlobalHotkey, ApplyGlobalHotkey);
+        if (saved is null)
+        {
+            // Cancelled: put back what was there. If that fails again, it
+            // was already failing before (and reported at startup).
+            ApplyGlobalHotkey(_settings.GlobalHotkey);
+            return;
+        }
+
+        // Saved now rather than on exit, so a crash can't lose the choice.
+        _settings.GlobalHotkey = saved;
+        PersistWindowState(_settings);
+        _settingsService.Save(_settings);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -124,8 +165,7 @@ public partial class MainWindow : Window
         {
             MessageForm.Show(
                 $"The shortcut for bringing QuickerPlaces to the front isn't active.\n\n{_globalHotkeyError}\n\n" +
-                $"To choose a different one, close QuickerPlaces and change \"globalHotkey\" in:\n{_settingsFilePath}\n\n" +
-                $"For example \"Ctrl+Alt+Q\", or \"None\" to turn it off.",
+                "To choose a different one, or turn it off, click the Settings (gear) button at the top of the window.",
                 AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }
@@ -236,7 +276,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Row shortcuts, acting on the selected row: Enter opens, F2 renames, Ctrl+E edits the path/URL, Ctrl+D toggles favourite, Delete removes.</summary>
+    /// <summary>Row shortcuts, acting on the selected row: Enter opens, F2 renames, Ctrl+E edits the path/URL, Ctrl+D toggles favourite, Ctrl+C copies the path/URL, Delete removes.</summary>
     private void PlacesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (PlacesGrid.SelectedItem is not PlaceViewModel place || DataContext is not MainViewModel viewModel)
@@ -251,6 +291,8 @@ public partial class MainWindow : Window
             Key.F2 when none => viewModel.RenameAliasCommand,
             Key.E when ctrl => viewModel.EditResourceCommand,
             Key.D when ctrl => viewModel.ToggleFavouriteCommand,
+            // Replaces DataGrid's own Ctrl+C, which copies every cell of the row.
+            Key.C when ctrl => viewModel.CopyResourceCommand,
             Key.Delete when none => viewModel.RemoveCommand,
             _ => null
         };
