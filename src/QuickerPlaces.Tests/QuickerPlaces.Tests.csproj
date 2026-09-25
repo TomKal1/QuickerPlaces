@@ -42,6 +42,17 @@
     <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
+    <!--
+      The Recently Deleted dialog's view models (plan 5.5, D21): every
+      decision the dialog makes lives in these, so they are tested here
+      rather than left to the manual checklist. PlaceViewModel comes along
+      for its type glyph, and ObservableObject as their base class; all
+      four are free of System.Windows.*.
+    -->
+    <Compile Include="..\QuickerPlaces\Mvvm\ObservableObject.cs" Link="Linked\Mvvm\ObservableObject.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\PlaceViewModel.cs" Link="Linked\ViewModels\PlaceViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedRowViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedRowViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>

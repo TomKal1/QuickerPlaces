@@ -121,8 +121,14 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="10">
+                        <!--
+                            RecognizesAccessKey so a label written "_Restore selected"
+                            shows an underlined access key (Alt+R) rather than a
+                            literal underscore, as the stock button template does.
+                        -->
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"
                                           Margin="{TemplateBinding Padding}" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -172,6 +178,7 @@
                         </Border.Background>
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"
                                           Margin="{TemplateBinding Padding}" />
                     </Border>
                     <ControlTemplate.Triggers>

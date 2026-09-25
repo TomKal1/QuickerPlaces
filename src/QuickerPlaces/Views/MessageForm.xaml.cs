@@ -30,6 +30,13 @@ public partial class MessageForm : Window
     public MessageFormResult Result { get; private set; } = MessageFormResult.None;
 
     public MessageForm(string message, string title, MessageFormButtons buttons, MessageFormIcon icon)
+        : this(message, title, icon)
+    {
+        BuildButtons(buttons);
+    }
+
+    /// <summary>Everything but the buttons, for a caller that adds its own (ShowDestructiveConfirm).</summary>
+    private MessageForm(string message, string title, MessageFormIcon icon)
     {
         InitializeComponent();
 
@@ -45,8 +52,6 @@ public partial class MessageForm : Window
             IconGlyph.Text = GlyphFor(icon);
             IconBadge.Background = BrushFor(icon);
         }
-
-        BuildButtons(buttons);
     }
 
     /// <summary>
@@ -63,20 +68,52 @@ public partial class MessageForm : Window
         Window? owner = null)
     {
         var form = new MessageForm(message, title, buttons, icon);
+        form.PlaceOver(owner);
+        form.ShowDialog();
+        return form.Result;
+    }
 
+    /// <summary>
+    /// Asks before an irreversible action (D18) — used by Recently
+    /// Deleted's Delete selected permanently and Empty Recently Deleted,
+    /// and nothing else. Unlike the YesNo set, whose Yes is the default,
+    /// <b>Cancel</b> is both the default and the cancel button and starts
+    /// with the focus, so Enter, Space and Esc all back out; only a
+    /// deliberate click (or Tab to it) on the confirm button, labelled
+    /// for what it does (<paramref name="confirmLabel"/>, e.g. "Delete
+    /// permanently") and in the plain style, goes ahead. Closing the
+    /// window any other way also answers false.
+    /// </summary>
+    /// <returns>True only if the confirm button was pressed.</returns>
+    public static bool ShowDestructiveConfirm(string message, string title, string confirmLabel, Window? owner = null)
+    {
+        var form = new MessageForm(message, title, MessageFormIcon.Warning);
+
+        // Left to right as in OKCancel: Cancel, then the action. The
+        // action keeps the plain style; Cancel, as the default, takes the
+        // primary look through AddButton's usual rule.
+        var cancel = form.AddButton("Cancel", MessageFormResult.Cancel, isDefault: true, isCancel: true);
+        form.AddButton(confirmLabel, MessageFormResult.OK, isDefault: false, isCancel: false);
+        form.Loaded += (_, _) => cancel.Focus();
+
+        form.PlaceOver(owner);
+        form.ShowDialog();
+        return form.Result == MessageFormResult.OK;
+    }
+
+    /// <summary>Centers on <paramref name="owner"/> if given, otherwise on Application.Current.MainWindow, otherwise the screen.</summary>
+    private void PlaceOver(Window? owner)
+    {
         var effectiveOwner = owner ?? Application.Current?.MainWindow;
-        if (effectiveOwner is not null && effectiveOwner.IsLoaded && !ReferenceEquals(effectiveOwner, form))
+        if (effectiveOwner is not null && effectiveOwner.IsLoaded && !ReferenceEquals(effectiveOwner, this))
         {
-            form.Owner = effectiveOwner;
-            form.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            Owner = effectiveOwner;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
         }
         else
         {
-            form.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
-
-        form.ShowDialog();
-        return form.Result;
     }
 
     private void BuildButtons(MessageFormButtons buttons)
@@ -105,7 +142,7 @@ public partial class MessageForm : Window
         }
     }
 
-    private void AddButton(string text, MessageFormResult result, bool isDefault, bool isCancel)
+    private Button AddButton(string text, MessageFormResult result, bool isDefault, bool isCancel)
     {
         var button = new Button
         {
@@ -116,9 +153,10 @@ public partial class MessageForm : Window
             IsCancel = isCancel
         };
 
-        // The one affirmative action (OK / Yes) uses the accent-filled
+        // The default button — the one affirmative action (OK / Yes), or
+        // Cancel in ShowDestructiveConfirm — uses the accent-filled
         // primary style, matching how MainWindow highlights its one
-        // primary action (Run Task); every other button stays neutral.
+        // primary action; every other button stays neutral.
         if (isDefault)
             button.Style = (Style)FindResource("Button.Primary");
 
@@ -129,6 +167,7 @@ public partial class MessageForm : Window
         };
 
         ButtonPanel.Children.Add(button);
+        return button;
     }
 
     private static string GlyphFor(MessageFormIcon icon) => icon switch

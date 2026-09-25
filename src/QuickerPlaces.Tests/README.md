@@ -1,8 +1,10 @@
 # QuickerPlaces.Tests
 
-xUnit tests for services and models only (D5 in `ai/260901_Phase 1 Detailed
-Plan.md`). No test constructs a `Window`, so no test needs an STA thread or
-a message pump — the default xUnit test runner is enough.
+xUnit tests for services and models, plus the UI-free view models behind
+the Recently Deleted dialog (D21 in `ai/260925_Phase 2 Detailed Plan.md`),
+and nothing else (D5 in `ai/260901_Phase 1 Detailed Plan.md`). No test
+constructs a `Window`, so no test needs an STA thread or a message pump —
+the default xUnit test runner is enough.
 
 `Fixtures/places.v1.json` is read via `AppContext.BaseDirectory` (not as an
 embedded resource) — see `QuickerPlaces.Tests.csproj`'s `CopyToOutputDirectory`
