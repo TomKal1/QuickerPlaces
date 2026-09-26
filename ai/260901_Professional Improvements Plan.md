@@ -31,7 +31,7 @@ The planned release adds:
 | Order | Phase | State |
 |---|---|---|
 | 1–3 | Phases 1, 2, 3: persistence, Recently Deleted, usage tracking and sorting | Done, on `main` |
-| **Next** | **Phase 9: opt-in root folder activity tracking** ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) | Plan being refreshed against the code as it is after Phase 3 |
+| **Next** | **Phase 9: opt-in root folder activity tracking** ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) | Plan refreshed 2026-09-25 (its §0.1, D17–D26); being implemented |
 | Then | Phase 4: general file support | Planned |
 | Then | Phase 6: explicit multi-folder import | Planned |
 | Then | Phase 7: search and retrieval polish | Planned |
