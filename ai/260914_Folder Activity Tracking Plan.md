@@ -1,11 +1,11 @@
 ---
 title: QuickerPlaces — Folder Activity Tracking Detailed Plan
-status: refreshed against the code on 2026-09-25 and ready to implement (next phase, roadmap §1.1) on claude/phase-9-folder-activity
+status: in progress on claude/phase-9-folder-activity — step 1 (the tracker, its seams, RootPathMatcher) built and tested on 2026-09-25; step 2 (the store) next
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
 builds_on: ai/260925_Phase 3 Handoff.md §5; ai/260925_Phase 3 Detailed Plan.md D23–D33; ai/BUILD_SUMMARY.md
-last_revised: 2026-09-25 — refreshed against the code after Phase 3 and against the user's answers (§0.1, D17–D26): late-bound COM, root configuration in activity.json, a GitHub-style year calendar replacing the hour heat map, tray and start-with-Windows in the first version, mapped-drive equivalence, timesheet export deferred. 2026-09-15 — longest period is a month, not a year (D16); monthly downsampling removed with it
+last_revised: 2026-09-25 — step 1 built; D27–D31 record what building it settled, and §11 gains question 7. Earlier on 2026-09-25 — refreshed against the code after Phase 3 and against the user's answers (§0.1, D17–D26): late-bound COM, root configuration in activity.json, a GitHub-style year calendar replacing the hour heat map, tray and start-with-Windows in the first version, mapped-drive equivalence, timesheet export deferred. 2026-09-15 — longest period is a month, not a year (D16); monthly downsampling removed with it
 ---
 
 # Phase 9 — Opt-in root folder activity tracking
@@ -154,6 +154,20 @@ These are settled here so they do not get re-litigated during implementation.
 - **Start with Windows** writes `HKCU\...\Run\QuickerPlaces` = `"<exe path>" --tray` on opt-in and deletes it on opt-out. `--tray` starts hidden in the tray, and only while the tray switch is on; otherwise it starts normally.
 
 **D26 — The tracker runs on its own STA thread, and its flush is driven from there too.** D5's thread owns the probe, the adaptive timer (D2), and the 5-minute flush timer (D10). On lock and on suspend (`SystemEvents`) it both discards the gap (D6) and flushes. On exit, `App` asks it to stop and waits a bounded time, 2 seconds, for its final flush; a flush that cannot finish in time is logged and dropped, and never delays the close. Nothing in the tracker, the probe or the store touches the WPF dispatcher. The Activity window reads the store through snapshot queries, which take the store's lock briefly and copy out.
+
+### Decisions made building step 1 (2026-09-25)
+
+These settle what D6 to D14 left open once the tracker met its tests. They are in `Services/Activity/FolderActivityTracker.cs` and pinned by `FolderActivityTrackerTests`.
+
+**D27 — A visit ends when the root's foreground folder changes, including to no Explorer window at all.** Returning to the same folder later is a second visit with its own dwell. It is the only definition the tracker can observe without guessing when a person "left". The cost: someone who alt-tabs between Explorer and Revit all afternoon collects many visits to one folder. Time is unaffected. See §11, question 7.
+
+**D28 — A visit counts only once it has been *seen* in the foreground past its dwell threshold.** D6 attributes each interval to what was foreground at its start. A folder seen at 4.5 s and gone at 6 s may have left at 4.6 s, so crediting it would count a transit. D9 prefers the under-count. Time still accrues from the threshold, not from the sample that confirmed it.
+
+**D29 — A clock gap is capped, and only a lock or a suspend discards.** Durations come from the monotonic clock, so a wall-clock jump (the user or a time sync moving the clock) adds nothing. A long monotonic gap with no event, such as a hung host or a missed suspend notification, is capped at twice the poll interval rather than discarded. A lock (`SessionLocked`, and the tracker does not sample while locked) or `DiscardGap` (suspend and resume) discards the gap outright. In practice the cap is always 3 s: attribution needs a foreground folder at the previous tick, and a foreground Explorer window means the 1.5 s interval.
+
+**D30 — Ambiguity is judged per root, on the credited folder, and the probe passes every window through.** This refines D14 and amends D13's "dropped at the probe boundary". Foreground tabs in `Acme\Drawings` and `Acme\Specs` agree under `RootChild` (both credit `Acme`) and disagree under `Exact`. A foreground tab that credits nothing (a shell location, or a path outside the root) disagrees with one that credits a folder. So the probe must not filter: a tab it dropped could be the one in front. `IShellWindowProbe` says so, and the tracker does all of D13's filtering through `RootPathMatcher`.
+
+**D31 — Idle, a lock and a suspend drop a visit still inside its dwell, and keep one already counted.** If the same folder is still in the foreground afterwards, a counted visit carries on, so a folder left open over lunch is one visit, not two. An uncounted one starts its dwell again, so time away never completes a dwell. While the user is idle no new visit arrives.
 
 ## 5. Work items
 
@@ -343,7 +357,7 @@ This is a tool for one person to see their own work. It is not an employee monit
 
 *Revised 2026-09-25.* Each step builds on Windows and Linux and leaves the suite green; it is the intended commit sequence.
 
-1. The seams (`IShellWindowProbe`, `IUserPresence`, `IMonotonicClock`), the snapshot record, `RootPathMatcher`, and `FolderActivityTracker` with its full unit test suite. No UI, no store, no COM.
+1. The seams (`IShellWindowProbe`, `IUserPresence`, `IMonotonicClock`), the snapshot record, `RootPathMatcher`, and `FolderActivityTracker` with its full unit test suite. No UI, no store, no COM. *Done 2026-09-25 (`12d765f`, `c648189`): 85 new tests, 414 in all; D27–D31. The `Stopwatch` implementation of `IMonotonicClock` moves to step 3 with the host.*
 2. The models, `IActivityStore` and `FileActivityStore`: configuration writes that report, buffered activity, 62-day detail and 365-day totals, quarantine, and their tests.
 3. `ShellWindowProbe` (late-bound COM, D17), `UserPresence`, and `ActivityTrackingHost` (D26), with a diagnostic harness that logs pass timings and handle counts. **Measure section 6's first three rows before going further.** Nothing is recorded yet, because no root can be added.
 4. The Activity window's root management and `AddRootDialog`, with the opt-in panel and D22's network-path offer (`NetworkDriveResolver`), plus the header icon and indicator (D21). From here, tracking really runs.
@@ -372,3 +386,4 @@ Steps 1 and 2 are the phase's real content and are fully testable in isolation. 
 4. **Is 62 days the right retention default?** It is the smallest window that always contains a complete previous month. Someone who wants to look back at a quarter would need more, and nothing in the store shape prevents raising it — the cost is linear and small. Revisit once a real `activity.json` has a few months in it. *2026-09-25:* the calendar's 365 days of totals (D20) cover the "look back further" case for totals; this question is now only about per-folder detail.
 5. *Added 2026-09-25:* **Timesheet export (D24).** Copy and CSV of a period's folder-by-day rows, deferred. Revisit once the Week and Month views have been used.
 6. *Added 2026-09-25:* **The calendar's colour scale.** D20 uses quartiles of the non-zero days in view, as GitHub does. A single long day then doesn't wash out the rest. The catch is that the same colour means different hours in different years. Revisit with real data.
+7. *Added 2026-09-25, step 1:* **Is D27's visit the right one?** A visit ends whenever the folder leaves the foreground, so alternating between Explorer and another application counts a visit on every return. The alternative is to end a visit only on navigation to another folder, or after an absence longer than some minutes. Revisit once a real week of Visits exists; it changes only `FolderActivityTracker.NextVisit` and its tests, not the store.
