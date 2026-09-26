@@ -20,6 +20,8 @@ Click **Add Folder** or **Add URL** in the header. Either opens the same small d
 1. **Alias** — the name you'll use to recognize this place. Must be unique; "Docs" and "docs" count as the same alias, so you'll be blocked (with a clear message) if you try to reuse one.
 2. **Path or URL** — for a folder, either type the path or use the **Browse...** button to pick it; for a URL, type it in (e.g. `https://wiki.example.com`). This also has to be unique — you can't save the same path or URL twice. Note that this check is exact: `C:\Projects` and `C:\Projects\` are treated as different values, as are `http://` and `https://` versions of the same site, so use whichever form you actually want to keep.
 
+For a folder, the **Alias** fills itself in with the folder's own name as soon as you pick or paste the path: `C:\Users\Thomas\Downloads\UFGS_M` suggests **UFGS_M**. Change it if you want something else. Once you've typed your own alias, changing the path leaves it alone.
+
 Click **Save**, and the new place appears immediately at the bottom of the grid.
 
 If you enter a folder path, QuickerPlaces checks that it's a syntactically valid, *full* path. It has to start from a drive (`C:\Projects`) or a network share (`\\server\share`); a relative path like `Projects` is rejected. It does not require the folder to already exist on disk, so you can save a place for a folder you're about to create. A URL is checked for being well-formed but is never contacted or pinged when you save it.

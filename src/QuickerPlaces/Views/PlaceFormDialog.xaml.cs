@@ -28,6 +28,10 @@ public partial class PlaceFormDialog : Window
     private readonly Place? _editingPlace;
     private readonly RestoreConflict? _conflict;
 
+    // The alias last filled in from the folder path, so a later path change
+    // can replace it — but never replace one the user typed.
+    private string? _suggestedAlias;
+
     private PlaceFormDialog(PlaceFormMode mode, PlaceType type, PlacesService placesService, Place? editingPlace,
         RestoreConflict? conflict = null, Window? owner = null)
     {
@@ -41,6 +45,12 @@ public partial class PlaceFormDialog : Window
 
         Title = TitleFor(mode, type);
         ConfigureFields();
+
+        // Browsing, typing or pasting a folder path fills in its deepest
+        // folder name as the alias. Adding only: renaming, editing and
+        // restoring already have an alias the user chose.
+        if (mode == PlaceFormMode.AddFolder)
+            ResourceTextBox.TextChanged += (_, _) => SuggestAlias();
 
         owner ??= Application.Current?.MainWindow;
         if (owner is not null && owner.IsLoaded && !ReferenceEquals(owner, this))
@@ -167,6 +177,22 @@ public partial class PlaceFormDialog : Window
 
         if (folderDialog.ShowDialog(this) == true)
             ResourceTextBox.Text = folderDialog.FolderName;
+    }
+
+    /// <summary>
+    /// Sets the alias to the folder path's deepest folder name while the alias
+    /// is empty or still the last suggestion. Once the user types their own,
+    /// it is left alone. The user can still edit a suggestion before saving,
+    /// and a name already in use is reported on Save as usual.
+    /// </summary>
+    private void SuggestAlias()
+    {
+        var current = AliasTextBox.Text;
+        if (!string.IsNullOrWhiteSpace(current) && current != _suggestedAlias)
+            return;
+
+        _suggestedAlias = AliasSuggestion.FromFolderPath(ResourceTextBox.Text) ?? string.Empty;
+        AliasTextBox.Text = _suggestedAlias;
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;

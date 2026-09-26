@@ -34,6 +34,7 @@
     <Compile Include="..\QuickerPlaces\Models\PlaceType.cs" Link="Linked\Models\PlaceType.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\StoreLoadOutcome.cs" Link="Linked\Models\StoreLoadOutcome.cs" />
+    <Compile Include="..\QuickerPlaces\Services\AliasSuggestion.cs" Link="Linked\Services\AliasSuggestion.cs" />
     <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
     <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
