@@ -47,6 +47,14 @@
     <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
     <!--
+      Phase 9's folder activity tracking (ai/260914_Folder Activity Tracking
+      Plan.md 5.1): the tracker, the path matcher and the seams they take.
+      The COM probe, UserPresence and the host that drive them are app-only.
+    -->
+    <Compile Include="..\QuickerPlaces\Models\Activity\RollupMode.cs" Link="Linked\Models\Activity\RollupMode.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\RootPathMatcher.cs" Link="Linked\Services\Activity\RootPathMatcher.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
+    <!--
       The Recently Deleted dialog's view models (plan 5.5, D21): every
       decision the dialog makes lives in these, so they are tested here
       rather than left to the manual checklist. PlaceViewModel comes along
