@@ -39,7 +39,20 @@
     <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
+    <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
+    <!--
+      The Recently Deleted dialog's view models (plan 5.5, D21): every
+      decision the dialog makes lives in these, so they are tested here
+      rather than left to the manual checklist. PlaceViewModel comes along
+      for its type glyph, and ObservableObject as their base class; all
+      four are free of System.Windows.*.
+    -->
+    <Compile Include="..\QuickerPlaces\Mvvm\ObservableObject.cs" Link="Linked\Mvvm\ObservableObject.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\PlaceViewModel.cs" Link="Linked\ViewModels\PlaceViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedRowViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedRowViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -50,12 +63,16 @@
 
   <ItemGroup>
     <!--
-      Fixtures/places.v1.json is read via AppContext.BaseDirectory at test
-      time (not as an embedded resource), so it needs to land next to the
-      test assembly in the output directory. Every test that reads it does
-      so the same way — see PlacesStoreFixtureTests.
+      Fixtures/places.v1.json and places.v2.json are read via
+      AppContext.BaseDirectory at test time (not as embedded resources), so
+      they need to land next to the test assembly in the output directory.
+      Every test that reads them does so the same way — see
+      PlacesStoreFixtureTests.
     -->
     <None Update="Fixtures\places.v1.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Fixtures\places.v2.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

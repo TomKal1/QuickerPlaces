@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.ViewModels;
@@ -44,6 +45,8 @@ public partial class App : Application
         // Nullable's flow analysis can prove a captured local is never
         // null at the capture site, so this needs no null-forgiving
         // operators to stay warning-clean under <Nullable>enable</Nullable>.
+        RequireAltForAccessKeys();
+
         var settingsService = new SettingsService();
         var settings = settingsService.Load();
         var placesService = new PlacesService();
@@ -106,6 +109,24 @@ public partial class App : Application
         // hotkey calls: restore, activate, focus the search box.
         singleInstance.ListenForShowRequests(Dispatcher, mainWindow.BringToFront);
     }
+
+    /// <summary>
+    /// Access keys ("_Restore selected") fire only with Alt. WPF also fires
+    /// one on a plain letter that nothing else took as text, such as R with
+    /// the Recently Deleted grid focused, which would restore the selection
+    /// on a stray keypress. The letter reaches AccessKeyManager as unhandled
+    /// text input, so handling it at the window stops that; a text box has
+    /// already taken its own typing by then, and Alt+letter arrives as
+    /// SystemText, not Text, so it still works. Menus are unaffected: they
+    /// open in a popup, not in a Window.
+    /// </summary>
+    private static void RequireAltForAccessKeys() =>
+        EventManager.RegisterClassHandler(typeof(Window), TextCompositionManager.TextInputEvent,
+            new TextCompositionEventHandler((_, e) =>
+            {
+                if (!string.IsNullOrEmpty(e.Text))
+                    e.Handled = true;
+            }));
 
     /// <summary>
     /// Loops the RecoveryDialog until the store's load state is resolved

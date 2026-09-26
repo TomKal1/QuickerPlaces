@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace QuickerPlaces.Models;
 
@@ -18,12 +19,28 @@ public sealed class Place
     /// <summary>Absolute folder path, or a URL. Duplicate-checked as an exact case-insensitive string match against other places of the same Type — deliberately not normalized (see SI §6.2).</summary>
     public required string Resource { get; set; }
 
-    /// <summary>Whether this place renders as a one-click bubble above the grid.</summary>
+    /// <summary>Whether this place renders as a one-click bubble above the grid. For a place in Recently Deleted, whether it was one when removed (D9).</summary>
     public bool IsFavourite { get; set; }
 
-    /// <summary>User-controlled manual ordering for the favourite bubbles. Null when not a favourite; assigned/renumbered by PlacesService whenever the favourite set or its order changes.</summary>
+    /// <summary>User-controlled manual ordering for the favourite bubbles. Null when not a favourite; assigned/renumbered by PlacesService whenever the favourite set or its order changes. Only active places take part in that numbering; for a place in Recently Deleted this is the bubble slot it is restored to (D9).</summary>
     public int? FavouriteOrder { get; set; }
 
-    /// <summary>When this place was first added. Internal bookkeeping — not necessarily shown in the UI.</summary>
-    public DateTime DateAdded { get; set; } = DateTime.Now;
+    /// <summary>
+    /// When this place was first added, in UTC. Converted from a local
+    /// DateTime by the v1 → v2 migration (PlacesStoreMigration). Stamped by
+    /// PlacesService from its injected clock; this initialiser only matters
+    /// for a v2 record hand-edited to lose the field.
+    /// </summary>
+    public DateTimeOffset DateAdded { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Null for an active place. Set (UTC) when the place is removed: it is then in
+    /// Recently Deleted until restored, permanently deleted, or purged seven full days
+    /// later (RecentlyDeletedPolicy). Set and cleared only by PlacesService. While set,
+    /// IsFavourite/FavouriteOrder are a remembered bubble slot, not a live position (D9).
+    /// Not written at all while null (D16), which keeps an active record's on-disk
+    /// shape as close to v1's as it can be.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? DeletedAt { get; set; }
 }

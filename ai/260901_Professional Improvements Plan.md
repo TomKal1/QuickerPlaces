@@ -1,10 +1,10 @@
 # QuickerPlaces — Professional Improvements Implementation Plan
 
-**Status:** Phase 1 implemented (builds clean, 41 tests pass; manual checklist outstanding); Phases 2 to 9 planned, and Phase 2 is next  
+**Status:** Phases 1 and 2 implemented (all 238 tests pass; both manual checklists closed on 2026-09-25, with the failure-path items accepted as untested; Phase 2 is not yet merged to `main`); Phases 3 to 9 planned, and Phase 3 is next, after the checklists  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-21 — Phase 1 status updated after its first build and test run; §4.8 settled the wording of Remove  
+**Last revised:** 2026-09-25 — Phase 2 implemented, ahead of the Phase 1 checklist, at the user's request; its detailed plan linked  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
-**Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
+**Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
 ## 1. Product direction
 
@@ -148,6 +148,8 @@ Requirements:
 - This protects one machine only. `places.json` lives in roaming application data, so a roaming profile used on two machines at once remains outside the guarantee — see the non-goals in section 2.
 
 ### Phase 2 — Seven-day Recently Deleted
+
+A separate, file-level plan for this phase is maintained in `ai/260925_Phase 2 Detailed Plan.md`. It settles what this section leaves open, including the entry point (§4.9's "secondary menu" does not exist, so it is a header button, D20) and what "seven full days" means (D13).
 
 #### 4.7 Data model
 

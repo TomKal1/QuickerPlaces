@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Tests.Fakes;
 using Xunit;
@@ -7,9 +8,11 @@ using Xunit;
 namespace QuickerPlaces.Tests;
 
 /// <summary>
-/// Covers plan section 6 rows 21 and 22: the log rolls over at its size
-/// cap instead of growing without bound, and it never records a written
-/// alias or resource. Every test redirects DiagnosticLog at a TempDirectory
+/// Covers the Phase 1 plan's section 6 rows 21 and 22: the log rolls over
+/// at its size cap instead of growing without bound, and it never records a
+/// written alias or resource. Also the Phase 2 plan's test 21: the v1 → v2
+/// migration's log line records its assumption, and still no alias or
+/// destination; and test 46: the purge logs a count, never which places. Every test redirects DiagnosticLog at a TempDirectory
 /// via UseDirectoryForTests — never real AppData — and afterwards points
 /// it back at the run-wide TestLogDirectory (not the real location).
 ///
@@ -99,6 +102,86 @@ public sealed class DiagnosticLogTests
             Assert.DoesNotContain(secretAlias, logContents);
             Assert.DoesNotContain(secretResource, logContents);
             Assert.Contains(storePath, logContents);
+        }
+        finally
+        {
+            DiagnosticLog.UseDirectoryForTests(TestLogDirectory.Path);
+        }
+    }
+
+    /// <summary>
+    /// Phase 2 test 21: migrating a v1 store logs the assumption roadmap
+    /// §4.7 asks to be recorded — how many dates were interpreted as local
+    /// time, and in which zone (its id) — with counts only: never an alias
+    /// or a destination (D11).
+    /// </summary>
+    [Fact]
+    public void MigrationLog_RecordsTheAssumptionAndZone_NeverAnAliasOrDestination()
+    {
+        using var tempDirectory = new TempDirectory();
+        DiagnosticLog.UseDirectoryForTests(tempDirectory.Path);
+        try
+        {
+            const string secretAlias = "MySecretProjectAlias";
+            const string secretResource = "https://secret.example.com/project";
+            var storage = new FakePlacesStorage
+            {
+                ContentsToReturn = $$"""
+                    { "schemaVersion": 1, "places": [
+                        { "alias": "{{secretAlias}}", "type": "url", "resource": "{{secretResource}}", "dateAdded": "2026-01-15T09:30:00" }
+                    ] }
+                    """
+            };
+            var clock = new ManualTimeProvider(new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero), TestZones.CentralEuropean);
+
+            var service = new PlacesService(storage, clock);
+            Assert.Equal(StoreLoadOutcome.Ok, service.LoadOutcome);
+
+            var logContents = File.ReadAllText(DiagnosticLog.LogFilePath);
+
+            Assert.Contains("from schemaVersion 1 to 2", logContents);
+            Assert.Contains("interpreted as local time in time zone \"Test/CentralEuropean\" for 1", logContents);
+            Assert.Contains("1 place(s)", logContents);
+            Assert.DoesNotContain(secretAlias, logContents);
+            Assert.DoesNotContain(secretResource, logContents);
+        }
+        finally
+        {
+            DiagnosticLog.UseDirectoryForTests(TestLogDirectory.Path);
+        }
+    }
+
+    /// <summary>
+    /// Phase 2 test 46: the purge logs how many places it removed and at
+    /// which point (D14), never which ones — no alias, no destination.
+    /// </summary>
+    [Fact]
+    public void PurgeLog_RecordsACount_NeverAnAliasOrDestination()
+    {
+        using var tempDirectory = new TempDirectory();
+        DiagnosticLog.UseDirectoryForTests(tempDirectory.Path);
+        try
+        {
+            const string secretAlias = "MySecretProjectAlias";
+            const string secretResource = "https://secret.example.com/project";
+            var storage = new FakePlacesStorage
+            {
+                ContentsToReturn = $$"""
+                    { "schemaVersion": 2, "places": [
+                        { "alias": "{{secretAlias}}", "type": "url", "resource": "{{secretResource}}", "dateAdded": "2026-01-01T00:00:00+00:00", "deletedAt": "2026-09-01T00:00:00+00:00" }
+                    ] }
+                    """
+            };
+            var clock = new ManualTimeProvider(new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero));
+
+            var service = new PlacesService(storage, clock);
+            Assert.Empty(service.RecentlyDeleted);
+
+            var logContents = File.ReadAllText(DiagnosticLog.LogFilePath);
+
+            Assert.Contains("Purged 1 place(s) from Recently Deleted after seven days (after load).", logContents);
+            Assert.DoesNotContain(secretAlias, logContents);
+            Assert.DoesNotContain(secretResource, logContents);
         }
         finally
         {

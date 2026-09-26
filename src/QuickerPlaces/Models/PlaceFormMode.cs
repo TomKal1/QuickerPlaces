@@ -18,5 +18,13 @@ public enum PlaceFormMode
     RenameAlias,
 
     /// <summary>Path/URL only, prefilled with the current value. Commits via PlacesService.TryEditResource.</summary>
-    EditResource
+    EditResource,
+
+    /// <summary>
+    /// A place in Recently Deleted that can't come back as it was: an
+    /// explanation of the conflict above alias + path/URL, both prefilled
+    /// and editable. Commits via PlacesService.TryRestore(place, alias,
+    /// resource, …) — the D15 conflict flow.
+    /// </summary>
+    Restore
 }

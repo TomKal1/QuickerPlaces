@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using Microsoft.Win32;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
@@ -8,10 +9,11 @@ namespace QuickerPlaces.Views;
 
 /// <summary>
 /// The combined Add dialog (Alias + Resource together, SI §6.1's default
-/// when the template had no existing data-entry-dialog precedent) and the
-/// two single-field edit dialogs, sharing one Window keyed by
-/// <see cref="PlaceFormMode"/>. Not instantiated directly — use the static
-/// ShowAdd/ShowRenameAlias/ShowEditResource factory methods, which also own
+/// when the template had no existing data-entry-dialog precedent), the
+/// two single-field edit dialogs, and Restore Place (the D15 conflict
+/// flow), sharing one Window keyed by <see cref="PlaceFormMode"/>. Not
+/// instantiated directly — use the static ShowAdd/ShowRenameAlias/
+/// ShowEditResource/ShowRestore factory methods, which also own
 /// committing the result via PlacesService so callers just get back
 /// "what happened" rather than re-implementing the commit themselves. This
 /// mirrors MessageForm's already-established "dialog calls straight into
@@ -24,8 +26,10 @@ public partial class PlaceFormDialog : Window
     private readonly PlaceType _type;
     private readonly PlacesService _placesService;
     private readonly Place? _editingPlace;
+    private readonly RestoreConflict? _conflict;
 
-    private PlaceFormDialog(PlaceFormMode mode, PlaceType type, PlacesService placesService, Place? editingPlace)
+    private PlaceFormDialog(PlaceFormMode mode, PlaceType type, PlacesService placesService, Place? editingPlace,
+        RestoreConflict? conflict = null, Window? owner = null)
     {
         InitializeComponent();
 
@@ -33,11 +37,12 @@ public partial class PlaceFormDialog : Window
         _type = type;
         _placesService = placesService;
         _editingPlace = editingPlace;
+        _conflict = conflict;
 
         Title = TitleFor(mode, type);
         ConfigureFields();
 
-        var owner = Application.Current?.MainWindow;
+        owner ??= Application.Current?.MainWindow;
         if (owner is not null && owner.IsLoaded && !ReferenceEquals(owner, this))
         {
             Owner = owner;
@@ -52,7 +57,7 @@ public partial class PlaceFormDialog : Window
     /// <summary>Set only when Mode is AddFolder/AddUrl and OK committed successfully.</summary>
     public Place? CreatedPlace { get; private set; }
 
-    /// <summary>True if a Rename/Edit committed successfully.</summary>
+    /// <summary>True if a Rename/Edit/Restore committed successfully.</summary>
     public bool Committed { get; private set; }
 
     public static Place? ShowAdd(PlaceType type, PlacesService placesService)
@@ -73,6 +78,25 @@ public partial class PlaceFormDialog : Window
     public static bool ShowEditResource(Place place, PlacesService placesService)
     {
         var dialog = new PlaceFormDialog(PlaceFormMode.EditResource, place.Type, placesService, editingPlace: place);
+        dialog.ShowDialog();
+        return dialog.Committed;
+    }
+
+    /// <summary>
+    /// The D15 conflict flow, shared by every restore path (Ctrl+Z, the
+    /// status bar's Undo, Recently Deleted's Restore selected): explains
+    /// what now holds the place's alias and/or destination, with both
+    /// fields prefilled and editable, and restores it under the edited
+    /// values through PlacesService.TryRestore(place, alias, resource, …).
+    /// Validation is Add's, shown in the error line as in every mode.
+    /// Cancel changes nothing: the place stays in Recently Deleted.
+    /// </summary>
+    /// <param name="owner">The window to center on; the main window when null. Recently Deleted passes itself.</param>
+    /// <returns>True if the place was restored.</returns>
+    public static bool ShowRestore(RestoreConflict conflict, PlacesService placesService, Window? owner = null)
+    {
+        var dialog = new PlaceFormDialog(PlaceFormMode.Restore, conflict.Place.Type, placesService,
+            editingPlace: conflict.Place, conflict: conflict, owner: owner);
         dialog.ShowDialog();
         return dialog.Committed;
     }
@@ -102,10 +126,36 @@ public partial class PlaceFormDialog : Window
                 BrowseButton.Visibility = _type == PlaceType.Folder ? Visibility.Visible : Visibility.Collapsed;
                 ResourceTextBox.Text = _editingPlace!.Resource;
                 break;
+
+            case PlaceFormMode.Restore:
+                ExplanationText.Text = _conflict!.Explanation;
+                ExplanationText.Visibility = Visibility.Visible;
+                AliasTextBox.Text = _editingPlace!.Alias;
+                ResourceLabel.Text = _type == PlaceType.Folder ? "Folder path" : "URL";
+                BrowseButton.Visibility = _type == PlaceType.Folder ? Visibility.Visible : Visibility.Collapsed;
+                ResourceTextBox.Text = _editingPlace.Resource;
+                OkButton.Content = "Restore";
+                // A screen reader announces the field, not the text above
+                // it, so each field carries the explanation as its help.
+                AutomationProperties.SetHelpText(AliasTextBox, _conflict.Explanation);
+                AutomationProperties.SetHelpText(ResourceTextBox, _conflict.Explanation);
+                break;
         }
 
-        var focusTarget = _mode == PlaceFormMode.EditResource ? (UIElement)ResourceTextBox : AliasTextBox;
-        Loaded += (_, _) => focusTarget.Focus();
+        // Restore starts in whichever field is in the way (the alias when
+        // both are), with its text selected so typing replaces it.
+        var focusTarget = _mode switch
+        {
+            PlaceFormMode.EditResource => ResourceTextBox,
+            PlaceFormMode.Restore when _conflict!.AliasHeldBy is null => ResourceTextBox,
+            _ => AliasTextBox
+        };
+        Loaded += (_, _) =>
+        {
+            focusTarget.Focus();
+            if (_mode == PlaceFormMode.Restore)
+                focusTarget.SelectAll();
+        };
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
@@ -128,6 +178,7 @@ public partial class PlaceFormDialog : Window
             PlaceFormMode.AddFolder or PlaceFormMode.AddUrl => TryCommitAdd(),
             PlaceFormMode.RenameAlias => TryCommitRename(),
             PlaceFormMode.EditResource => TryCommitEditResource(),
+            PlaceFormMode.Restore => TryCommitRestore(),
             _ => false
         };
 
@@ -179,6 +230,22 @@ public partial class PlaceFormDialog : Window
         return true;
     }
 
+    private bool TryCommitRestore()
+    {
+        // The save result is discarded here as in every other mode: the
+        // caller refreshes from PlacesService.HasUnsavedChanges (D1 — a
+        // failed save still leaves the place restored in memory).
+        var result = _placesService.TryRestore(_editingPlace!, AliasTextBox.Text, ResourceTextBox.Text, out _);
+        if (!result.Success)
+        {
+            ShowError(result.ErrorMessage!);
+            return false;
+        }
+
+        Committed = true;
+        return true;
+    }
+
     private void ShowError(string message)
     {
         ErrorText.Text = message;
@@ -191,6 +258,7 @@ public partial class PlaceFormDialog : Window
         PlaceFormMode.AddUrl => "Add URL",
         PlaceFormMode.RenameAlias => "Rename Alias",
         PlaceFormMode.EditResource => type == PlaceType.Folder ? "Edit Folder Path" : "Edit URL",
+        PlaceFormMode.Restore => "Restore Place",
         _ => "Place"
     };
 }

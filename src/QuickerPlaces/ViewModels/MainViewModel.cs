@@ -21,7 +21,8 @@ namespace QuickerPlaces.ViewModels;
 /// <summary>
 /// Backs MainWindow. Owns the Places grid collection, the favourite-bubble
 /// projection of it, and every command the UI exposes. Dialog views
-/// (PlaceFormDialog, ExportDialog, ImportDialog, MessageForm) are invoked
+/// (PlaceFormDialog, ExportDialog, ImportDialog, RecentlyDeletedDialog,
+/// MessageForm) are invoked
 /// directly from here rather than through an IDialogService abstraction —
 /// the same "isn't strict MVVM, but nothing here needs the extra layer"
 /// tradeoff the template's MessageForm already made.
@@ -37,12 +38,23 @@ public sealed class MainViewModel : ObservableObject
     private string? _statusMessage;
     private bool _statusOffersUndo;
 
-    // Most recent removal on top. Session-only: undo history isn't saved.
-    private readonly Stack<RemovedPlace> _removedPlaces = new();
+    // Most recent removal on top. Session-only: undo history isn't saved;
+    // after a restart, Recently Deleted is the way back (D19). Holds the
+    // removed records themselves: their list slot and bubble slot are in
+    // the record now (D7, D9), so a copy of either here could only go
+    // stale (D10).
+    private readonly Stack<Place> _undoStack = new();
 
-    // Hides the status bar a few seconds after its last message. Ctrl+Z
-    // still works after it's gone; the bar is just a reminder.
-    private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(8) };
+    // Hides the status bar a few seconds after its last message: 10 s when
+    // it offers Undo, 8 s otherwise (D19). Ctrl+Z still works after it's
+    // gone, and Recently Deleted after that; the bar is just a reminder.
+    private static readonly TimeSpan StatusWithUndoDuration = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan StatusDuration = TimeSpan.FromSeconds(8);
+    private readonly DispatcherTimer _statusTimer = new() { Interval = StatusDuration };
+
+    // True while the pointer is over the status bar or the keyboard focus
+    // is inside it (D19), so reaching for Undo never races the timer.
+    private bool _statusPaused;
     private bool _hasUnsavedChanges;
     private string? _persistenceMessage;
 
@@ -85,7 +97,8 @@ public sealed class MainViewModel : ObservableObject
         ClearSearchCommand = new RelayCommand(() => SearchText = string.Empty);
         OpenDataFolderCommand = new RelayCommand(() => ExplorerReveal.Reveal(_placesService.PlacesFilePath));
         CopyResourceCommand = new RelayCommand(parameter => CopyResource(parameter as PlaceViewModel));
-        UndoRemoveCommand = new RelayCommand(UndoRemove, () => _removedPlaces.Count > 0);
+        UndoRemoveCommand = new RelayCommand(UndoRemove, () => _undoStack.Count > 0);
+        ShowRecentlyDeletedCommand = new RelayCommand(ShowRecentlyDeleted);
         DismissStatusCommand = new RelayCommand(() => ShowStatus(null));
         RetrySaveCommand = new RelayCommand(RetrySave);
         ShowLogCommand = new RelayCommand(ShowLog);
@@ -163,8 +176,12 @@ public sealed class MainViewModel : ObservableObject
     {
         get
         {
+            // Pointing at Recently Deleted when the list is empty only
+            // because everything was removed (plan 5.3 row 24).
             if (Places.Count == 0)
-                return "No places yet. Use Add Folder (Ctrl+N) or Add URL (Ctrl+U) to save your first one.";
+                return _placesService.RecentlyDeleted.Count > 0
+                    ? "No places yet. Use Add Folder (Ctrl+N) or Add URL (Ctrl+U) to save your first one. Places you removed are in Recently Deleted."
+                    : "No places yet. Use Add Folder (Ctrl+N) or Add URL (Ctrl+U) to save your first one.";
             if (VisiblePlaceCount == 0)
                 return $"No places match \"{SearchText.Trim()}\". Press Esc to clear the search.";
             return null;
@@ -221,7 +238,10 @@ public sealed class MainViewModel : ObservableObject
 
     public RelayCommand DismissStatusCommand { get; }
 
-    /// <summary>A short note shown in the bar under the grid ("Removed "Docs"."), or null to hide the bar.</summary>
+    /// <summary>Opens Recently Deleted (the header's bin button, D20).</summary>
+    public RelayCommand ShowRecentlyDeletedCommand { get; }
+
+    /// <summary>A short note shown in the bar under the grid ("Moved "Docs" to Recently Deleted."), or null to hide the bar.</summary>
     public string? StatusMessage
     {
         get => _statusMessage;
@@ -333,68 +353,162 @@ public sealed class MainViewModel : ObservableObject
         RebuildFavourites();
     }
 
+    /// <summary>
+    /// Moves a place to Recently Deleted, without asking (roadmap §4.8,
+    /// D18): nothing is lost, since Undo (Ctrl+Z, all session) and Recently
+    /// Deleted (seven days) both bring it back exactly.
+    /// </summary>
     private void Remove(PlaceViewModel? place)
     {
         if (place is null)
-            return;
-
-        var confirm = MessageForm.Show(
-            $"Remove \"{place.Alias}\"?\n\nYou can undo this with Ctrl+Z while QuickerPlaces stays open.",
-            AppName, MessageFormButtons.YesNo, MessageFormIcon.Question);
-
-        if (confirm != MessageFormResult.Yes)
             return;
 
         var persistence = _placesService.Remove(place.Model, out var removed);
         RefreshPersistenceState(persistence);
 
         // Blocked by an unresolved recovery (not normally reachable: the
-        // window only opens once recovery is resolved) — nothing changed.
-        if (removed is null)
+        // window only opens once recovery is resolved), or already removed
+        // — nothing changed, so there is nothing to offer Undo for.
+        if (!removed)
             return;
 
         Places.Remove(place);
         RebuildFavourites();
 
-        _removedPlaces.Push(removed);
+        _undoStack.Push(place.Model);
         UndoRemoveCommand.RaiseCanExecuteChanged();
-        ShowStatus($"Removed \"{place.Alias}\".", offerUndo: true);
+        ShowStatus($"Moved \"{place.Alias}\" to Recently Deleted.", offerUndo: true);
     }
 
     private void UndoRemove()
     {
-        if (_removedPlaces.Count == 0)
+        if (_undoStack.Count == 0)
             return;
 
-        var removed = _removedPlaces.Pop();
+        var place = _undoStack.Pop();
         UndoRemoveCommand.RaiseCanExecuteChanged();
 
-        var result = _placesService.TryRestore(removed, out var persistence);
+        // The entry is dropped from the stack whatever happens below, not
+        // kept: leaving it would jam Ctrl+Z on this one entry and make every
+        // older removal unreachable. Each outcome says so, so the next
+        // Ctrl+Z moving on isn't a surprise.
+        var next = _undoStack.Count > 0 ? " Ctrl+Z restores the one removed before it." : string.Empty;
+
+        var result = _placesService.TryRestore(place, out var persistence);
         RefreshPersistenceState(persistence);
         if (!result.Success)
         {
-            // Dropped from the stack, not kept: leaving it would jam Ctrl+Z
-            // on this one entry and make every older removal unreachable.
-            // The message says so, so the next Ctrl+Z moving on isn't a surprise.
-            var next = _removedPlaces.Count > 0 ? "\n\nCtrl+Z will now restore the place removed before it." : string.Empty;
-            MessageForm.Show((result.ErrorMessage ?? "That place can't be restored.") + next,
-                AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
-            return;
+            // Its alias or path/URL is now used by an active place: the
+            // D15 flow explains which, and lets the user change them.
+            if (_placesService.GetRestoreConflict(place) is { } conflict)
+            {
+                var restored = PlaceFormDialog.ShowRestore(conflict, _placesService);
+                // The dialog discards its save result, as for every edit.
+                RefreshPersistenceState();
+                if (!restored)
+                {
+                    // Cancelled: the reason was on screen a moment ago, and
+                    // the place is not lost.
+                    ShowStatus($"\"{place.Alias}\" is still in Recently Deleted.{next}");
+                    return;
+                }
+            }
+            else
+            {
+                // Purged after seven days, deleted permanently, or already
+                // restored from Recently Deleted: nothing to edit.
+                MessageForm.Show((result.ErrorMessage ?? "That place can't be restored.") +
+                    (next.Length > 0 ? "\n\n" + next.TrimStart() : string.Empty),
+                    AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
+                return;
+            }
         }
 
-        // PlacesService reinserted it at its old position; mirror that so
-        // Places stays in the same order as the stored list.
-        var restored = new PlaceViewModel(removed.Place);
-        Places.Insert(Math.Clamp(removed.Index, 0, Places.Count), restored);
+        InsertRestored(place);
         foreach (var favourite in Places.Where(p => p.IsFavourite))
             favourite.Refresh();
 
-        ClearSearchIfHidden(removed.Place);
+        ClearSearchIfHidden(place);
         RebuildFavourites();
 
-        ShowStatus(_removedPlaces.Count > 0
-            ? $"Restored \"{removed.Place.Alias}\". Ctrl+Z restores the one removed before it."
-            : $"Restored \"{removed.Place.Alias}\".");
+        ShowStatus($"Restored \"{place.Alias}\".{next}");
+    }
+
+    private void ShowRecentlyDeleted() => RecentlyDeletedDialog.Show(_placesService, SyncWithRecentlyDeleted);
+
+    /// <summary>
+    /// Runs after each Recently Deleted action, while the dialog is still
+    /// open, and brings the main window up to date with it: a row for each
+    /// place it restored (at its stored position), favourites and their
+    /// numbering (a restored favourite shifts the bubbles after it), the
+    /// banner — read from PlacesService.HasUnsavedChanges, since the action
+    /// saved or failed to — and the Undo stack, which must no longer offer
+    /// anything the dialog restored or deleted.
+    /// </summary>
+    private void SyncWithRecentlyDeleted(IReadOnlyList<Place> restored)
+    {
+        RefreshPersistenceState();
+
+        foreach (var place in restored)
+            InsertRestored(place);
+
+        foreach (var favourite in Places.Where(p => p.IsFavourite))
+            favourite.Refresh();
+
+        RebuildFavourites();
+        if (restored.Any(p => !PlaceSearch.Matches(p, SearchText)))
+            SearchText = string.Empty;
+
+        var undoChanged = PruneUndoStack();
+
+        // Recently Deleted may have emptied, which changes the empty-grid hint.
+        RaiseGridStatusChanged();
+
+        if (restored.Count > 0)
+            ShowStatus(restored.Count == 1 ? $"Restored \"{restored[0].Alias}\"." : $"Restored {restored.Count} places.");
+        else if (undoChanged && StatusOffersUndo)
+            // Its Undo would now restore a different place than the one it names.
+            ShowStatus(null);
+    }
+
+    /// <summary>
+    /// Keeps only the Undo entries still in Recently Deleted, in their
+    /// order, so Ctrl+Z never tries to restore a place the dialog already
+    /// restored or deleted for good (plan 5.4). Returns whether anything
+    /// was dropped.
+    /// </summary>
+    private bool PruneUndoStack()
+    {
+        var stillDeleted = new HashSet<Place>(_placesService.RecentlyDeleted, ReferenceEqualityComparer.Instance);
+        // A Stack enumerates top first; push the survivors back bottom first.
+        var kept = _undoStack.Where(stillDeleted.Contains).Reverse().ToList();
+        if (kept.Count == _undoStack.Count)
+            return false;
+
+        _undoStack.Clear();
+        foreach (var place in kept)
+            _undoStack.Push(place);
+
+        UndoRemoveCommand.RaiseCanExecuteChanged();
+        return true;
+    }
+
+    /// <summary>
+    /// Adds a row for a place PlacesService has just restored, at its
+    /// position among the active places (plan 5.3 row 23), so Places stays
+    /// in the same order as the stored list. The record never left its
+    /// stored slot (D7), and Places mirrors the active records in stored
+    /// order, so the row goes after every row whose place comes before it
+    /// there. Counting only places that already have a row keeps this right
+    /// when a batch restore (D22) hands back several places at once, in an
+    /// order that is not the list's.
+    /// </summary>
+    private void InsertRestored(Place place)
+    {
+        var shown = new HashSet<Place>(Places.Select(vm => vm.Model), ReferenceEqualityComparer.Instance);
+        // Places is a fresh snapshot per call (D8): read it once.
+        var index = _placesService.Places.TakeWhile(p => !ReferenceEquals(p, place)).Count(shown.Contains);
+        Places.Insert(index, new PlaceViewModel(place));
     }
 
     private void CopyResource(PlaceViewModel? place)
@@ -417,13 +531,45 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Shows <paramref name="message"/> in the status bar for a few seconds, or hides the bar when null.</summary>
+    /// <summary>
+    /// Shows <paramref name="message"/> in the status bar, or hides the bar
+    /// when null. It stays 10 seconds when it offers Undo and 8 otherwise,
+    /// counted afresh for each new message and not at all while paused
+    /// (D19). Never moves the keyboard focus.
+    /// </summary>
     private void ShowStatus(string? message, bool offerUndo = false)
     {
         _statusTimer.Stop();
+
+        // A hidden bar can't be hovered or hold the focus. Clearing the
+        // pause whenever the bar hides or reappears means a MouseLeave that
+        // never arrives (the bar collapsed under a click on its own
+        // Dismiss button) can't leave the next message stuck on screen.
+        if (message is null || StatusMessage is null)
+            _statusPaused = false;
+
         StatusMessage = message;
         StatusOffersUndo = message is not null && offerUndo;
-        if (message is not null)
+        _statusTimer.Interval = StatusOffersUndo ? StatusWithUndoDuration : StatusDuration;
+        if (message is not null && !_statusPaused)
+            _statusTimer.Start();
+    }
+
+    /// <summary>Holds the status bar open: the pointer is over it or the keyboard focus is inside it (D19). Called by MainWindow.</summary>
+    public void PauseStatusTimer()
+    {
+        _statusPaused = true;
+        _statusTimer.Stop();
+    }
+
+    /// <summary>Lets the status bar time out again, with its full interval, once neither the pointer nor the focus is on it (D19). Called by MainWindow.</summary>
+    public void ResumeStatusTimer()
+    {
+        if (!_statusPaused)
+            return;
+
+        _statusPaused = false;
+        if (StatusMessage is not null)
             _statusTimer.Start();
     }
 
@@ -620,7 +766,8 @@ public sealed class MainViewModel : ObservableObject
     /// that just ran directly (ToggleFavourite, Remove, TryRestore,
     /// SetFavouriteOrder, RetrySave) and supplies the banner's message text when it failed
     /// just now. The dialog-mediated mutations (AddPlace, RenameAlias,
-    /// EditResource, Import) discard their PersistenceResult inside the
+    /// EditResource, Import, Undo's Restore Place, Recently Deleted)
+    /// discard or keep their PersistenceResult inside the
     /// dialog and call this with no argument — when there is still an
     /// unsaved change but no fresh failure message to show, this falls
     /// back to a standing sentence naming the store file rather than

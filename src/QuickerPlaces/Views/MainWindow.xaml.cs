@@ -290,7 +290,20 @@ public partial class MainWindow : Window
         // Handled first: DataGrid's own Enter handling would otherwise
         // also move the selection down a row.
         e.Handled = true;
+        var index = PlacesGrid.SelectedIndex;
         command.Execute(place);
+
+        // Remove no longer opens a confirmation, so nothing hands the focus
+        // back: the focused row has just gone, and the next Delete or arrow
+        // key would go nowhere. Select and focus the row that took its place
+        // (the one before, if it was the last).
+        if (ReferenceEquals(command, viewModel.RemoveCommand) && !PlacesGrid.Items.Contains(place))
+        {
+            if (PlacesGrid.Items.Count > 0)
+                FocusGridRow(index);
+            else
+                PlacesGrid.Focus();
+        }
     }
 
     /// <summary>Selects and keyboard-focuses the grid row at <paramref name="index"/> (clamped; first row if nothing was selected).</summary>
@@ -312,6 +325,34 @@ public partial class MainWindow : Window
             row.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
         else
             PlacesGrid.Focus();
+    }
+
+    // -----------------------------------------------------------------
+    // Status bar pause (D19). The bar stays up while the pointer is over
+    // it or the keyboard focus is inside it, whichever came first and
+    // until both have left; MainViewModel owns the timer.
+    // -----------------------------------------------------------------
+
+    // Each handler takes its own state from the event itself and only the
+    // other one from the element, so neither depends on the order in which
+    // WPF updates IsMouseOver and raises MouseEnter/MouseLeave.
+
+    private void StatusBar_MouseEnter(object sender, MouseEventArgs e) => UpdateStatusPause(hovered: true, focused: StatusBar.IsKeyboardFocusWithin);
+
+    private void StatusBar_MouseLeave(object sender, MouseEventArgs e) => UpdateStatusPause(hovered: false, focused: StatusBar.IsKeyboardFocusWithin);
+
+    private void StatusBar_IsKeyboardFocusWithinChanged(object sender, DependencyPropertyChangedEventArgs e)
+        => UpdateStatusPause(hovered: StatusBar.IsMouseOver, focused: (bool)e.NewValue);
+
+    private void UpdateStatusPause(bool hovered, bool focused)
+    {
+        if (DataContext is not MainViewModel viewModel)
+            return;
+
+        if (hovered || focused)
+            viewModel.PauseStatusTimer();
+        else
+            viewModel.ResumeStatusTimer();
     }
 
     /// <summary>Double-click on a grid row = Open (SI §6.3), the same action as the row's top context-menu item.</summary>

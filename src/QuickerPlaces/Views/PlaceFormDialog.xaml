@@ -11,9 +11,10 @@
         WindowStartupLocation="CenterOwner"
         d:DesignHeight="240" d:DesignWidth="460">
     <!--
-        The combined Add-a-Place dialog (SI §6.1) and the two single-field
-        edit dialogs (Rename Alias / Edit Path-URL) share this one Window —
-        ConfigureFields() in the code-behind shows/hides the Alias and
+        The combined Add-a-Place dialog (SI §6.1), the two single-field
+        edit dialogs (Rename Alias / Edit Path-URL), and Restore Place (the
+        D15 restore-conflict flow) share this one Window — ConfigureFields()
+        in the code-behind shows/hides the explanation and the Alias and
         Resource panels per PlaceFormMode. A plain themed Window like
         MessageForm, so it picks up Bg.Glow/Font.Sans/Text.Primary from
         Theme.xaml for free.
@@ -24,14 +25,19 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel x:Name="AliasPanel" Grid.Row="0" Margin="0,0,0,14">
+        <!-- Restore mode only: why the place can't come back as it was. Collapsed in every other mode. -->
+        <TextBlock x:Name="ExplanationText" Grid.Row="0" TextWrapping="Wrap" MaxWidth="412"
+                   HorizontalAlignment="Left" Margin="0,0,0,16" Visibility="Collapsed" />
+
+        <StackPanel x:Name="AliasPanel" Grid.Row="1" Margin="0,0,0,14">
             <TextBlock Text="Alias" FontWeight="SemiBold" Margin="0,0,0,6" />
             <TextBox x:Name="AliasTextBox" />
         </StackPanel>
 
-        <StackPanel x:Name="ResourcePanel" Grid.Row="1" Margin="0,0,0,14">
+        <StackPanel x:Name="ResourcePanel" Grid.Row="2" Margin="0,0,0,14">
             <TextBlock x:Name="ResourceLabel" Text="Folder path" FontWeight="SemiBold" Margin="0,0,0,6" />
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -44,11 +50,11 @@
             </Grid>
         </StackPanel>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="2" Foreground="{StaticResource Status.Error}"
+        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{StaticResource Status.Error}"
                    TextWrapping="Wrap" MaxWidth="412" HorizontalAlignment="Left"
                    Margin="0,0,0,14" Visibility="Collapsed" />
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="CancelButton" Content="Cancel" Margin="0,0,8,0"
                     IsCancel="True" Click="CancelButton_Click" />
             <Button x:Name="OkButton" Content="OK" Style="{StaticResource Button.Primary}"

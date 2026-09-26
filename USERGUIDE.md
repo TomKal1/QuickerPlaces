@@ -6,12 +6,12 @@ QuickerPlaces is a small always-on-top-of-your-workflow window for storing folde
 
 When QuickerPlaces opens you'll see, top to bottom:
 
-- A header with the app name and six buttons: a gear icon for **Settings**, a folder icon that opens your data folder, **Import...**, **Export...**, **Add Folder**, **Add URL**.
+- A header with the app name and seven buttons: a gear icon for **Settings**, a folder icon that opens your data folder, a bin icon for **Recently Deleted**, **Import...**, **Export...**, **Add Folder**, **Add URL**.
 - A row of **favourite bubbles** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
 - The **All Places** header with a count, a **search box**, and a **Hide List** / **Show List** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
 
-Nothing here needs a save button. Every add, edit, favourite toggle, reorder, or removal is written to disk the moment it happens — and if that write can't complete for some reason, a banner appears above the favourite bubbles to tell you so (see "The unsaved-changes banner" below).
+Nothing here needs a save button. Every add, edit, favourite toggle, reorder, removal, or restore is written to disk the moment it happens — and if that write can't complete for some reason, a banner appears above the favourite bubbles to tell you so (see "The unsaved-changes banner" below).
 
 ## Adding a place
 
@@ -35,7 +35,11 @@ Every row in the **All Places** grid shows the Alias, Type (Folder or URL), the 
   - **Rename Alias** — change just the name; the same uniqueness check from adding applies.
   - **Edit Path/URL** — change just the destination; the same duplicate check applies.
   - **Toggle Favourite** — pin it to (or unpin it from) the bubble row above the grid.
-  - **Remove** — deletes it, after asking. A bar under the list confirms it with an **Undo** button, and **Ctrl+Z** does the same. Undo puts the place back exactly where it was, including its spot among your favourites. You can undo several removals in a row, most recent first, for as long as QuickerPlaces stays open. If you've since reused that alias or path/URL for another place, undo explains why it can't restore it.
+  - **Remove** — moves it to **Recently Deleted** straight away, without asking first, because nothing is lost yet. The row and its bubble disappear, and a bar under the list says **Moved "Docs" to Recently Deleted.** with an **Undo** button. **Ctrl+Z** does the same as Undo. Either one puts the place back exactly where it was, including its spot among your favourites. You can undo several removals in a row, most recent first, for as long as QuickerPlaces stays open. After that, including after a restart, the place waits in Recently Deleted for seven days (see "Recently Deleted" below).
+
+    The bar stays for about 10 seconds (other messages there stay about 8), and it waits while your mouse pointer is over it or you've tabbed into it, so reaching for **Undo** never races it. It never takes the keyboard focus away from what you were doing. Ctrl+Z still works after it has gone.
+
+    If you've since given that alias or path/URL to another place, Undo opens a **Restore Place** dialog instead. It says which place is in the way and shows the alias and path/URL filled in, with the one that's in the way selected so you can type a new value. Click **Restore** to bring the place back under the new values, or **Cancel** to leave it in Recently Deleted. If the place's seven days in Recently Deleted have run out, Undo tells you it's gone.
 
 If a place can no longer be opened — the folder's been deleted, or the URL is malformed — you'll get a clear message instead of the app crashing or silently doing nothing.
 
@@ -60,6 +64,27 @@ Any place can be a favourite. Toggling **Favourite** (from the grid's right-clic
 - **Right-click a bubble** for a shortcut menu: **Open**, **Copy Path/URL**, or **Remove from Favourites** — you don't need to go back to the grid just to unpin something.
 - **Hover over a bubble** to see where it points.
 - **Ctrl+1** to **Ctrl+9** open the first nine bubbles, in their left-to-right order.
+
+## Recently Deleted
+
+Places you remove aren't deleted straight away. They go to **Recently Deleted**, which you open with the bin icon in the header. They don't appear in the grid, the bubbles or search while they're there.
+
+**How long they stay.** At least seven full days: 7 × 24 hours from the moment you removed the place. After that it's deleted for good the next time QuickerPlaces starts or saves a change, so if QuickerPlaces isn't running, a place can stay a little longer than seven days, never less. The **Days remaining** column counts down from **7 days**. It rounds up, so **1 day** means less than 24 hours are left. **Expiring** means the seven days are up but QuickerPlaces hasn't started or saved since, and you can still restore the place until it does. Hover over a **Days remaining** cell to see the exact date and time.
+
+**What it shows.** Alias (with the folder or globe icon), Type, Path / URL, **Deleted** (the date and time you removed it, in your local time) and **Days remaining**. The most recently removed place is at the top. Click a column header to sort. Select one place with a click, or several with Shift or Ctrl.
+
+**What you can do:**
+
+- **Restore selected** (**Alt+R**) — puts the selected places back in the grid, each in its old spot in the list, and favourites back in their old place among the bubbles.
+- **Delete selected permanently** (**Alt+D**) — deletes the selected places for good.
+- **Empty Recently Deleted** (**Alt+E**) — deletes every place in Recently Deleted for good.
+- **Close** — Esc closes the dialog too.
+
+The two permanent actions can't be undone, so both ask first. In that question, **Cancel** is the default: Enter, Space and Esc all back out, and so does closing the question window. Only clicking the button labelled **Delete permanently** or **Empty Recently Deleted** (or tabbing to it and pressing it) goes ahead. Pressing **Delete** in the Recently Deleted list does nothing, so nothing here is one keystroke away from being lost.
+
+**Restore conflicts.** Places in Recently Deleted never block an alias or path/URL: as soon as you remove "Docs", you can add a new place called "Docs". If you later restore the old one, it can't come back as it was. **Restore selected** first brings back every selected place that doesn't clash with anything, then shows the **Restore Place** dialog for each one that does, one at a time. That dialog explains which place now has its alias or path/URL, and lets you change either before clicking **Restore**. **Cancel** leaves that place in Recently Deleted and moves on to the next. If two selected places have the same alias, the more recently removed one is restored and the other one goes to Restore Place.
+
+If a change made here can't be saved, a line in the Recently Deleted dialog says why, and the unsaved-changes banner is waiting in the main window when you close it. When everything has been removed from the grid, its empty-list hint also reminds you that your removed places are in Recently Deleted.
 
 ## Bringing QuickerPlaces up from anywhere
 
@@ -86,7 +111,7 @@ If you only want the favourite bubbles visible, click **Hide List**. The grid co
 | **Ctrl+N** | Add Folder |
 | **Ctrl+U** | Add URL |
 | **Ctrl+H** | Hide / show the list |
-| **Ctrl+Z** | Undo the last Remove (repeat to undo earlier ones) |
+| **Ctrl+Z** | Undo the last Remove (repeat for earlier ones, this session) |
 | **Ctrl+1** … **Ctrl+9** | Open favourite bubble 1–9 |
 | **Enter** (in search box) | Open the top result |
 | **Down** (in search box) | Move into the grid |
@@ -101,13 +126,13 @@ These act on the selected grid row, when the grid has keyboard focus:
 | **Ctrl+E** | Edit Path/URL |
 | **Ctrl+D** | Toggle Favourite |
 | **Ctrl+C** | Copy Path/URL |
-| **Delete** | Remove (asks first) |
+| **Delete** | Remove (moves it to Recently Deleted; the next row is then selected) |
 
 ## The unsaved-changes banner
 
 If QuickerPlaces can't write a change to disk — the file's permissions changed, another program is holding it open, the disk is full, and so on — a banner appears at the top of the window instead of the app silently pretending everything is fine.
 
-The banner means exactly one thing: **the change you just made is on your screen but not yet on disk.** Nothing is lost — whatever you added, renamed, edited, favourited, reordered, or removed stays exactly as you left it in the app. It just hasn't been written to `places.json` yet.
+The banner means exactly one thing: **the change you just made is on your screen but not yet on disk.** Nothing is lost — whatever you added, renamed, edited, favourited, reordered, removed, restored, or permanently deleted stays exactly as you left it in the app. It just hasn't been written to `places.json` yet.
 
 Three buttons on the banner:
 
@@ -143,7 +168,7 @@ QuickerPlaces only allows one running copy per Windows user on a machine. If you
 
 ## Exporting places
 
-Click **Export...** to open a checklist of every place you've saved, all checked by default. Uncheck anything you don't want to include, then choose where to save the resulting `.json` file. Saving over an earlier export is safe: the new file is written completely before it replaces the old one, so an interrupted export never leaves a half-written file behind. This is the way to back up your list or hand a set of places to someone else running QuickerPlaces.
+Click **Export...** to open a checklist of every place in your list, all checked by default. Places in Recently Deleted are never exported. Uncheck anything you don't want to include, then choose where to save the resulting `.json` file. Saving over an earlier export is safe: the new file is written completely before it replaces the old one, so an interrupted export never leaves a half-written file behind. This is the way to back up your list or hand a set of places to someone else running QuickerPlaces.
 
 ## Importing places
 
@@ -153,22 +178,32 @@ What's left — the items that don't collide with anything — is presented as a
 
 If everything in the file collides with what you already have, you'll see an empty (or very short) list — that's expected, not an error.
 
+A few more rules:
+
+- Only places in your list count as collisions. A place in the file whose alias or path/URL matches only something in your Recently Deleted is still offered. (Restoring that old one later then goes through the Restore Place dialog.)
+- Removed places in a file are skipped. Exports never contain them, but a copied `places.json` can.
+- Exports made by older versions of QuickerPlaces still import.
+- A file exported by a newer version of QuickerPlaces is refused with "That file was exported by a newer version of QuickerPlaces. Update QuickerPlaces to import it." Nothing is offered from it.
+
 ## Where your data lives
 
 QuickerPlaces keeps a few small plain-text files, all safe to open in a text editor if you're curious or want to back them up manually:
 
-- **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes.
+- **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes. It holds Recently Deleted too.
 - **A backup of the previous version:** `%AppData%\QuickerPlaces\QuickerPlaces\places.bak.json` — QuickerPlaces keeps the previous contents of `places.json` every time it saves, automatically, right next to it. You don't need to do anything to get this; it's just there as an extra safety net.
 - **Window layout** (size, position, whether the grid is collapsed) and the **global hotkey**: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change the shortcut in Settings.
 - **The diagnostic log:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log` — see "Where the log lives" above.
 
-You never need to touch any of these files by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes. The folder icon at the left of the header opens the folder that holds `places.json` in File Explorer, with the file selected. The backup and any set-aside damaged files (see "The startup recovery prompt") are in the same folder.
+You never need to touch any of these files by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes (Recently Deleted goes with it). The folder icon at the left of the header opens the folder that holds `places.json` in File Explorer, with the file selected. The backup and any set-aside damaged files (see "The startup recovery prompt") are in the same folder.
+
+**Upgrading from a version without Recently Deleted.** This version stores `places.json` in a new format: dates are kept in UTC (the grid still shows your local date), and removed places are marked rather than deleted. The first time it starts, it converts your existing file in memory and writes nothing. The converted file is saved with your first change, and right after that save `places.bak.json` is your pre-upgrade file, until the next save replaces it. From then on, an older version of QuickerPlaces that has the startup recovery prompt says the file was written by a newer version, and leaves it untouched. A version from before the recovery prompt existed doesn't check: it would show the places in Recently Deleted as ordinary places, and forget they were removed the next time it saved. Don't go back to one of those with this file.
 
 ## If something goes wrong
 
 - **First launch, or a missing places file:** QuickerPlaces just starts with an empty list — this is normal, not an error, and your first **Add Folder**/**Add URL** creates the file.
 - **A places file that can't be loaded** (damaged, held open by another program, or from a newer version of the app): see "The startup recovery prompt" above — QuickerPlaces asks you what to do rather than guessing, and it never touches your file except when you explicitly choose to start fresh from a genuinely damaged one.
 - **A save that doesn't go through:** see "The unsaved-changes banner" above — your change stays visible and nothing is lost; the banner tells you and lets you retry.
+- **Removed something by mistake:** press Ctrl+Z (while QuickerPlaces is still open), or restore it from Recently Deleted within seven days.
 - **A place that won't open:** you'll get an on-screen message explaining why (folder no longer exists, URL is malformed, etc.) rather than the app freezing or closing.
 
 If you hit anything not covered here, or something that looks like an actual crash, that's worth reporting rather than working around — see `ai/BUILD_SUMMARY.md` for the project's current known-issues status.

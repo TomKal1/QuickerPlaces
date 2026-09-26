@@ -37,8 +37,10 @@ public enum StoreLoadOutcome
 
     /// <summary>
     /// The file was opened and read, but its content is not a usable
-    /// store: it isn't valid JSON, it doesn't parse to a PlacesStore, or
-    /// its schemaVersion is missing or non-numeric. The application MAY
+    /// store: it isn't valid JSON, it doesn't parse to a PlacesStore, its
+    /// schemaVersion is missing, non-numeric or below 1, or it is a
+    /// version 1 store that could not be migrated (PlacesStoreMigration).
+    /// The application MAY
     /// offer to quarantine the file (rename it aside, preserving its
     /// bytes, per <see cref="IPlacesStorage.Quarantine"/> in
     /// Services/IPlacesStorage.cs) and start empty once the user chooses

@@ -2,12 +2,12 @@
 
 A lightweight Windows desktop utility for storing and quickly opening remembered "places" — folder paths and URLs — under a memorable alias. Part of the **QuickerLinks** project: a better path launcher than Quick Links.
 
-> **Status:** early build. The features (search, hotkey, undo, copy, settings and the rest) have had a hands-on pass on Windows. Phase 1 of the [roadmap](ai/260901_Professional%20Improvements%20Plan.md) (persistence reliability and recovery: failed saves are reported with a Retry banner, a damaged or unreadable store is handled safely, and only one instance runs at a time) is merged in and builds with no warnings, and all 125 automated tests pass, but **its manual verification pass on Windows has not been done yet**: the recovery dialogs and the unsaved-changes banner are unproven in the running app. See `ai/BUILD_SUMMARY.md` for the checklist, and `ai/260921_Handoff.md` for where the roadmap stands.
+> **Status:** early build. The features (search, hotkey, undo, copy, settings and the rest) have had a hands-on pass on Windows. Phase 1 of the [roadmap](ai/260901_Professional%20Improvements%20Plan.md) (persistence reliability and recovery: failed saves are reported with a Retry banner, a damaged or unreadable store is handled safely, and only one instance runs at a time) is merged in. Phase 2 (a seven-day Recently Deleted: Remove no longer asks, and removed places can be restored for a week) is implemented on its branch, not yet merged. Everything builds with no warnings and all 237 automated tests pass, but **neither phase's manual verification pass on Windows has been done yet**: the recovery dialogs, the unsaved-changes banner and Recently Deleted are unproven in the running app. See `ai/BUILD_SUMMARY.md` for the checklists, and `ai/260925_Phase 2 Handoff.md` for where the roadmap stands.
 
 ## What it does
 
 - Save a folder path or a URL under a unique **alias**, with validation that blocks duplicate aliases and duplicate paths/URLs before they're saved.
-- Browse everything in a sortable grid — right-click a row for **Open**, **Copy Path/URL**, **Rename Alias**, **Edit Path/URL**, **Toggle Favourite**, or **Remove**; double-click to open. Removed something by mistake? **Undo** (or Ctrl+Z) puts it back.
+- Browse everything in a sortable grid — right-click a row for **Open**, **Copy Path/URL**, **Rename Alias**, **Edit Path/URL**, **Toggle Favourite**, or **Remove**; double-click to open. Removed something by mistake? **Undo** (or Ctrl+Z) puts it back, and **Recently Deleted** keeps it for seven days.
 - **Search** the grid as you type, by alias or path/URL. Press Enter to open the top result, so the search box doubles as a quick launcher.
 - Press **Ctrl+Alt+Space** from any app to bring QuickerPlaces to the front with the search box ready, type a few letters, and press Enter to open. Launching it again does the same thing rather than opening a second copy. Change the shortcut in **Settings** (the gear icon).
 - Drive everything from the keyboard: Ctrl+F search, Ctrl+N / Ctrl+U add, Ctrl+1–9 open a favourite, plus Enter / F2 / Ctrl+E / Ctrl+D / Delete on the selected row. The full list is in [`USERGUIDE.md`](USERGUIDE.md#keyboard-shortcuts).
@@ -37,7 +37,7 @@ dotnet run --project QuickerPlaces
 dotnet test QuickerPlaces.sln
 ```
 
-The tests (`src/QuickerPlaces.Tests`) cover the service layer only: validation, persistence, favourites, export/import, and the search matching rule. They target plain `net10.0`, so they run on any OS. Building the WPF app itself on a non-Windows machine needs `-p:EnableWindowsTargeting=true`.
+The tests (`src/QuickerPlaces.Tests`) cover the service layer and the UI-free view models behind the Recently Deleted dialog: validation, persistence, the schema migration, favourites, Recently Deleted and its expiry, export/import, and the search matching rule. They target plain `net10.0`, so they run on any OS. Building the WPF app itself on a non-Windows machine needs `-p:EnableWindowsTargeting=true`.
 
 ### Where your data lives
 

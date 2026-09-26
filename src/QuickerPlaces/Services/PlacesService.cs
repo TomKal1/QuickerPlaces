@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using QuickerPlaces.Models;
 
@@ -50,18 +51,39 @@ public sealed class PlacesService
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
+    /// <summary>
+    /// How places.json is parsed before binding. Duplicate property names
+    /// are refused at parse time, as a JsonException: JsonObject cannot
+    /// hold them, and would otherwise throw ArgumentException on first
+    /// access — a type LoadFromDisk's catch does not classify (D6), so it
+    /// would escape the constructor. QuickerPlaces never writes a duplicate
+    /// key, so a file that has one is Damaged like any other malformed file.
+    /// </summary>
+    private static readonly JsonDocumentOptions StoreDocumentOptions = new() { AllowDuplicateProperties = false };
+
     private readonly IPlacesStorage _storage;
+    private readonly TimeProvider _time;
     private readonly List<Place> _places;
 
-    /// <summary>Builds the production service over the real, roaming AppData store — unchanged from before the storage seam existed, so App.xaml.cs needs no changes.</summary>
-    public PlacesService() : this(FilePlacesStorage.ForDefaultLocation())
+    /// <summary>Builds the production service over the real, roaming AppData store and the system clock — unchanged from before the storage seam existed, so App.xaml.cs needs no changes.</summary>
+    public PlacesService() : this(FilePlacesStorage.ForDefaultLocation(), TimeProvider.System)
     {
     }
 
-    /// <summary>Builds the service over any IPlacesStorage — the seam a test uses to exercise load/save behaviour without touching a real disk.</summary>
-    public PlacesService(IPlacesStorage storage)
+    /// <summary>
+    /// Builds the service over any IPlacesStorage — the seam a test uses to
+    /// exercise load/save behaviour without touching a real disk — and,
+    /// optionally, any clock (D12). Every timestamp this service stamps or
+    /// compares comes from <paramref name="timeProvider"/>, never from
+    /// DateTime.Now directly, so a test can pin both the instant and the
+    /// local time zone instead of inheriting the machine's.
+    /// </summary>
+    public PlacesService(IPlacesStorage storage, TimeProvider? timeProvider = null)
     {
         _storage = storage;
+        // Assigned before LoadFromDisk: loading is the first thing that
+        // may need the clock.
+        _time = timeProvider ?? TimeProvider.System;
         var (places, outcome) = LoadFromDisk();
         _places = places;
         LoadOutcome = outcome;
@@ -72,15 +94,24 @@ public sealed class PlacesService
         // below. Ok and NotPresent need no recovery state at all.
         if (RequiresRecovery(outcome))
             SetRecoveryUnresolved(RecoveryMessageFor(outcome));
+
+        // D14 point 1: only a store that loaded — and migrated, if it had
+        // to — is purged. In memory only, like the migration before it:
+        // loading never writes, so the purge reaches disk with the next
+        // successful save.
+        if (outcome == StoreLoadOutcome.Ok)
+            PurgeExpired("after load");
     }
 
     /// <summary>
     /// The current on-disk schema version this build writes and expects.
-    /// Bump only alongside a migration branch in LoadFromDisk (plan 5.3) —
-    /// there are no prior versions yet, so there is nothing to migrate
-    /// today.
+    /// Bump only alongside a migration branch in LoadFromDisk (Phase 1 plan
+    /// 5.3). Version 2 (Phase 2) made DateAdded a UTC DateTimeOffset and
+    /// added DeletedAt; a version 1 store is migrated in memory on load by
+    /// PlacesStoreMigration (D11) and reaches disk only with the next
+    /// successful save.
     /// </summary>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     /// <summary>
     /// What happened the last time the store was loaded — see
@@ -92,25 +123,53 @@ public sealed class PlacesService
     /// </summary>
     public StoreLoadOutcome LoadOutcome { get; private set; }
 
+    /// <summary>The clock purge decisions use — the Recently Deleted dialog's countdown reads it too, so the two agree (D12).</summary>
+    public DateTimeOffset UtcNow => _time.GetUtcNow();
+
     /// <summary>Full path to places.json — handy for a "Reveal in Explorer" menu item.</summary>
     public string PlacesFilePath => _storage.StoreFilePath;
 
-    /// <summary>Snapshot of all stored places, in stored order. Callers that need live updates should go through MainViewModel's ObservableCollection instead.</summary>
-    public IReadOnlyList<Place> Places => _places;
+    /// <summary>
+    /// Snapshot of the active places — everything not in Recently Deleted
+    /// — in stored order (D8). A fresh list on every call, so don't index
+    /// it inside a loop that also calls into this service. Callers that
+    /// need live updates should go through MainViewModel's
+    /// ObservableCollection instead.
+    /// </summary>
+    public IReadOnlyList<Place> Places => Active.ToList();
+
+    /// <summary>Snapshot of the places in Recently Deleted, most recently removed first (D8). A fresh list on every call.</summary>
+    public IReadOnlyList<Place> RecentlyDeleted => _places
+        .Where(p => p.DeletedAt is not null)
+        .OrderByDescending(p => p.DeletedAt)
+        .ToList();
+
+    /// <summary>
+    /// The stored places that are not in Recently Deleted, in list order.
+    /// A removed place stays in _places, in its slot, with DeletedAt set
+    /// (D7), so every enumeration of _places has to decide whether it means
+    /// active places; this makes the usual answer one word (plan 5.3).
+    /// </summary>
+    private IEnumerable<Place> Active => _places.Where(p => p.DeletedAt is null);
 
     // ---------------------------------------------------------------
     // Validation — shared by both live inline dialog validation and the
     // Try* commit methods below, so the rules can never drift apart.
     // ---------------------------------------------------------------
 
-    /// <summary>Case-insensitive uniqueness check against all existing aliases (SI §6.2), excluding <paramref name="excluding"/> itself when editing.</summary>
+    /// <summary>
+    /// Case-insensitive uniqueness check against the active places' aliases
+    /// (SI §6.2), excluding <paramref name="excluding"/> itself when
+    /// editing. A place in Recently Deleted never blocks an alias (roadmap
+    /// §4.10, D15): restoring it later is what has to deal with the clash.
+    /// </summary>
     public ValidationResult ValidateAlias(string? alias, Place? excluding = null)
     {
         if (string.IsNullOrWhiteSpace(alias))
             return ValidationResult.Fail("Alias can't be empty.");
 
         var trimmed = alias.Trim();
-        var collides = _places.Any(p =>
+        var collides = Active.Any(p =>
             !ReferenceEquals(p, excluding) &&
             string.Equals(p.Alias, trimmed, StringComparison.OrdinalIgnoreCase));
 
@@ -121,9 +180,10 @@ public sealed class PlacesService
 
     /// <summary>
     /// Format validation plus the case-insensitive exact-match duplicate
-    /// check against other places of the same Type (SI §6.2 — deliberately
-    /// not normalized: "C:\Foo" and "C:\Foo\" are different values, as are
-    /// http/https variants of a URL).
+    /// check against other active places of the same Type (SI §6.2 —
+    /// deliberately not normalized: "C:\Foo" and "C:\Foo\" are different
+    /// values, as are http/https variants of a URL). Places in Recently
+    /// Deleted are not checked, as for aliases (§4.10, D15).
     /// </summary>
     public ValidationResult ValidateResource(string? resource, PlaceType type, Place? excluding = null)
     {
@@ -139,7 +199,7 @@ public sealed class PlacesService
         if (!formatResult.Success)
             return formatResult;
 
-        var collides = _places.Any(p =>
+        var collides = Active.Any(p =>
             !ReferenceEquals(p, excluding) &&
             p.Type == type &&
             string.Equals(p.Resource, trimmed, StringComparison.OrdinalIgnoreCase));
@@ -219,7 +279,7 @@ public sealed class PlacesService
             Resource = resource.Trim(),
             IsFavourite = false,
             FavouriteOrder = null,
-            DateAdded = DateTime.Now
+            DateAdded = _time.GetUtcNow()
         };
 
         _places.Add(place);
@@ -233,6 +293,12 @@ public sealed class PlacesService
     {
         if (IsMutationBlocked(out persistence))
             return ValidationResult.Fail(BlockedMessage());
+
+        if (IsInRecentlyDeleted(place, out var deleted))
+        {
+            persistence = PersistenceResult.Ok();
+            return deleted;
+        }
 
         var result = ValidateAlias(newAlias, excluding: place);
         if (!result.Success)
@@ -251,6 +317,12 @@ public sealed class PlacesService
         if (IsMutationBlocked(out persistence))
             return ValidationResult.Fail(BlockedMessage());
 
+        if (IsInRecentlyDeleted(place, out var deleted))
+        {
+            persistence = PersistenceResult.Ok();
+            return deleted;
+        }
+
         var result = ValidateResource(newResource, place.Type, excluding: place);
         if (!result.Success)
         {
@@ -263,11 +335,30 @@ public sealed class PlacesService
         return ValidationResult.Ok();
     }
 
-    /// <summary>Turns favouriting on/off. Turning on appends to the end of the favourite order; turning off renumbers the remaining favourites so FavouriteOrder stays a dense 0..n-1 sequence.</summary>
+    /// <summary>
+    /// Plan 5.3 row 6: rename and edit refuse a place in Recently Deleted.
+    /// Nothing in the UI can reach one (the grid shows active places only),
+    /// so only a bug gets here — but it must not edit a record the user
+    /// cannot see, nor change what its restore would bring back.
+    /// </summary>
+    private static bool IsInRecentlyDeleted(Place place, out ValidationResult refusal)
+    {
+        refusal = place.DeletedAt is null
+            ? ValidationResult.Ok()
+            : ValidationResult.Fail($"\"{place.Alias}\" is in Recently Deleted. Restore it first.");
+        return place.DeletedAt is not null;
+    }
+
+    /// <summary>Turns favouriting on/off. Turning on appends to the end of the favourite order; turning off renumbers the remaining favourites so FavouriteOrder stays a dense 0..n-1 sequence. Does nothing, and writes nothing, for a place in Recently Deleted, whose favourite fields are a remembered slot (D9).</summary>
     public PersistenceResult ToggleFavourite(Place place)
     {
         if (IsMutationBlocked(out var blocked))
             return blocked;
+
+        // Plan 5.3 row 7: not reachable from the UI, and nothing changed,
+        // so there is nothing to save or report.
+        if (place.DeletedAt is not null)
+            return PersistenceResult.Ok();
 
         if (place.IsFavourite)
         {
@@ -278,75 +369,95 @@ public sealed class PlacesService
         else
         {
             place.IsFavourite = true;
-            place.FavouriteOrder = _places.Where(p => p.IsFavourite).Count() - 1;
+            place.FavouriteOrder = Active.Where(p => p.IsFavourite).Count() - 1;
             // The above counts `place` itself (already flagged), so the
             // count-1 lands it at the end — equivalent to Max(existing)+1
             // without needing a separate "any favourites yet" branch.
+            // Active only: a deleted favourite's remembered slot (D9)
+            // would otherwise leave a gap in the bubble numbering.
         }
 
         return Persist();
     }
 
-    /// <summary>Reassigns FavouriteOrder for every current favourite to match <paramref name="orderedFavourites"/> (0-based, dense). Used after a bubble drag-reorder.</summary>
+    /// <summary>Reassigns FavouriteOrder for every current favourite to match <paramref name="orderedFavourites"/> (0-based, dense). Used after a bubble drag-reorder. Any place in Recently Deleted in the list is skipped: the bubbles the caller passes are active places.</summary>
     public PersistenceResult SetFavouriteOrder(IReadOnlyList<Place> orderedFavourites)
     {
         if (IsMutationBlocked(out var blocked))
             return blocked;
 
-        for (var i = 0; i < orderedFavourites.Count; i++)
-            orderedFavourites[i].FavouriteOrder = i;
+        // Plan 5.3 row 8: numbered among active places only, so a deleted
+        // record neither takes a bubble number nor loses its remembered
+        // slot (D9).
+        var order = 0;
+        foreach (var place in orderedFavourites)
+        {
+            if (place.DeletedAt is null)
+                place.FavouriteOrder = order++;
+        }
 
         return Persist();
     }
 
     /// <summary>
-    /// Removes <paramref name="place"/>. <paramref name="removed"/> records
-    /// what <see cref="TryRestore"/> needs to put it back exactly where it
-    /// was (list position and favourite position), or is null if nothing
-    /// was removed (blocked by recovery, or not in the store).
+    /// Moves <paramref name="place"/> to Recently Deleted: the same record
+    /// stays in the same list slot with DeletedAt stamped from the clock
+    /// (D7), so a restore — this session's Undo, or Recently Deleted after
+    /// a restart — can put it back exactly. <paramref name="removed"/> is
+    /// false when nothing changed: blocked by recovery (D3), not in the
+    /// store, or already deleted.
     /// </summary>
-    public PersistenceResult Remove(Place place, out RemovedPlace? removed)
+    public PersistenceResult Remove(Place place, out bool removed)
     {
-        removed = null;
+        removed = false;
 
         if (IsMutationBlocked(out var blocked))
             return blocked;
 
-        var index = _places.IndexOf(place);
-        if (index < 0)
+        // Not in the store, or already removed: nothing to change, so
+        // nothing is written and the caller has nothing to offer Undo for.
+        if (!_places.Contains(place) || place.DeletedAt is not null)
             return PersistenceResult.Ok();
 
-        removed = new RemovedPlace(place, index, place.IsFavourite ? place.FavouriteOrder : null);
+        place.DeletedAt = _time.GetUtcNow();
+        removed = true;
 
-        _places.RemoveAt(index);
+        // IsFavourite and FavouriteOrder are left as they were: they are now
+        // the remembered bubble slot a restore returns it to (D9). Only the
+        // active favourites are renumbered, closing the gap it leaves.
         if (place.IsFavourite)
             RenumberFavourites();
+
+        // A failed save leaves it deleted in memory with the banner up (D1).
         return Persist();
     }
 
     /// <summary>
-    /// Undoes a <see cref="Remove"/>: reinserts the same Place at its old
-    /// list position (clamped, if the list has shrunk since) and, if it was
-    /// a favourite, at its old bubble position, shifting later bubbles
-    /// right. Everything else about it (alias, DateAdded...) is unchanged.
-    /// Refuses without changing anything if its alias or path/URL has since
-    /// been reused by another place, since restoring it would create the
-    /// very duplicate the validation rules forbid.
+    /// Un-deletes <paramref name="place"/> exactly as it was: the same
+    /// record, in the list slot it never left (D7), and — if it was a
+    /// favourite — at its remembered bubble slot, clamped to the current
+    /// row, with later bubbles shifted right (D9). Everything else about it
+    /// (alias, DateAdded...) is unchanged.
+    ///
+    /// Refuses without changing anything if it is no longer in Recently
+    /// Deleted (purged, or permanently deleted), is already active, or its
+    /// alias or path/URL is now used by an active place — restoring it
+    /// would create the very duplicate the validation rules forbid, so it
+    /// stays in Recently Deleted for the conflict flow (D15).
     ///
     /// Like every other mutation this is a forward change, not a rollback
-    /// (D1): if the save fails, the restored place stays in memory and the
-    /// unsaved-changes banner offers Retry.
+    /// (D1): if the save fails, the restored place stays active in memory
+    /// and the unsaved-changes banner offers Retry.
     /// </summary>
-    public ValidationResult TryRestore(RemovedPlace removed, out PersistenceResult persistence)
+    public ValidationResult TryRestore(Place place, out PersistenceResult persistence)
     {
         if (IsMutationBlocked(out persistence))
             return ValidationResult.Fail(BlockedMessage());
 
         persistence = PersistenceResult.Ok();
-        var place = removed.Place;
 
-        if (_places.Contains(place))
-            return ValidationResult.Fail($"\"{place.Alias}\" is already back in the list.");
+        if (!CanBeRestored(place, out var notRestorable))
+            return notRestorable;
 
         if (!ValidateAlias(place.Alias).Success)
             return ValidationResult.Fail($"Can't restore \"{place.Alias}\": that alias is now used by another place.");
@@ -354,32 +465,198 @@ public sealed class PlacesService
         if (!ValidateResource(place.Resource, place.Type).Success)
             return ValidationResult.Fail($"Can't restore \"{place.Alias}\": its path/URL is now stored under another alias.");
 
-        _places.Insert(Math.Clamp(removed.Index, 0, _places.Count), place);
-
-        if (removed.FavouriteOrder is { } favouriteOrder)
-        {
-            // Make room at the old position; RenumberFavourites then closes
-            // any gap if favourites were removed in the meantime.
-            foreach (var other in _places.Where(p => p.IsFavourite && !ReferenceEquals(p, place) && p.FavouriteOrder >= favouriteOrder))
-                other.FavouriteOrder++;
-
-            place.IsFavourite = true;
-            place.FavouriteOrder = favouriteOrder;
-            RenumberFavourites();
-        }
-        else
-        {
-            place.IsFavourite = false;
-            place.FavouriteOrder = null;
-        }
-
+        Undelete(place);
         persistence = Persist();
         return ValidationResult.Ok();
     }
 
+    /// <summary>
+    /// Restores <paramref name="place"/> under a new alias and/or
+    /// destination — the commit of the D15 conflict flow, where the user
+    /// edits whatever an active place now holds. Validation is as for Add,
+    /// against active places; a failure changes nothing and leaves it in
+    /// Recently Deleted. Otherwise it comes back exactly as the plain
+    /// <see cref="TryRestore(Place, out PersistenceResult)"/> would — same
+    /// record, list slot and bubble slot (D7, D9) — with the new values, in
+    /// one save, as a forward change (D1).
+    /// </summary>
+    public ValidationResult TryRestore(Place place, string alias, string resource, out PersistenceResult persistence)
+    {
+        if (IsMutationBlocked(out persistence))
+            return ValidationResult.Fail(BlockedMessage());
+
+        persistence = PersistenceResult.Ok();
+
+        if (!CanBeRestored(place, out var notRestorable))
+            return notRestorable;
+
+        // The record is deleted, so it is not among the active places these
+        // check; `excluding` only says so explicitly.
+        var aliasResult = ValidateAlias(alias, excluding: place);
+        if (!aliasResult.Success)
+            return aliasResult;
+
+        var resourceResult = ValidateResource(resource, place.Type, excluding: place);
+        if (!resourceResult.Success)
+            return resourceResult;
+
+        place.Alias = alias.Trim();
+        place.Resource = resource.Trim();
+        Undelete(place);
+        persistence = Persist();
+        return ValidationResult.Ok();
+    }
+
+    /// <summary>
+    /// What stops <paramref name="place"/> being restored as it is — the
+    /// active place now holding its alias and/or the one holding its
+    /// destination (§4.10, D15) — or null if nothing does. Also null for a
+    /// place that is not in Recently Deleted at all (already restored,
+    /// purged, or permanently deleted): there is nothing to edit, and
+    /// TryRestore's own message says why.
+    /// </summary>
+    public RestoreConflict? GetRestoreConflict(Place place)
+    {
+        if (!CanBeRestored(place, out _))
+            return null;
+
+        // The same comparisons as ValidateAlias and ValidateResource, so a
+        // conflict is reported exactly when TryRestore would refuse.
+        var alias = place.Alias.Trim();
+        var resource = place.Resource.Trim();
+        var aliasHeldBy = Active.FirstOrDefault(p => string.Equals(p.Alias, alias, StringComparison.OrdinalIgnoreCase));
+        var resourceHeldBy = Active.FirstOrDefault(p =>
+            p.Type == place.Type &&
+            string.Equals(p.Resource, resource, StringComparison.OrdinalIgnoreCase));
+
+        return aliasHeldBy is null && resourceHeldBy is null
+            ? null
+            : new RestoreConflict(place, aliasHeldBy, resourceHeldBy);
+    }
+
+    /// <summary>
+    /// Restores the selected places that do not conflict, newest deletion
+    /// first (D22), in one save — none if nothing was restored. Conflicts
+    /// are returned for the D15 flow, not skipped, and stay in Recently
+    /// Deleted. Because the restores happen in that order, when two selected
+    /// places share an alias the more recently deleted one comes back and
+    /// the older one is returned as a conflict: the newer copy is the
+    /// likelier one to be wanted. Anything selected that is not in Recently
+    /// Deleted is ignored. Both lists are in restore order.
+    /// </summary>
+    public (List<Place> restored, List<RestoreConflict> conflicts, PersistenceResult persistence) RestoreSelected(IEnumerable<Place> selected)
+    {
+        var restored = new List<Place>();
+        var conflicts = new List<RestoreConflict>();
+
+        if (IsMutationBlocked(out var blocked))
+            return (restored, conflicts, blocked);
+
+        var candidates = selected
+            .Distinct<Place>(ReferenceEqualityComparer.Instance)
+            .Where(p => CanBeRestored(p, out _))
+            .OrderByDescending(p => p.DeletedAt)
+            .ToList();
+
+        foreach (var place in candidates)
+        {
+            // Checked one at a time, after the restores before it, so a
+            // clash between two selected places is caught like any other.
+            if (GetRestoreConflict(place) is { } conflict)
+            {
+                conflicts.Add(conflict);
+                continue;
+            }
+
+            Undelete(place);
+            restored.Add(place);
+        }
+
+        // D22: one whole-store write for the batch, as CommitImport does,
+        // and none at all when nothing changed. A failure keeps every
+        // restore in memory (D1).
+        var persistence = restored.Count > 0 ? Persist() : PersistenceResult.Ok();
+        return (restored, conflicts, persistence);
+    }
+
+    /// <summary>
+    /// Removes the given places from the store for good — the one
+    /// irreversible step (§4.9). Ignores any that are not in Recently
+    /// Deleted, so an active place can never be lost this way. One save,
+    /// or none if nothing changed (D22). A failed save leaves them gone
+    /// from memory and the store unsaved; Retry writes it (D1).
+    /// </summary>
+    public PersistenceResult DeletePermanently(IEnumerable<Place> selected)
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        var doomed = new HashSet<Place>(selected.Where(p => p is not null && p.DeletedAt is not null), ReferenceEqualityComparer.Instance);
+        var deleted = _places.RemoveAll(doomed.Contains);
+
+        return deleted > 0 ? Persist() : PersistenceResult.Ok();
+    }
+
+    /// <summary>Removes every place in Recently Deleted for good, keeping the active ones. One save, or none if it was already empty (D22).</summary>
+    public PersistenceResult EmptyRecentlyDeleted()
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        var deleted = _places.RemoveAll(p => p.DeletedAt is not null);
+
+        return deleted > 0 ? Persist() : PersistenceResult.Ok();
+    }
+
+    /// <summary>
+    /// Plan 5.4 steps 2-3, shared by every restore path: a place not in the
+    /// store any more (purged, or permanently deleted) or one that is
+    /// already active cannot be restored. <paramref name="refusal"/> says
+    /// which, in the words Undo shows the user.
+    /// </summary>
+    private bool CanBeRestored(Place place, out ValidationResult refusal)
+    {
+        refusal = !_places.Contains(place)
+            ? ValidationResult.Fail($"\"{place.Alias}\" is no longer in Recently Deleted.")
+            : place.DeletedAt is null
+                ? ValidationResult.Fail($"\"{place.Alias}\" is already back in the list.")
+                : ValidationResult.Ok();
+        return refusal.Success;
+    }
+
+    /// <summary>
+    /// Clears DeletedAt and, for a favourite, returns it to its remembered
+    /// bubble slot (D9): active favourites at or after that slot shift right
+    /// by one, then RenumberFavourites closes any gap left by favourites
+    /// that went in the meantime — so a slot past the end of today's row
+    /// lands at its end. Plan 5.3 row 10: only active favourites shift; a
+    /// deleted record's slot is its own memory and is never moved by
+    /// another place's restore. The record is already in _places, so it is
+    /// excluded by reference.
+    /// </summary>
+    private void Undelete(Place place)
+    {
+        place.DeletedAt = null;
+
+        if (!place.IsFavourite)
+            return;
+
+        if (place.FavouriteOrder is { } slot)
+        {
+            foreach (var other in Active.Where(p => p.IsFavourite && !ReferenceEquals(p, place) && p.FavouriteOrder >= slot))
+                other.FavouriteOrder++;
+        }
+
+        // A favourite with no remembered slot (only a hand-edited file can
+        // hold one) sorts last in RenumberFavourites: a favourite always
+        // comes back as a favourite (D9).
+        RenumberFavourites();
+    }
+
+    /// <summary>Renumbers the active favourites to a dense 0..n-1. A deleted record keeps its FavouriteOrder untouched: it is the remembered slot a restore returns it to (D9).</summary>
     private void RenumberFavourites()
     {
-        var favourites = _places.Where(p => p.IsFavourite).OrderBy(p => p.FavouriteOrder ?? int.MaxValue).ToList();
+        var favourites = Active.Where(p => p.IsFavourite).OrderBy(p => p.FavouriteOrder ?? int.MaxValue).ToList();
         for (var i = 0; i < favourites.Count; i++)
             favourites[i].FavouriteOrder = i;
     }
@@ -388,12 +665,26 @@ public sealed class PlacesService
     // Export / Import (SI §6.5 / §6.6)
     // ---------------------------------------------------------------
 
-    /// <summary>Writes the given places to <paramref name="filePath"/> as a standalone PlacesStore JSON document, replacing any existing file atomically. Returns an error message on failure, or null on success.</summary>
+    /// <summary>
+    /// Writes the given places to <paramref name="filePath"/> as a
+    /// standalone PlacesStore JSON document at the current schema version,
+    /// replacing any existing file atomically. Returns an error message on
+    /// failure, or null on success.
+    ///
+    /// Places in Recently Deleted are left out even if a caller passes them
+    /// (D16): an export is a list the user chose to keep or share, and
+    /// Recently Deleted is a safety net nobody chose. So an export never
+    /// carries a deletedAt key either (Place writes it only when set).
+    /// </summary>
     public string? Export(IEnumerable<Place> places, string filePath)
     {
         try
         {
-            var export = new PlacesStore { Places = places.ToList() };
+            var export = new PlacesStore
+            {
+                SchemaVersion = CurrentSchemaVersion,
+                Places = places.Where(p => p is not null && p.DeletedAt is null).ToList()
+            };
             var json = JsonSerializer.Serialize(export, JsonOptions);
             // Atomic for the same reason as places.json: exporting over an
             // earlier backup must never leave a half-written file in its place.
@@ -442,18 +733,62 @@ public sealed class PlacesService
     /// that do NOT collide with anything already stored (SI §6.6 — an
     /// incoming item whose alias or resource collides is excluded before
     /// the user ever sees it as an option). Returns an error message
-    /// instead of candidates if the file can't be read/parsed.
+    /// instead of candidates if the file can't be read/parsed, or was
+    /// written by a newer version (D17).
+    ///
+    /// The version decides how the file is read (D17): missing is treated
+    /// as 1, as import always has; 1 goes through the same
+    /// PlacesStoreMigration as the store, with this service's clock and
+    /// zone, so its dates follow the same rule; 2 is read as is; anything
+    /// newer is refused. Import stays lenient about a missing version where
+    /// the store is strict because the risks differ: the store's gate stops
+    /// a foreign file being loaded and then overwritten, while import is
+    /// additive, reviewed row by row, and never writes the source file.
+    ///
+    /// Records carrying deletedAt are never offered — whether from a
+    /// hand-edited file or a copied places.json, importing one into
+    /// Recently Deleted is meaningless and importing it as active would
+    /// resurrect something deleted elsewhere — and collisions are checked
+    /// against active places only (D15), so a place matching only something
+    /// in Recently Deleted is still offered.
     /// </summary>
     public (List<Place> candidates, string? errorMessage) GetImportCandidates(string filePath)
     {
         try
         {
             var json = File.ReadAllText(filePath);
-            var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
-            var incoming = store?.Places ?? new List<Place>();
+            if (JsonNode.Parse(json, documentOptions: StoreDocumentOptions) is not JsonObject root)
+                return (new List<Place>(), NotAnExportMessage);
+
+            var version = 1;
+            if (root["schemaVersion"] is { } versionNode)
+            {
+                if (versionNode is not JsonValue versionValue ||
+                    versionValue.GetValueKind() != JsonValueKind.Number ||
+                    !versionValue.TryGetValue(out version) ||
+                    version < 1)
+                {
+                    // Below 1 is numeric but no build ever wrote it — the same
+                    // reasoning as the store's gate (plan 5.1).
+                    return (new List<Place>(), NotAnExportMessage);
+                }
+
+                if (version > CurrentSchemaVersion)
+                    return (new List<Place>(), "That file was exported by a newer version of QuickerPlaces. Update QuickerPlaces to import it.");
+            }
+
+            // Import never logs the migration: it changes nothing stored, and
+            // the file itself is never written back.
+            if (version == 1)
+                PlacesStoreMigration.MigrateV1ToV2(root, _time.LocalTimeZone, _time.GetUtcNow());
+
+            var store = root.Deserialize<PlacesStore>(JsonOptions);
+            var incoming = (store?.Places ?? new List<Place>())
+                .Where(p => p is not null && p.DeletedAt is null)
+                .ToList();
 
             var candidates = incoming
-                .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Alias) && !string.IsNullOrWhiteSpace(p.Resource))
+                .Where(p => !string.IsNullOrWhiteSpace(p.Alias) && !string.IsNullOrWhiteSpace(p.Resource))
                 .Where(p => ValidateAlias(p.Alias).Success && ValidateResource(p.Resource, p.Type).Success)
                 .ToList();
 
@@ -483,6 +818,8 @@ public sealed class PlacesService
             return (new List<Place>(), $"Couldn't read that file: {ex.Message}");
         }
     }
+
+    private const string NotAnExportMessage = "That file isn't a QuickerPlaces export.";
 
     /// <summary>
     /// Adds the user-selected import candidates as new Place records (never
@@ -520,7 +857,7 @@ public sealed class PlacesService
                 Resource = candidate.Resource.Trim(),
                 IsFavourite = false,
                 FavouriteOrder = null,
-                DateAdded = DateTime.Now
+                DateAdded = _time.GetUtcNow()
             };
 
             _places.Add(place);
@@ -575,8 +912,11 @@ public sealed class PlacesService
 
         try
         {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
+            // JsonNode rather than JsonDocument, so a version 1 document can
+            // be migrated before it is bound to Place (D11). The version is
+            // read from the same tree, so the gate below and the migration
+            // can never disagree about what the file says.
+            var root = JsonNode.Parse(json, documentOptions: StoreDocumentOptions) as JsonObject;
 
             // The absent/non-numeric-version case is deliberately Damaged,
             // not "assume version 1" (plan 5.3): every store this
@@ -584,12 +924,20 @@ public sealed class PlacesService
             // document without one — or with one that isn't a number — is
             // not an old-but-valid v1 store. It is damaged, or it is a
             // file this application never wrote at all.
-            if (root.ValueKind != JsonValueKind.Object ||
-                !root.TryGetProperty("schemaVersion", out var versionElement) ||
-                versionElement.ValueKind != JsonValueKind.Number ||
-                !versionElement.TryGetInt32(out var version))
+            if (root?["schemaVersion"] is not JsonValue versionValue ||
+                versionValue.GetValueKind() != JsonValueKind.Number ||
+                !versionValue.TryGetValue<int>(out var version))
             {
                 DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} has no usable schemaVersion; treating as damaged.");
+                return (new List<Place>(), StoreLoadOutcome.Damaged);
+            }
+
+            // No build ever wrote a version below 1, so it is not a known
+            // migration (roadmap §4.3) — before Phase 2 the "< current"
+            // branch would have let 0 through as if it were current.
+            if (version < 1)
+            {
+                DiagnosticLog.Warn($"Places store at {_storage.StoreFilePath} has schemaVersion {version}, which no version of QuickerPlaces writes; treating as damaged.");
                 return (new List<Place>(), StoreLoadOutcome.Damaged);
             }
 
@@ -599,7 +947,29 @@ public sealed class PlacesService
                 return (new List<Place>(), StoreLoadOutcome.WrittenByNewerVersion);
             }
 
-            var store = JsonSerializer.Deserialize<PlacesStore>(json, JsonOptions);
+            if (version == 1)
+            {
+                // In memory only: this method never calls _storage.Write, so
+                // the migrated store reaches disk with the next successful
+                // save through Persist() (roadmap §4.3, Phase 1 test 15). If
+                // that save fails, the file is still the untouched v1
+                // original and the next launch migrates it again from the
+                // same source values — which is why DateAdded is converted
+                // exactly once (D11). A value the migration cannot convert
+                // throws JsonException, caught below as Damaged (D6).
+                var report = PlacesStoreMigration.MigrateV1ToV2(root, _time.LocalTimeZone, _time.GetUtcNow());
+
+                // Counts and a zone id only, never an alias or a destination
+                // (DiagnosticLog's privacy rule). The zone is logged because
+                // it is the assumption roadmap §4.7 asks to be recorded.
+                DiagnosticLog.Info(
+                    $"Migrating places store at {_storage.StoreFilePath} from schemaVersion 1 to {CurrentSchemaVersion} in memory " +
+                    $"(written with the next successful save): {report.Records} place(s); dateAdded converted to UTC exactly for " +
+                    $"{report.ExactOffsets} that carried an offset, interpreted as local time in time zone \"{report.ZoneId}\" for " +
+                    $"{report.InterpretedAsLocal} that had none, and set to the current time for {report.MissingDates} that were missing.");
+            }
+
+            var store = root.Deserialize<PlacesStore>(JsonOptions);
 
             // Both halves of this check matter. A document that is
             // literally "null" deserializes to a null store; one whose
@@ -616,30 +986,27 @@ public sealed class PlacesService
                 return (new List<Place>(), StoreLoadOutcome.Damaged);
             }
 
-            if (version < CurrentSchemaVersion)
-            {
-                // No prior schema version exists yet (CurrentSchemaVersion
-                // is still 1), so there is nothing to migrate today. This
-                // branch is written now, deliberately empty apart from the
-                // log line, so the next version bump has a documented
-                // place to add a migration step rather than inventing the
-                // gate from scratch. Whatever a future migration produces
-                // here must not be written back to disk until a save
-                // succeeds through the normal Persist() path (plan 5.3,
-                // test 15) — this method never calls _storage.Write.
-                DiagnosticLog.Info($"Migrating places store at {_storage.StoreFilePath} from schemaVersion {version} to {CurrentSchemaVersion} in memory (no-op: no prior versions exist yet).");
-            }
-
             // A hand-edited file can contain a bare `null` in the array;
             // drop it here rather than let it NRE the first grid binding.
+            // Places in Recently Deleted are kept (plan 5.3 row 15): they
+            // are part of the store, in their list slots (D7).
             var places = store.Places.Where(p => p is not null).ToList();
 
-            DiagnosticLog.Info($"Loaded {places.Count} place(s) from {_storage.StoreFilePath} (schemaVersion {version}).");
+            // A hand-edited file can carry any offset; normalise so that
+            // only UTC is ever held in memory, and so written back (§3).
+            foreach (var place in places)
+            {
+                place.DateAdded = place.DateAdded.ToUniversalTime();
+                place.DeletedAt = place.DeletedAt?.ToUniversalTime();
+            }
+
+            var deleted = places.Count(p => p.DeletedAt is not null);
+            DiagnosticLog.Info($"Loaded {places.Count - deleted} place(s) and {deleted} in Recently Deleted from {_storage.StoreFilePath} (schemaVersion {version}).");
             return (places, StoreLoadOutcome.Ok);
         }
         catch (JsonException ex)
         {
-            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} is not valid JSON.", ex);
+            DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} is not valid JSON, or could not be migrated.", ex);
             return (new List<Place>(), StoreLoadOutcome.Damaged);
         }
     }
@@ -683,6 +1050,11 @@ public sealed class PlacesService
         {
             ClearRecoveryUnresolved();
             DiagnosticLog.Info($"Reload of {_storage.StoreFilePath} succeeded; recovery resolved.");
+
+            // D14 point 1 again: a successful reload is a load like the
+            // constructor's, and purges the same way, in memory only.
+            if (outcome == StoreLoadOutcome.Ok)
+                PurgeExpired("after load");
         }
 
         return outcome;
@@ -711,7 +1083,9 @@ public sealed class PlacesService
     {
         try
         {
-            var quarantinedPath = _storage.Quarantine(DateTimeOffset.Now);
+            // Local time from the injected clock (D12): the file name is
+            // for a person reading a folder listing, and a test can pin it.
+            var quarantinedPath = _storage.Quarantine(_time.GetLocalNow());
             DiagnosticLog.Warn($"Quarantined damaged places store to {quarantinedPath}.");
 
             _places.Clear();
@@ -747,9 +1121,18 @@ public sealed class PlacesService
     /// </summary>
     private PersistenceResult Persist()
     {
+        // D14 point 2: every save — RetrySave included — writes a store
+        // without expired records. Like the change that triggered this save,
+        // the purge is not undone if the write below fails (D1); the next
+        // successful save, or Retry, writes the same purged list.
+        PurgeExpired("before save");
+
         try
         {
-            var store = new PlacesStore { Places = _places };
+            // Every record, deleted ones included: this is how Recently
+            // Deleted persists (plan 5.3 row 17). The version is set here,
+            // not left to PlacesStore's initialiser.
+            var store = new PlacesStore { SchemaVersion = CurrentSchemaVersion, Places = _places };
             var json = JsonSerializer.Serialize(store, JsonOptions);
             _storage.Write(json);
 
@@ -771,14 +1154,46 @@ public sealed class PlacesService
             // store path and the record count, never a place's alias or
             // resource. The count and path are enough to diagnose "why
             // didn't my data save" without writing anyone's data to a
-            // second, less-protected file.
+            // second, less-protected file. Active and deleted are counted
+            // separately, so the line matches what the user sees.
+            var deleted = _places.Count(p => p.DeletedAt is not null);
             DiagnosticLog.Error(
-                $"Failed to save {_places.Count} place(s) to {_storage.StoreFilePath}",
+                $"Failed to save {_places.Count - deleted} place(s) and {deleted} in Recently Deleted to {_storage.StoreFilePath}",
                 ex);
 
             var message = $"Couldn't save your places to \"{_storage.StoreFilePath}\". {ex.Message}";
             return PersistenceResult.Fail(message);
         }
+    }
+
+    /// <summary>
+    /// Removes every place whose seven days in Recently Deleted are up at
+    /// the clock's now (RecentlyDeletedPolicy, D13), and returns how many.
+    /// Called from exactly two points (D14): after a successful load (the
+    /// constructor and Reload, trigger "after load") and at the top of
+    /// Persist (trigger "before save"). Nowhere else, so a purge never
+    /// writes on its own.
+    ///
+    /// Roadmap §4.10: never purge from a store that failed to load or
+    /// migrate. That already holds by construction — such a store is empty
+    /// in memory, and D3 blocks every path to Persist — but this checks
+    /// IsRecoveryUnresolved itself, so a later caller cannot break the rule
+    /// by accident.
+    /// </summary>
+    private int PurgeExpired(string trigger)
+    {
+        if (IsRecoveryUnresolved)
+            return 0;
+
+        var now = _time.GetUtcNow();
+        var purged = _places.RemoveAll(p => p.DeletedAt is { } deletedAt && RecentlyDeletedPolicy.IsExpired(deletedAt, now));
+
+        // A count and the trigger only, never which places (DiagnosticLog's
+        // privacy rule).
+        if (purged > 0)
+            DiagnosticLog.Info($"Purged {purged} place(s) from Recently Deleted after seven days ({trigger}).");
+
+        return purged;
     }
 
     /// <summary>
@@ -875,11 +1290,44 @@ public sealed class PlacesService
         => RecoveryBlockedMessage ?? "Your saved places need attention before changes can be saved.";
 }
 
-/// <summary>A removed place plus where it was, so it can be put back by <see cref="PlacesService.TryRestore"/>.</summary>
-/// <param name="Place">The removed record itself (not a copy).</param>
-/// <param name="Index">Its position in the stored list when it was removed.</param>
-/// <param name="FavouriteOrder">Its bubble position if it was a favourite, otherwise null.</param>
-public sealed record RemovedPlace(Place Place, int Index, int? FavouriteOrder);
+/// <summary>
+/// A place in Recently Deleted whose alias and/or destination is now used
+/// by an active place (§4.10), so it cannot be restored as it is. Every
+/// restore path hands this to the same edit-before-restore flow (D15),
+/// which commits through PlacesService.TryRestore(place, alias, resource, …).
+/// </summary>
+/// <param name="Place">The deleted place that cannot be restored as it is.</param>
+/// <param name="AliasHeldBy">The active place now using its alias (case-insensitively), or null.</param>
+/// <param name="ResourceHeldBy">The active place now using its path/URL, or null.</param>
+public sealed record RestoreConflict(Place Place, Place? AliasHeldBy, Place? ResourceHeldBy)
+{
+    /// <summary>
+    /// One or two sentences for the restore dialog, e.g. "\"Docs\" can't be
+    /// restored as it was: another place is now called \"docs\", and
+    /// \"Projects\" now uses its folder path. Change them below, then
+    /// restore." Names the places involved, so it is shown to the user and
+    /// never logged (DiagnosticLog's privacy rule).
+    /// </summary>
+    public string Explanation
+    {
+        get
+        {
+            var destination = Place.Type == PlaceType.Folder ? "folder path" : "URL";
+            var start = $"\"{Place.Alias}\" can't be restored as it was: ";
+
+            if (AliasHeldBy is not null && ReferenceEquals(AliasHeldBy, ResourceHeldBy))
+                return start + $"another place, \"{AliasHeldBy.Alias}\", now has its alias and its {destination}. Change them below, then restore.";
+
+            if (AliasHeldBy is not null && ResourceHeldBy is not null)
+                return start + $"another place is now called \"{AliasHeldBy.Alias}\", and \"{ResourceHeldBy.Alias}\" now uses its {destination}. Change them below, then restore.";
+
+            if (AliasHeldBy is not null)
+                return start + $"another place is now called \"{AliasHeldBy.Alias}\". Change the alias below, then restore.";
+
+            return start + $"\"{ResourceHeldBy?.Alias}\" now uses its {destination}. Change the {destination} below, then restore.";
+        }
+    }
+}
 
 /// <summary>Matches import-dedupe keys the same way ValidateResource matches duplicates: same Type, case-insensitive exact Resource.</summary>
 internal sealed class ResourceKeyComparer : IEqualityComparer<(PlaceType Type, string Resource)>

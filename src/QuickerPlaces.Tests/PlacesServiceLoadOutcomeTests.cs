@@ -109,11 +109,12 @@ public sealed class PlacesServiceLoadOutcomeTests
     }
 
     /// <summary>
-    /// Test 15: even though there is currently nothing to migrate (no
-    /// prior schema version exists), the load path must never write to
-    /// disk on its own — only a save through the normal path may. A
-    /// version equal to current already exercises "loaded, never written
-    /// unless a save happens", which is the guarantee this test protects.
+    /// Test 15: the load path must never write to disk on its own — only a
+    /// save through the normal path may. Since Phase 2 a version 1 store is
+    /// migrated in memory on load (D11), so this empty one now exercises
+    /// the migrating path; Phase 2's test 13
+    /// (PlacesServiceSchemaV2Tests.LoadingAV1Store_WritesNothing) proves
+    /// the same with records whose dates are converted.
     /// </summary>
     [Fact]
     public void LoadingAStore_NeverWritesToDiskUntilASaveSucceeds()
