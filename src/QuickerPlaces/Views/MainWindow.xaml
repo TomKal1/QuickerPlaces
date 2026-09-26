@@ -339,60 +339,75 @@
                         at the window's 700 px minimum. MaxWidth stops the
                         short columns spreading on a wide screen, leaving the
                         extra room to Alias and Path / URL, which have none.
-                        The star column is the exception: an icon, so a fixed
-                        48 px, just wide enough for its header star plus the
-                        sort chevron.
                     -->
                     <!--
-                        Favourite, as a star beside the alias: filled gold for a
-                        favourite, an outline otherwise, and clicking it toggles
-                        (the same command as Ctrl+D and the menu's Toggle
-                        Favourite). Its header star sorts favourites first.
+                        Template column: the type glyph, the alias, and the
+                        favourite star straight after the alias text. The inner
+                        DockPanel is left-aligned and measures the star first,
+                        so the star sits right after the text while it fits,
+                        and a long alias trims to "…" rather than pushing the
+                        star out of the cell. (The StackPanel this replaces
+                        gave the alias unlimited width, so it never trimmed.)
+
+                        The star is gold on a favourite, always. On any other
+                        place a faint outline appears only on the row under the
+                        pointer or the selected row, where it would be clicked,
+                        so the list isn't covered in empty stars. Clicking it
+                        toggles favourite: the same command as Ctrl+D and the
+                        menu's Toggle Favourite. It is not focusable, so the
+                        keyboard still moves by row; Ctrl+D is the keyboard
+                        route.
                     -->
-                    <DataGridTemplateColumn SortMemberPath="Favourite" Width="48" CanUserResize="False"
-                                            HeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
-                        <DataGridTemplateColumn.Header>
-                            <TextBlock Text="&#xE735;" FontFamily="{StaticResource Font.Icons}" FontSize="12"
-                                       ToolTip="Favourites (click to sort)" AutomationProperties.Name="Favourite" />
-                        </DataGridTemplateColumn.Header>
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Button Style="{StaticResource Button.GridIcon}"
-                                        Command="{Binding DataContext.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                        CommandParameter="{Binding}"
-                                        ToolTip="{Binding FavouriteToolTip}"
-                                        AutomationProperties.Name="{Binding FavouriteToolTip}">
-                                    <TextBlock Text="{Binding FavouriteGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="14">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{StaticResource Text.Faint}" />
-                                                <!-- Later triggers win: a favourite stays gold whether hovered or selected. -->
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
-                                                        <Setter Property="Foreground" Value="#CCFFFFFF" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
-                                                        <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsFavourite}" Value="True">
-                                                        <Setter Property="Foreground" Value="{StaticResource Favourite.Star}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Button>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <!-- Template column so the type glyph can sit beside the alias. -->
                     <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="2*" MinWidth="110">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding TypeGlyph}" Style="{StaticResource TextBlock.Glyph}" />
-                                    <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                                <DockPanel VerticalAlignment="Center">
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding TypeGlyph}" Style="{StaticResource TextBlock.Glyph}" />
+                                    <DockPanel HorizontalAlignment="Left">
+                                        <Button DockPanel.Dock="Right" Margin="4,0,0,0"
+                                                Command="{Binding DataContext.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="{Binding FavouriteToolTip}"
+                                                AutomationProperties.Name="{Binding FavouriteToolTip}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource Button.GridIcon}">
+                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsFavourite}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <TextBlock Text="{Binding FavouriteGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="13">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource Text.Faint}" />
+                                                        <!-- Later triggers win: a favourite stays gold whether hovered or selected. -->
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                                <Setter Property="Foreground" Value="#CCFFFFFF" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsFavourite}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource Favourite.Star}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Button>
+                                        <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                </DockPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

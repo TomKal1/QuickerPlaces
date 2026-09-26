@@ -174,6 +174,13 @@ public sealed class MainViewModel : ObservableObject
         ApplySort();
     }
 
+    /// <summary>Returns the grid to stored order. MainWindow calls this for a remembered sort that no column shows any more, so a sort is never in force without its arrow.</summary>
+    public void ClearSort()
+    {
+        CurrentSort = null;
+        ApplySort();
+    }
+
     /// <summary>
     /// Sorts the view by <see cref="CurrentSort"/>, or returns it to stored
     /// order. A CustomSort rather than SortDescriptions: it compares without
@@ -404,11 +411,6 @@ public sealed class MainViewModel : ObservableObject
         RefreshPersistenceState(persistence);
         place.Refresh();
         RebuildFavourites();
-
-        // As for an open under a usage sort (D32): sorted by favourite, the
-        // row moves to its new group at once.
-        if (CurrentSort?.Key is PlaceSortKey.Favourite)
-            PlacesView.Refresh();
     }
 
     /// <summary>

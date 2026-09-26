@@ -145,7 +145,13 @@ public partial class MainWindow : Window
     {
         // The remembered sort is already applied to the view (MainViewModel's
         // constructor); this shows its arrow. Done once the grid is loaded, so
-        // nothing in its own start-up can clear the arrow afterwards.
+        // nothing in its own start-up can clear the arrow afterwards. A
+        // remembered sort with no column to show it (Favourite, whose column
+        // became the star beside the alias) would be a sort nobody can see
+        // or undo, so it goes back to stored order instead.
+        if (DataContext is MainViewModel { CurrentSort: { } remembered } viewModel && !HasColumnFor(remembered.Key))
+            viewModel.ClearSort();
+
         UpdateSortArrows();
 
         // Surfaced here (rather than from OnSourceInitialized, where the
@@ -378,6 +384,17 @@ public partial class MainWindow : Window
 
         viewModel.SortBy(key);
         UpdateSortArrows();
+    }
+
+    private bool HasColumnFor(PlaceSortKey key)
+    {
+        foreach (var column in PlacesGrid.Columns)
+        {
+            if (Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var columnKey) && columnKey == key)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>Shows the current sort's arrow on its column, and none on the others.</summary>
