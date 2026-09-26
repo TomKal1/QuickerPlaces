@@ -182,6 +182,16 @@
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <!-- Icon-only so the header still fits at the window's MinWidth. -->
+                <Button x:Name="ActivityButton" Click="ActivityButton_Click" Margin="0,0,8,0">
+                    <Grid Width="16" Height="16">
+                        <TextBlock Text="&#xE823;" FontFamily="{StaticResource Font.Icons}" FontSize="15"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Ellipse x:Name="ActivityDot" Width="5" Height="5"
+                                 Fill="{StaticResource Accent.Hover}" Stroke="{StaticResource Bg.Panel}"
+                                 StrokeThickness="1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                 Visibility="Collapsed" />
+                    </Grid>
+                </Button>
                 <Button Content="&#xE713;" FontFamily="{StaticResource Font.Icons}"
                         Click="SettingsButton_Click" Margin="0,0,8,0"
                         ToolTip="Settings"

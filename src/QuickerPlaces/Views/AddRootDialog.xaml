@@ -1,0 +1,40 @@
+<Window x:Class="QuickerPlaces.Views.AddRootDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Start folder activity tracking"
+        Width="600" SizeToContent="Height" ResizeMode="NoResize"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Track activity under this folder?"
+                   FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
+        <TextBlock x:Name="RootPathText" Grid.Row="1" TextWrapping="Wrap"
+                   FontFamily="{StaticResource Font.Mono}" Foreground="{StaticResource Accent.Hover}"
+                   Margin="0,0,0,16" />
+        <StackPanel Grid.Row="2" Margin="0,0,0,16">
+            <TextBlock Text="QuickerPlaces will record folder paths under this root, visit counts, and the time each folder is in the foreground while you are active."
+                       TextWrapping="Wrap" Margin="0,0,0,8" />
+            <TextBlock Text="It does not record file names, file contents, other apps, or activity outside this root."
+                       TextWrapping="Wrap" Margin="0,0,0,8" />
+            <TextBlock x:Name="StorageText" TextWrapping="Wrap" Margin="0,0,0,8" />
+            <TextBlock Text="This data stays on this computer, is not included when you export places, and is recorded only while QuickerPlaces is running."
+                       TextWrapping="Wrap" />
+        </StackPanel>
+        <CheckBox x:Name="MappedEquivalentCheck" Grid.Row="3" IsChecked="True"
+                  Margin="0,0,0,18" Visibility="Collapsed">
+            <TextBlock x:Name="MappedEquivalentText" TextWrapping="Wrap" />
+        </CheckBox>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0" />
+            <Button Content="Start tracking" Style="{StaticResource Button.Primary}"
+                    IsDefault="True" Click="Confirm_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

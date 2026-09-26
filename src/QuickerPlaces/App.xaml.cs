@@ -2,15 +2,16 @@ using System.Windows;
 using System.Windows.Input;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Activity;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
 
 namespace QuickerPlaces;
 
 /// <summary>
-/// Startup/shutdown orchestration. QuickerPlaces has no tray icon and no
-/// background/silent run mode (see SI §1/§3) — it is a normal window app:
-/// one window shows on launch, and closing it exits the process. Window
+/// Startup/shutdown orchestration. QuickerPlaces has no tray icon or silent
+/// startup mode yet: the main window shows on launch, and closing it exits
+/// the process after the activity host's bounded final flush. Window
 /// chrome (bounds, grid-expanded state) is saved once here on clean exit;
 /// Places data itself is saved continuously by PlacesService as the user
 /// edits it (see Services/PlacesService.cs), independent of this.
@@ -67,8 +68,10 @@ public partial class App : Application
         }
 
         var mainViewModel = new MainViewModel(settings, placesService);
+        var activityStore = ActivityTrackingHost.CreateStore();
+        var activityHost = new ActivityTrackingHost(activityStore);
 
-        var mainWindow = new MainWindow(mainViewModel, settings, settingsService);
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost);
 
         mainWindow.Closing += (_, e) =>
         {
@@ -91,6 +94,7 @@ public partial class App : Application
                 }
             }
 
+            activityHost.Dispose();
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
             DiagnosticLog.Info($"{AppInfo.Name} exiting cleanly.");
@@ -98,6 +102,7 @@ public partial class App : Application
         };
 
         mainWindow.Show();
+        activityHost.Start();
 
         // A second launch attempt signals SingleInstance instead of
         // starting up (above); this is what the running instance does

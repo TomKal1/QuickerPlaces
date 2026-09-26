@@ -87,6 +87,7 @@
     <Compile Include="..\QuickerPlaces\ViewModels\PlaceViewModel.cs" Link="Linked\ViewModels\PlaceViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedRowViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedRowViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\ActivityViewModel.cs" Link="Linked\ViewModels\ActivityViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>

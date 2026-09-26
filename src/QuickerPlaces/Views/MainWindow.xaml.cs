@@ -1,10 +1,12 @@
 using System;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Activity;
 using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views;
@@ -13,18 +15,43 @@ public partial class MainWindow : Window
 {
     private readonly AppSettings _settings;
     private readonly SettingsService _settingsService;
+    private readonly ActivityStore _activityStore;
+    private readonly ActivityTrackingHost _activityHost;
     private GlobalHotkey? _globalHotkey;
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
 
-    public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService)
+    public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
+        ActivityStore activityStore, ActivityTrackingHost activityHost)
     {
         InitializeComponent();
         DataContext = viewModel;
         _settings = settings;
         _settingsService = settingsService;
+        _activityStore = activityStore;
+        _activityHost = activityHost;
         RestoreWindowState(settings);
+        UpdateActivityIndicator();
+    }
+
+    private void ActivityButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new ActivityWindow(this, _activityStore, _activityHost,
+            new NetworkDriveResolver(), UpdateActivityIndicator);
+        window.ShowDialog();
+        UpdateActivityIndicator();
+    }
+
+    private void UpdateActivityIndicator()
+    {
+        var count = _activityStore.EnabledRoots().Count;
+        var text = count > 0
+            ? $"Activity — tracking {count} {(count == 1 ? "folder" : "folders")}"
+            : _activityStore.Roots.Count > 0 ? "Activity — paused" : "Activity — no folders tracked";
+        ActivityButton.ToolTip = text;
+        AutomationProperties.SetName(ActivityButton, text);
+        ActivityDot.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // -----------------------------------------------------------------
