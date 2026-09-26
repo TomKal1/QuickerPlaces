@@ -1,0 +1,34 @@
+---
+status: Phase 9 steps 1–7 implemented locally; live application checks pending
+branch: claude/phase-9-folder-activity
+date: 2026-09-26
+---
+
+# Phase 9 hand-off — app verification
+
+Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The latest code checkpoint is `e164286` (tray/startup). The documentation update after it is a separate local commit. Nothing has been pushed. The solution builds with zero warnings and 528 tests pass.
+
+## What has already been checked
+
+The developer probe's live events, 20,000-pass stress runs, lock handling, Explorer process restart recovery, and bounded shutdown were observed with the user on Windows. The strongest five-entry run had zero failures, a 0.017 ms maximum cached pass, a projected 0.0006% of one core at 1.5-second intervals, no sampled Explorer handle growth, and no private-byte growth. These are probe measurements, not a measurement of the finished WPF app running for a workday. Full numbers and caveats are in plan section 6 and `BUILD_SUMMARY.md`.
+
+An attempted Computer Use launch of the finished WPF app on 2026-09-26 ended with an app approval timeout before a window was returned. No QuickerPlaces process remained afterward, and no live UI result is claimed from that attempt.
+
+## Short live check still needed
+
+Run the **QuickerPlaces** project in Visual Studio, rather than the ActivityProbe. Use a small test root that you are comfortable recording. No root is tracked before you confirm one.
+
+1. Open **Activity** in the header. Add the test root and confirm **Start tracking**. Use File Explorer in a child folder for longer than five seconds, then switch away and back. Check the Week and Day rows, Visits and Time. Switching back to the same folder should continue one visit, without crediting the time away. Open a different child folder and check that its row appears. Click a calendar day and **Add as Place** for one row; cancel the Add Folder dialog if you do not want a new Place.
+2. In **Root settings**, use **Stop tracking** and confirm the data stays while new time stops; use **Resume tracking** to turn it back on. Check the grouping and threshold fields if convenient. **Delete root and its data** should remove the test root and its totals after confirmation.
+3. Add a root again for the background check. In **Settings**, turn on **Keep running in the tray when I close the window**. Close the main window, then use the tray icon's **Open**, **Pause tracking**, **Resume tracking**, and **Exit** actions. Check that the hotkey and a second launch reopen the hidden window. If **Start with Windows in the tray** is enabled, verify a sign-in starts it hidden with a tray icon; turn the switch off afterward and confirm the startup entry is removed. This sign-in check can be deferred until the next normal sign-in.
+4. On a machine with a mapped drive, add a mapped-root folder, accept the offered network equivalent, and browse the same child through the drive letter and its UNC path. It should appear as one row. This is a separate check if no mapped drive is available on the current machine.
+
+Record each result as passed, failed, or untested in the Phase 9 plan and `BUILD_SUMMARY.md`. If an app crash or wrong total appears, fix it before closing the phase. Existing probe results do not substitute for the Activity UI or tray check.
+
+## Constraints carried forward
+
+- Activity is local, opt-in per root, and never part of Places export. Do not introduce automatic root enrollment or path-bearing diagnostic logs.
+- `activity.json` stores root configuration and data together. Root changes report failed writes and can be retried. Activity samples buffer and flush; `places.json` remains independent.
+- The COM event cache and host run off the WPF UI thread. The user accepted the short Visual Studio probe session as the performance gate (D37–D38).
+- D39: returning from another app to the same Explorer folder continues the visit; the time away is not credited.
+- Both background switches default off. The tray icon must stay visible whenever a hidden startup instance is running; Exit follows the existing bounded shutdown path.

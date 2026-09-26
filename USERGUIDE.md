@@ -6,7 +6,7 @@ QuickerPlaces is a small always-on-top-of-your-workflow window for storing folde
 
 When QuickerPlaces opens you'll see, top to bottom:
 
-- A header with the app name and seven buttons: a gear icon for **Settings**, a folder icon that opens your data folder, a bin icon for **Recently Deleted**, **Import...**, **Export...**, **Add Folder**, **Add URL**.
+- A header with the app name and eight buttons: **Activity**, a gear icon for **Settings**, a folder icon that opens your data folder, a bin icon for **Recently Deleted**, **Import...**, **Export...**, **Add Folder**, **Add URL**. Activity shows a dot while folder tracking is on.
 - A row of **favourite bubbles** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
 - The **All Places** header with a count, a **search box**, and a **Hide List** / **Show List** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
@@ -90,6 +90,24 @@ What counts, precisely: an open counts when QuickerPlaces asks Windows to open t
 Windows accepting the request is all QuickerPlaces can see. If the program that receives it then fails, for example a browser that can't reach the site, the open has still been counted.
 
 These numbers never change your favourites or their order. Removing a place to Recently Deleted and restoring it keeps them.
+
+## Folder Activity
+
+**Folder Activity is off until you choose a root folder.** Click **Activity** in the header, then **Add root…**, choose a folder, and read the confirmation before clicking **Start tracking**. QuickerPlaces records folder paths under that root, visit counts, and time when one of those folders is shown in the foreground in File Explorer while you are active. It does not read file names or contents, watch other apps, or track folders outside roots you added. The header dot shows when tracking is on.
+
+In the **Activity** tab, choose a root, then use **Week**, **Month**, **Previous**, **Next**, or the date picker for a **Day** view. Rows show Folder, Visits, Time, and Last visited. Click a heading to sort. **Add as Place** opens the normal Add Folder dialog with that folder filled in; it does not add anything until you save there. The **Calendar** tab shows the last 365 days. Darker squares mean more recorded time relative to the other nonzero days shown; a grey square before you started tracking means *not tracked*. Choose a day to see its folders.
+
+Visits have a five-second threshold by default, so quickly passing through a folder does not count. Time starts counting after that threshold. Switching to another app and back to the same Explorer folder continues the visit, without crediting the time away. Leaving a folder open while you are idle, locking the PC, or suspending it does not add time. A visit to a folder through Explorer can count even if you opened it from QuickerPlaces. The figures describe foreground Explorer time, not the amount of work completed.
+
+In **Root settings**, you can change how folders are grouped: **Root child** combines everything under each immediate child, **Exact** keeps the folder shown, and **Depth** groups at a chosen number of levels. You can change the visit threshold and idle timeout, or add equivalent paths to the same root. For a mapped drive, the Add root confirmation offers its network path when Windows supplies one; selecting it lets either route count toward the same folder row.
+
+**Stop tracking** keeps the root and its recorded data, and **Resume tracking** starts it again. **Delete root and its data** removes both after confirmation. Folder detail is kept for 62 days; the calendar's daily totals are kept for 365 days. Before tracking began, or after older detail expires, the app does not present missing detail as zero activity.
+
+Activity is stored only on this computer in `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json`, separately from your Places and their export. It is buffered and saved about every five minutes, and on idle, lock, and exit; a crash can lose up to the last five minutes. If a root setting cannot be saved, Activity shows an error and **Retry save**. Explorer restarts can cause a brief gap before tracking resumes.
+
+### Keeping tracking on in the background
+
+In **Settings**, **Keep running in the tray when I close the window** makes closing the main window hide it while QuickerPlaces continues running. The tray icon's menu has **Open QuickerPlaces**, **Pause tracking** or **Resume tracking**, and **Exit**. Pausing stops sampling until you resume. The global shortcut or starting QuickerPlaces again also reopens the hidden window. **Start with Windows in the tray** starts it at sign-in; turning this off removes its per-user startup entry. Both switches are off by default. You can turn either off in Settings at any time.
 
 ## Recently Deleted
 
@@ -218,7 +236,8 @@ QuickerPlaces keeps a few small plain-text files, all safe to open in a text edi
 
 - **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes. It holds Recently Deleted too.
 - **A backup of the previous version:** `%AppData%\QuickerPlaces\QuickerPlaces\places.bak.json` — QuickerPlaces keeps the previous contents of `places.json` every time it saves, automatically, right next to it. You don't need to do anything to get this; it's just there as an extra safety net.
-- **Window layout** (size, position, whether the grid is collapsed, how it's sorted) and the **global hotkey**: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change the shortcut in Settings.
+- **Window layout** (size, position, whether the grid is collapsed, how it's sorted), the **global hotkey**, and the tray/startup switches: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change Settings.
+- **Folder Activity roots and recorded time:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json` — stays on this computer and is separate from a Places export.
 
 Last Opened and Opens are stored with each place in `places.json`, so they go wherever that file goes. The sort is in `settings.json`, which stays on this computer.
 - **The diagnostic log:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log` — see "Where the log lives" above.

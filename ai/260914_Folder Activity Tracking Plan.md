@@ -58,7 +58,7 @@ So a root added today produces a full Month view a month from now. Every period 
 
 ## 2. Scope
 
-**In scope:** opt-in per-root tracking with a configurable rollup, a dwell threshold before a visit counts, foreground-and-active time accounting, a local activity store with a flat day-level retention window, Week, Month and per-day views, a heat map, CSV export for timesheets, **Add as Place** from any tracked folder, and a purge.
+**In scope:** opt-in per-root tracking with a configurable rollup, a dwell threshold before a visit counts, foreground-and-active time accounting, a local activity store with a flat day-level retention window, Week, Month and per-day views, a heat map, **Add as Place** from any tracked folder, and a purge. CSV export for timesheets is deferred by D24.
 
 **Out of scope, deliberately:** any period longer than a month (D16), and the downsampling machinery that would need; reading Explorer's internal storage in any form; tracking anything outside a root the user explicitly added; tracking file *contents*, file names, or applications; any transmission of activity data anywhere; automatic creation of Places; automatic favourites or reordering (parent §2 keeps that non-goal); and any form of reporting designed for a second person to read. This is a tool for the person using the computer to see their own work. Section 8 states what that constrains.
 
@@ -375,7 +375,7 @@ View-model and formatting tests (UI-free, *added 2026-09-25*):
 - `ActivityViewModel`: Week and Month sums from day detail; Last visited is the latest `last`; Add as Place defaults the alias from `AliasSuggestion` and reports `TryAdd`'s validation message; a failed configuration save shows its message.
 - `AppSettings` version 4 reads a version-3 file with both switches off.
 
-Manual verification on Windows, because none of this can be proven in the repository's current environment (no .NET SDK, no Explorer). *2026-09-25:* the repository now builds and tests on Windows and Linux; Explorer is still Windows-only.
+Manual verification on Windows, because unit tests cannot prove Explorer and tray integration. The 2026-09-26 developer probe runs and their measured results are recorded in section 6; the application UI, mapped-drive path equivalence, and sign-in launch remain to be checked live.
 
 - Every item in section 6, with the method and the numbers recorded in `BUILD_SUMMARY.md`.
 - Explorer restarted mid-session: tracking recovers without a user-visible error.
@@ -389,7 +389,7 @@ Manual verification on Windows, because none of this can be proven in the reposi
 
 Recorded separately from the non-goals in section 2 because it is a product boundary, not a scope boundary.
 
-This is a tool for one person to see their own work. It is not an employee monitor, and the design must keep it from quietly becoming one: activity data stays on the machine, is never uploaded, never syncs with `places.json`, and is never included in an export the user did not explicitly perform themselves. There is no scheduled report, no aggregation across users, no silent mode, and no way to run it without the tracking indicator visible in the window. The feature is opt-in, per root, with an explanation shown before the first sample is recorded and a purge that actually deletes. Any future request to add a "manager view", a remote sink, a hidden mode, or reporting for anyone other than the person at the keyboard is out of scope by design, and should be refused on that basis rather than costed.
+This is a tool for one person to see their own work. It is not an employee monitor, and the design must keep it from quietly becoming one: activity data stays on the machine, is never uploaded, never syncs with `places.json`, and is never included in an export the user did not explicitly perform themselves. There is no scheduled report or aggregation across users. The main-window indicator shows active tracking, and the opted-in background mode keeps a tray icon with tracking status and Pause. The feature is opt-in, per root, with an explanation shown before the first sample is recorded and a purge that actually deletes. Any future request to add a "manager view", a remote sink, unindicated background mode, or reporting for anyone other than the person at the keyboard is out of scope by design, and should be refused on that basis rather than costed.
 
 ## 9. Order of work
 

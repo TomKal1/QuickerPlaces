@@ -10,7 +10,7 @@ using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views;
 
-/// <summary>Root management and opt-in; period and calendar views arrive in later steps.</summary>
+/// <summary>Opt-in root management, period totals, and the year calendar.</summary>
 public partial class ActivityWindow : Window
 {
     private readonly ActivityViewModel _viewModel;

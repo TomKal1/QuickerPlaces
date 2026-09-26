@@ -388,8 +388,16 @@ The items, with what each must show, are the Phase 3 plan's section 8.
 - [ ] Save failure → **Not done; not needed.**
 - [x] **Export and import**, in part: importing a file whose places all already exist offers nothing and says so (after item 6's fix to the message). A round trip into a fresh profile was not done; the automated round-trip test covers it.
 
-## Current status
+## Status snapshot — 2026-09-25
 
 As of 2026-09-25, Phases 1 and 2 are on `main` (Phase 2 through PR #6), with their manual checklists closed. The user accepted the untested items as untested; they stay recorded as untested and are not to be read as passed.
 
 Phase 3 is implemented on `claude/phase-3-usage-tracking`, with the fixes from the user's hands-on use, and its manual verification is closed as recorded above. All 329 tests pass, and the solution builds with 0 warnings on Windows (`dotnet build QuickerPlaces.sln`, `dotnet test QuickerPlaces.sln` from `src\`). Next: push the branch and merge it through a pull request, then write the Phase 4 detailed plan (general file support). The Linux `TZ` pass is still owed (see the departures table). Where to pick up is in `ai/260925_Phase 3 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.
+
+## Phase 9 — Folder Activity (2026-09-26)
+
+Phase 9 is implemented on `claude/phase-9-folder-activity` through plan steps 1–7. It adds an opt-in root activity store, Explorer observation through an event-fed COM cache, a background tracking host, root management, Week/Month/Day views, a 365-day calendar, and optional tray and sign-in coverage. No activity is recorded until a root is added and confirmed. `activity.json` stays under `%LocalAppData%\QuickerPlaces\QuickerPlaces` and is separate from roaming `places.json` and Places exports. The user guide now explains the limits, retention, and controls.
+
+The user and developer probe measured the Windows performance gate before the UI work. The final five-entry cached stress run completed 20,000 passes with zero failures, maximum pass 0.017 ms, projected one-core CPU 0.0006% at a 1.5-second sampling interval, constant Explorer handle total 11,611 at each 1,000-pass sample, and private bytes falling from 17,645,568 to 17,567,744. The mean and p95 rounded to 0.000 ms at the probe's display precision. Initial off-path reconciliation took 171.560 ms. A separate host run reported zero timer wakes while locked and a 2.0 ms stop. The same live probe recovered after an Explorer process restart in about 67 seconds. These are developer-probe measurements; they do not establish a full-day app CPU average or the five-separate-window case. The detailed run record and earlier measurements are in the [Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md), section 6.
+
+The solution builds on Windows with zero warnings and 528 tests pass. The tests cover the matching, time accounting, storage, host decisions, calendar, periods, settings defaults, and tray pause state. The WPF Activity window, live tray behaviour, sign-in launch, and mapped-drive equivalence have not yet been manually verified in the application. The short check is in [the current hand-off](260926_Phase%209%20Handoff.md). Do not mark Phase 9 complete until those outcomes are recorded.
