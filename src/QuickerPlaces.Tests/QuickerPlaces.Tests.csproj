@@ -40,6 +40,7 @@
     <Compile Include="..\QuickerPlaces\Services\IShell.cs" Link="Linked\Services\IShell.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceLauncher.cs" Link="Linked\Services\PlaceLauncher.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceSort.cs" Link="Linked\Services\PlaceSort.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />

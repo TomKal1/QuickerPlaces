@@ -24,8 +24,12 @@ public sealed class AppSettings
     /// stay at least 2: builds from main already write 2, and Load resets a
     /// file newer than this to defaults, silently dropping the user's
     /// hotkey and window layout.
+    ///
+    /// 3: added PlacesSortKey and PlacesSortDirection (Phase 3 D30). No
+    /// migration needed either: a version-2 file lacks them, which reads as
+    /// no sort — the stored order it already showed.
     /// </summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -50,4 +54,18 @@ public sealed class AppSettings
     /// rewrites the file on exit.
     /// </summary>
     public string? GlobalHotkey { get; set; } = HotkeyGesture.Default;
+
+    /// <summary>
+    /// The places grid's remembered sort (Phase 3 D30): a PlaceSortKey name
+    /// and "ascending" or "descending", as PlaceSort.Format writes them. Both
+    /// null means the stored order. Strings, not enums, deliberately: this
+    /// file's enums deserialize strictly, so a misspelt value would throw
+    /// and Load's fallback would reset every setting, hotkey included —
+    /// PlaceSort.Parse instead ignores what it doesn't recognise. Machine-
+    /// local presentation state, like the rest of this file (roadmap §3).
+    /// </summary>
+    public string? PlacesSortKey { get; set; }
+
+    /// <summary>See <see cref="PlacesSortKey"/>.</summary>
+    public string? PlacesSortDirection { get; set; }
 }

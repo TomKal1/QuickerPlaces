@@ -30,7 +30,7 @@ public sealed class PlaceViewModel : ObservableObject
     public PlaceType Type => Model.Type;
 
     /// <summary>"Folder" or "URL" — for the DataGrid's Type column.</summary>
-    public string TypeLabel => Model.Type == PlaceType.Folder ? "Folder" : "URL";
+    public string TypeLabel => Model.Type.Label();
 
     /// <summary>
     /// Icon-font glyph for this place's Type, rendered with the theme's
