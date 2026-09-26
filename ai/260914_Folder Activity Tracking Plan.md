@@ -1,11 +1,11 @@
 ---
 title: QuickerPlaces — Folder Activity Tracking Detailed Plan
-status: in progress on claude/phase-9-folder-activity — step 1 (the tracker, its seams, RootPathMatcher) built and tested on 2026-09-25; step 2 (the store) next
+status: in progress on claude/phase-9-folder-activity — steps 1 (the tracker, its seams, RootPathMatcher) and 2 (ActivityStore) built and tested on 2026-09-25; step 3 (the COM probe, the host and the performance gate) next, and it needs the user
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
 builds_on: ai/260925_Phase 3 Handoff.md §5; ai/260925_Phase 3 Detailed Plan.md D23–D33; ai/BUILD_SUMMARY.md
-last_revised: 2026-09-25 — step 1 built; D27–D31 record what building it settled, and §11 gains question 7. Earlier on 2026-09-25 — refreshed against the code after Phase 3 and against the user's answers (§0.1, D17–D26): late-bound COM, root configuration in activity.json, a GitHub-style year calendar replacing the hour heat map, tray and start-with-Windows in the first version, mapped-drive equivalence, timesheet export deferred. 2026-09-15 — longest period is a month, not a year (D16); monthly downsampling removed with it
+last_revised: 2026-09-25 — step 2 built; D32–D36 record what it settled. Earlier the same day — step 1 built; D27–D31 record what building it settled, and §11 gains question 7. Earlier on 2026-09-25 — refreshed against the code after Phase 3 and against the user's answers (§0.1, D17–D26): late-bound COM, root configuration in activity.json, a GitHub-style year calendar replacing the hour heat map, tray and start-with-Windows in the first version, mapped-drive equivalence, timesheet export deferred. 2026-09-15 — longest period is a month, not a year (D16); monthly downsampling removed with it
 ---
 
 # Phase 9 — Opt-in root folder activity tracking
@@ -168,6 +168,20 @@ These settle what D6 to D14 left open once the tracker met its tests. They are i
 **D30 — Ambiguity is judged per root, on the credited folder, and the probe passes every window through.** This refines D14 and amends D13's "dropped at the probe boundary". Foreground tabs in `Acme\Drawings` and `Acme\Specs` agree under `RootChild` (both credit `Acme`) and disagree under `Exact`. A foreground tab that credits nothing (a shell location, or a path outside the root) disagrees with one that credits a folder. So the probe must not filter: a tab it dropped could be the one in front. `IShellWindowProbe` says so, and the tracker does all of D13's filtering through `RootPathMatcher`.
 
 **D31 — Idle, a lock and a suspend drop a visit still inside its dwell, and keep one already counted.** If the same folder is still in the foreground afterwards, a counted visit carries on, so a folder left open over lunch is one visit, not two. An uncounted one starts its dwell again, so time away never completes a dwell. While the user is idle no new visit arrives.
+
+### Decisions made building step 2 (2026-09-25)
+
+These are in `Services/Activity/ActivityStore.cs` and pinned by the `ActivityStore*Tests`.
+
+**D32 — One `ActivityStore` over the existing `IPlacesStorage` seam, not `IActivityStore` plus `FileActivityStore`.** `FilePlacesStorage` already takes a folder and a file name. Pointed at `activity.json` it gives the temp-file-and-replace write, an `activity.bak.json` backup and an `activity.corrupt-*.json` quarantine, all tested since Phase 1, and the tests use the same `FakePlacesStorage`. A second file layer would duplicate it. This follows `PlacesService`, a concrete class over the seam. It replaces the two files in 5.2's table.
+
+**D33 — Only a damaged file is quarantined. One that cannot be opened, or that a newer version wrote, is never touched, and tracking is off for the session.** This amends §7's "a malformed or unreadable `activity.json` is quarantined". Phase 1's `StoreLoadOutcome` rule applies here too: a file that could not be opened is more likely held by antivirus or a sync client than damaged, and renaming or overwriting it could destroy intact data. So for `Unreadable`, `WrittenByNewerVersion`, and `Damaged` where the quarantine itself fails, `IsAvailable` is false. Nothing is recorded or written, every configuration change is refused with the notice, and the Activity window shows one line (`Notice`). Startup is never blocked, and nothing opens a dialog.
+
+**D34 — Time is held in whole milliseconds and written as seconds with up to three decimals (`"s": 4321.5`).** The tracker's intervals are about 1.5 s. Summing whole seconds would lose a third of the time, and summing doubles lets a day total drift from the sum of its folders. Integer milliseconds make §7's "totals always equal the sum of that day's folder seconds" exact. Each interval is rounded to the millisecond once, when it is recorded.
+
+**D35 — A day total also carries its folder count (`"f"`).** D20's tooltip says "3h 12m in 9 folders", and for a day older than 62 days the folder detail has gone. One more integer per day keeps the tooltip true for the whole year.
+
+**D36 — Buffering means the in-memory document is updated at once, and `Flush` writes the whole document when anything has changed.** Queries see recorded time before it is flushed. A failed flush keeps the data, so the next flush writes it: §7's "logged and dropped" drops the *failure*, not the data. A failed configuration write is reported, keeps the change in memory, and the next write of either kind carries it (Phase 1's D1). *When* to flush (every 5 minutes, on idle, on lock, on exit) belongs to the host (D26), so §7's "buffered writes flush on interval, on idle, and on exit" is tested with the host in step 3. The store's side of it, that recording never writes and a flush writes only when there is something new, is tested now.
 
 ## 5. Work items
 
@@ -358,7 +372,7 @@ This is a tool for one person to see their own work. It is not an employee monit
 *Revised 2026-09-25.* Each step builds on Windows and Linux and leaves the suite green; it is the intended commit sequence.
 
 1. The seams (`IShellWindowProbe`, `IUserPresence`, `IMonotonicClock`), the snapshot record, `RootPathMatcher`, and `FolderActivityTracker` with its full unit test suite. No UI, no store, no COM. *Done 2026-09-25 (`12d765f`, `c648189`): 85 new tests, 414 in all; D27–D31. The `Stopwatch` implementation of `IMonotonicClock` moves to step 3 with the host.*
-2. The models, `IActivityStore` and `FileActivityStore`: configuration writes that report, buffered activity, 62-day detail and 365-day totals, quarantine, and their tests.
+2. The models, `IActivityStore` and `FileActivityStore`: configuration writes that report, buffered activity, 62-day detail and 365-day totals, quarantine, and their tests. *Done 2026-09-25 (`982211f`, `5bcf97f`) as one `ActivityStore` over `IPlacesStorage` (D32): 82 new tests, 496 in all; D32–D36.*
 3. `ShellWindowProbe` (late-bound COM, D17), `UserPresence`, and `ActivityTrackingHost` (D26), with a diagnostic harness that logs pass timings and handle counts. **Measure section 6's first three rows before going further.** Nothing is recorded yet, because no root can be added.
 4. The Activity window's root management and `AddRootDialog`, with the opt-in panel and D22's network-path offer (`NetworkDriveResolver`), plus the header icon and indicator (D21). From here, tracking really runs.
 5. The Activity window's periods: Week, Month and Day, the grid with Last visited, and Add as Place.
