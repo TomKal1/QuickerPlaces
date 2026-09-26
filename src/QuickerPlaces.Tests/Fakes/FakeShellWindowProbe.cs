@@ -26,9 +26,15 @@ public sealed class FakeShellWindowProbe : IShellWindowProbe
     /// <summary>Closes every window.</summary>
     public void CloseAll() => Windows.Clear();
 
+    /// <summary>When set, Sample throws this, as the COM probe does when Explorer restarts or a pass times out.</summary>
+    public System.Exception? ThrowOnSample { get; set; }
+
     public IReadOnlyList<ShellWindowSnapshot> Sample()
     {
         Samples++;
+        if (ThrowOnSample is not null)
+            throw ThrowOnSample;
+
         return Windows.ToArray();
     }
 }

@@ -65,6 +65,7 @@
     <Compile Include="..\QuickerPlaces\Services\Activity\ActivityPeriod.cs" Link="Linked\Services\Activity\ActivityPeriod.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\ActivityRootSnapshot.cs" Link="Linked\Services\Activity\ActivityRootSnapshot.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\ActivityStore.cs" Link="Linked\Services\Activity\ActivityStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityTrackingLoop.cs" Link="Linked\Services\Activity\ActivityTrackingLoop.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\FolderActivity.cs" Link="Linked\Services\Activity\FolderActivity.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\FolderActivityTracker.cs" Link="Linked\Services\Activity\FolderActivityTracker.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\IMonotonicClock.cs" Link="Linked\Services\Activity\IMonotonicClock.cs" />
@@ -72,7 +73,9 @@
     <Compile Include="..\QuickerPlaces\Services\Activity\IUserPresence.cs" Link="Linked\Services\Activity\IUserPresence.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\RootPathMatcher.cs" Link="Linked\Services\Activity\RootPathMatcher.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\ShellWindowSnapshot.cs" Link="Linked\Services\Activity\ShellWindowSnapshot.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\StopwatchMonotonicClock.cs" Link="Linked\Services\Activity\StopwatchMonotonicClock.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\TrackingSignal.cs" Link="Linked\Services\Activity\TrackingSignal.cs" />
     <!--
       The Recently Deleted dialog's view models (plan 5.5, D21): every
       decision the dialog makes lives in these, so they are tested here
