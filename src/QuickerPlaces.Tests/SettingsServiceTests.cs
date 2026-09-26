@@ -85,7 +85,7 @@ public sealed class SettingsServiceTests : IDisposable
 
         var loaded = NewService().Load();
 
-        Assert.Equal(3, AppSettings.CurrentSchemaVersion);
+        Assert.Equal(4, AppSettings.CurrentSchemaVersion);
         Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
         Assert.Equal("LastOpened", loaded.PlacesSortKey);
         Assert.Equal("descending", loaded.PlacesSortDirection);
@@ -103,6 +103,30 @@ public sealed class SettingsServiceTests : IDisposable
         Assert.Null(loaded.PlacesSortDirection);
         Assert.Equal(10, loaded.WindowLeft);
         Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
+    }
+
+    [Fact]
+    public void Version_3_settings_keep_existing_values_and_default_tray_switches_off()
+    {
+        File.WriteAllText(_temp.File("settings.json"),
+            """{ "schemaVersion": 3, "globalHotkey": "Ctrl+Shift+Q", "placesSortKey": "Alias" }""");
+
+        var loaded = NewService().Load();
+
+        Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
+        Assert.Equal("Alias", loaded.PlacesSortKey);
+        Assert.False(loaded.MinimizeToTray);
+        Assert.False(loaded.StartWithWindows);
+    }
+
+    [Fact]
+    public void Tray_switches_round_trip()
+    {
+        NewService().Save(new AppSettings { MinimizeToTray = true, StartWithWindows = true });
+        var loaded = NewService().Load();
+
+        Assert.True(loaded.MinimizeToTray);
+        Assert.True(loaded.StartWithWindows);
     }
 
     /// <summary>

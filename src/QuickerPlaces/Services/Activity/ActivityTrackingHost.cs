@@ -19,6 +19,7 @@ public sealed class ActivityTrackingHost : IDisposable
     private bool _stopping;
     private bool _disposed;
     private bool _suspended;
+    private int _manuallyPaused;
 
     public ActivityTrackingHost(ActivityStore store)
     {
@@ -41,6 +42,7 @@ public sealed class ActivityTrackingHost : IDisposable
     }
 
     public bool IsAvailable { get; }
+    public bool IsPaused => Volatile.Read(ref _manuallyPaused) != 0;
 
     /// <summary>Delivered on the worker after a wake; intended for the developer probe.</summary>
     public event Action<ActivityTrackingLoop>? WakeCompleted;
@@ -65,6 +67,12 @@ public sealed class ActivityTrackingHost : IDisposable
 
     public void RootsChanged() => Signal(TrackingSignal.RootsChanged);
 
+    public void SetTrackingPaused(bool paused)
+    {
+        if (Interlocked.Exchange(ref _manuallyPaused, paused ? 1 : 0) == (paused ? 1 : 0)) return;
+        Signal(paused ? TrackingSignal.Paused : TrackingSignal.TrackingResumed);
+    }
+
     private void Signal(TrackingSignal signal)
     {
         lock (_sync)
@@ -72,7 +80,7 @@ public sealed class ActivityTrackingHost : IDisposable
             if (_stopping || _disposed) return;
             if (signal == TrackingSignal.Suspending) _suspended = true;
             if (signal == TrackingSignal.Resumed) _suspended = false;
-            _probe.SetPaused(_presence.SessionLocked || _suspended || _store.EnabledRoots().Count == 0);
+            _probe.SetPaused(_presence.SessionLocked || _suspended || IsPaused || _store.EnabledRoots().Count == 0);
             _signals.Enqueue(signal);
             _wake.Set();
         }

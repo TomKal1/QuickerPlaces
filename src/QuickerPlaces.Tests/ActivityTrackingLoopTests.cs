@@ -93,6 +93,25 @@ public sealed class ActivityTrackingLoopTests
     }
 
     [Fact]
+    public void TrayPause_FlushesAndSleepsWithoutSampling_UntilResume()
+    {
+        _loop.Start();
+        StartTracking();
+        Run(5);
+        var beforePause = _probe.Samples;
+
+        _loop.Wake(TrackingSignal.Paused);
+        Assert.Null(_loop.NextWait);
+        Assert.Equal(beforePause, _probe.Samples);
+        Assert.False(_store.HasUnsavedChanges);
+
+        Advance(TimeSpan.FromHours(1));
+        _loop.Wake(TrackingSignal.TrackingResumed);
+        Assert.Equal(beforePause + 1, _probe.Samples);
+        Assert.Equal(FolderActivityTracker.ForegroundPollInterval, _loop.NextWait);
+    }
+
+    [Fact]
     public void Ticks_RecordIntoTheStore_WithoutWriting()
     {
         _loop.Start();

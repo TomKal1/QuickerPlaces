@@ -7,11 +7,9 @@ using QuickerPlaces.Models;
 namespace QuickerPlaces.Services;
 
 /// <summary>
-/// Loads and saves AppSettings (window chrome only — see AppSettings'
-/// remarks) as JSON under the user's local AppData folder. Save is called
-/// once, explicitly, on clean exit (App.xaml.cs) — window bounds don't need
-/// write-through persistence the way Places data does, since losing the
-/// last few pixels of a resize to a crash is harmless.
+/// Loads and saves AppSettings (machine-local UI and launch settings) as
+/// JSON under the user's local AppData folder. The Settings dialog saves
+/// explicit opt-ins at once; window bounds are also saved on clean exit.
 /// </summary>
 public sealed class SettingsService
 {

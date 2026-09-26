@@ -16,5 +16,11 @@ public enum TrackingSignal
     Resumed,
 
     /// <summary>A root was added, edited, stopped, resumed or deleted.</summary>
-    RootsChanged
+    RootsChanged,
+
+    /// <summary>The user paused tracking from the tray.</summary>
+    Paused,
+
+    /// <summary>The user resumed tracking from the tray.</summary>
+    TrackingResumed
 }

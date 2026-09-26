@@ -40,6 +40,7 @@ public sealed class ActivityTrackingLoop
     private IReadOnlyList<TrackedRootConfig> _roots = Array.Empty<TrackedRootConfig>();
     private TimeSpan _lastFlush;
     private bool _suspended;
+    private bool _paused;
     private bool _idle;
 
     public ActivityTrackingLoop(FolderActivityTracker tracker, ActivityStore store, IUserPresence presence, IMonotonicClock clock)
@@ -58,7 +59,7 @@ public sealed class ActivityTrackingLoop
     {
         get
         {
-            if (_roots.Count == 0 || _suspended || _presence.SessionLocked)
+            if (_roots.Count == 0 || _suspended || _paused || _presence.SessionLocked)
                 return null;
 
             var untilFlush = FlushInterval - (_clock.Elapsed - _lastFlush);
@@ -117,10 +118,21 @@ public sealed class ActivityTrackingLoop
                 case TrackingSignal.RootsChanged:
                     LoadRoots();
                     break;
+
+                case TrackingSignal.Paused:
+                    _paused = true;
+                    _tracker.DiscardGap();
+                    Flush();
+                    break;
+
+                case TrackingSignal.TrackingResumed:
+                    _paused = false;
+                    _tracker.DiscardGap();
+                    break;
             }
         }
 
-        if (_roots.Count == 0 || _suspended || _presence.SessionLocked)
+        if (_roots.Count == 0 || _suspended || _paused || _presence.SessionLocked)
             return;
 
         if (_presence.IdleFor >= _roots.Max(r => r.IdleTimeout))

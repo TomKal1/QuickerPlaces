@@ -6,17 +6,15 @@
     <RootNamespace>QuickerPlaces</RootNamespace>
     <AssemblyName>QuickerPlaces</AssemblyName>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
 
     <!--
       ImplicitUsings is OFF, carried forward from the SystemApp template.
-      The template originally also turned on UseWindowsForms for a tray
-      icon's NotifyIcon, which made ImplicitUsings actively dangerous
+      UseWindowsForms for the tray icon's NotifyIcon makes ImplicitUsings
+      actively dangerous
       (System.Windows.* vs System.Windows.Forms/System.Drawing collide on
-      short names like Application, MessageBox, Color). QuickerPlaces has
-      no tray icon and no WinForms dependency (folder picking uses
-      Microsoft.Win32.OpenFolderDialog, a native WPF API), so that hazard
-      no longer applies — this is now just a style choice: every file
+      short names like Application, MessageBox, Color). Every file
       declares its own explicit `using`s rather than relying on the SDK's
       implicit global set, which keeps each file's dependencies visible at
       a glance.

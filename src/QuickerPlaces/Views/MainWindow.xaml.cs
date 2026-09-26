@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -17,6 +18,8 @@ public partial class MainWindow : Window
     private readonly SettingsService _settingsService;
     private readonly ActivityStore _activityStore;
     private readonly ActivityTrackingHost _activityHost;
+    private TrayIcon? _trayIcon;
+    private bool _exitRequested;
     private GlobalHotkey? _globalHotkey;
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
@@ -45,16 +48,37 @@ public partial class MainWindow : Window
         UpdateActivityIndicator();
     }
 
-    private void UpdateActivityIndicator()
+    public void UpdateActivityIndicator()
     {
         var count = _activityStore.EnabledRoots().Count;
-        var text = count > 0
+        var text = count > 0 && _activityHost.IsPaused
+            ? "Activity — tracking paused"
+            : count > 0
             ? $"Activity — tracking {count} {(count == 1 ? "folder" : "folders")}"
             : _activityStore.Roots.Count > 0 ? "Activity — paused" : "Activity — no folders tracked";
         ActivityButton.ToolTip = text;
         AutomationProperties.SetName(ActivityButton, text);
-        ActivityDot.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ActivityDot.Visibility = count > 0 && !_activityHost.IsPaused ? Visibility.Visible : Visibility.Collapsed;
+        _trayIcon?.Refresh(_settings);
     }
+
+    public AppSettings Settings => _settings;
+
+    public void AttachTrayIcon(TrayIcon trayIcon)
+    {
+        _trayIcon = trayIcon;
+        trayIcon.Refresh(_settings);
+    }
+
+    public void ExitFromTray()
+    {
+        _exitRequested = true;
+        Show();
+        Close();
+        if (IsLoaded) _exitRequested = false;
+    }
+
+    public void AllowSessionEnd() => _exitRequested = true;
 
     // -----------------------------------------------------------------
     // Global hotkey + bring-to-front. The hotkey needs this window's HWND,
@@ -108,7 +132,8 @@ public partial class MainWindow : Window
         // hotkey in the capture box would fire it instead of recording it.
         ApplyGlobalHotkey(null);
 
-        var saved = SettingsDialog.Show(this, _settings.GlobalHotkey, ApplyGlobalHotkey);
+        var saved = SettingsDialog.Show(this, _settings.GlobalHotkey,
+            _settings.MinimizeToTray, _settings.StartWithWindows, ApplySettingsChoice);
         if (saved is null)
         {
             // Cancelled: put back what was there. If that fails again, it
@@ -116,17 +141,44 @@ public partial class MainWindow : Window
             ApplyGlobalHotkey(_settings.GlobalHotkey);
             return;
         }
+    }
 
-        // Saved now rather than on exit, so a crash can't lose the choice.
-        _settings.GlobalHotkey = saved;
+    private string? ApplySettingsChoice(SettingsChoice choice)
+    {
+        var error = ApplyGlobalHotkey(choice.Hotkey);
+        if (error is not null) return error;
+        if (!StartupRegistration.TryApply(choice.StartWithWindows, out error))
+        {
+            ApplyGlobalHotkey(_settings.GlobalHotkey);
+            return error;
+        }
+        _settings.GlobalHotkey = choice.Hotkey;
+        _settings.MinimizeToTray = choice.MinimizeToTray;
+        _settings.StartWithWindows = choice.StartWithWindows;
         PersistWindowState(_settings);
         _settingsService.Save(_settings);
+        _trayIcon?.Refresh(_settings);
+        return null;
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_settings.MinimizeToTray && !_exitRequested)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+        base.OnClosing(e);
+        if (e.Cancel) _exitRequested = false;
     }
 
     protected override void OnClosed(EventArgs e)
     {
         _globalHotkey?.Dispose();
         _globalHotkey = null;
+        _trayIcon?.Dispose();
+        _trayIcon = null;
         base.OnClosed(e);
     }
 
