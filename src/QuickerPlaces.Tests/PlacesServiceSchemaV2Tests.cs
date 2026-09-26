@@ -390,14 +390,21 @@ public sealed class PlacesServiceSchemaV2Tests
         Assert.Null(reloadedNew.DeletedAt);
     }
 
-    /// <summary>Not a numbered plan test: CommitImport stamps DateAdded from the injected clock too (5.2).</summary>
+    /// <summary>
+    /// Not a numbered plan test. Phase 2 had CommitImport stamp DateAdded
+    /// from the clock; since Phase 3's D33 an import keeps the candidate's
+    /// own DateAdded, as UTC, so a round trip is lossless.
+    /// </summary>
     [Fact]
-    public void CommitImport_StampsTheClock()
+    public void CommitImport_KeepsTheCandidatesDateAdded_AsUtc()
     {
         var service = new PlacesService(new FakePlacesStorage(), Clock());
+        var original = new DateTimeOffset(2025, 6, 2, 20, 15, 0, TimeSpan.FromHours(10));
 
-        var (imported, _) = service.CommitImport(new[] { new Place { Alias = "A", Type = PlaceType.Url, Resource = "https://a.example.com" } });
+        var (imported, _) = service.CommitImport(new[] { new Place { Alias = "A", Type = PlaceType.Url, Resource = "https://a.example.com", DateAdded = original } });
 
-        Assert.Equal(Now, Assert.Single(imported).DateAdded);
+        var added = Assert.Single(imported);
+        Assert.Equal(original, added.DateAdded);
+        Assert.Equal(TimeSpan.Zero, added.DateAdded.Offset);
     }
 }

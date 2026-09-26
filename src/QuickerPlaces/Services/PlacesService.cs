@@ -769,8 +769,9 @@ public sealed class PlacesService
     /// The version decides how the file is read (D17): missing is treated
     /// as 1, as import always has; 1 goes through the same
     /// PlacesStoreMigration as the store, with this service's clock and
-    /// zone, so its dates follow the same rule; 2 is read as is; anything
-    /// newer is refused. Import stays lenient about a missing version where
+    /// zone, so its dates follow the same rule; 1 and 2 then go through
+    /// v2 → v3, which gives them fresh ids (Phase 3 D28); 3 is read as is;
+    /// anything newer is refused. Import stays lenient about a missing version where
     /// the store is strict because the risks differ: the store's gate stops
     /// a foreign file being loaded and then overwritten, while import is
     /// additive, reviewed row by row, and never writes the source file.
@@ -807,10 +808,13 @@ public sealed class PlacesService
                     return (new List<Place>(), "That file was exported by a newer version of QuickerPlaces. Update QuickerPlaces to import it.");
             }
 
-            // Import never logs the migration: it changes nothing stored, and
-            // the file itself is never written back.
+            // The same chain as the store (D28). Import never logs a
+            // migration: it changes nothing stored, and the file itself is
+            // never written back.
             if (version == 1)
                 PlacesStoreMigration.MigrateV1ToV2(root, _time.LocalTimeZone, _time.GetUtcNow());
+            if (version <= 2)
+                PlacesStoreMigration.MigrateV2ToV3(root);
 
             var store = root.Deserialize<PlacesStore>(JsonOptions);
             var incoming = (store?.Places ?? new List<Place>())
@@ -860,6 +864,15 @@ public sealed class PlacesService
     /// changed since the preview was shown) and silently skips any that no
     /// longer pass.
     ///
+    /// Keeps the candidate's DateAdded, LastOpenedAt and OpenCount, so an
+    /// export/import round trip is lossless (roadmap §4.18, Phase 3 D33),
+    /// normalised as the loader does: UTC, and a count of 0 or more. Keeps
+    /// its Id too, unless it is empty or already held by any record in the
+    /// store — active, deleted, or added earlier in this batch — when it
+    /// gets a fresh one. Restoring your own backup therefore keeps each
+    /// place's identity, and someone else's export can never share one of
+    /// yours. Favourite state is still not imported.
+    ///
     /// Persists once for the whole batch (test 19), not once per record —
     /// D2's whole-store write makes per-record saves both wasteful and
     /// pointless. A failed persist still leaves every successfully-added
@@ -873,6 +886,10 @@ public sealed class PlacesService
 
         var imported = new List<Place>();
 
+        // Every record, deleted ones included (D7): an id held by a place in
+        // Recently Deleted is still that place's, and a restore brings it back.
+        var takenIds = _places.Select(p => p.Id).ToHashSet();
+
         foreach (var candidate in selectedCandidates)
         {
             if (!ValidateAlias(candidate.Alias).Success)
@@ -880,15 +897,21 @@ public sealed class PlacesService
             if (!ValidateResource(candidate.Resource, candidate.Type).Success)
                 continue;
 
+            var id = candidate.Id != Guid.Empty && takenIds.Add(candidate.Id)
+                ? candidate.Id
+                : NewUniqueId(takenIds);
+
             var place = new Place
             {
-                Id = Guid.NewGuid(),
+                Id = id,
                 Alias = candidate.Alias.Trim(),
                 Type = candidate.Type,
                 Resource = candidate.Resource.Trim(),
                 IsFavourite = false,
                 FavouriteOrder = null,
-                DateAdded = _time.GetUtcNow()
+                DateAdded = candidate.DateAdded.ToUniversalTime(),
+                LastOpenedAt = candidate.LastOpenedAt?.ToUniversalTime(),
+                OpenCount = Math.Max(0, candidate.OpenCount)
             };
 
             _places.Add(place);
