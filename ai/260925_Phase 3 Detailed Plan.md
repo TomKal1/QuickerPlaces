@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Phase 3 Detailed Implementation Plan
-status: implemented 2026-09-25 (steps 1–7, e250fbb to 3e77208, plus 479388b, on claude/phase-3-usage-tracking, not yet merged) — all 311 tests pass; the UI is compile-verified only, never run; the section 8 checklist has not been walked. Where the build departs from this plan: BUILD_SUMMARY.md, Phase 3
+status: implemented 2026-09-25 (steps 1–7, e250fbb to 3e77208, plus 479388b, on claude/phase-3-usage-tracking, not yet merged) — later fixes from the user's hands-on use; all 329 tests pass; the section 8 checklist is closed (part passed in use, the rest not done and judged not needed by the user). Where the build departs from this plan: BUILD_SUMMARY.md, Phase 3
 created: 2026-09-25
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.11 to 4.14 (Usage tracking and sorting)

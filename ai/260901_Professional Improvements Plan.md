@@ -1,6 +1,6 @@
 # QuickerPlaces — Professional Improvements Implementation Plan
 
-**Status:** Phases 1 and 2 implemented and merged to `main` (238 tests pass; both manual checklists closed on 2026-09-25, with the failure-path items accepted as untested); Phase 3 implemented on `claude/phase-3-usage-tracking` (311 tests pass; UI not yet run, manual checklist not yet walked; not merged); Phases 4 to 9 planned, and Phase 4 is next, after the checklist  
+**Status:** Phases 1 and 2 implemented and merged to `main` (238 tests pass; both manual checklists closed on 2026-09-25, with the failure-path items accepted as untested); Phase 3 implemented on `claude/phase-3-usage-tracking` (329 tests pass; manual verification closed; not yet merged); Phases 4 to 9 planned, and Phase 4 is next  
 **Created:** 2026-09-01  
 **Last revised:** 2026-09-25 — Phase 3 implemented; Phase 2 merged  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  

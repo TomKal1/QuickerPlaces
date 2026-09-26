@@ -356,29 +356,40 @@ Phase 3 is planned in detail in [`ai/260925_Phase 3 Detailed Plan.md`](260925_Ph
 
 ### Verification status — read this before calling Phase 3 done
 
-**2026-09-25: all 311 tests pass on Windows, and the app builds with 0 warnings. The app has not been run.** Nothing added in step 7 (the columns, sorting, arrows, re-sort after an open) has been seen on screen. The session that built it deliberately didn't launch the app: `places.json` lives at a fixed `%AppData%` path with no override, and the first open would have migrated the real store to v3.
+**2026-09-25, when implemented: all 311 tests pass on Windows, and the app builds with 0 warnings. The app has not been run.** The session that built it deliberately didn't launch the app: `places.json` lives at a fixed `%AppData%` path with no override, and the first open would have migrated the real store to v3.
 
-### Manual verification checklist (must be walked on Windows)
+**Later on 2026-09-25: the user ran it on their own data**, over several rounds of screenshots. Each round's findings were fixed on the branch: the table of departures above has the rows, and "Found by the hands-on look" below has the list. Afterwards all 329 tests pass and the app builds with 0 warnings. The user then closed the manual verification: the items below that the hands-on use did not exercise are **not done, and the user judged them not needed**. They are recorded as such and are not to be read as passed.
 
-The items, with what each must show, are the Phase 3 plan's section 8. Record results here, against each item. Anything that can't be tested is recorded as untested, not skipped.
+### Found by the hands-on look, 2026-09-25
 
-- [ ] Upgrade a real file
-- [ ] Downgrade refusal
-- [ ] Every open path counts once
-- [ ] Missing folder
-- [ ] Failed launch
-- [ ] Sorting
-- [ ] Re-sort after an open
-- [ ] Undo while sorted
-- [ ] Remembered
-- [ ] Search with a usage sort
-- [ ] Width
-- [ ] Locale
-- [ ] Save failure
-- [ ] Export and import
+1. **Columns didn't scale with the window.** A narrower window crushed Alias and Path / URL while the fixed short columns kept their width. Every column is now proportional, with minimum and maximum widths (`f692008`).
+2. **Favourite and Opens weren't centred**, and **the sort indicator was nearly invisible.** They are now centred, and the header has its own template with a sort arrow (`f692008`), made larger with an accent underline in `3692e5d`.
+3. **The favourite checkbox couldn't be clicked.** It was replaced by a clickable star, first in its own column (`c3dffdf`), then straight after the alias (`55d9a95`).
+4. **Sorting cycled through a third, unsorted click.** It now flips between up and down only (`3692e5d`).
+5. **A new folder's alias had to be typed.** It now defaults to the deepest folder name (`ce1cc87`).
+6. **Message boxes cut off the end of each line.** The text sat in a horizontal `StackPanel` that let it wrap only at a fixed 320 px. With the 36 px icon that was wider than the 356 px of content width inside the 420 px window. It is now a two-column `Grid`, so the text wraps to the width left. This predates Phase 3; the user found it through the import message. It affected every `MessageForm`.
+
+### Manual verification checklist
+
+The items, with what each must show, are the Phase 3 plan's section 8.
+
+- [x] **Upgrade a real file.** Passed in use: the user's existing places loaded intact under the v3 build, and their opens were recorded and kept across restarts. The file-level details (the `id`s on disk, `places.bak.json` holding the v2 file, the log line) were not inspected.
+- [ ] Downgrade refusal → **Not done; not needed** (user, 2026-09-25).
+- [x] **Every open path counts once.** Passed in use for opening from the grid: Opens rose by one and Last Opened moved to the time of each open. The bubble, Ctrl+1–9 and search-box paths were not separately confirmed.
+- [ ] Missing folder → **Not done; not needed.**
+- [ ] Failed launch → **Not done; not needed.**
+- [x] **Sorting.** Passed, after the changes in items 2 and 4 above: the first direction per column, flipping, the arrow and underline.
+- [ ] Re-sort after an open → **Not done; not needed.**
+- [ ] Undo while sorted → **Not done; not needed.**
+- [ ] Remembered → **Not done; not needed.**
+- [ ] Search with a usage sort → **Not done; not needed.**
+- [x] **Width.** Passed after item 1 above, maximised and in a smaller window.
+- [ ] Locale → **Not done; not needed.** The user's dates show in US format, as their region would, so the check would not have shown a difference.
+- [ ] Save failure → **Not done; not needed.**
+- [x] **Export and import**, in part: importing a file whose places all already exist offers nothing and says so (after item 6's fix to the message). A round trip into a fresh profile was not done; the automated round-trip test covers it.
 
 ## Current status
 
 As of 2026-09-25, Phases 1 and 2 are on `main` (Phase 2 through PR #6), with their manual checklists closed. The user accepted the untested items as untested; they stay recorded as untested and are not to be read as passed.
 
-Phase 3 is implemented on `claude/phase-3-usage-tracking`, which is not yet pushed or merged. All 311 tests pass, and the solution builds with 0 warnings on Windows (`dotnet build QuickerPlaces.sln`, `dotnet test QuickerPlaces.sln` from `src\`). Its manual checklist (above) has not been walked. Next: walk it, fix what it finds, merge through a pull request, then write the Phase 4 detailed plan. Where to pick up is in `ai/260925_Phase 3 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.
+Phase 3 is implemented on `claude/phase-3-usage-tracking`, with the fixes from the user's hands-on use, and its manual verification is closed as recorded above. All 329 tests pass, and the solution builds with 0 warnings on Windows (`dotnet build QuickerPlaces.sln`, `dotnet test QuickerPlaces.sln` from `src\`). Next: push the branch and merge it through a pull request, then write the Phase 4 detailed plan (general file support). The Linux `TZ` pass is still owed (see the departures table). Where to pick up is in `ai/260925_Phase 3 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.
