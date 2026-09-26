@@ -10,6 +10,14 @@ namespace QuickerPlaces.Models;
 /// </summary>
 public sealed class Place
 {
+    /// <summary>
+    /// Stable identity for this place (Phase 3 D27). Assigned once — by the v2 → v3
+    /// migration, TryAdd, or import — and never changed by rename, edit, remove or
+    /// restore. Declared first so it is written first. Phase 5 keys per-file
+    /// application choices by it; nothing in Phase 3 displays it.
+    /// </summary>
+    public Guid Id { get; set; }
+
     /// <summary>User-facing unique name. Uniqueness is case-insensitive ("Docs" and "docs" collide) — enforced by PlacesService, not by this type.</summary>
     public required string Alias { get; set; }
 
@@ -43,4 +51,15 @@ public sealed class Place
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? DeletedAt { get; set; }
+
+    /// <summary>
+    /// When QuickerPlaces last launched this place and Windows accepted it (Phase 3 D24),
+    /// in UTC; null if never. Written only by PlacesService.RecordOpen. Not written to
+    /// JSON while null, so a never-opened record carries no date it doesn't have.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? LastOpenedAt { get; set; }
+
+    /// <summary>How many times QuickerPlaces has launched this place and Windows accepted it (D24). Saturates at int.MaxValue.</summary>
+    public int OpenCount { get; set; }
 }

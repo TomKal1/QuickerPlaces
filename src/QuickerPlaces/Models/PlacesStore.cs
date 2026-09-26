@@ -13,12 +13,13 @@ namespace QuickerPlaces.Models;
 public sealed class PlacesStore
 {
     /// <summary>
-    /// Version 2 since Phase 2 (UTC dateAdded, deletedAt). This initialiser
+    /// Version 3 since Phase 3 (id, lastOpenedAt, openCount); 2 since Phase 2
+    /// (UTC dateAdded, deletedAt). This initialiser
     /// never decides what reaches disk: PlacesService sets it from
     /// CurrentSchemaVersion on every write, and reads it from the file
     /// before binding (PlacesStoreMigration).
     /// </summary>
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 3;
 
     /// <summary>Every stored place in list order, including those in Recently Deleted (D7): the file order is the list order.</summary>
 

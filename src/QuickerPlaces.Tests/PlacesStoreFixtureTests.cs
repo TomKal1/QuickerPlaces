@@ -15,12 +15,14 @@ namespace QuickerPlaces.Tests;
 /// the Phase 2 plan's section 7: an existing v1 places.json, with the shape
 /// every pre-Phase-2 build wrote, loads with every field intact — now
 /// migrated to v2, DateAdded in UTC. And Phase 2's test 12: a v2 file, with
-/// places in Recently Deleted, loads with every field intact too. This is
+/// places in Recently Deleted, loads with every field intact too. Phase 3's
+/// tests 2 to 4 extend both to v3 (ids, never-opened usage) and add a v3
+/// fixture with usage on active and deleted places. This is
 /// the regression net for an accidental change to JsonOptions, to Place's
 /// property names, or to the migration.
 ///
-/// Fixtures/places.v1.json and places.v2.json are frozen once written — do
-/// not "fix" either to match a future schema change; a new fixture is
+/// Fixtures/places.v1.json, places.v2.json and places.v3.json are frozen
+/// once written — do not "fix" any of them to match a future schema change; a new fixture is
 /// added for that instead. Each test pins its fixture's content hash, so an
 /// edit fails here rather than quietly changing what is being proven.
 /// </summary>
@@ -91,6 +93,10 @@ public sealed class PlacesStoreFixtureTests
         AssertUtc(Utc(2025, 11, 19, 22, 12, 47), oldReports.DateAdded);
         Assert.Null(oldReports.DeletedAt);
 
+        // Phase 3 test 2: migrated on through v2 → v3, so every place has
+        // its own id and the never-opened defaults (D28).
+        AssertMigratedToV3(service);
+
         // Loading never writes (roadmap §4.3): the migrated store is only
         // in memory, and the stored text is the fixture's, untouched.
         Assert.Equal(0, storage.WriteCount);
@@ -159,19 +165,89 @@ public sealed class PlacesStoreFixtureTests
         AssertUtc(Utc(2025, 6, 2, 10, 15, 0), oldWiki.DateAdded);
         AssertUtc(Utc(2026, 9, 20, 8, 0, 0), oldWiki.DeletedAt);
 
+        // Phase 3 test 3: migrated on to v3, deleted records included.
+        AssertMigratedToV3(service);
+
+        Assert.Equal(0, storage.WriteCount);
+    }
+
+    /// <summary>Every place, active or deleted, has a distinct non-empty Id and has never been opened — what v2 → v3 gives an older store (D27, D28).</summary>
+    private static void AssertMigratedToV3(PlacesService service)
+    {
+        var all = service.Places.Concat(service.RecentlyDeleted).ToList();
+        Assert.All(all, p => Assert.NotEqual(Guid.Empty, p.Id));
+        Assert.Equal(all.Count, all.Select(p => p.Id).Distinct().Count());
+        Assert.All(all, p => Assert.Null(p.LastOpenedAt));
+        Assert.All(all, p => Assert.Equal(0, p.OpenCount));
+    }
+
+    private static Guid Id(int n) => Guid.Parse($"00000000-0000-0000-0000-{n:D12}");
+
+    /// <summary>
+    /// Phase 3 test 4: places.v3.json loads with every field intact — the
+    /// fixed ids, usage on active places and on a deleted one (usage
+    /// survives Recently Deleted), and a never-opened place with no
+    /// lastOpenedAt. Timesheets was opened 30 seconds after Downloads, so
+    /// precision below the minute is proven to survive too.
+    /// </summary>
+    [Fact]
+    public void V3FixtureFile_LoadsWithEveryFieldIntact()
+    {
+        var json = ReadFixture("places.v3.json");
+        Assert.Equal("249924013895ec9705cd817b4e9cac7b74998ce91f3331379239381fef191ec2", ContentHash(json));
+
+        var storage = new FakePlacesStorage { ContentsToReturn = json };
+        var service = new PlacesService(storage, new ManualTimeProvider(Utc(2026, 9, 25, 0, 0, 0), TestZones.PlusTen));
+
+        Assert.Equal(StoreLoadOutcome.Ok, service.LoadOutcome);
+        Assert.Equal(new[] { "Downloads", "QuickerPlaces Repo", "reports", "Timesheets" }, service.Places.Select(p => p.Alias));
+        Assert.Equal(new[] { Id(1), Id(2), Id(4), Id(5) }, service.Places.Select(p => p.Id));
+
+        var downloads = service.Places[0];
+        Assert.Equal(@"C:\Users\Test\Downloads", downloads.Resource);
+        Assert.True(downloads.IsFavourite);
+        Assert.Equal(0, downloads.FavouriteOrder);
+        AssertUtc(Utc(2026, 1, 14, 23, 30, 0), downloads.DateAdded);
+        AssertUtc(Utc(2026, 9, 24, 21, 15, 0), downloads.LastOpenedAt);
+        Assert.Equal(12, downloads.OpenCount);
+
+        var repo = service.Places[1];
+        Assert.Equal(PlaceType.Url, repo.Type);
+        AssertUtc(Utc(2026, 9, 10, 8, 0, 0), repo.LastOpenedAt);
+        Assert.Equal(1, repo.OpenCount);
+
+        var neverOpened = service.Places[2];
+        Assert.Equal(@"D:\Reports", neverOpened.Resource);
+        Assert.Null(neverOpened.LastOpenedAt);
+        Assert.Equal(0, neverOpened.OpenCount);
+
+        var timesheets = service.Places[3];
+        AssertUtc(Utc(2026, 9, 24, 21, 15, 30), timesheets.LastOpenedAt);
+        Assert.Equal(2, timesheets.OpenCount);
+
+        var deleted = Assert.Single(service.RecentlyDeleted);
+        Assert.Equal(Id(3), deleted.Id);
+        Assert.Equal("Reports", deleted.Alias);
+        AssertUtc(Utc(2026, 9, 24, 17, 45, 0), deleted.DeletedAt);
+        AssertUtc(Utc(2026, 9, 23, 12, 0, 0), deleted.LastOpenedAt);
+        Assert.Equal(3, deleted.OpenCount);
+
         Assert.Equal(0, storage.WriteCount);
     }
 
     /// <summary>
-    /// Not a numbered plan test: saving the loaded v2 fixture writes it
+    /// Not a numbered plan test: saving the loaded v3 fixture writes it
     /// back exactly — every record, deleted ones included and in the same
-    /// list slots (D7), with this build's own formatting. Proves the fixture
-    /// really is the shape this build writes, not merely one it can read.
+    /// list slots (D7), with this build's own formatting and property order
+    /// (id first, lastOpenedAt only when set). Proves the fixture really is
+    /// the shape this build writes, not merely one it can read. Phase 2's
+    /// version of this test used places.v2.json, which a v3 build migrates
+    /// and so can no longer write back unchanged.
     /// </summary>
     [Fact]
-    public void V2FixtureFile_IsWrittenBackExactly()
+    public void V3FixtureFile_IsWrittenBackExactly()
     {
-        var json = ReadFixture("places.v2.json");
+        var json = ReadFixture("places.v3.json");
         var storage = new FakePlacesStorage { ContentsToReturn = json };
         var service = new PlacesService(storage, new ManualTimeProvider(Utc(2026, 9, 25, 0, 0, 0)));
 

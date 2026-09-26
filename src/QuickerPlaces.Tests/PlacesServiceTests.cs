@@ -499,13 +499,13 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.All(target.Places, p => Assert.False(p.IsFavourite));
         Assert.Equal(2, NewServiceAt("other.json").Places.Count);
 
-        // Phase 2 test 39: and the export reads as version 2.
-        Assert.Equal(2, JsonNode.Parse(File.ReadAllText(exportFile))!["schemaVersion"]!.GetValue<int>());
+        // Phase 2 test 39: and the export reads as this build's version (3 since Phase 3).
+        Assert.Equal(PlacesService.CurrentSchemaVersion, JsonNode.Parse(File.ReadAllText(exportFile))!["schemaVersion"]!.GetValue<int>());
     }
 
     /// <summary>
     /// Phase 2 test 33: Export leaves out places in Recently Deleted even
-    /// when the caller passes them, writes schemaVersion 2, and no record
+    /// when the caller passes them, writes this build's schemaVersion, and no record
     /// has a deletedAt key (D16).
     /// </summary>
     [Fact]
@@ -521,7 +521,7 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Null(service.Export(service.Places.Concat(service.RecentlyDeleted), exportFile));
 
         var written = JsonNode.Parse(File.ReadAllText(exportFile))!;
-        Assert.Equal(2, written["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PlacesService.CurrentSchemaVersion, written["schemaVersion"]!.GetValue<int>());
         var places = written["places"]!.AsArray();
         Assert.Equal(new[] { "Docs", "Mail" }, places.Select(p => p!["alias"]!.GetValue<string>()));
         Assert.All(places, p => Assert.False(p!.AsObject().ContainsKey("deletedAt")));
@@ -705,7 +705,7 @@ public sealed class PlacesServiceTests : IDisposable
     {
         var exportFile = Path.Combine(_temp.Path, "export.json");
         File.WriteAllText(exportFile, """
-            { "schemaVersion": 3, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
+            { "schemaVersion": 4, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
             """);
 
         var (candidates, error) = NewService().GetImportCandidates(exportFile);

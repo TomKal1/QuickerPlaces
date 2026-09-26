@@ -100,7 +100,7 @@ public sealed class PlacesServiceSchemaV2Tests
         Assert.Equal(StoreLoadOutcome.Ok, second.LoadOutcome);
         Assert.Equal(before, second.Places.Select(p => (p.Alias, p.DateAdded)));
         Assert.Equal(new DateTimeOffset(2026, 1, 14, 23, 30, 0, TimeSpan.Zero), second.Places[0].DateAdded);
-        Assert.Equal(2, JsonNode.Parse(storage.LastWritten!)!["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PlacesService.CurrentSchemaVersion, JsonNode.Parse(storage.LastWritten!)!["schemaVersion"]!.GetValue<int>());
     }
 
     /// <summary>
@@ -140,13 +140,13 @@ public sealed class PlacesServiceSchemaV2Tests
         Assert.Equal(new[] { "Pinned", "Wiki" }, service.Places.Select(p => p.Alias));
     }
 
-    /// <summary>Test 16, version 3: WrittenByNewerVersion, and the file is left byte-identical.</summary>
+    /// <summary>Test 16, a version newer than this build (4 since Phase 3's test 5): WrittenByNewerVersion, and the file is left byte-identical.</summary>
     [Fact]
-    public void Version3_IsWrittenByNewerVersion_AndTheFileIsUntouched()
+    public void NewerVersion_IsWrittenByNewerVersion_AndTheFileIsUntouched()
     {
         using var dir = new TempDirectory();
         var path = dir.File("places.json");
-        File.WriteAllText(path, """{ "schemaVersion": 3, "places": [] }""");
+        File.WriteAllText(path, """{ "schemaVersion": 4, "places": [] }""");
         var originalBytes = File.ReadAllBytes(path);
 
         var service = new PlacesService(new FilePlacesStorage(dir.Path, "places.json"), Clock());

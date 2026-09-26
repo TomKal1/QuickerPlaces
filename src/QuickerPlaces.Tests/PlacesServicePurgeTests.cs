@@ -70,13 +70,13 @@ public sealed class PlacesServicePurgeTests
         AssertNoPurgeReachesTheFile(dir, path, StoreLoadOutcome.Unreadable, holdOpen: true);
     }
 
-    /// <summary>Test 44, WrittenByNewerVersion: a version 3 store with an expired record is left byte-identical.</summary>
+    /// <summary>Test 44, WrittenByNewerVersion: a version 4 store with an expired record is left byte-identical.</summary>
     [Fact]
     public void NoPurge_FromAStoreWrittenByANewerVersion()
     {
         using var dir = new TempDirectory();
         var path = dir.File("places.json");
-        File.WriteAllText(path, $$"""{ "schemaVersion": 3, "places": [ {{DeletedRecord("Expired", Now.AddDays(-30))}} ] }""");
+        File.WriteAllText(path, $$"""{ "schemaVersion": 4, "places": [ {{DeletedRecord("Expired", Now.AddDays(-30))}} ] }""");
 
         AssertNoPurgeReachesTheFile(dir, path, StoreLoadOutcome.WrittenByNewerVersion, holdOpen: false);
     }
