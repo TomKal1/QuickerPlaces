@@ -329,9 +329,19 @@
                         by PlacesGrid_Sorting, which replaces the DataGrid's own
                         sorting (Phase 3 D29) — so it names the key, not a
                         bound property.
+
+                        Every width is proportional (a star value), so the
+                        whole grid scales with the window rather than only
+                        Alias and Path / URL absorbing a change. A fixed pixel
+                        column never shrinks until the star columns are
+                        crushed, and a column whose edge was dragged became a
+                        fixed pixel one. MinWidth keeps each column readable
+                        at the window's 700 px minimum. MaxWidth stops the
+                        short columns spreading on a wide screen, leaving the
+                        extra room to Alias and Path / URL, which have none.
                     -->
                     <!-- Template column so the type glyph can sit beside the alias. -->
-                    <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="*">
+                    <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="2*" MinWidth="110">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -341,8 +351,8 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" SortMemberPath="Type" Width="90" />
-                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" SortMemberPath="Destination" Width="2*" />
+                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" SortMemberPath="Type" Width="0.7*" MinWidth="64" MaxWidth="100" />
+                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" SortMemberPath="Destination" Width="3*" MinWidth="140" />
                     <!--
                         Mode=OneWay is required here, not just decorative:
                         DataGridCheckBoxColumn's cell (display AND edit) is a
@@ -359,18 +369,30 @@
                         InvalidOperationException as soon as the column tries
                         to bind.
                     -->
-                    <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" SortMemberPath="Favourite" Width="90" IsReadOnly="True" />
+                    <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" SortMemberPath="Favourite"
+                                            Width="0.8*" MinWidth="78" MaxWidth="100" IsReadOnly="True"
+                                            HeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
+                        <!-- Based on the column's own default, which already centres the box across and keeps it inert; this centres it down the row too. -->
+                        <DataGridCheckBoxColumn.ElementStyle>
+                            <Style TargetType="CheckBox" BasedOn="{x:Static DataGridCheckBoxColumn.DefaultElementStyle}">
+                                <Setter Property="VerticalAlignment" Value="Center" />
+                            </Style>
+                        </DataGridCheckBoxColumn.ElementStyle>
+                    </DataGridCheckBoxColumn>
                     <!--
                         Last Opened replaces Date Added, which is still stored
                         and exported (roadmap §4.13). Formatted in the view
                         model with the user's regional settings, not by a
                         StringFormat, which would ignore them (D31).
                     -->
-                    <DataGridTextColumn Header="Last Opened" Binding="{Binding LastOpenedText}" SortMemberPath="LastOpened" Width="150" />
-                    <DataGridTextColumn Header="Opens" Binding="{Binding OpenCount}" SortMemberPath="Opens" Width="70">
+                    <DataGridTextColumn Header="Last Opened" Binding="{Binding LastOpenedText}" SortMemberPath="LastOpened"
+                                        Width="1.4*" MinWidth="128" MaxWidth="180" />
+                    <DataGridTextColumn Header="Opens" Binding="{Binding OpenCount}" SortMemberPath="Opens"
+                                        Width="0.6*" MinWidth="62" MaxWidth="90"
+                                        HeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
-                                <Setter Property="TextAlignment" Value="Right" />
+                                <Setter Property="TextAlignment" Value="Center" />
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
