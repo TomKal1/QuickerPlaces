@@ -165,7 +165,7 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>
     /// A click on the column header for <paramref name="key"/>: its first
-    /// direction, then the other, then the stored order (PlaceSort.Next).
+    /// direction, then flipping up and down (PlaceSort.Next).
     /// MainWindow calls this in place of the DataGrid's own sorting.
     /// </summary>
     public void SortBy(PlaceSortKey key)

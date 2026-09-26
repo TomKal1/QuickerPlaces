@@ -45,22 +45,15 @@ public readonly record struct PlaceSort(PlaceSortKey Key, ListSortDirection Dire
     };
 
     /// <summary>
-    /// The header-click cycle: another column starts in its first direction;
-    /// the same column again reverses; a third time returns to no sort. The
-    /// third state exists because stored order is the default, and without
-    /// it there would be no way back to it.
+    /// A header click: another column starts in its first direction, and the
+    /// same column again flips it, up and down only. Stored order (no sort) is
+    /// only the starting state before any header is clicked; the user chose a
+    /// two-way flip over a third click that returns to it.
     /// </summary>
-    public static PlaceSort? Next(PlaceSort? current, PlaceSortKey clicked)
-    {
-        var first = FirstDirection(clicked);
-
-        if (current is not { } sort || sort.Key != clicked)
-            return new PlaceSort(clicked, first);
-
-        return sort.Direction == first
-            ? new PlaceSort(clicked, Opposite(first))
-            : null;
-    }
+    public static PlaceSort Next(PlaceSort? current, PlaceSortKey clicked)
+        => current is { } sort && sort.Key == clicked
+            ? new PlaceSort(clicked, Opposite(sort.Direction))
+            : new PlaceSort(clicked, FirstDirection(clicked));
 
     /// <summary>
     /// Compares places by <see cref="Key"/> in <see cref="Direction"/>, then —

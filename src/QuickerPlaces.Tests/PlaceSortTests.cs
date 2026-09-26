@@ -132,7 +132,7 @@ public sealed class PlaceSortTests
     [InlineData(PlaceSortKey.LastOpened, ListSortDirection.Descending)]
     [InlineData(PlaceSortKey.Opens, ListSortDirection.Descending)]
     [InlineData(PlaceSortKey.DateAdded, ListSortDirection.Descending)]
-    public void Next_CyclesFirstDirection_ThenTheOther_ThenNoSort(PlaceSortKey key, ListSortDirection first)
+    public void Next_StartsInTheFirstDirection_ThenOnlyFlips(PlaceSortKey key, ListSortDirection first)
     {
         var other = first == ListSortDirection.Ascending ? ListSortDirection.Descending : ListSortDirection.Ascending;
 
@@ -142,7 +142,7 @@ public sealed class PlaceSortTests
 
         Assert.Equal(new PlaceSort(key, first), one);
         Assert.Equal(new PlaceSort(key, other), two);
-        Assert.Null(three);
+        Assert.Equal(new PlaceSort(key, first), three);
     }
 
     [Fact]

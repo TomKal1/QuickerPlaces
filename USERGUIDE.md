@@ -47,7 +47,7 @@ If a place can no longer be opened — the folder's been deleted, or the URL is 
 
 ## Sorting the grid
 
-Click a column header to sort by it. **Last Opened** and **Opens** start with the most recent and the most used. The other columns start A to Z. Click the same header again to reverse it, and a third time to go back to the order you added your places in. An arrow on the header shows the sort in use.
+Click a column header to sort by it. **Last Opened** and **Opens** start with the most recent and the most used. The other columns start A to Z. Click the same header again to reverse it; each click flips it between up and down. The sorted column's header has an arrow showing the direction and a coloured line along its bottom edge. Until you first click a header, the grid is in the order you added your places.
 
 Places with the same value, such as several that have never been opened, are listed by alias. A place you've never opened always counts as the oldest, so it's at the bottom when Last Opened shows the newest first.
 

@@ -511,8 +511,9 @@
     <!--
         Replaces the default header template, whose sort indicator is a small
         grey triangle above the text that is all but invisible on this theme.
-        A sorted column shows an accent chevron beside its title (up for
-        ascending, down for descending) and a brighter title. Grids that sort
+        A sorted column shows an accent arrow beside its title (up for
+        ascending, down for descending), a brighter title, and an accent
+        underline across its header. Grids that sort
         themselves, like Recently Deleted, get the same indicator, since it
         follows the column's SortDirection. PART_LeftHeaderGripper and
         PART_RightHeaderGripper are the names DataGridColumnHeader looks for
@@ -542,26 +543,31 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <ContentPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
-                                <TextBlock x:Name="SortGlyph" Grid.Column="1" Margin="6,1,0,0"
+                                <TextBlock x:Name="SortGlyph" Grid.Column="1" Margin="6,0,0,0"
                                            VerticalAlignment="Center"
-                                           FontFamily="{StaticResource Font.Icons}" FontSize="10" FontWeight="Normal"
-                                           Foreground="{StaticResource Accent}"
+                                           FontFamily="{StaticResource Font.Icons}" FontSize="13" FontWeight="Normal"
+                                           Foreground="{StaticResource Accent.Hover}"
                                            Visibility="Collapsed" />
                             </Grid>
                         </Border>
+                        <!-- An accent underline on the sorted column's header, so which column is sorted reads at a glance. -->
+                        <Border x:Name="SortBar" Height="2" VerticalAlignment="Bottom"
+                                Background="{StaticResource Accent}" Visibility="Collapsed" />
                         <Thumb x:Name="PART_LeftHeaderGripper" HorizontalAlignment="Left" Style="{StaticResource DataGridColumnHeader.Gripper}" />
                         <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right" Style="{StaticResource DataGridColumnHeader.Gripper}" />
                     </Grid>
                     <ControlTemplate.Triggers>
-                        <!-- Segoe Fluent Icons / MDL2 ChevronUp and ChevronDown. -->
+                        <!-- Segoe Fluent Icons / MDL2 Up and Down arrows. -->
                         <Trigger Property="SortDirection" Value="Ascending">
-                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE70E;" />
+                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE74A;" />
                             <Setter TargetName="SortGlyph" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="SortBar" Property="Visibility" Value="Visible" />
                             <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
                         </Trigger>
                         <Trigger Property="SortDirection" Value="Descending">
-                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE70D;" />
+                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE74B;" />
                             <Setter TargetName="SortGlyph" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="SortBar" Property="Visibility" Value="Visible" />
                             <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">

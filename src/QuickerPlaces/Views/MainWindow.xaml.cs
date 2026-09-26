@@ -369,8 +369,8 @@ public partial class MainWindow : Window
     // -----------------------------------------------------------------
     // Sorting (Phase 3 D29). The DataGrid's own sorting is replaced, not
     // extended: it would set SortDescriptions, which can't express "never
-    // opened is oldest" or the alias tie-break, and it has no way back to
-    // the stored order. Each column's SortMemberPath is its PlaceSortKey
+    // opened is oldest" or the alias tie-break, and each column's first
+    // direction is PlaceSort's to choose. Each column's SortMemberPath is its PlaceSortKey
     // name, and nothing else reads it.
     // -----------------------------------------------------------------
 
