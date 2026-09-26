@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Folder Activity Tracking Detailed Plan
-status: in progress on claude/phase-9-folder-activity — steps 1 to 7 built; 530 tests and a warning-free build, with live application checks pending
+status: in progress on claude/phase-9-folder-activity — steps 1 to 7 built; 531 tests and a warning-free build, with live application checks pending
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
@@ -76,7 +76,7 @@ These are settled here so they do not get re-litigated during implementation.
 
 **D1 — Observe shell windows; never watch the file system.** Tracking uses the documented `ShellWindows` COM collection (Internet Explorer's `SHDocVw`, present on every supported Windows) to read the folder each open Explorer window is showing. A recursive `FileSystemWatcher` over a large root is rejected: it costs real CPU and I/O, overflows its internal buffer on a busy tree, and answers the wrong question — it reports changes, not attention.
 
-**D2 — Sample adaptively rather than on a fixed timer.** The event-fed probe makes the ordinary sample a cached read and a foreground-handle check (D3). The accounting host samples ~1.5 s while an Explorer window is in the foreground and ~15 s when it is not. There is no host timer while the session is locked, suspended or without enabled roots. D38 adds a presence check every 15 s while idle.
+**D2 — Check Explorer while the user is active, and sleep while away.** The event-fed probe makes the ordinary sample a cached read and a foreground-handle check (D3). The accounting host checks every ~1.5 s while the user is active, including when another app is foreground. There is no host timer while the session is locked, suspended or without enabled roots. D38 adds a presence check every 15 s while idle. *Revised after the first Activity UI check, 2026-09-26:* the prior 15 s check while another app was foreground could miss a short Explorer visit before its five-second dwell threshold even began. The event-fed cache met the CPU budget at a 1.5 s cadence, so active-user checks now use that cadence regardless of the foreground app. Idle and lock behaviour is unchanged.
 
 **D3 — Event-driven observation is required after the first Windows performance run.** `DShellWindowsEvents` (`WindowRegistered` / `WindowRevoked`) plus per-window `NavigateComplete2` can update a cached window/path snapshot when Explorer changes, leaving routine samples to read memory and call `GetForegroundWindow`. Sinks need re-attaching after Explorer restarts, and a missed event needs a bounded reconciliation path. The probe stays behind `IShellWindowProbe` (5.1), so the accounting, store and UI do not change. This was originally a later swap; the 2026-09-26 D37 run exceeded both the probe pass and CPU budgets, so the swap is now a step 3 requirement.
 
@@ -342,6 +342,8 @@ If the first three cannot be met, the event-driven probe (D3) moves from "later 
 *Fourth event-fed stress run, 2026-09-26:* The older, still-running developer probe again reported five Explorer entries and 20,000 cached passes with zero failures. Mean and p95 rounded to 0.000 ms, maximum was 0.017 ms, and projected one-core CPU at a 1.5 s interval was 0.0006%. Explorer handles stayed at 11,611 in every 1,000-pass sample. Private bytes decreased from 17,645,568 to 17,567,744 (with a small intermediate fluctuation). Initial reconciliation took 171.560 ms off the timed sample path, under the two-second setup bound. This further confirms the numerical budgets, though this build still omits distinct HWND count.
 
 *Gate decision, 2026-09-26:* The user accepts these results and does not want further probe optimization. The numerical targets are met with substantial margin on five cached entries, and routine sample cost depends on entry count rather than whether the entries are tabs or separate HWNDs. Distinct HWNDs were not recorded in the old executable, so the exact five-separate-window setup is not claimed as observed. Proceed to step 4 without another stress run.
+
+*Short-visit fix check, 2026-09-26:* After the D2 timing revision, a 10-second scripted visit after another app is in front is counted (regression test). A temporary host on the user's Windows machine sampled 30 times, reported zero probe failures, and recorded one real Explorer visit while `C:\X\2024\240011` was foreground for 20 seconds. Its root was temporary `C:\`, with the default grouping. A second temporary host used `C:\X` at Depth 2 but ran after the desktop had been idle past five minutes; it took only one tick and recorded no visit during the 20-second automated window launch. That run does not exercise Depth 2 attribution because the host correctly remained idle. The user's exact Depth 2 configuration still needs a fresh app UI check with keyboard or mouse activity. The faster active-user cadence uses the same cached probe measured above; idle remains at one presence check every 15 seconds and lock at zero timer wakes.
 
 ## 7. Test plan
 

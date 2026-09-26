@@ -93,6 +93,31 @@ public sealed class ActivityTrackingLoopTests
     }
 
     [Fact]
+    public void ABriefExplorerVisitAfterAnotherApp_IsObservedAndCounted()
+    {
+        _loop.Start();
+        _probe.CloseAll();
+        var root = StartTracking();
+        Run(2); // Another app has been in front; Explorer then gets ten seconds.
+        _probe.ShowForeground(Acme);
+
+        var elapsed = TimeSpan.Zero;
+        var visitLength = TimeSpan.FromSeconds(10);
+        while (_loop.NextWait is { } wait && elapsed + wait <= visitLength)
+        {
+            Advance(wait);
+            _loop.Wake();
+            elapsed += wait;
+        }
+        Advance(visitLength - elapsed);
+        _probe.CloseAll();
+        _loop.Wake();
+
+        Assert.True(TimeInAcme(root) > TimeSpan.Zero);
+        Assert.Equal(1, _store.QueryPeriod(root, Today, Today)!.Folders[0].Visits);
+    }
+
+    [Fact]
     public void TrayPause_FlushesAndSleepsWithoutSampling_UntilResume()
     {
         _loop.Start();
@@ -137,13 +162,15 @@ public sealed class ActivityTrackingLoopTests
         Run(1);                                         // 300 s
         Assert.Equal(writes + 1, _storage.WriteCount);
 
-        _probe.CloseAll();                              // seen at 301.5; the slow 15 s interval from there
-        Run(19);                                        // 301.5 + 18 × 15 = 571.5 s
+        _probe.CloseAll();                              // active-user checks stay at 1.5 s
+        Run(198);                                       // 597 s
         Assert.Equal(writes + 1, _storage.WriteCount);
-        Assert.Equal(TimeSpan.FromSeconds(15), _loop.NextWait);
+        Assert.Equal(TimeSpan.FromSeconds(1.5), _loop.NextWait);
 
-        Run(1);                                         // 586.5 s: the next wait is cut short to meet the flush
-        Assert.Equal(TimeSpan.FromSeconds(13.5), _loop.NextWait);
+        Advance(TimeSpan.FromSeconds(1));
+        _loop.Wake();                                   // 598 s: wait is capped at the 600 s flush
+        Run(1);                                         // 599.5 s
+        Assert.Equal(TimeSpan.FromSeconds(0.5), _loop.NextWait);
         Run(1);                                         // 600 s
         Assert.Equal(writes + 2, _storage.WriteCount);
     }

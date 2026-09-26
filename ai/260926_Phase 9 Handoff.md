@@ -6,7 +6,7 @@ date: 2026-09-26
 
 # Phase 9 hand-off — app verification
 
-Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 530 tests pass after the grouping clarification.
+Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 531 tests pass after the short-visit timing fix.
 
 ## What has already been checked
 
@@ -15,6 +15,10 @@ The developer probe's live events, 20,000-pass stress runs, lock handling, Explo
 An attempted Computer Use launch of the finished WPF app on 2026-09-26 ended with an app approval timeout before a window was returned. No QuickerPlaces process remained afterward, and no live UI result is claimed from that attempt.
 
 The user then ran the Activity UI and saved `C:\X` with Depth 2. Week view still showed one earlier `C:\X\2024` row. The saved store confirms the new setting, but the old row contains only the already-grouped folder key and cannot be split into `240015` later. The UI now explains this, and a grouping change resets the active visit. The follow-up is to observe a **new** qualifying visit under Depth 2; the screenshot did not yet show one.
+
+The user then recreated `C:\X` at Depth 2 and still saw no new row. The live probe saw the test folder, and the app log showed no probe failures. The host's 15-second check while another app was foreground could miss a short Explorer visit; this is now 1.5 seconds while active, with idle and locked waits unchanged. A temporary Windows host recorded one real visit with 30 ticks and zero failures after the change, but used its default `C:\` root. Recheck the user's Depth 2 root in the rebuilt app before marking this fixed in the UI.
+
+A follow-up temporary `C:\X`/Depth 2 host run happened after the desktop was idle past five minutes and therefore sampled only once. It cannot establish Depth 2 behaviour. For the next UI check, interact with Explorer using mouse or keyboard and keep `C:\X\2024\240011` foreground for at least 25 seconds, allowing the 15-second idle-return check plus the five-second visit threshold. Then leave Activity open up to 30 seconds for its view refresh. A new `C:\X\2024\240011` row should appear. The existing real activity root is already enabled at Depth 2; do not delete it again for this check.
 
 ## Short live check still needed
 

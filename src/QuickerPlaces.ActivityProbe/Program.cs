@@ -17,6 +17,9 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        var hostRoot = args.Length > 1 ? args[1] : @"C:\";
+        var hostDepth = args.Length > 2 && int.TryParse(args[2], out var requestedDepth) && requestedDepth >= 1
+            ? requestedDepth : 1;
         var session = Path.Combine(Path.GetTempPath(), "QuickerPlaces.ActivityProbe-" + Guid.NewGuid().ToString("N"));
         var logDirectory = Path.Combine(session, "logs");
         var storeDirectory = Path.Combine(session, "store");
@@ -46,7 +49,7 @@ internal static class Program
                 {
                     case "1": case "live": pendingChoice = Live(); break;
                     case "2": case "stress": Stress(); break;
-                    case "3": case "host": Host(storeDirectory); break;
+                    case "3": case "host": Host(storeDirectory, hostRoot, hostDepth); break;
                     case "q": case "quit": return 0;
                     case "": break; // An Enter typed after a live-view shortcut.
                     default: Console.WriteLine("Choose 1, 2, 3 or Q."); break;
@@ -201,20 +204,30 @@ internal static class Program
         return total;
     }
 
-    private static void Host(string storeDirectory)
+    private static void Host(string storeDirectory, string rootPath, int depth)
     {
         Directory.CreateDirectory(storeDirectory);
         var store = new ActivityStore(new FilePlacesStorage(storeDirectory, "activity.json"), TimeProvider.System);
-        var result = store.TryAddRoot(@"C:\", null, out _, out var persistence);
+        var result = store.TryAddRoot(rootPath, null, out var root, out var persistence);
         if (!result.Success || !persistence.Saved)
         {
             Console.WriteLine("Could not create the temporary root.");
             return;
         }
+        if (depth > 1)
+        {
+            result = store.TryUpdateRoot(root!.Config with { Rollup = QuickerPlaces.Models.Activity.RollupMode.Depth, Depth = depth }, out persistence);
+            if (!result.Success || !persistence.Saved)
+            {
+                Console.WriteLine("Could not configure the temporary root depth.");
+                return;
+            }
+        }
 
         var latestWakes = 0;
         var latestTicks = 0;
         var latestFailures = 0;
+        var latestIdle = 0;
         int? wakesAtLock = null;
         var progress = Stopwatch.StartNew();
         using var host = new ActivityTrackingHost(store);
@@ -223,9 +236,10 @@ internal static class Program
             Volatile.Write(ref latestWakes, loop.Wakes);
             Volatile.Write(ref latestTicks, loop.Ticks);
             Volatile.Write(ref latestFailures, loop.ProbeFailures);
+            Volatile.Write(ref latestIdle, loop.IsIdle ? 1 : 0);
             if (progress.Elapsed >= TimeSpan.FromSeconds(15))
             {
-                Console.WriteLine($"Host running: wakes={loop.Wakes}, ticks={loop.Ticks}, failures={loop.ProbeFailures}. Press Enter to stop.");
+                Console.WriteLine($"Host running: wakes={loop.Wakes}, ticks={loop.Ticks}, failures={loop.ProbeFailures}, idle={loop.IsIdle}. Press Enter to stop.");
                 progress.Restart();
             }
             if (loop.Wakes % 40 == 0)
@@ -251,13 +265,18 @@ internal static class Program
             }
         };
         host.Start();
-        Console.WriteLine("Host running with a temporary C:\\ root. Lock the PC for one minute, then restart Explorer. Press Enter to stop.");
+        Console.WriteLine($"Host running with a temporary {rootPath} root at depth {depth}. Press Enter to stop.");
         Console.ReadLine();
         var stop = Stopwatch.StartNew();
         host.Stop();
         stop.Stop();
-        var line = $"Host stopped wakes={Volatile.Read(ref latestWakes)} ticks={Volatile.Read(ref latestTicks)} failures={Volatile.Read(ref latestFailures)} stopMs={stop.Elapsed.TotalMilliseconds:F1} unsaved={store.HasUnsavedChanges}.";
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var period = store.QueryPeriod(root!.RootId, today, today);
+        var line = $"Host stopped wakes={Volatile.Read(ref latestWakes)} ticks={Volatile.Read(ref latestTicks)} failures={Volatile.Read(ref latestFailures)} idle={Volatile.Read(ref latestIdle) != 0} stopMs={stop.Elapsed.TotalMilliseconds:F1} unsaved={store.HasUnsavedChanges} recordedGroups={period?.Folders.Count ?? 0} recordedVisits={period?.Folders.Sum(folder => folder.Visits) ?? 0}.";
         Console.WriteLine(line);
+        if (period is not null)
+            foreach (var folder in period.Folders)
+                Console.WriteLine($"  {folder.Folder} visits={folder.Visits} time={folder.Time.TotalSeconds:F1}s");
         Log(line);
     }
 }

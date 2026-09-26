@@ -105,7 +105,7 @@ Changing the grouping affects **new visits only**. Earlier rows keep the groupin
 
 **Stop tracking** keeps the root and its recorded data, and **Resume tracking** starts it again. **Delete root and its data** removes both after confirmation. Folder detail is kept for 62 days; the calendar's daily totals are kept for 365 days. Before tracking began, or after older detail expires, the app does not present missing detail as zero activity.
 
-Activity is stored only on this computer in `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json`, separately from your Places and their export. It is buffered and saved about every five minutes, and on idle, lock, and exit; a crash can lose up to the last five minutes. If a root setting cannot be saved, Activity shows an error and **Retry save**. Explorer restarts can cause a brief gap before tracking resumes.
+Activity is stored only on this computer in `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json`, separately from your Places and their export. It is buffered and saved about every five minutes, and on idle, lock, and exit; a crash can lose up to the last five minutes. If a root setting cannot be saved, Activity shows an error and **Retry save**. Explorer restarts can cause a brief gap before tracking resumes. After you have been idle past the root's timeout, QuickerPlaces checks for your return every 15 seconds; a short test visit made immediately on return may not count until that check and the visit threshold have both elapsed.
 
 ### Keeping tracking on in the background
 

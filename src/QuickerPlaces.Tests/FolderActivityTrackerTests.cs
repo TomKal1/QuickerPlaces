@@ -340,14 +340,14 @@ public sealed class FolderActivityTrackerTests
     }
 
     [Fact]
-    public void ThePollInterval_IsSlowWhenNoExplorerWindowIsForeground()
+    public void ThePollInterval_StillDetectsBriefExplorerVisitsAfterAnotherApp()
     {
         var h = new TrackerHarness(Jobs);
         h.Probe.Windows.Add(new ShellWindowSnapshot(Acme, 1, false));
         h.Tick();
 
         Assert.Equal(FolderActivityTracker.BackgroundPollInterval, h.Tracker.PollInterval);
-        Assert.Equal(Seconds(15), FolderActivityTracker.BackgroundPollInterval);
+        Assert.Equal(Seconds(1.5), FolderActivityTracker.BackgroundPollInterval);
     }
 
     // ---- D8, D13, D22: what is credited ----

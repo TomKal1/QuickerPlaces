@@ -77,6 +77,9 @@ public sealed class ActivityTrackingLoop
     /// <summary>How many ticks failed because the probe threw.</summary>
     public int ProbeFailures { get; private set; }
 
+    /// <summary>Whether the host is waiting for the next idle-presence check.</summary>
+    public bool IsIdle => _idle;
+
     /// <summary>The duration of the most recent tick, probe pass included, for the performance log.</summary>
     public TimeSpan LastTickDuration { get; private set; }
 

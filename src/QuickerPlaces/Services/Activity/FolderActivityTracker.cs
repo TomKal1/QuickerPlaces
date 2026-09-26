@@ -35,8 +35,13 @@ public sealed class FolderActivityTracker
     /// <summary>How often to tick while an Explorer window is in the foreground (D2).</summary>
     public static readonly TimeSpan ForegroundPollInterval = TimeSpan.FromSeconds(1.5);
 
-    /// <summary>How often to tick while none is (D2).</summary>
-    public static readonly TimeSpan BackgroundPollInterval = TimeSpan.FromSeconds(15);
+    /// <summary>
+    /// How often to look for Explorer while another app is in front. The
+    /// cached probe is cheap enough to use the foreground cadence: a 15 s
+    /// check missed short visits before the dwell threshold could start.
+    /// Idle and locked sessions still use the host's longer/indefinite wait.
+    /// </summary>
+    public static readonly TimeSpan BackgroundPollInterval = TimeSpan.FromSeconds(1.5);
 
     private readonly IShellWindowProbe _probe;
     private readonly IUserPresence _presence;
