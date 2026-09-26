@@ -52,7 +52,13 @@
       The COM probe, UserPresence and the host that drive them are app-only.
     -->
     <Compile Include="..\QuickerPlaces\Models\Activity\RollupMode.cs" Link="Linked\Models\Activity\RollupMode.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityInterval.cs" Link="Linked\Services\Activity\ActivityInterval.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\FolderActivityTracker.cs" Link="Linked\Services\Activity\FolderActivityTracker.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\IMonotonicClock.cs" Link="Linked\Services\Activity\IMonotonicClock.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\IShellWindowProbe.cs" Link="Linked\Services\Activity\IShellWindowProbe.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\IUserPresence.cs" Link="Linked\Services\Activity\IUserPresence.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\RootPathMatcher.cs" Link="Linked\Services\Activity\RootPathMatcher.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ShellWindowSnapshot.cs" Link="Linked\Services\Activity\ShellWindowSnapshot.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
     <!--
       The Recently Deleted dialog's view models (plan 5.5, D21): every
