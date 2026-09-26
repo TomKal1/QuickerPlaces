@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Folder Activity Tracking Detailed Plan
-status: in progress on claude/phase-9-folder-activity — steps 1 to 4 built; Activity root opt-in and host wiring are in place, with manual mapped-drive validation pending
+status: in progress on claude/phase-9-folder-activity — steps 1 to 6 built; period views and year calendar pass the local suite, with tray/startup and manual checks next
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
@@ -399,8 +399,8 @@ This is a tool for one person to see their own work. It is not an employee monit
 2. The models, `IActivityStore` and `FileActivityStore`: configuration writes that report, buffered activity, 62-day detail and 365-day totals, quarantine, and their tests. *Done 2026-09-25 (`982211f`, `5bcf97f`) as one `ActivityStore` over `IPlacesStorage` (D32): 82 new tests, 496 in all; D32–D36.*
 3. `EventShellWindowProbe` (late-bound COM and events, D3, D17), `UserPresence`, and `ActivityTrackingHost` (D26), with a diagnostic harness that logs pass timings and handle counts. **Measure section 6's first three rows before going further.** Nothing is recorded by the app yet, because no root can be added. *Done 2026-09-26. The first polling probe failed the pass and CPU budgets; the event-fed replacement passed the numerical budgets, lock and in-session Explorer restart checks. The user accepted the five-entry measurements as sufficient for this gate, with the separate-HWND caveat in section 6.*
 4. The Activity window's root management and `AddRootDialog`, with the opt-in panel and D22's network-path offer (`NetworkDriveResolver`), plus the header icon and indicator (D21). From here, tracking really runs. *Built 2026-09-26: root add/stop/resume/edit/delete with immediate persistence feedback, the mapped-drive suggestion, the main-window indicator, and App host start/stop. Four UI-free view-model tests bring the suite to 515. Manual mapped-drive validation remains for the work machine.*
-5. The Activity window's periods: Week, Month and Day, the grid with Last visited, and Add as Place.
-6. The calendar heat map (D20).
+5. The Activity window's periods: Week, Month and Day, the grid with Last visited, and Add as Place. *Built 2026-09-26: culture-aware period boundaries and labels, sortable folder rows, expired-detail wording and day totals, live refresh, and the normal Add Folder dialog prefilled from a row.*
+6. The calendar heat map (D20). *Built 2026-09-26: 365 days in culture-aligned weeks, four nonzero-time quartiles, separate pre-tracking cells, accessible day labels and tooltips, and click-through to Day. The UI-free calendar and period tests bring the suite to 525.*
 7. Tray and start-with-Windows: `AppSettings` version 4, the Settings check boxes, hide-to-tray, `--tray` (D25).
 8. Manual verification on Windows; record the section 6 numbers; update `USERGUIDE.md`, `BUILD_SUMMARY.md` and a hand-off.
 

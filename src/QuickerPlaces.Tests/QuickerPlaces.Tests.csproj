@@ -61,6 +61,7 @@
     <Compile Include="..\QuickerPlaces\Models\Activity\RollupMode.cs" Link="Linked\Models\Activity\RollupMode.cs" />
     <Compile Include="..\QuickerPlaces\Models\Activity\TrackedRoot.cs" Link="Linked\Models\Activity\TrackedRoot.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\ActivityDayTotal.cs" Link="Linked\Services\Activity\ActivityDayTotal.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityFormat.cs" Link="Linked\Services\Activity\ActivityFormat.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\ActivityInterval.cs" Link="Linked\Services\Activity\ActivityInterval.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\ActivityPeriod.cs" Link="Linked\Services\Activity\ActivityPeriod.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\ActivityRootSnapshot.cs" Link="Linked\Services\Activity\ActivityRootSnapshot.cs" />
@@ -88,6 +89,7 @@
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedRowViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedRowViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\ActivityViewModel.cs" Link="Linked\ViewModels\ActivityViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\ActivityCalendar.cs" Link="Linked\ViewModels\ActivityCalendar.cs" />
   </ItemGroup>
 
   <ItemGroup>

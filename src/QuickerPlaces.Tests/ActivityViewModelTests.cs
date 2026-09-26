@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Tests.Fakes;
 using QuickerPlaces.ViewModels;
@@ -9,10 +10,11 @@ namespace QuickerPlaces.Tests;
 public sealed class ActivityViewModelTests
 {
     private readonly FakePlacesStorage _storage = new() { StoreFilePath = @"C:\fake\activity.json" };
+    private readonly ManualTimeProvider _time = new();
     private int _rootNotifications;
 
     private ActivityViewModel NewViewModel()
-        => new(new ActivityStore(_storage, new ManualTimeProvider()), () => _rootNotifications++);
+        => new(new ActivityStore(_storage, _time), () => _rootNotifications++, _time);
 
     [Fact]
     public void AddToggleAndDelete_UpdateSelectionAndNotifyTheHost()
@@ -78,4 +80,65 @@ public sealed class ActivityViewModelTests
         Assert.Single(view.SelectedRoot.Config.EquivalentPrefixes);
         Assert.Equal(2, _rootNotifications);
     }
+
+    [Fact]
+    public void WeekAndMonthNavigationUseCalendarBoundaries()
+    {
+        var view = new ActivityViewModel(new ActivityStore(_storage, _time),
+            () => { }, _time, CultureInfo.GetCultureInfo("en-GB"));
+        Assert.Equal(new DateOnly(2026, 9, 21), view.PeriodFrom);
+        Assert.Equal(new DateOnly(2026, 9, 27), view.PeriodTo);
+
+        view.SetPeriodMode(ActivityPeriodMode.Month);
+        Assert.Equal(new DateOnly(2026, 9, 1), view.PeriodFrom);
+        Assert.Equal(new DateOnly(2026, 9, 30), view.PeriodTo);
+        view.MovePeriod(-1);
+        Assert.Equal(new DateOnly(2026, 8, 1), view.PeriodFrom);
+        view.MovePeriod(1);
+        Assert.Equal(new DateOnly(2026, 9, 1), view.PeriodFrom);
+        Assert.False(view.CanMoveNext);
+    }
+
+    [Fact]
+    public void DayViewUsesStoredDayTotalWhenFolderDetailHasExpired()
+    {
+        var store = new ActivityStore(_storage, _time);
+        var root = ActivityFixtures.AddRoot(store);
+        var oldDay = new DateOnly(2026, 6, 1);
+        store.Record(new[] { ActivityFixtures.Interval(root.RootId, ActivityFixtures.Acme,
+            oldDay, 3600, startsVisit: true) });
+        _time.Advance(TimeSpan.FromDays(1));
+        store.Flush();
+        var view = new ActivityViewModel(store, () => { }, _time);
+
+        view.ShowDay(oldDay);
+
+        Assert.Empty(view.PeriodRows);
+        Assert.Contains("1h total", view.PeriodSummary);
+        Assert.Contains("expired", view.PeriodNotice);
+    }
+
+    [Fact]
+    public void CurrentWeekShowsRecordedFolderWithReadableFields()
+    {
+        var store = new ActivityStore(_storage, _time);
+        var root = ActivityFixtures.AddRoot(store);
+        store.Record(new[] { ActivityFixtures.Interval(root.RootId, ActivityFixtures.Acme,
+            ActivityFixtures.Today, 1920, startsVisit: true) });
+        var view = new ActivityViewModel(store, () => { }, _time);
+
+        var row = Assert.Single(view.PeriodRows);
+        Assert.Equal(ActivityFixtures.Acme, row.Folder);
+        Assert.Equal(1, row.Visits);
+        Assert.Equal("32m", row.TimeText);
+        Assert.Contains("32m", view.PeriodSummary);
+    }
+
+    [Theory]
+    [InlineData(0, "0m")]
+    [InlineData(30, "<1m")]
+    [InlineData(1920, "32m")]
+    [InlineData(11520, "3h 12m")]
+    public void DurationFormatUsesReadableHoursAndMinutes(int seconds, string expected)
+        => Assert.Equal(expected, ActivityFormat.Duration(TimeSpan.FromSeconds(seconds)));
 }

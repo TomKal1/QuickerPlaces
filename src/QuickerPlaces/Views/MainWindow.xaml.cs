@@ -37,8 +37,10 @@ public partial class MainWindow : Window
 
     private void ActivityButton_Click(object sender, RoutedEventArgs e)
     {
+        if (DataContext is not MainViewModel viewModel) return;
         var window = new ActivityWindow(this, _activityStore, _activityHost,
-            new NetworkDriveResolver(), UpdateActivityIndicator);
+            new NetworkDriveResolver(), UpdateActivityIndicator,
+            (folder, owner) => viewModel.AddFolderFromActivity(folder, owner));
         window.ShowDialog();
         UpdateActivityIndicator();
     }

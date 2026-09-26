@@ -324,15 +324,22 @@ public sealed class MainViewModel : ObservableObject
         // PlacesService afterward rather than from a result passed back
         // here — there isn't one.
         var created = PlaceFormDialog.ShowAdd(type, _placesService);
+        NoteAddedPlace(created);
+    }
+
+    /// <summary>Adds an Activity row as a folder Place through the normal Add dialog and validation.</summary>
+    public void AddFolderFromActivity(string folderPath, Window owner)
+    {
+        var created = PlaceFormDialog.ShowAddFolderPrefilled(folderPath, _placesService, owner);
+        NoteAddedPlace(created);
+    }
+
+    private void NoteAddedPlace(Place? created)
+    {
         RefreshPersistenceState();
-
-        if (created is null)
-            return;
-
+        if (created is null) return;
         Places.Add(new PlaceViewModel(created));
         ClearSearchIfHidden(created);
-        // A brand-new place is never a favourite yet, but rebuilding here
-        // costs nothing at this scale and keeps this method simple.
         RebuildFavourites();
     }
 
