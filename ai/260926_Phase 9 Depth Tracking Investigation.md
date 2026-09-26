@@ -1,16 +1,18 @@
 ---
-status: Unresolved — user retested and the two 2024 folders are still missing
+status: Depth 2 manual check passed on 2026-09-26; original cause not isolated
 branch: claude/phase-9-folder-activity
 date: 2026-09-26
 ---
 
 # Phase 9 Depth 2 tracking investigation
 
-## Expected result and current failure
+## Original failure and observed result
 
-With `C:\X` tracked at **Chosen depth below root = 2**, a qualifying visit to `C:\X\2024\240015` or `C:\X\2024\240011` should be recorded under that exact two-level folder. The visit threshold was initially five seconds and is now one second; the idle timeout is five minutes. The user has visited these folders and retested after the timing fix, but neither appears in Activity.
+With `C:\X` tracked at **Chosen depth below root = 2**, a qualifying visit to `C:\X\2024\240015` or `C:\X\2024\240011` should be recorded under that exact two-level folder. The visit threshold was initially five seconds and is now one second; the idle timeout is five minutes. Earlier visits did not appear promptly in Activity.
 
-The current `activity.json` confirms that `C:\X` is enabled with `rollup=depth` and `depth=2`. Its stored folder keys include `C:\X\2023`, `C:\X\2024`, and **`C:\X\2023\230108`**. They do not include `C:\X\2024\240015` or `C:\X\2024\240011`. A one-level key can legitimately be recorded when the visited folder is only one level below the root. The `230108` key shows that Depth 2 can record a two-level folder in at least one case; it does not explain why the two 2024 folders are absent. In the latest saved settings the dwell threshold was reduced from five seconds to **one second**.
+The first `activity.json` snapshot confirmed `C:\X` was enabled with `rollup=depth` and `depth=2`. It contained `C:\X\2023\230108` but not the two 2024 child folders. A one-level key can legitimately be recorded when the visited folder is only one level below the root. The dwell threshold was later reduced from five seconds to **one second**.
+
+After the Activity refresh change in `496aabb`, the user confirmed `C:\X\2024\240011` appears as its own row. A read-only check of the saved store also found **both** `C:\X\2024\240011` (one visit, 9.52 seconds) and `C:\X\2024\240015` (one visit, 2.00 seconds) under Depth 2 on 2026-09-26. This establishes the manual Depth 2 recording check for these folders. It does not establish which earlier condition caused them to be absent.
 
 ## What we tried
 
@@ -23,10 +25,8 @@ The current `activity.json` confirms that `C:\X` is enabled with `rollup=depth` 
 7. The user reports `230108` appeared only after a delay, while `240011` remained missing. The Activity window previously refreshed its list every 30 seconds, so display delay is expected. The screenshot also shows Activity in front of Explorer; time spent with Activity in front cannot count as an Explorer visit. We updated the UI to state this and refresh immediately when it becomes active again, then once more two seconds later so the host has time to record Explorer's final interval. This explains possible test conditions, but does not prove why `240011` was absent.
 8. The app log from the latest run showed a normal start at 2:50:07 PM and clean exit at 2:50:56 PM, with no reported probe failure. We added a path-free summary on host exit of ticks classified as no Explorer, Explorer in the background, outside the tracked roots, ambiguous foreground entries, user idle, or eligible, plus counted visits. The next run's summary can narrow the failure without recording folder names. This diagnostic has not yet been observed for the missing folder.
 
-The last inspected app log shows a normal start, one loaded tracked root, and a clean exit, with no reported probe failure. Silent failure to attribute a particular visit would not necessarily appear in that log. The solution previously built with zero warnings and 531 tests passed; those results do not override the failed manual check.
+The earlier app log showed normal starts and exits with no reported probe failure. It did not capture why those first visits were absent. After `496aabb`, the solution built with zero warnings and 532 tests passed.
 
-## Status and next diagnostic
+## Status
 
-**Unresolved.** The saved setting is Depth 2, and at least one two-level folder has been recorded, but the user's `240015` and `240011` visits have not. Do not mark the Depth 2 UI check passed or ask the user to delete the root again.
-
-For the next check, keep the rebuilt app running, put `C:\X\2024\240011` in the active Explorer window for at least ten seconds, then return to Activity. On app exit, compare `activity.json` with the new path-free sample summary in `quickerplaces.log`. If the row is still missing, the summary can distinguish an absent/background Explorer window, ambiguity, idle, or an eligible sample that failed to become a visit. No such run with the new diagnostic has been done yet.
+**Depth 2 manual check passed.** Both tested 2024 child folders have saved visits under the expected two-level keys, and the user saw `240011` in Activity. The path-free sample summary remains available if a missing-visit report recurs. No additional probe run is needed for this check.

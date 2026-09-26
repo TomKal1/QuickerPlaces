@@ -6,7 +6,7 @@ date: 2026-09-26
 
 # Phase 9 hand-off — app verification
 
-Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 532 tests pass. The Depth 2 check remains unresolved; see [the investigation summary](260926_Phase%209%20Depth%20Tracking%20Investigation.md) for the latest evidence and diagnostic instructions.
+Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 532 tests pass. The Depth 2 manual check passed; see [the investigation summary](260926_Phase%209%20Depth%20Tracking%20Investigation.md) for its history and remaining limits.
 
 ## What has already been checked
 
@@ -18,7 +18,7 @@ The user then ran the Activity UI and saved `C:\X` with Depth 2. Week view still
 
 The user then recreated `C:\X` at Depth 2 and still saw no new row. The live probe saw the test folder, and the app log showed no probe failures. The host's 15-second check while another app was foreground could miss a short Explorer visit; this is now 1.5 seconds while active, with idle and locked waits unchanged. A temporary Windows host recorded one real visit with 30 ticks and zero failures after the change, but used its default `C:\` root. Recheck the user's Depth 2 root in the rebuilt app before marking this fixed in the UI.
 
-A follow-up temporary `C:\X`/Depth 2 host run happened after the desktop was idle past five minutes and therefore sampled only once. It cannot establish Depth 2 behaviour. For the next UI check, interact with Explorer using mouse or keyboard and keep `C:\X\2024\240011` foreground for at least 25 seconds, allowing the 15-second idle-return check plus the five-second visit threshold. Then leave Activity open up to 30 seconds for its view refresh. A new `C:\X\2024\240011` row should appear. The existing real activity root is already enabled at Depth 2; do not delete it again for this check.
+A follow-up temporary `C:\X`/Depth 2 host run happened after the desktop was idle past five minutes and therefore sampled only once. It was inconclusive. The later rebuilt app refreshed Activity on return and two seconds later, and added path-free sample outcomes to its exit log. The user confirmed `C:\X\2024\240011` appeared as its own Depth 2 row; the saved store also contained `C:\X\2024\240015`. Mark the Depth 2 UI check passed. The precise cause of the earlier missing visits was not isolated.
 
 ## Short live check still needed
 
