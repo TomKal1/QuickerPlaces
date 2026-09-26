@@ -164,7 +164,7 @@ Two test doubles do most of the work: `FakePlacesStorage`, an in-memory `IPlaces
 
 1. `dotnet build QuickerPlaces.sln` — succeeded, 0 warnings, 0 errors. **Done.**
 2. `dotnet test QuickerPlaces.sln --no-build` — 41 passed, 0 failed, 0 skipped. **Done.**
-3. The manual checklist below — **not yet walked.** Until it is, Phase 1 is compiler- and test-verified but not proven in the running application.
+3. The manual checklist below — **walked on 2026-09-25, in part.** The result is recorded against each item. Three passed: the damaged-file recovery and both second-instance checks. The other eight are **untested**, because they need a failed save (denied write permission), a file held open, a hand-set `schemaVersion`, a USB drive or a multi-monitor setup. The banner, the close prompt and the Unreadable and newer-version prompts have still not been seen on screen.
 
 That leaves the gap the tests cannot close: every test runs on the storage seam and never constructs a `Window`, so the recovery dialogs, the banner, and second-instance activation are unproven. The original note is kept below, because it explains why the checklist exists.
 
@@ -172,17 +172,17 @@ That leaves the gap the tests cannot close: every test runs on the storage seam 
 
 ### Manual verification checklist (must be walked on Windows)
 
-- [ ] Deny write permission on `places.json`, add a place, and confirm: the banner appears, the new place stays visible on screen, and clicking **Retry** succeeds once permission is restored.
-- [ ] Corrupt `places.json` by hand (break the JSON), launch, and walk all three recovery options for the `Damaged` case; confirm the quarantine file appears next to `places.json` and its bytes match the original corrupted content exactly.
-- [ ] Hold `places.json` open from another program, launch, and confirm: the message says the file **couldn't be opened**, not that it's damaged; **no** empty-store option is offered anywhere in the dialog; and **Try Again** recovers the real data once the other program releases the handle.
-- [ ] Set `schemaVersion` to `99` in `places.json`, launch, confirm the newer-version message appears, and confirm the file is byte-for-byte unchanged afterward.
-- [ ] Launch a second instance while the first is minimized — confirm it comes forward (with the search box focused) instead of a second window opening.
-- [ ] Launch a second instance while the first is behind another window — same confirmation.
-- [ ] Pull a USB drive mid-session with the store on it, if a removable-media path is actually testable in the environment; otherwise record it explicitly as untested rather than silently skipped.
-- [ ] Confirm the unsaved-changes banner never steals keyboard focus while it's showing.
-- [ ] Confirm the window still restores correctly (position, size, DPI) on a high-DPI multi-monitor setup.
-- [ ] With the banner showing (write permission still denied), close the window: confirm it asks before closing, that **No** keeps the window open, and that **Yes** closes it.
-- [ ] Undo a Remove while write permission is denied: confirm the place comes back on screen and the banner appears.
+- [ ] Deny write permission on `places.json`, add a place, and confirm: the banner appears, the new place stays visible on screen, and clicking **Retry** succeeds once permission is restored. → **Untested.**
+- [x] Corrupt `places.json` by hand (break the JSON), launch, and walk all three recovery options for the `Damaged` case; confirm the quarantine file appears next to `places.json` and its bytes match the original corrupted content exactly. → **Pass.** A hand-broken JSON file was tried and the recovery flow worked. The quarantine byte comparison was not reported separately.
+- [ ] Hold `places.json` open from another program, launch, and confirm: the message says the file **couldn't be opened**, not that it's damaged; **no** empty-store option is offered anywhere in the dialog; and **Try Again** recovers the real data once the other program releases the handle. → **Untested.**
+- [ ] Set `schemaVersion` to `99` in `places.json`, launch, confirm the newer-version message appears, and confirm the file is byte-for-byte unchanged afterward. → **Untested.**
+- [x] Launch a second instance while the first is minimized — confirm it comes forward (with the search box focused) instead of a second window opening. → **Pass.** Reported working in general use.
+- [x] Launch a second instance while the first is behind another window — same confirmation. → **Pass.** Reported working in general use.
+- [ ] Pull a USB drive mid-session with the store on it, if a removable-media path is actually testable in the environment; otherwise record it explicitly as untested rather than silently skipped. → **Untested.** No removable-media setup was tried.
+- [ ] Confirm the unsaved-changes banner never steals keyboard focus while it's showing. → **Untested.** The banner needs a failed save, which was not set up.
+- [ ] Confirm the window still restores correctly (position, size, DPI) on a high-DPI multi-monitor setup. → **Untested.**
+- [ ] With the banner showing (write permission still denied), close the window: confirm it asks before closing, that **No** keeps the window open, and that **Yes** closes it. → **Untested.**
+- [ ] Undo a Remove while write permission is denied: confirm the place comes back on screen and the banner appears. → **Untested.**
 
 ### Known limitation (Phase 1 as written; since replaced)
 
@@ -263,7 +263,15 @@ It was implemented on 2026-09-25 on `claude/roadmap-status-4tv9nf`, one commit p
 2. Time zones: no test reads the machine's zone. The DST cases were also checked against the real `Europe/Berlin` zone, and the suite was run under several `TZ` settings (`e835a75`).
 3. Fixtures: `places.v1.json` is unchanged and now pinned by a SHA-256 of its text. `places.v2.json` is new, frozen and pinned the same way, and a test shows it is exactly what this build writes.
 4. `dotnet build QuickerPlaces/QuickerPlaces.csproj -p:EnableWindowsTargeting=true`: builds with 0 warnings and 0 errors, XAML included. **The app has not been run.** Nothing in the UI half of step 8 has been seen on screen.
-5. The manual checklist below: **not walked**, and neither is Phase 1's.
+5. The manual checklist below: **walked on 2026-09-25, in part**, as was Phase 1's. The result is recorded against each item. The everyday UI passed, and the upgrade was confirmed from the user's own data. Two findings were fixed, and the re-check passed (see below). Downgrade refusal, expiry, the failure cases and the screen-reader checks are **untested**.
+
+### Found by the manual walk, 2026-09-25
+
+1. **Enter in Recently Deleted restored the selection.** `FocusAfterAction` focused the first row with `MoveFocus(Next)`, copied from `MainWindow.FocusGridRow`. The dialog's grid has `TabNavigation="Once"`, so that moved the focus out of the grid onto **Restore selected**, and Enter clicked it. The dialog now focuses the row's first cell.
+2. **Plain letters fired access keys.** WPF fires an access key on a plain letter that nothing took as text input. The fix above does not stop this: R still restores with a read-only `DataGrid` focused. The user chose to require Alt. `App.RequireAltForAccessKeys` marks unhandled plain text input as handled at the window, so it never reaches `AccessKeyManager`. Text boxes take their own typing first, Alt+letter arrives as `SystemText`, and menus open in popups, not in a `Window`. So this applies app-wide, to every future underscore label as well.
+3. **Restored places appeared only after the dialog closed.** The dialog now raises `RecentlyDeletedViewModel.Changed` after every action, with the places that action restored. `MainViewModel.SyncWithRecentlyDeleted` then updates the grid, favourites, banner, Undo stack and status bar straight away. A test covers the event. This supersedes the Phase 2 hand-off's note (§5) that the banner is refreshed after the dialog closes.
+
+Items 1 and 2 were checked with a throwaway WPF probe. It used the same grid setup, and WPF's own input pipeline, because keystrokes sent by Windows go to whichever window is in front. With the old focus code, the focus landed on a `Button` and Enter restored. With the fix, it landed on a `DataGridCell` and Enter moved down a row. Plain R restored in both cases until the Alt rule was added, and after that it did nothing, while a text box still took typing. Alt+letter could not be synthesised that way. The user's re-check in the real app confirmed Alt+R works, plain R does nothing, and Enter no longer restores.
 
 ### Manual verification checklist (must be walked on Windows)
 
@@ -271,44 +279,44 @@ The plan's section 8, merged with the UI checks listed by step 8. Record a resul
 
 **Upgrade and downgrade**
 
-- [ ] **Upgrade a real file.** Copy a `places.json` written by a pre-Phase-2 build into place and launch. Places, favourites and the Date Added column are unchanged. The file is still `schemaVersion` 1 on disk until the first change. After one change it is 2, with `+00:00` dates, and `places.bak.json` is the v1 file. The log has the migration line with counts and a zone id, and no alias.
-- [ ] **Downgrade refusal.** Start a build that has Phase 1's version gate but predates Phase 2 (`main` at `ca0ac72`) against the v2 file. The newer-version prompt appears, and the file is byte-identical afterwards. (Builds before the Phase 1 merge do not refuse; see the last row of the table above.)
+- [x] **Upgrade a real file.** Copy a `places.json` written by a pre-Phase-2 build into place and launch. Places, favourites and the Date Added column are unchanged. The file is still `schemaVersion` 1 on disk until the first change. After one change it is 2, with `+00:00` dates, and `places.bak.json` is the v1 file. The log has the migration line with counts and a zone id, and no alias. → **Pass.** Confirmed from the user's own data: the log has the migration line (1 place, zone "Eastern Standard Time", no alias), and `places.json` is v2. `places.bak.json` is v2 too, as expected after more than one save; its brief v1 stage was not observed.
+- [ ] **Downgrade refusal.** Start a build that has Phase 1's version gate but predates Phase 2 (`main` at `ca0ac72`) against the v2 file. The newer-version prompt appears, and the file is byte-identical afterwards. (Builds before the Phase 1 merge do not refuse; see the last row of the table above.) → **Untested.** No `ca0ac72` build was run against the v2 file.
 
 **Header**
 
-- [ ] The bin icon renders (Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on Windows 10). It has its tooltip, and a screen reader announces "Recently Deleted".
-- [ ] The header fits at the 700 px `MinWidth`, and on a high-DPI display.
+- [x] The bin icon renders (Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on Windows 10). It has its tooltip, and a screen reader announces "Recently Deleted". → **Pass.** Icon and tooltip, on Windows 11. The screen-reader announcement is **untested**.
+- [x] The header fits at the 700 px `MinWidth`, and on a high-DPI display. → **Pass.** At 700 px. High DPI not specifically tried.
 
 **Remove and Undo**
 
-- [ ] Remove, from the context menu and with Delete: no confirmation, the row and its bubble go, and the status bar says "Moved "X" to Recently Deleted." with **Undo**. The menu item shows "Delete" as its gesture, and its tooltip.
-- [ ] After Delete, the next row (the previous one, if it was the last) is selected and focused, and Delete again removes it. Removing the last row leaves the focus on the grid, and Ctrl+Z then works.
-- [ ] Status bar: it stays about 10 s with Undo and about 8 s without. Hovering pauses it, and leaving restarts the full interval. Tabbing into it pauses it. It never takes focus when it appears. After dismissing it, a new Remove still times out.
-- [ ] Ctrl+Z after the bar has gone still restores. Undo of a removed favourite puts its bubble back in the same position. So does restoring it from Recently Deleted after closing and reopening the app.
-- [ ] **Undo conflict.** Remove "Docs", add a new "Docs", press Ctrl+Z. Restore Place explains the conflict (a screen reader reads the explanation). Both fields are prefilled, the conflicting field is focused with its text selected, and **Browse...** is there for folders. Restoring with a new alias brings the row back in its old position, bubble slot included. Repeat and **Cancel**: the status bar says it is still in Recently Deleted, and it is in the dialog.
+- [x] Remove, from the context menu and with Delete: no confirmation, the row and its bubble go, and the status bar says "Moved "X" to Recently Deleted." with **Undo**. The menu item shows "Delete" as its gesture, and its tooltip. → **Pass.**
+- [x] After Delete, the next row (the previous one, if it was the last) is selected and focused, and Delete again removes it. Removing the last row leaves the focus on the grid, and Ctrl+Z then works. → **Pass.**
+- [x] Status bar: it stays about 10 s with Undo and about 8 s without. Hovering pauses it, and leaving restarts the full interval. Tabbing into it pauses it. It never takes focus when it appears. After dismissing it, a new Remove still times out. → **Pass.**
+- [x] Ctrl+Z after the bar has gone still restores. Undo of a removed favourite puts its bubble back in the same position. So does restoring it from Recently Deleted after closing and reopening the app. → **Pass.**
+- [x] **Undo conflict.** Remove "Docs", add a new "Docs", press Ctrl+Z. Restore Place explains the conflict (a screen reader reads the explanation). Both fields are prefilled, the conflicting field is focused with its text selected, and **Browse...** is there for folders. Restoring with a new alias brings the row back in its old position, bubble slot included. Repeat and **Cancel**: the status bar says it is still in Recently Deleted, and it is in the dialog. → **Pass.** The screen-reader part is **untested**.
 
 **The Recently Deleted dialog**
 
-- [ ] It opens centred on the main window, with the first row selected and focused, or with **Close** focused when empty.
-- [ ] Deleted shows local time in the user's locale format. The Days remaining tooltip shows the exact expiry. Both headers sort chronologically.
-- [ ] Shift and Ctrl multi-select work. **Restore selected** and **Delete selected permanently** are enabled only with a selection.
-- [ ] Alt+R, Alt+D and Alt+E work and show their underlines. No button anywhere in the app shows a stray underscore.
-- [ ] **Check:** does a plain R, D or E (no Alt), pressed while the dialog's grid has focus, fire an access key? WPF can do this. R would restore the selection (reversible); D and E would only open a confirmation that defaults to Cancel. Record what happens.
-- [ ] Esc closes the dialog. Enter closes it: record whether it does when the grid has focus, where the `DataGrid` may take Enter itself. Delete in its grid does nothing. The whole dialog works from the keyboard, and Tab leaves the grid in one step.
-- [ ] **Restore selected** with a mixed selection: the free places restore at once, each conflict opens Restore Place over the dialog one at a time, and each can be cancelled on its own.
-- [ ] Both confirmations: Enter, Space, Esc and the title-bar X all cancel. The action buttons read "Delete permanently" and "Empty Recently Deleted".
-- [ ] The empty state text shows, with the action buttons disabled.
-- [ ] After closing: restored rows are in their original positions, bubbles are in order, a search that would hide a restored row is cleared, and Ctrl+Z skips places the dialog restored or deleted.
-- [ ] The empty-grid hint mentions Recently Deleted only when it has items.
+- [x] It opens centred on the main window, with the first row selected and focused, or with **Close** focused when empty. → **Pass.**
+- [x] Deleted shows local time in the user's locale format. The Days remaining tooltip shows the exact expiry. Both headers sort chronologically. → **Pass.**
+- [x] Shift and Ctrl multi-select work. **Restore selected** and **Delete selected permanently** are enabled only with a selection. → **Pass.**
+- [x] Alt+R, Alt+D and Alt+E work and show their underlines. No button anywhere in the app shows a stray underscore. → **Pass.**
+- [x] **Check:** does a plain R, D or E (no Alt), pressed while the dialog's grid has focus, fire an access key? WPF can do this. R would restore the selection (reversible); D and E would only open a confirmation that defaults to Cancel. Record what happens. → **Found: yes, they fired.** The cause was partly the bug in the next item, and partly WPF itself: the probe under "Found by the manual walk" shows plain R still restores with the grid focused. The user chose to require Alt, so a plain letter no longer fires an access key anywhere in the app (`App.RequireAltForAccessKeys`). **Re-checked 2026-09-25: pass.** Plain R does nothing, and Alt+R restores.
+- [x] Esc closes the dialog. Enter closes it: record whether it does when the grid has focus, where the `DataGrid` may take Enter itself. Delete in its grid does nothing. The whole dialog works from the keyboard, and Tab leaves the grid in one step. → **Found: Enter restored the selection instead of closing.** The dialog focused its first row with `MoveFocus(Next)`, as `MainWindow.FocusGridRow` does. Because this grid has `TabNavigation="Once"`, that moved the focus out of the grid onto **Restore selected**. `FocusAfterAction` now focuses the row's first cell. With the grid focused, Enter now moves to the next row (standard `DataGrid` behaviour) and does not close the dialog. From anywhere else, Enter closes it through the default Close button. Esc was reported working. **Re-checked 2026-09-25: pass.**
+- [x] **Restore selected** with a mixed selection: the free places restore at once, each conflict opens Restore Place over the dialog one at a time, and each can be cancelled on its own. → **Pass.**
+- [x] Both confirmations: Enter, Space, Esc and the title-bar X all cancel. The action buttons read "Delete permanently" and "Empty Recently Deleted". → **Pass.**
+- [x] The empty state text shows, with the action buttons disabled. → **Pass.**
+- [x] After closing: restored rows are in their original positions, bubbles are in order, a search that would hide a restored row is cleared, and Ctrl+Z skips places the dialog restored or deleted. → **Pass.** Changed during the walk: the main window now catches up after each action, while the dialog is still open, rather than after it closes (`RecentlyDeletedViewModel.Changed`).
+- [x] The empty-grid hint mentions Recently Deleted only when it has items. → **Pass.**
 
 **Expiry**
 
-- [ ] With the app closed, edit a `deletedAt` in `places.json` to eight days ago, then launch. That record is not in the dialog, the log records one purge "after load", and the file still holds the record until the next change.
+- [ ] With the app closed, edit a `deletedAt` in `places.json` to eight days ago, then launch. That record is not in the dialog, the log records one purge "after load", and the file still holds the record until the next change. → **Untested.**
 
 **Failures**
 
-- [ ] Deny write permission on `places.json`. A Remove shows the banner, and so does an Undo. Retry clears it once permission returns.
-- [ ] With write permission still denied: each dialog action shows the error line in the dialog, and the banner appears after closing. Restoring permission and using Retry clears both.
+- [ ] Deny write permission on `places.json`. A Remove shows the banner, and so does an Undo. Retry clears it once permission returns. → **Untested.**
+- [ ] With write permission still denied: each dialog action shows the error line in the dialog, and the banner appears after closing. Restoring permission and using Retry clears both. → **Untested.**
 
 ### Known issue found, not fixed
 
@@ -316,6 +324,6 @@ The plan's section 8, merged with the UI checks listed by step 8. Record a resul
 
 ## Current status
 
-As of 2026-09-25, Phase 1 is on `main`, and Phase 2 is implemented on `claude/roadmap-status-4tv9nf`, which is not yet merged. All 237 tests pass on Linux (`dotnet test QuickerPlaces.Tests/QuickerPlaces.Tests.csproj` from `src/`). The WPF app compiles with 0 warnings and 0 errors (`dotnet build QuickerPlaces/QuickerPlaces.csproj -p:EnableWindowsTargeting=true`). The feature work has had a hands-on pass on Windows. Neither phase has been run in the app.
+As of 2026-09-25, Phase 1 is on `main`, and Phase 2 is implemented on `claude/roadmap-status-4tv9nf`, which is not yet merged. Both manual checklists were walked in part on 2026-09-25. The everyday UI passed, three findings were fixed (above), and the failure-path and special-setup items are still untested. All 238 tests pass, and the solution builds with 0 warnings on Windows (`dotnet build QuickerPlaces.sln`, `dotnet test QuickerPlaces.sln` from `src\`).
 
-Next is to walk the Phase 1 manual checklist on Windows, then Phase 2's (both above), and record the results here. Then fix whatever they find, merge, and write the Phase 3 detailed plan. That plan is deliberately deferred until the checklists are walked, because until then Phase 2 has not landed (`ai/README.md`, "Working on a phase"). Where to pick up is in `ai/260925_Phase 2 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.
+**The user accepted the untested items as untested on 2026-09-25**, so the manual verification of both phases is closed. They stay recorded as untested against their items and are not to be read as passed. Next is to merge Phase 2 to `main` through a pull request, then write the Phase 3 detailed plan. That plan was deferred until Phase 2 landed (`ai/README.md`, "Working on a phase"). Where to pick up is in `ai/260925_Phase 2 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.

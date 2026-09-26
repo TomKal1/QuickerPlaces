@@ -51,16 +51,16 @@ public partial class RecentlyDeletedDialog : Window
     }
 
     /// <summary>
-    /// Shows the dialog modally. Returns the places restored while it was
-    /// open, in restore order, for MainViewModel to insert into the grid;
-    /// MainViewModel then refreshes the banner from PlacesService, since
-    /// every action here may have saved, or failed to.
+    /// Shows the dialog modally. <paramref name="changed"/> runs after every
+    /// action, while the dialog is still open, with the places that action
+    /// restored, so MainViewModel can insert them into the grid and refresh
+    /// the banner from PlacesService straight away.
     /// </summary>
-    public static IReadOnlyList<Place> Show(PlacesService placesService)
+    public static void Show(PlacesService placesService, Action<IReadOnlyList<Place>> changed)
     {
         var dialog = new RecentlyDeletedDialog(placesService);
+        dialog._viewModel.Changed += changed;
         dialog.ShowDialog();
-        return dialog._viewModel.RestoredPlaces;
     }
 
     private void ItemsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -131,11 +131,16 @@ public partial class RecentlyDeletedDialog : Window
         ItemsGrid.SelectedItem = item;
         ItemsGrid.ScrollIntoView(item);
 
-        // As in MainWindow.FocusGridRow: focusing the DataGrid itself
-        // doesn't focus a row, so arrow keys wouldn't move from it.
+        // Focusing the DataGrid itself doesn't focus a row, so arrow keys
+        // wouldn't move from it: focus the row's first cell. Not
+        // MainWindow.FocusGridRow's MoveFocus(Next) from the row, because
+        // this grid's TabNavigation="Once" sends that out of the grid, onto
+        // Restore selected, where Enter would restore instead of closing.
+        ItemsGrid.CurrentCell = new DataGridCellInfo(item, ItemsGrid.Columns[0]);
         ItemsGrid.UpdateLayout();
-        if (ItemsGrid.ItemContainerGenerator.ContainerFromIndex(index) is DataGridRow row)
-            row.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        if (ItemsGrid.ItemContainerGenerator.ContainerFromIndex(index) is DataGridRow row
+            && ItemsGrid.Columns[0].GetCellContent(row)?.Parent is DataGridCell cell)
+            cell.Focus();
         else
             ItemsGrid.Focus();
     }

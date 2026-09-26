@@ -167,6 +167,39 @@ public sealed class RecentlyDeletedViewModelTests
         Assert.Null(viewModel.ErrorMessage);
     }
 
+    /// <summary>The main window catches up after each action, not when the dialog closes.</summary>
+    [Fact]
+    public void EveryAction_RaisesChanged_WithWhatItRestored()
+    {
+        var service = NewService(out _, out _);
+        var docs = AddFolder(service, "Docs");
+        var wiki = AddFolder(service, "Wiki");
+        var notes = AddFolder(service, "Notes");
+        Remove(service, docs);
+        Remove(service, wiki);
+        Remove(service, notes);
+        AddFolder(service, "Docs", "Elsewhere");
+        var viewModel = new RecentlyDeletedViewModel(service, TestZones.PlusTen);
+        var raised = new List<Place[]>();
+        viewModel.Changed += restored => raised.Add(restored.ToArray());
+
+        Select(viewModel, docs, wiki);
+        var conflict = Assert.Single(viewModel.RestoreSelected());
+        Assert.Equal(new[] { wiki }, Assert.Single(raised));
+
+        Assert.True(service.TryRestore(docs, "Docs (old)", docs.Resource, out _).Success);
+        viewModel.NoteRestored(conflict.Place);
+        Assert.Equal(new[] { docs }, raised[1]);
+
+        Select(viewModel, notes);
+        viewModel.DeleteSelectedPermanently();
+        Assert.Empty(raised[2]);
+
+        viewModel.EmptyRecentlyDeleted();
+        Assert.Equal(4, raised.Count);
+        Assert.Empty(raised[3]);
+    }
+
     [Fact]
     public void ConflictFlow_AskedAfresh_ThenRestoredUnderTheEditedValues_IsRecorded()
     {

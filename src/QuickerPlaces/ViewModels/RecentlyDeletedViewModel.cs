@@ -22,7 +22,7 @@ namespace QuickerPlaces.ViewModels;
 /// memory if the save fails (D1). A failure is shown in <see
 /// cref="ErrorMessage"/> so the user isn't left guessing behind a modal;
 /// the main window's banner stays driven by PlacesService.HasUnsavedChanges
-/// alone, refreshed by MainViewModel after the dialog closes.
+/// alone, refreshed by MainViewModel after each action (<see cref="Changed"/>).
 /// </summary>
 public sealed class RecentlyDeletedViewModel : ObservableObject
 {
@@ -72,8 +72,15 @@ public sealed class RecentlyDeletedViewModel : ObservableObject
 
     public bool HasError => ErrorMessage is not null;
 
-    /// <summary>Every place restored while the dialog was open, in restore order — handed back to MainViewModel to insert into the grid.</summary>
+    /// <summary>Every place restored while the dialog was open, in restore order. Each is also passed to <see cref="Changed"/> as it is restored.</summary>
     public IReadOnlyList<Place> RestoredPlaces => _restored;
+
+    /// <summary>
+    /// Raised after every action, with the places that action restored
+    /// (often none), so the main window can catch up while the dialog is
+    /// still open instead of when it closes.
+    /// </summary>
+    public event Action<IReadOnlyList<Place>>? Changed;
 
     /// <summary>Called by the view whenever the grid's selection changes.</summary>
     public void SetSelection(IEnumerable<RecentlyDeletedRowViewModel> selected)
@@ -106,6 +113,7 @@ public sealed class RecentlyDeletedViewModel : ObservableObject
         _restored.AddRange(restored);
         ApplyPersistence(persistence);
         Reload();
+        Changed?.Invoke(restored);
         return conflicts;
     }
 
@@ -128,11 +136,13 @@ public sealed class RecentlyDeletedViewModel : ObservableObject
 
         // Only D3 can refuse this now (it would say so through the
         // persistence result); nothing else stands in the way.
-        if (_placesService.TryRestore(place, out var persistence).Success)
+        var restored = _placesService.TryRestore(place, out var persistence).Success;
+        if (restored)
             _restored.Add(place);
 
         ApplyPersistence(persistence);
         Reload();
+        Changed?.Invoke(restored ? new[] { place } : Array.Empty<Place>());
         return null;
     }
 
@@ -147,6 +157,7 @@ public sealed class RecentlyDeletedViewModel : ObservableObject
         _restored.Add(place);
         ApplyPersistence(null);
         Reload();
+        Changed?.Invoke(new[] { place });
     }
 
     /// <summary>Delete selected permanently, after the view has asked <see cref="DeleteSelectedConfirmation"/>.</summary>
@@ -155,6 +166,7 @@ public sealed class RecentlyDeletedViewModel : ObservableObject
         var persistence = _placesService.DeletePermanently(_selection.Select(r => r.Place));
         ApplyPersistence(persistence);
         Reload();
+        Changed?.Invoke(Array.Empty<Place>());
     }
 
     /// <summary>Empty Recently Deleted, after the view has asked <see cref="EmptyConfirmation"/>.</summary>
@@ -163,6 +175,7 @@ public sealed class RecentlyDeletedViewModel : ObservableObject
         var persistence = _placesService.EmptyRecentlyDeleted();
         ApplyPersistence(persistence);
         Reload();
+        Changed?.Invoke(Array.Empty<Place>());
     }
 
     /// <summary>Rebuilds every row from the service, with the service's clock, so the countdown is current.</summary>

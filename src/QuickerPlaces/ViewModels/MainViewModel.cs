@@ -434,18 +434,19 @@ public sealed class MainViewModel : ObservableObject
         ShowStatus($"Restored \"{place.Alias}\".{next}");
     }
 
+    private void ShowRecentlyDeleted() => RecentlyDeletedDialog.Show(_placesService, SyncWithRecentlyDeleted);
+
     /// <summary>
-    /// Opens Recently Deleted, then brings the main window up to date with
-    /// whatever it did: a row for each place it restored (at its stored
-    /// position), favourites and their numbering (a restored favourite
-    /// shifts the bubbles after it), the banner — read from
-    /// PlacesService.HasUnsavedChanges, since the dialog's actions saved or
-    /// failed to — and the Undo stack, which must no longer offer anything
-    /// the dialog restored or deleted.
+    /// Runs after each Recently Deleted action, while the dialog is still
+    /// open, and brings the main window up to date with it: a row for each
+    /// place it restored (at its stored position), favourites and their
+    /// numbering (a restored favourite shifts the bubbles after it), the
+    /// banner — read from PlacesService.HasUnsavedChanges, since the action
+    /// saved or failed to — and the Undo stack, which must no longer offer
+    /// anything the dialog restored or deleted.
     /// </summary>
-    private void ShowRecentlyDeleted()
+    private void SyncWithRecentlyDeleted(IReadOnlyList<Place> restored)
     {
-        var restored = RecentlyDeletedDialog.Show(_placesService);
         RefreshPersistenceState();
 
         foreach (var place in restored)
