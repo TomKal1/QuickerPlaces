@@ -1,11 +1,11 @@
 ---
 title: QuickerPlaces — Folder Activity Tracking Detailed Plan
-status: in progress on claude/phase-9-folder-activity — steps 1 (the tracker, its seams, RootPathMatcher) and 2 (ActivityStore) built and tested on 2026-09-25; step 3 (the COM probe, the host and the performance gate) next, and it needs the user
+status: in progress on claude/phase-9-folder-activity — steps 1 to 3 done; event-fed probe passed navigation, restart, lock and five-entry performance checks; step 4 next
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
 builds_on: ai/260925_Phase 3 Handoff.md §5; ai/260925_Phase 3 Detailed Plan.md D23–D33; ai/BUILD_SUMMARY.md
-last_revised: 2026-09-25 — step 2 built; D32–D36 record what it settled. Earlier the same day — step 1 built; D27–D31 record what building it settled, and §11 gains question 7. Earlier on 2026-09-25 — refreshed against the code after Phase 3 and against the user's answers (§0.1, D17–D26): late-bound COM, root configuration in activity.json, a GitHub-style year calendar replacing the hour heat map, tray and start-with-Windows in the first version, mapped-drive equivalence, timesheet export deferred. 2026-09-15 — longest period is a month, not a year (D16); monthly downsampling removed with it
+last_revised: 2026-09-26 — first D37 stress failed; event-fed probe implemented, passed Windows navigation, restart, lock and five-entry performance checks, and the user accepted the performance gate. 2026-09-25 — step 3 implementation and D37–D39. Earlier — step 2 built with D32–D36, step 1 with D27–D31, and the Phase 3 refresh with D17–D26. 2026-09-15 — longest period is a month, not a year (D16)
 ---
 
 # Phase 9 — Opt-in root folder activity tracking
@@ -76,13 +76,13 @@ These are settled here so they do not get re-litigated during implementation.
 
 **D1 — Observe shell windows; never watch the file system.** Tracking uses the documented `ShellWindows` COM collection (Internet Explorer's `SHDocVw`, present on every supported Windows) to read the folder each open Explorer window is showing. A recursive `FileSystemWatcher` over a large root is rejected: it costs real CPU and I/O, overflows its internal buffer on a busy tree, and answers the wrong question — it reports changes, not attention.
 
-**D2 — Poll adaptively rather than on a fixed timer.** One enumeration pass, with the handful of Explorer windows a person actually has open, costs well under a millisecond of CPU. The sampling rate is what decides the cost, so it varies: ~1.5 s while an Explorer window is in the foreground, ~15 s when it is not, and **no timer at all** while the session is locked, while the user has been idle past the threshold, or while no `explorer.exe` shell window exists. A fixed 1 s metronome is the only part of this design with a measurable power cost on a laptop, and this removes it.
+**D2 — Sample adaptively rather than on a fixed timer.** The event-fed probe makes the ordinary sample a cached read and a foreground-handle check (D3). The accounting host samples ~1.5 s while an Explorer window is in the foreground and ~15 s when it is not. There is no host timer while the session is locked, suspended or without enabled roots. D38 adds a presence check every 15 s while idle.
 
-**D3 — Event-driven observation is a later swap, not the first version.** `DShellWindowsEvents` (`WindowRegistered` / `WindowRevoked`) plus per-window `NavigateComplete2` sinks idle at zero cost, but need re-attaching whenever Explorer restarts and fail quietly when a sink is dropped. The poller goes behind `IShellWindowProbe` (5.1) so the event-driven implementation can replace it without touching the accounting, the store, or the UI.
+**D3 — Event-driven observation is required after the first Windows performance run.** `DShellWindowsEvents` (`WindowRegistered` / `WindowRevoked`) plus per-window `NavigateComplete2` can update a cached window/path snapshot when Explorer changes, leaving routine samples to read memory and call `GetForegroundWindow`. Sinks need re-attaching after Explorer restarts, and a missed event needs a bounded reconciliation path. The probe stays behind `IShellWindowProbe` (5.1), so the accounting, store and UI do not change. This was originally a later swap; the 2026-09-26 D37 run exceeded both the probe pass and CPU budgets, so the swap is now a step 3 requirement.
 
-**D4 — COM wrappers are released on every pass.** Every object obtained from `ShellWindows` — the collection, each window, each `IShellFolderViewDual`, each `Folder` and `FolderItem` — is released in a `finally` before the pass returns. Holding them pins references inside `explorer.exe`, and over an eight-hour session that shows up as Explorer's memory and handle count climbing. This is the single most common way this feature is implemented badly, and section 9 makes it a measured acceptance criterion rather than a hope.
+**D4 — COM wrappers have bounded ownership.** The first polling probe released every object it obtained on each pass. The event-fed probe holds the ShellWindows collection and one subscription per Explorer entry until shutdown, revocation or reconciliation; document, folder and item wrappers are still released immediately after reading a path. Every subscription is unadvised and released when replaced. Explorer handle growth is a measured criterion in §6.
 
-**D5 — COM runs on its own STA thread, never on the UI thread.** A hung Explorer window must not be able to freeze QuickerPlaces. The probe owns a dedicated STA background thread; every pass has a timeout; a pass that times out is abandoned and logged (once per occurrence class, per D12), not retried in a loop.
+**D5 — COM runs on its own STA thread, never on the UI thread.** A hung Explorer window must not freeze QuickerPlaces. The event-fed probe owns a dedicated STA background thread and message pump. Startup and reconciliation have a two-second timeout as observed by the host; a hung worker is abandoned and replaced, with its failure logged once per class (D12). Ordinary cached samples perform no COM call.
 
 **D6 — Time is attributed backwards, from a monotonic clock, with a cap.** Each sample attributes the elapsed interval since the previous sample to the folder that was foreground *at the previous sample*, measured with `Stopwatch` rather than wall-clock time. Any single attribution is capped at twice the current poll interval, and `SystemEvents.PowerModeChanged` (suspend/resume) plus `SessionSwitch` (lock/unlock) discard the gap entirely. Without the cap, closing a laptop lid for the weekend adds 60 hours to whatever folder was last on screen.
 
@@ -118,7 +118,7 @@ These are settled here so they do not get re-litigated during implementation.
 
 ### Decisions added by the 2026-09-25 refresh
 
-**D17 — COM is late-bound; there is no COM reference.** `<COMReference>` needs the full-framework MSBuild of Visual Studio; `dotnet build`, which this project uses on Windows and in Linux sessions, cannot resolve it (MSB4803). The probe creates `Shell.Application` through `Type.GetTypeFromProgID` and walks `Windows()` → `Document` → `Folder.Self.Path` and `HWND` through `dynamic`. That is the call sequence 5.1 already named as the fallback, now the only path. Nothing ships an interop assembly, and Phase 8's single-file concern about embedded interop disappears. D4's release discipline applies unchanged: every object obtained is passed to `Marshal.ReleaseComObject` in a `finally`.
+**D17 — COM is late-bound; there is no COM reference.** `<COMReference>` needs the full-framework MSBuild of Visual Studio; `dotnet build`, which this project uses on Windows and in Linux sessions, cannot resolve it (MSB4803). The probe creates `Shell.Application` through `Type.GetTypeFromProgID` and reads `Windows()` → `Document` → `Folder.Self.Path` and `HWND` through `dynamic`. Nothing ships an interop assembly. The event-fed probe uses COM connection points for change notifications and D4's bounded ownership rule for their wrappers.
 
 **D18 — Tracked roots live in `activity.json` beside their data, not in `settings.json`.** This replaces the configuration half of D11. `settings.json` is saved best-effort: `SettingsService.Save` swallows write errors, and `Load` silently returns defaults for a damaged or newer file. Both are right for window bounds and wrong for a list the user built, where a failed save could resurrect a deleted root or lose a new one without a word. In `activity.json`:
 
@@ -159,7 +159,7 @@ These are settled here so they do not get re-litigated during implementation.
 
 These settle what D6 to D14 left open once the tracker met its tests. They are in `Services/Activity/FolderActivityTracker.cs` and pinned by `FolderActivityTrackerTests`.
 
-**D27 — A visit ends when the root's foreground folder changes, including to no Explorer window at all.** Returning to the same folder later is a second visit with its own dwell. It is the only definition the tracker can observe without guessing when a person "left". The cost: someone who alt-tabs between Explorer and Revit all afternoon collects many visits to one folder. Time is unaffected. See §11, question 7.
+**D27 — A visit ends when the root's foreground folder changes.** A counted visit survives a switch to another application: returning to the same Explorer folder continues that visit, without crediting the time away. A different Explorer folder ends it. See D39 and §11, question 7.
 
 **D28 — A visit counts only once it has been *seen* in the foreground past its dwell threshold.** D6 attributes each interval to what was foreground at its start. A folder seen at 4.5 s and gone at 6 s may have left at 4.6 s, so crediting it would count a transit. D9 prefers the under-count. Time still accrues from the threshold, not from the sample that confirmed it.
 
@@ -183,6 +183,12 @@ These are in `Services/Activity/ActivityStore.cs` and pinned by the `ActivitySto
 
 **D36 — Buffering means the in-memory document is updated at once, and `Flush` writes the whole document when anything has changed.** Queries see recorded time before it is flushed. A failed flush keeps the data, so the next flush writes it: §7's "logged and dropped" drops the *failure*, not the data. A failed configuration write is reported, keeps the change in memory, and the next write of either kind carries it (Phase 1's D1). *When* to flush (every 5 minutes, on idle, on lock, on exit) belongs to the host (D26), so §7's "buffered writes flush on interval, on idle, and on exit" is tested with the host in step 3. The store's side of it, that recording never writes and a flush writes only when there is something new, is tested now.
 
+**D37 — Measure the performance budget in a short Visual Studio session.** Keep §6's numerical targets. Replace the eight-hour working day with a rapid stress run of about 20,000 consecutive probe passes, sampling Explorer handle totals and this process's private bytes every 1,000 passes after a GC; a live check; a one-minute lock; and an Explorer restart. The mapped-drive check (D22) is a later ten-minute run on the work machine. Record the measured values against §6 before declaring the gate passed.
+
+**D38 — While idle, check for return every 15 seconds.** A fully event-driven wake on keyboard or mouse input would require a system-wide input hook. The idle host therefore wakes once every 15 seconds to check presence. Lock and suspend still have no timer wakeups.
+
+**D39 — Returning from another app continues a counted visit to the same folder.** Settled by the user on 2026-09-25. While another app is foreground, no time accrues. Returning to the same Explorer folder retains the visit count; switching to a different Explorer folder starts a new visit and dwell. An uncounted visit still loses its dwell during an absence (D31).
+
 ## 5. Work items
 
 ### 5.1 The probe seam and a testable tracker (parent 4.28)
@@ -190,7 +196,7 @@ These are in `Services/Activity/ActivityStore.cs` and pinned by the `ActivitySto
 | File | Status | Purpose |
 |---|---|---|
 | `src/QuickerPlaces/Services/Activity/IShellWindowProbe.cs` | new | One method: `IReadOnlyList<ShellWindowSnapshot> Sample()` |
-| `src/QuickerPlaces/Services/Activity/ShellWindowProbe.cs` | new | The COM implementation (D1, D4, D5, D13, D14) |
+| `src/QuickerPlaces/Services/Activity/EventShellWindowProbe.cs` | new | The event-fed COM implementation (D1, D3–D5, D13, D14) |
 | `src/QuickerPlaces/Services/Activity/ShellWindowSnapshot.cs` | new | `record(string Path, nint Hwnd, bool IsForeground)` |
 | `src/QuickerPlaces/Services/Activity/IUserPresence.cs` (+ `UserPresence.cs`) | new | `TimeSpan IdleFor { get; }`, `bool SessionLocked { get; }` over `GetLastInputInfo` and `SessionSwitch` |
 | `src/QuickerPlaces/Services/Activity/IMonotonicClock.cs` (+ impl) | new | `Stopwatch`-backed; the seam that makes D6 testable |
@@ -201,7 +207,7 @@ These are in `Services/Activity/ActivityStore.cs` and pinned by the `ActivitySto
 
 The tracker takes all four seams as constructor parameters (the probe, presence, the monotonic clock, and `TimeProvider` for the day, D19) and contains **no COM and no P/Invoke**. Every behaviour in D6 through D9, D14 and D19 is then a plain unit test that feeds it a scripted sequence of snapshots and clock readings. This is the whole reason the seam exists; a tracker that calls `GetForegroundWindow()` directly cannot be tested at all. `FolderActivityTracker`, `RootPathMatcher`, the seam interfaces, the snapshot record and the models are UI-free and linked into the test project, like `PlacesService`. The probe, `UserPresence`, `NetworkDriveResolver` and the host are app-only.
 
-*Revised 2026-09-25 (D17):* COM is late-bound. `Type.GetTypeFromProgID("Shell.Application")` → `Windows()` → each window's `HWND` and `Document.Folder.Self.Path`, through `dynamic`, with every object released in a `finally`. The first version of this plan used `<COMReference>` with embedded interop types and kept late binding as the fallback. `dotnet build` cannot resolve COM references, so the fallback is now the design. The call sequence and the release discipline (D4) are unchanged.
+*Revised 2026-09-26 (D3, D17):* COM is late-bound. `Type.GetTypeFromProgID("Shell.Application")` → `Windows()` → each window's `HWND` and `Document.Folder.Self.Path`, through `dynamic`, runs at initialization and reconciliation. Public COM-visible connection-point sinks receive window registration/revocation and navigation events on a dedicated STA dispatcher; the normal sample reads the cache and calls `GetForegroundWindow`. A broken sink clears the cache, and reconciliation retries. Long-lived wrappers follow D4's bounded ownership rule. No `<COMReference>` or interop assembly is needed.
 
 ### 5.2 The activity store (parent 4.29)
 
@@ -305,17 +311,35 @@ These are acceptance criteria, measured on Windows before the phase is called do
 | Measure | Budget |
 |---|---|
 | One probe pass, 5 Explorer windows open | < 2 ms |
-| Average CPU, tracking active, over an 8-hour session | < 0.1% of one core |
-| `explorer.exe` handle count growth over an 8-hour session | none attributable to QuickerPlaces (D4) |
-| QuickerPlaces private bytes growth, same session | < 10 MB |
-| Timer wakeups while idle or locked | zero (D2) |
+| Average CPU, tracking active, measured in the D37 short session | < 0.1% of one core |
+| `explorer.exe` handle count growth during the D37 stress run | none attributable to QuickerPlaces (D4) |
+| QuickerPlaces private bytes growth, same run | < 10 MB |
+| Timer wakeups while idle / locked | one presence check every 15 s / zero (D38) |
 | `activity.json` at steady state, one root, daily use, 62 days of detail plus 365 day totals | < 500 KB |
 | UI thread blocked by tracking | never (D5) |
 | Close with tracking active, including the final flush | < 2 s added (D26) |
 
 If the first three cannot be met, the event-driven probe (D3) moves from "later swap" to "required", rather than the budget moving.
 
-*2026-09-25:* unlike the Phase 3 checklist, these measurements are not optional. A tracker that leaks handles in `explorer.exe` degrades the user's own desktop over a working day, and nothing else would show it. The first three are taken in step 3 of section 9, before any UI exists. The eight-hour rows are taken with the user's ordinary working day as the session: the host logs its pass timings and a handle-count sample every hour, so no one has to sit and watch.
+*Revised 2026-09-25 (D37–D38):* these measurements are not optional. Step 3 uses a short Visual Studio session: about 20,000 back-to-back probe passes with handle and private-byte samples every 1,000 passes after GC, plus a live check, a one-minute lock and an Explorer restart. The numerical budgets above remain the acceptance criteria. D22's mapped-drive check follows on the work machine.
+
+*First Windows run, 2026-09-26 (developer probe, Debug without debugger):* 20,000 passes, zero failures. Mean pass 30.947 ms (p95 91.575 ms, maximum 425.565 ms), against < 2 ms; projected one-core CPU at a 1.5 s interval 0.7220%, against < 0.1%. Private bytes rose from 25,632,768 at pass 1,000 to 29,880,320 at pass 20,000 (4.05 MiB, below 10 MiB). Explorer handle totals fluctuated from 9,734 to 11,068 and ended at 9,851 versus 10,059 at pass 1,000; that does not show monotonic growth, though the changing desktop workload prevents attributing every change. The one-minute lock logged zero timer wakes. The host stopped in 1.5 ms with zero probe failures after 57 wakes and 56 ticks. The user closed and reopened a folder window; an Explorer *process* restart remains untested. The probe pass and CPU budgets **failed**; per D3 the event-driven probe is required before step 4.
+
+*Event-fed Windows run, 2026-09-26 (developer probe, Debug without debugger):* The live check showed `WindowRegistered`/`WindowRevoked` and `NavigateComplete2` counts rising while Explorer entries and folder paths changed. Several tabs shared one HWND, as D14 anticipates. The cached stress run had 20,000 passes and zero failures; mean and p95 rounded to 0.000 ms, maximum 0.004 ms, and projected one-core CPU at a 1.5 s interval was 0.0006%. Explorer handles stayed at 9,137 at every 1,000-pass sample; private bytes stayed at 18,329,600, except one 18,321,408 sample. Initial reconciliation took 13.514 ms off the sampling path. The host reported `Locked` and `Unlocked`, zero locked timer wakes, zero probe failures after five wakes and four ticks, no unsaved data and a 2.0 ms stop. The run had three Explorer entries, so the specified five-window pass remains to be repeated. The host output has no explicit Explorer process restart or probe recovery marker; that recovery remains unverified.
+
+*Second event-fed run, 2026-09-26:* With five Explorer entries, 20,000 cached passes had zero failures; mean and p95 rounded to 0.000 ms, maximum 0.010 ms, and projected one-core CPU at a 1.5 s interval was 0.0005%. Explorer handles stayed at 6,086 and process private bytes at 19,361,792 in every 1,000-pass sample. Initial reconciliation took 18.223 ms off the sampling path. All five entries shared HWND 265782, so this tested five tabs in one window rather than five separate foreground windows. The following Live trace showed no change in HWND, entries, or event counters; it cannot establish that Explorer restarted while the probe was running.
+
+*Explorer process restart check, 2026-09-26:* Explorer PID 31656 started at 12:48:45 AM while the Live probe was running (it began at 12:48:39). The pasted probe trace still showed its two old entries on HWND 2558278, with zero window/navigation events and only the initial reconciliation, through 12:49:06. The periodic reconciliation is scheduled for roughly 12:49:39 and can retry after 15 seconds if the old COM collection is disconnected; recovery after that point remains to be observed. Stale paths are not credited while the old HWND is no longer foreground.
+
+*Follow-up trace:* The user exited that Live view and started another at 12:50:42. The fresh probe immediately saw one entry on new HWND 2163726, showing startup works after an Explorer restart. Because the first probe was disposed on return to the menu, that trace did not establish reconnection.
+
+*In-session recovery trace:* A Live probe started at 12:51:50. Explorer PID 29848 started at 12:51:59 while it was running. The probe retained the old HWND 2163726 until its scheduled reconciliation, then reported `COMException` 0x800706BA on ten samples. By 12:53:06, after the retry, the **same** probe showed a new foreground Music window on HWND 1314106 with three reconciliations and continued sampling. Recovery took about 67 seconds from Explorer restart. The developer console initially repeated each failure; it now prints the first failure and a recovery count, while the production tracking loop already logs one failure per class per session (D12).
+
+*Third event-fed stress run, 2026-09-26:* With five Explorer entries, 20,000 cached passes had zero failures; mean and p95 rounded to 0.000 ms, maximum 0.010 ms, and projected one-core CPU at a 1.5 s interval was 0.0005%. Explorer handles stayed at 6,896 at every 1,000-pass sample. Process private bytes fell from 17,842,176 at pass 1,000 to 17,203,200 at pass 2,000 and stayed there. Initial reconciliation took 21.451 ms off the sampling path. This confirms the numerical budgets for five cached entries. Stress output omits HWNDs, so it does not independently prove that the five entries were in separate Explorer windows.
+
+*Fourth event-fed stress run, 2026-09-26:* The older, still-running developer probe again reported five Explorer entries and 20,000 cached passes with zero failures. Mean and p95 rounded to 0.000 ms, maximum was 0.017 ms, and projected one-core CPU at a 1.5 s interval was 0.0006%. Explorer handles stayed at 11,611 in every 1,000-pass sample. Private bytes decreased from 17,645,568 to 17,567,744 (with a small intermediate fluctuation). Initial reconciliation took 171.560 ms off the timed sample path, under the two-second setup bound. This further confirms the numerical budgets, though this build still omits distinct HWND count.
+
+*Gate decision, 2026-09-26:* The user accepts these results and does not want further probe optimization. The numerical targets are met with substantial margin on five cached entries, and routine sample cost depends on entry count rather than whether the entries are tabs or separate HWNDs. Distinct HWNDs were not recorded in the old executable, so the exact five-separate-window setup is not claimed as observed. Proceed to step 4 without another stress run.
 
 ## 7. Test plan
 
@@ -373,7 +397,7 @@ This is a tool for one person to see their own work. It is not an employee monit
 
 1. The seams (`IShellWindowProbe`, `IUserPresence`, `IMonotonicClock`), the snapshot record, `RootPathMatcher`, and `FolderActivityTracker` with its full unit test suite. No UI, no store, no COM. *Done 2026-09-25 (`12d765f`, `c648189`): 85 new tests, 414 in all; D27–D31. The `Stopwatch` implementation of `IMonotonicClock` moves to step 3 with the host.*
 2. The models, `IActivityStore` and `FileActivityStore`: configuration writes that report, buffered activity, 62-day detail and 365-day totals, quarantine, and their tests. *Done 2026-09-25 (`982211f`, `5bcf97f`) as one `ActivityStore` over `IPlacesStorage` (D32): 82 new tests, 496 in all; D32–D36.*
-3. `ShellWindowProbe` (late-bound COM, D17), `UserPresence`, and `ActivityTrackingHost` (D26), with a diagnostic harness that logs pass timings and handle counts. **Measure section 6's first three rows before going further.** Nothing is recorded yet, because no root can be added.
+3. `EventShellWindowProbe` (late-bound COM and events, D3, D17), `UserPresence`, and `ActivityTrackingHost` (D26), with a diagnostic harness that logs pass timings and handle counts. **Measure section 6's first three rows before going further.** Nothing is recorded by the app yet, because no root can be added. *Done 2026-09-26. The first polling probe failed the pass and CPU budgets; the event-fed replacement passed the numerical budgets, lock and in-session Explorer restart checks. The user accepted the five-entry measurements as sufficient for this gate, with the separate-HWND caveat in section 6.*
 4. The Activity window's root management and `AddRootDialog`, with the opt-in panel and D22's network-path offer (`NetworkDriveResolver`), plus the header icon and indicator (D21). From here, tracking really runs.
 5. The Activity window's periods: Week, Month and Day, the grid with Last visited, and Add as Place.
 6. The calendar heat map (D20).
@@ -400,4 +424,4 @@ Steps 1 and 2 are the phase's real content and are fully testable in isolation. 
 4. **Is 62 days the right retention default?** It is the smallest window that always contains a complete previous month. Someone who wants to look back at a quarter would need more, and nothing in the store shape prevents raising it — the cost is linear and small. Revisit once a real `activity.json` has a few months in it. *2026-09-25:* the calendar's 365 days of totals (D20) cover the "look back further" case for totals; this question is now only about per-folder detail.
 5. *Added 2026-09-25:* **Timesheet export (D24).** Copy and CSV of a period's folder-by-day rows, deferred. Revisit once the Week and Month views have been used.
 6. *Added 2026-09-25:* **The calendar's colour scale.** D20 uses quartiles of the non-zero days in view, as GitHub does. A single long day then doesn't wash out the rest. The catch is that the same colour means different hours in different years. Revisit with real data.
-7. *Added 2026-09-25, step 1:* **Is D27's visit the right one?** A visit ends whenever the folder leaves the foreground, so alternating between Explorer and another application counts a visit on every return. The alternative is to end a visit only on navigation to another folder, or after an absence longer than some minutes. Revisit once a real week of Visits exists; it changes only `FolderActivityTracker.NextVisit` and its tests, not the store.
+7. *Settled 2026-09-25 (D39):* Switching back from another app to the same Explorer folder continues the counted visit. Time away is not credited. A different Explorer folder begins a new visit.

@@ -4,8 +4,8 @@ namespace QuickerPlaces.Services.Activity;
 
 /// <summary>
 /// Reads which folders the open Explorer windows are showing (Phase 9 plan
-/// 5.1). The COM implementation polls <c>ShellWindows</c> (D1, D17); an
-/// event-driven one can replace it without touching the tracker (D3).
+/// 5.1). The event-driven COM implementation caches ShellWindows paths (D3)
+/// so the tracker can sample without cross-process COM calls.
 /// </summary>
 public interface IShellWindowProbe
 {

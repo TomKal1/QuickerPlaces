@@ -144,6 +144,36 @@ public sealed class FolderActivityTrackerTests
         Assert.Equal(Seconds(4 + 1.5 + 1), h.TimeIn(Acme));
     }
 
+    [Fact]
+    public void ReturningFromAnotherAppToSameFolder_ContinuesVisitWithoutCreditingTimeAway()
+    {
+        var h = WithACountedVisitToAcme();     // t = 9, 4 s
+        h.Probe.Windows[0] = h.Probe.Windows[0] with { IsForeground = false };
+        h.Step();                              // t = 10.5, last foreground interval
+        h.Step(TimeSpan.FromMinutes(2));       // another app stays foreground
+        var beforeReturn = h.TimeIn(Acme);
+
+        h.Probe.Windows[0] = h.Probe.Windows[0] with { IsForeground = true };
+        h.Step();                              // re-establish foreground baseline
+        Assert.Equal(beforeReturn, h.TimeIn(Acme));
+        h.Step();
+
+        Assert.Equal(1, h.VisitsTo(Acme));
+        Assert.Equal(beforeReturn + Seconds(1.5), h.TimeIn(Acme));
+    }
+
+    [Fact]
+    public void ClosingExplorer_EndsTheVisitEvenIfTheSameFolderIsReopened()
+    {
+        var h = WithACountedVisitToAcme();
+        h.Probe.CloseAll();
+        h.Step();
+        h.Probe.ShowForeground(Acme);
+        h.Steps(5);
+
+        Assert.Equal(2, h.VisitsTo(Acme));
+    }
+
     // ---- D7: foreground only, and only while present ----
 
     [Fact]

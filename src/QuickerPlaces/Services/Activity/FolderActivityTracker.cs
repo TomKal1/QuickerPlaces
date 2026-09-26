@@ -23,8 +23,8 @@ namespace QuickerPlaces.Services.Activity;
 ///   for less than the root's timeout.
 /// - D9: a visit counts once it has been seen in the foreground past its
 ///   dwell threshold, and time accrues from the threshold, not from arrival.
-///   A visit ends when the root's foreground folder changes, including to
-///   none. A visit still inside its dwell is dropped by idle, a lock or a
+///   A counted visit survives another app taking the foreground, with no
+///   time credited away (D39). A visit still inside its dwell is dropped by idle, a lock or a
 ///   suspend, so its dwell starts again.
 /// - D14: when the foreground tabs credit different folders, or one credits
 ///   none, nothing is credited until they agree.
@@ -45,7 +45,7 @@ public sealed class FolderActivityTracker
 
     private List<TrackedRootConfig> _roots = new();
 
-    /// <summary>Each root's current visit, by RootId: the folder in the foreground at the previous tick.</summary>
+    /// <summary>Each root's current visit, by RootId; counted visits can survive a background interval.</summary>
     private readonly Dictionary<string, Visit> _visits = new(StringComparer.Ordinal);
 
     /// <summary>The monotonic time of the previous tick; null when there is none to measure from.</summary>
@@ -102,7 +102,8 @@ public sealed class FolderActivityTracker
         }
 
         var now = _clock.Elapsed;
-        var foreground = _probe.Sample().Where(w => w.IsForeground).ToList();
+        var windows = _probe.Sample();
+        var foreground = windows.Where(w => w.IsForeground).ToList();
         TimeSpan? span = _previousTick is { } previous
             ? Min(now - previous, PollInterval + PollInterval)
             : null;
@@ -114,10 +115,10 @@ public sealed class FolderActivityTracker
             var present = _presence.IdleFor < root.IdleTimeout;
             _visits.TryGetValue(root.RootId, out var visit);
 
-            if (visit is not null && span is { } elapsed && present)
+            if (visit is not null && visit.WasForeground && span is { } elapsed && present)
                 Accrue(root, visit, SameFolder(visit.Folder, folder), now, elapsed, intervals);
 
-            var next = NextVisit(visit, folder, present, now);
+            var next = NextVisit(visit, folder, windows.Count > 0 && foreground.Count == 0, present, now);
             if (next is null)
                 _visits.Remove(root.RootId);
             else
@@ -143,6 +144,9 @@ public sealed class FolderActivityTracker
 
         /// <summary>True once the visit has crossed its dwell threshold and been counted (D9).</summary>
         public bool Counted { get; set; }
+
+        /// <summary>False during another application's foreground interval, so return does not credit that gap.</summary>
+        public bool WasForeground { get; set; } = true;
     }
 
     /// <summary>
@@ -194,13 +198,24 @@ public sealed class FolderActivityTracker
     /// when no folder is there. While the user is away no visit arrives, and
     /// one still inside its dwell is dropped (D7, D9).
     /// </summary>
-    private static Visit? NextVisit(Visit? visit, string? folder, bool present, TimeSpan now)
+    private static Visit? NextVisit(Visit? visit, string? folder, bool anotherAppForeground, bool present, TimeSpan now)
     {
         if (folder is null)
+        {
+            if (anotherAppForeground && visit?.Counted == true)
+            {
+                visit.WasForeground = false;
+                return visit;
+            }
+
             return null;
+        }
 
         if (visit is not null && SameFolder(visit.Folder, folder) && (visit.Counted || present))
+        {
+            visit.WasForeground = true;
             return visit;
+        }
 
         return present ? new Visit(folder, now) : null;
     }
