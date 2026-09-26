@@ -10,6 +10,9 @@ namespace QuickerPlaces.Services;
 /// without touching a real disk. At this step the production
 /// implementation (FilePlacesStorage) behaves identically to the File.*
 /// calls it replaces; only the seam is new.
+///
+/// Phase 9's ActivityStore uses the same seam over activity.json (plan
+/// D32): nothing here is specific to places.json except the name.
 /// </summary>
 public interface IPlacesStorage
 {

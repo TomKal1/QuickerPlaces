@@ -57,8 +57,14 @@ public sealed class FakePlacesStorage : IPlacesStorage
         ContentsToReturn = contents;
     }
 
+    /// <summary>When set, Quarantine() throws this and moves nothing, as a failed rename would.</summary>
+    public Exception? QuarantineThrows { get; set; }
+
     public string Quarantine(DateTimeOffset timestamp)
     {
+        if (QuarantineThrows is not null)
+            throw QuarantineThrows;
+
         QuarantineCount++;
         var stamp = timestamp.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
         QuarantinedPath = $@"C:\fake\places.corrupt-{stamp}.json";
