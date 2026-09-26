@@ -1,8 +1,8 @@
 # QuickerPlaces — Professional Improvements Implementation Plan
 
-**Status:** Phases 1 and 2 implemented and merged to `main` (238 tests pass; both manual checklists closed on 2026-09-25, with the failure-path items accepted as untested); Phase 3 implemented on `claude/phase-3-usage-tracking` (329 tests pass; manual verification closed; not yet merged); Phases 4 to 9 planned, and Phase 4 is next  
+**Status:** Phases 1, 2 and 3 implemented and merged to `main` (Phase 3 through PR #7; 329 tests pass; every manual checklist closed); Phase 9 is next, then 4 → 6 → 7 → 8 → 5 (§1.1)  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-25 — the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 implemented; Phase 2 merged  
+**Last revised:** 2026-09-25 — the release split withdrawn for a plain order of work, with Phase 9 moved up to next (§1.1); the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 merged  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 3](260925_Phase%203%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
@@ -24,19 +24,24 @@ The planned release adds:
 - Remembered grid sorting
 - A self-contained, single-file Windows release
 
-### 1.1 Release split
+### 1.1 Order of work
 
-This is more work than one release should carry, so it ships as two.
+*Revised 2026-09-25 at the user's direction.* This section used to split the phases into three releases (Release 1: Phases 1–4, 6 and 7; Release 2: Phase 5; Release 3: Phase 9, deliberately last). Nothing is being released on that schedule: the app is built and run from source, and "release" only meant a grouping of phases. The split is withdrawn in favour of a plain order. Where later sections still say "release", read it as "this plan's work" or, in Phase 8, a published build.
 
-**Release 1 — Phases 1 to 4, 6, and 7.** Persistence reliability, Recently Deleted, usage tracking and sorting, general file support, multi-folder import, and search. Every item is self-contained, none depends on a third-party application being installed, and the set is enough to justify a release on its own.
+| Order | Phase | State |
+|---|---|---|
+| 1–3 | Phases 1, 2, 3: persistence, Recently Deleted, usage tracking and sorting | Done, on `main` |
+| **Next** | **Phase 9: opt-in root folder activity tracking** ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) | Plan being refreshed against the code as it is after Phase 3 |
+| Then | Phase 4: general file support | Planned |
+| Then | Phase 6: explicit multi-folder import | Planned |
+| Then | Phase 7: search and retrieval polish | Planned |
+| Then | Phase 8: distribution (publish profiles, clean-machine check) | Planned; must also check Phase 9's COM interop in a single-file build |
+| Then | Phase 5: user-defined file tabs, opening policies, Revit release selection | Planned; the largest phase, and the only one that depends on third-party software |
+| Last | Opening workshared Revit central models through WWTools (§4.21) | Direction settled, deferred to after Phase 9 |
 
-**Release 2 — Phase 5.** User-defined file tabs, opening policies, and Revit-safe opening. This is the largest phase, the only one carrying vendor risk, and the only one whose correctness depends on software that is not present on the build machine. Holding it back keeps that risk out of the release that rewrites persistence.
+**Why Phase 9 moved up.** It was placed last because it is the only phase that watches in the background rather than acting on a command, and to keep it from competing for attention with the persistence work. That reasoning no longer applies: Phases 1 and 3, its only prerequisites, are done, and nothing in Phases 4 to 8 depends on it or is affected by it (it tracks folders only). Its value also grows with how long it has run, so starting it sooner means its Week and Month views fill sooner. The user ranks it above file support.
 
-**Release 3 candidate — Phase 9.** Opt-in root folder activity tracking. It is the only phase that adds a background observer rather than a command the user invokes, and the only one whose value depends on having run for weeks before it shows anything. It is planned in full ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) but deliberately sequenced last: it depends on Phase 1's reliable persistence and on Phase 3 having settled what a recorded open means, and it must not compete with either for attention.
-
-**After Phase 9 — opening workshared central models through WWTools.** Deferred here on 2026-09-25 from Phase 5's Revit work (§4.21, "Opening workshared central models"). The direction is settled: Revit's own `CreateNewLocal`, run by a request handler in the user's WWTools add-in, and never a file copy or RevitBatchProcessor. Phase 5 still ships its generic tabs and opening policies, and Revit release selection, in Release 2 without it.
-
-Phase 8 (distribution) applies to all of them: Release 1 establishes the publish profiles and the clean-machine verification, and each later release repeats the verification.
+**Opening workshared central models** stays deferred. The direction is settled in §4.21, "Opening workshared central models": Revit's own `CreateNewLocal`, run by a request handler in the user's WWTools add-in, and never a file copy or RevitBatchProcessor. Phase 5 does not depend on it.
 
 ## 2. Explicit non-goals
 
