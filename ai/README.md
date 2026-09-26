@@ -22,7 +22,8 @@ Working documents for QuickerPlaces: the original brief, the specification built
 | [`260925_Phase 9 Step 2 Handoff.md`](260925_Phase%209%20Step%202%20Handoff.md) | Phase 9 step 1 done: what the tracker and matcher are, what the store in step 2 must respect from their output (sub-second durations, case-insensitive folder keys, visits counted once), what step 3's host inherits, and the one open question for the user | Superseded by the step 3 hand-off for *where to work* and *what next*; its §3 and §4 still apply |
 | [`260925_Phase 9 Step 3 Handoff.md`](260925_Phase%209%20Step%203%20Handoff.md) | Phase 9 steps 1 and 2 done: the store's surface, and what step 3 (COM probe, host, performance gate) must agree with the user before any code, and wire | Superseded by the step 3b hand-off for *what next*; its wiring notes still apply |
 | [`260925_Phase 9 Step 3b Handoff.md`](260925_Phase%209%20Step%203b%20Handoff.md) | Step 3 half done (the loop and clock); the user's agreement to a short VS session instead of a working day | Superseded by the current Phase 9 hand-off |
-| [`260926_Phase 9 Handoff.md`](260926_Phase%209%20Handoff.md) | Steps 1–7 implemented and tested; the short live application checklist, performance result summary, and constraints | Current: use this to finish Phase 9 manual verification |
+| [`260926_Phase 9 Handoff.md`](260926_Phase%209%20Handoff.md) | Steps 1–7 implemented and tested; the short live application checklist, performance result summary, and constraints | Current for remaining Phase 9 checks; the Depth 2 failure is recorded separately below |
+| [`260926_Phase 9 Depth Tracking Investigation.md`](260926_Phase%209%20Depth%20Tracking%20Investigation.md) | What was tried for the missing `C:\X\2024\240015` and `240011` activity rows, evidence and limits of each check, and the unresolved state | Current investigation summary; Depth 2 manual check remains failed |
 
 ## Conventions
 
