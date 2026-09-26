@@ -2,7 +2,7 @@
 
 **Status:** Phases 1 and 2 implemented and merged to `main` (238 tests pass; both manual checklists closed on 2026-09-25, with the failure-path items accepted as untested); Phase 3 implemented on `claude/phase-3-usage-tracking` (329 tests pass; manual verification closed; not yet merged); Phases 4 to 9 planned, and Phase 4 is next  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-25 — Phase 3 implemented; Phase 2 merged  
+**Last revised:** 2026-09-25 — the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 implemented; Phase 2 merged  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 3](260925_Phase%203%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
@@ -33,6 +33,8 @@ This is more work than one release should carry, so it ships as two.
 **Release 2 — Phase 5.** User-defined file tabs, opening policies, and Revit-safe opening. This is the largest phase, the only one carrying vendor risk, and the only one whose correctness depends on software that is not present on the build machine. Holding it back keeps that risk out of the release that rewrites persistence.
 
 **Release 3 candidate — Phase 9.** Opt-in root folder activity tracking. It is the only phase that adds a background observer rather than a command the user invokes, and the only one whose value depends on having run for weeks before it shows anything. It is planned in full ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) but deliberately sequenced last: it depends on Phase 1's reliable persistence and on Phase 3 having settled what a recorded open means, and it must not compete with either for attention.
+
+**After Phase 9 — opening workshared central models through WWTools.** Deferred here on 2026-09-25 from Phase 5's Revit work (§4.21, "Opening workshared central models"). The direction is settled: Revit's own `CreateNewLocal`, run by a request handler in the user's WWTools add-in, and never a file copy or RevitBatchProcessor. Phase 5 still ships its generic tabs and opening policies, and Revit release selection, in Release 2 without it.
 
 Phase 8 (distribution) applies to all of them: Release 1 establishes the publish profiles and the clean-machine verification, and each later release repeats the verification.
 
@@ -369,6 +371,23 @@ Later optional Revit adapter:
 - Match the detected saved version to an installed release and show the decision before launch.
 - Test workshared, local, central, family, template, cloud-connected, and future-version failure cases before enabling automatic selection by default.
 - Do not parse undocumented RVT internals or private Autodesk history files.
+
+Opening workshared central models, through WWTools (recorded 2026-09-25; **deferred until after Phase 9**):
+
+A central model should never be opened directly. The user works in a local copy, and a local can only be made by Revit itself. This was researched on 2026-09-25 against the user's own repositories, and the direction below is settled. It is deferred to after Phase 9 at the user's request; nothing in Phases 4 to 9 depends on it.
+
+- **QuickerPlaces never copies a central file to make a local.** A Windows file copy keeps the central's identity, and synchronising from it can damage the central or lose other people's work. Locals are made only by Revit's `WorksharingUtils.CreateNewLocal`, inside a Revit session.
+- **QuickerPlaces never deletes or overwrites an existing local.** It may hold unsynchronised work. A new local that would collide gets a timestamped name, or the user is asked.
+- **The adapter is a request handler in WWTools**, the user's existing Revit add-in, already built and deployed for Revit 2024–2026. It is not a new add-in:
+  - QuickerPlaces chooses the Revit release under this section's rules.
+  - QuickerPlaces writes a small request file (central path, local folder, workset option) into its own local data folder, then launches that release's `Revit.exe`.
+  - Once Revit has started, WWTools picks up the request, makes the local with `CreateNewLocal` in the user's normal local folder, then opens and activates it with the requested workset configuration. The model stays open for the user.
+  - This keeps Autodesk assemblies out of QuickerPlaces, as the adapter bullets above require, and puts the per-release work in the project already maintained per release.
+- **Without WWTools**, QuickerPlaces falls back to launching the chosen `Revit.exe` with the central's path and letting Revit's own open behaviour apply. Whether a command-line open of a central creates a local, or opens the central itself, differs by release and must be verified on each supported release before this fallback is offered for centrals.
+- **RevitBatchProcessor (RBP) is not the opening mechanism**, and is not a requirement for opening Revit files. RBP is built for unattended batches: after its task script runs, it closes the document without saving and ends the Revit process. In its Create New Local mode it also deletes any existing file at `C:\REVIT_LOCAL20xx\<Model>_<username>.rvt` before making a new local there, which in a click-to-open launcher could destroy unsynchronised work. Its `OpenAndActivateNewLocal` (`CreateNewLocal`, then `OpenAndActivateDocument`) is the right call sequence, and WWTools should follow it.
+- **Reuse from Model Delta and RBP:** their discovery of installed Revit releases and `Revit.exe` paths (Model Delta's `BatchRvtInstallation.cs`, RBP's `RevitVersion.cs`) is the approach this section's "discover installed Revit releases" needs.
+- **Open question for that plan: reading the saved version.** RBP's `revit_file_version.py` reads a file's saved version without Revit, by parsing the file's internal BasicFileInfo stream. The bullets above currently forbid parsing undocumented RVT internals. Decide either to relax that for this one stream, or to read it through Autodesk's `BasicFileInfo.Extract` inside WWTools, as part of the same request.
+- **Out of scope:** cloud models (BIM 360 / ACC), which have no file path to launch.
 
 The generic custom-tab feature must ship independently of this optional adapter. `.trc` and other normally associated formats should work through Windows default handling without vendor-specific code.
 
