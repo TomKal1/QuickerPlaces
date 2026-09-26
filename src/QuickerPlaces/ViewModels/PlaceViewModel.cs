@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using QuickerPlaces.Models;
 using QuickerPlaces.Mvvm;
 
@@ -59,6 +60,29 @@ public sealed class PlaceViewModel : ObservableObject
     /// date for an evening add east of Greenwich.
     /// </summary>
     public DateTime DateAdded => Model.DateAdded.LocalDateTime;
+
+    /// <summary>When QuickerPlaces last launched this place (UTC), or null if never (Phase 3 D24).</summary>
+    public DateTimeOffset? LastOpenedAt => Model.LastOpenedAt;
+
+    /// <summary>How many times QuickerPlaces has launched this place — the grid's Opens column.</summary>
+    public int OpenCount => Model.OpenCount;
+
+    /// <summary>The grid's Last Opened column: "—" if never, otherwise local short date and time (D31).</summary>
+    public string LastOpenedText => FormatLastOpened(Model.LastOpenedAt, TimeZoneInfo.Local, CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// Formats a last-opened instant in <paramref name="zone"/> with
+    /// <paramref name="culture"/>'s short date and short time ("g"): date
+    /// and time, because a launcher is used many times a day and a date
+    /// alone would make every place opened today look alike. Formatted
+    /// here rather than by a XAML StringFormat, which would ignore the
+    /// user's regional settings (D31). The zone and culture are parameters
+    /// so tests never depend on the machine's.
+    /// </summary>
+    public static string FormatLastOpened(DateTimeOffset? value, TimeZoneInfo zone, CultureInfo culture)
+        => value is { } opened
+            ? TimeZoneInfo.ConvertTime(opened, zone).DateTime.ToString("g", culture)
+            : "—";
 
     /// <summary>
     /// Raises a property-changed notification for every property on this

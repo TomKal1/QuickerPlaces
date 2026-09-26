@@ -41,6 +41,7 @@ public sealed class MainViewModel : ObservableObject
     private string? _globalHotkeyText;
     private string? _statusMessage;
     private bool _statusOffersUndo;
+    private PlaceSort? _currentSort;
 
     // Most recent removal on top. Session-only: undo history isn't saved;
     // after a restart, Recently Deleted is the way back (D19). Holds the
@@ -72,14 +73,20 @@ public sealed class MainViewModel : ObservableObject
         Places = new ObservableCollection<PlaceViewModel>(_placesService.Places.Select(p => new PlaceViewModel(p)));
         FavouritePlaces = new ObservableCollection<PlaceViewModel>();
 
-        // The grid binds to this filtered view rather than to Places
-        // directly. It's the collection's default view, so the DataGrid's
-        // own column-header sorting keeps working on top of the filter.
+        // The grid binds to this filtered, sorted view rather than to Places
+        // directly. Sorting is the view's too (Phase 3 D29), never the
+        // collection's: Places must stay in stored order for
+        // InsertRestored.
         PlacesView = CollectionViewSource.GetDefaultView(Places);
         PlacesView.Filter = item => item is PlaceViewModel place && PlaceSearch.Matches(place.Model, SearchText);
         // Listening on the view (not on Places) means the view has already
         // re-filtered by the time the header/empty-state text is recomputed.
         PlacesView.CollectionChanged += (_, _) => RaiseGridStatusChanged();
+
+        // The sort remembered in settings.json (D30); anything it doesn't
+        // recognise is the stored order.
+        _currentSort = PlaceSort.Parse(settings.PlacesSortKey, settings.PlacesSortDirection);
+        ApplySort();
 
         // Commands must exist before RebuildFavourites() runs below — it
         // calls ExportCommand.RaiseCanExecuteChanged(), and on a fresh
@@ -140,7 +147,7 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>All stored places, in insertion order — the DataGrid's built-in column-header sorting covers everything beyond that.</summary>
+    /// <summary>All stored places, in stored order. Never sorted: <see cref="PlacesView"/> is (D29).</summary>
     public ObservableCollection<PlaceViewModel> Places { get; }
 
     /// <summary>Favourited places only, ordered by FavouriteOrder — backs the bubble row above the grid.</summary>
@@ -148,6 +155,40 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Places filtered by <see cref="SearchText"/> — what the DataGrid actually shows.</summary>
     public ICollectionView PlacesView { get; }
+
+    /// <summary>The grid's sort, or null for stored order. Changed by <see cref="SortBy"/>; remembered in settings.json (D30).</summary>
+    public PlaceSort? CurrentSort
+    {
+        get => _currentSort;
+        private set => SetProperty(ref _currentSort, value);
+    }
+
+    /// <summary>
+    /// A click on the column header for <paramref name="key"/>: its first
+    /// direction, then the other, then the stored order (PlaceSort.Next).
+    /// MainWindow calls this in place of the DataGrid's own sorting.
+    /// </summary>
+    public void SortBy(PlaceSortKey key)
+    {
+        CurrentSort = PlaceSort.Next(CurrentSort, key);
+        ApplySort();
+    }
+
+    /// <summary>
+    /// Sorts the view by <see cref="CurrentSort"/>, or returns it to stored
+    /// order. A CustomSort rather than SortDescriptions: it compares without
+    /// reflection, and only a comparer can say "never opened is oldest" and
+    /// break ties by alias (D29). Setting it refreshes the view.
+    /// </summary>
+    private void ApplySort()
+    {
+        if (PlacesView is not ListCollectionView view)
+            return;
+
+        view.CustomSort = CurrentSort is { } sort
+            ? Comparer<object>.Create((a, b) => sort.Comparer.Compare(((PlaceViewModel)a).Model, ((PlaceViewModel)b).Model))
+            : null;
+    }
 
     /// <summary>The grid's search box text. Every whitespace-separated term must appear in the alias or path/URL (see <see cref="PlaceSearch"/>).</summary>
     public string SearchText
@@ -317,6 +358,12 @@ public sealed class MainViewModel : ObservableObject
         // Refresh updates both.
         RefreshPersistenceState(outcome.Persistence);
         place.Refresh();
+
+        // Only a usage sort can change because of an open, so only it pays
+        // for re-sorting the view; the row moves to its new place at once
+        // (D32). No other sort sees a reset.
+        if (CurrentSort?.Key is PlaceSortKey.LastOpened or PlaceSortKey.Opens)
+            PlacesView.Refresh();
     }
 
     private void RenameAlias(PlaceViewModel? place)
@@ -709,6 +756,11 @@ public sealed class MainViewModel : ObservableObject
     public void PersistToSettings()
     {
         _settings.IsGridExpanded = IsGridExpanded;
+
+        // Both null is the stored order (D30).
+        var sort = CurrentSort?.Format();
+        _settings.PlacesSortKey = sort?.Key;
+        _settings.PlacesSortDirection = sort?.Direction;
     }
 
     /// <summary>

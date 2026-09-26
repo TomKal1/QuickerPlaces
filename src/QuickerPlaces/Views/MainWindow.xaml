@@ -314,7 +314,8 @@
                       IsReadOnly="True"
                       CanUserAddRows="False"
                       SelectionMode="Single"
-                      PreviewKeyDown="PlacesGrid_PreviewKeyDown">
+                      PreviewKeyDown="PlacesGrid_PreviewKeyDown"
+                      Sorting="PlacesGrid_Sorting">
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow">
                         <Setter Property="Tag" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext}" />
@@ -323,7 +324,13 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <!-- Template column so the type glyph can sit beside the alias; SortMemberPath keeps header-click sorting by Alias. -->
+                    <!--
+                        Every SortMemberPath is a PlaceSortKey name, read only
+                        by PlacesGrid_Sorting, which replaces the DataGrid's own
+                        sorting (Phase 3 D29) — so it names the key, not a
+                        bound property.
+                    -->
+                    <!-- Template column so the type glyph can sit beside the alias. -->
                     <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
@@ -334,8 +341,8 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="90" />
-                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" />
+                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" SortMemberPath="Type" Width="90" />
+                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" SortMemberPath="Destination" Width="2*" />
                     <!--
                         Mode=OneWay is required here, not just decorative:
                         DataGridCheckBoxColumn's cell (display AND edit) is a
@@ -352,8 +359,21 @@
                         InvalidOperationException as soon as the column tries
                         to bind.
                     -->
-                    <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" Width="90" IsReadOnly="True" />
-                    <DataGridTextColumn Header="Date Added" Binding="{Binding DateAdded, StringFormat={}{0:d}}" Width="110" />
+                    <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" SortMemberPath="Favourite" Width="90" IsReadOnly="True" />
+                    <!--
+                        Last Opened replaces Date Added, which is still stored
+                        and exported (roadmap §4.13). Formatted in the view
+                        model with the user's regional settings, not by a
+                        StringFormat, which would ignore them (D31).
+                    -->
+                    <DataGridTextColumn Header="Last Opened" Binding="{Binding LastOpenedText}" SortMemberPath="LastOpened" Width="150" />
+                    <DataGridTextColumn Header="Opens" Binding="{Binding OpenCount}" SortMemberPath="Opens" Width="70">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="TextAlignment" Value="Right" />
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                 </DataGrid.Columns>
             </DataGrid>
 

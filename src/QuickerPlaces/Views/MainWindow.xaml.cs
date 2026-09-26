@@ -143,6 +143,11 @@ public partial class MainWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        // The remembered sort is already applied to the view (MainViewModel's
+        // constructor); this shows its arrow. Done once the grid is loaded, so
+        // nothing in its own start-up can clear the arrow afterwards.
+        UpdateSortArrows();
+
         // Surfaced here (rather than from OnSourceInitialized, where the
         // error is found) so a loaded, on-screen window exists for
         // MessageForm to center on. A problem loading places.json never
@@ -353,6 +358,39 @@ public partial class MainWindow : Window
             viewModel.PauseStatusTimer();
         else
             viewModel.ResumeStatusTimer();
+    }
+
+    // -----------------------------------------------------------------
+    // Sorting (Phase 3 D29). The DataGrid's own sorting is replaced, not
+    // extended: it would set SortDescriptions, which can't express "never
+    // opened is oldest" or the alias tie-break, and it has no way back to
+    // the stored order. Each column's SortMemberPath is its PlaceSortKey
+    // name, and nothing else reads it.
+    // -----------------------------------------------------------------
+
+    private void PlacesGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        e.Handled = true;
+
+        if (DataContext is not MainViewModel viewModel ||
+            !Enum.TryParse<PlaceSortKey>(e.Column.SortMemberPath, out var key))
+            return;
+
+        viewModel.SortBy(key);
+        UpdateSortArrows();
+    }
+
+    /// <summary>Shows the current sort's arrow on its column, and none on the others.</summary>
+    private void UpdateSortArrows()
+    {
+        var sort = (DataContext as MainViewModel)?.CurrentSort;
+
+        foreach (var column in PlacesGrid.Columns)
+        {
+            column.SortDirection = sort is { } active && Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var key) && key == active.Key
+                ? active.Direction
+                : null;
+        }
     }
 
     /// <summary>Double-click on a grid row = Open (SI §6.3), the same action as the row's top context-menu item.</summary>
