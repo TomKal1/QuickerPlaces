@@ -185,6 +185,8 @@ public sealed class PlaceSortTests
     [InlineData("Nonsense", "ascending")]
     [InlineData("Alias", "sideways")]
     [InlineData("3", "ascending")]
+    [InlineData("Alias, Type", "ascending")]
+    [InlineData(" Alias", "ascending")]
     [InlineData("Alias", "0")]
     public void Parse_ReturnsNoSort_ForAnythingItDoesNotRecognise(string? key, string? direction)
         => Assert.Null(PlaceSort.Parse(key, direction));

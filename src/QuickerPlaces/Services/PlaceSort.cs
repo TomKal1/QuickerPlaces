@@ -78,19 +78,23 @@ public readonly record struct PlaceSort(PlaceSortKey Key, ListSortDirection Dire
     /// </summary>
     public static PlaceSort? Parse(string? key, string? direction)
     {
-        // Enum.TryParse would also accept a number ("3"), which Format never
-        // writes; only a defined name counts.
-        if (!Enum.TryParse<PlaceSortKey>(key, ignoreCase: true, out var parsedKey) ||
-            !Enum.IsDefined(parsedKey) ||
-            int.TryParse(key, out _))
+        // Matched against the names themselves: Enum.TryParse would also
+        // accept a number ("3"), padding, and flag syntax ("Alias, Type"),
+        // none of which Format ever writes.
+        PlaceSortKey? parsedKey = null;
+        foreach (var candidate in Enum.GetValues<PlaceSortKey>())
         {
-            return null;
+            if (string.Equals(candidate.ToString(), key, StringComparison.OrdinalIgnoreCase))
+                parsedKey = candidate;
         }
 
+        if (parsedKey is not { } matched)
+            return null;
+
         if (string.Equals(direction, "ascending", StringComparison.OrdinalIgnoreCase))
-            return new PlaceSort(parsedKey, ListSortDirection.Ascending);
+            return new PlaceSort(matched, ListSortDirection.Ascending);
         if (string.Equals(direction, "descending", StringComparison.OrdinalIgnoreCase))
-            return new PlaceSort(parsedKey, ListSortDirection.Descending);
+            return new PlaceSort(matched, ListSortDirection.Descending);
 
         return null;
     }
