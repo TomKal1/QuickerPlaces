@@ -6,13 +6,15 @@ date: 2026-09-26
 
 # Phase 9 hand-off — app verification
 
-Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The latest code checkpoint is `e164286` (tray/startup). The documentation update after it is a separate local commit. Nothing has been pushed. The solution builds with zero warnings and 528 tests pass.
+Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 530 tests pass after the grouping clarification.
 
 ## What has already been checked
 
 The developer probe's live events, 20,000-pass stress runs, lock handling, Explorer process restart recovery, and bounded shutdown were observed with the user on Windows. The strongest five-entry run had zero failures, a 0.017 ms maximum cached pass, a projected 0.0006% of one core at 1.5-second intervals, no sampled Explorer handle growth, and no private-byte growth. These are probe measurements, not a measurement of the finished WPF app running for a workday. Full numbers and caveats are in plan section 6 and `BUILD_SUMMARY.md`.
 
 An attempted Computer Use launch of the finished WPF app on 2026-09-26 ended with an app approval timeout before a window was returned. No QuickerPlaces process remained afterward, and no live UI result is claimed from that attempt.
+
+The user then ran the Activity UI and saved `C:\X` with Depth 2. Week view still showed one earlier `C:\X\2024` row. The saved store confirms the new setting, but the old row contains only the already-grouped folder key and cannot be split into `240015` later. The UI now explains this, and a grouping change resets the active visit. The follow-up is to observe a **new** qualifying visit under Depth 2; the screenshot did not yet show one.
 
 ## Short live check still needed
 

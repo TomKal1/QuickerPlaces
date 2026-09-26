@@ -31,6 +31,7 @@ public sealed class ActivityViewModel : ObservableObject
     private DateOnly _anchorDate;
     private string _periodNotice = "";
     private string _periodSummary = "";
+    private string _groupingNotice = "";
 
     public ActivityViewModel(ActivityStore store, Action rootsChanged, TimeProvider? time = null,
         CultureInfo? culture = null)
@@ -67,7 +68,9 @@ public sealed class ActivityViewModel : ObservableObject
     public bool HasPeriodRows => PeriodRows.Count > 0;
     public bool CanMoveNext => PeriodTo < Today();
     public ActivityPeriodMode PeriodMode => _periodMode;
-    public string PeriodNotice => _periodNotice;
+    public string PeriodNotice => string.IsNullOrEmpty(_groupingNotice)
+        ? _periodNotice
+        : string.IsNullOrEmpty(_periodNotice) ? _groupingNotice : $"{_periodNotice} {_groupingNotice}";
     public string PeriodSummary => _periodSummary;
     public string EmptyPeriodText => SelectedRoot is null
         ? "Add a root to see activity."
@@ -91,6 +94,8 @@ public sealed class ActivityViewModel : ObservableObject
         get => _selectedRoot;
         set
         {
+            if (_selectedRoot?.RootId != value?.RootId)
+                _groupingNotice = "";
             if (!SetProperty(ref _selectedRoot, value)) return;
             OnPropertyChanged(nameof(HasSelection));
             OnPropertyChanged(nameof(ToggleLabel));
@@ -205,6 +210,12 @@ public sealed class ActivityViewModel : ObservableObject
         ApplyPersistence(persistence);
         _rootsChanged();
         Reload(selected.RootId);
+        if (selected.Config.Rollup != settings.Rollup ||
+            (settings.Rollup == RollupMode.Depth && selected.Config.Depth != settings.Depth))
+        {
+            _groupingNotice = "Grouping saved. Earlier rows keep the grouping used when they were recorded; new visits use this setting.";
+            OnPropertyChanged(nameof(PeriodNotice));
+        }
         return true;
     }
 

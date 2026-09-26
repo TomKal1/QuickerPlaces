@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Folder Activity Tracking Detailed Plan
-status: in progress on claude/phase-9-folder-activity — steps 1 to 7 built; 528 tests and a warning-free build, with manual checks and documentation next
+status: in progress on claude/phase-9-folder-activity — steps 1 to 7 built; 530 tests and a warning-free build, with live application checks pending
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
@@ -97,6 +97,8 @@ These are settled here so they do not get re-litigated during implementation.
 | `Depth(n)` | the ancestor `n` levels below the root; `Depth(1)` is `RootChild` |
 
 `RootChild` is the default because it produces a short, stable list that stays readable across a month without search. `Exact` is the honest answer to "what did I actually open" and is the right choice for a shallow root.
+
+*Clarified after the first app check, 2026-09-26:* changing the rollup affects new visits only. Stored totals contain the grouped folder key, not the finer observed path, so an earlier `C:\X\2024` row cannot be split into its child folders when the root changes from Depth 1 to Depth 2. The Activity UI explains this beside the setting and after saving; the tracker starts a fresh visit under the new grouping so it does not keep crediting the old key.
 
 **D9 — A visit must survive a dwell threshold before it counts.** Default 5 seconds, configurable per root. Walking down a tree to reach one folder must not credit every folder passed through. Time accrues from the moment the threshold is met, not retroactively from arrival — under-counting by a few seconds is preferable to crediting folders that were only transited.
 

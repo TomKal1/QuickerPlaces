@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using QuickerPlaces.Models.Activity;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Tests.Fakes;
 using QuickerPlaces.ViewModels;
@@ -79,6 +80,27 @@ public sealed class ActivityViewModelTests
         Assert.Equal(TimeSpan.FromMinutes(3), view.SelectedRoot.Config.IdleTimeout);
         Assert.Single(view.SelectedRoot.Config.EquivalentPrefixes);
         Assert.Equal(2, _rootNotifications);
+    }
+
+    [Fact]
+    public void ChangingGrouping_ExplainsWhyEarlierRowsStayGroupedAsRecorded()
+    {
+        var store = new ActivityStore(_storage, _time);
+        var root = ActivityFixtures.AddRoot(store);
+        store.Record(new[] { ActivityFixtures.Interval(root.RootId, ActivityFixtures.Acme,
+            ActivityFixtures.Today, 30, startsVisit: true) });
+        var view = new ActivityViewModel(store, () => { }, _time);
+
+        view.Rollup = RollupMode.Depth;
+        view.DepthText = "2";
+        Assert.True(view.SaveSelectedSettings());
+
+        Assert.Equal(RollupMode.Depth, view.SelectedRoot!.Config.Rollup);
+        Assert.Equal(2, view.SelectedRoot.Config.Depth);
+        Assert.Equal(ActivityFixtures.Acme, Assert.Single(view.PeriodRows).Folder);
+        Assert.Contains("Earlier rows keep", view.PeriodNotice);
+        view.RefreshPeriod();
+        Assert.Contains("new visits use", view.PeriodNotice);
     }
 
     [Fact]

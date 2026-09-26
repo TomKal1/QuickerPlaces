@@ -453,6 +453,24 @@ public sealed class FolderActivityTrackerTests
         Assert.Equal(1, h.VisitsTo(Acme));
     }
 
+    [Fact]
+    public void ChangingDepth_StartsANewVisitWithoutCreditingTheOldGroupAgain()
+    {
+        var h = new TrackerHarness(Jobs);
+        h.Probe.ShowForeground(Acme + @"\Drawings");
+        h.Tick();
+        h.Steps(6);
+        Assert.Equal(Seconds(4), h.TimeIn(Acme));
+
+        h.Tracker.SetRoots(new[] { Jobs with { Rollup = RollupMode.Depth, Depth = 2 } });
+        h.Tick();
+        h.Steps(6);
+
+        Assert.Equal(Seconds(4), h.TimeIn(Acme));
+        Assert.Equal(Seconds(4), h.TimeIn(Acme + @"\Drawings"));
+        Assert.Equal(1, h.VisitsTo(Acme + @"\Drawings"));
+    }
+
     // ---- D14: ambiguous tabs ----
 
     [Fact]

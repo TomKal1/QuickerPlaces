@@ -66,15 +66,26 @@ public sealed class FolderActivityTracker
     public TimeSpan PollInterval { get; private set; } = ForegroundPollInterval;
 
     /// <summary>
-    /// The enabled roots to track. A root that stays keeps its current visit;
-    /// a root that goes stops being credited at once.
+    /// The enabled roots to track. A root with unchanged settings keeps its
+    /// current visit; changing its grouping starts a fresh visit under the
+    /// new folder key. A removed root stops being credited at once.
     /// </summary>
     public void SetRoots(IEnumerable<TrackedRootConfig> roots)
     {
-        _roots = roots.ToList();
-        var kept = _roots.Select(r => r.RootId).ToHashSet(StringComparer.Ordinal);
+        var updated = roots.ToList();
+        var previous = _roots.ToDictionary(r => r.RootId, StringComparer.Ordinal);
+        var kept = updated.Select(r => r.RootId).ToHashSet(StringComparer.Ordinal);
         foreach (var rootId in _visits.Keys.Where(id => !kept.Contains(id)).ToList())
             _visits.Remove(rootId);
+        foreach (var root in updated)
+        {
+            if (previous.TryGetValue(root.RootId, out var before) &&
+                (before.Rollup != root.Rollup || before.Depth != root.Depth ||
+                 !string.Equals(before.Path, root.Path, StringComparison.OrdinalIgnoreCase) ||
+                 !before.EquivalentPrefixes.SequenceEqual(root.EquivalentPrefixes, StringComparer.OrdinalIgnoreCase)))
+                _visits.Remove(root.RootId);
+        }
+        _roots = updated;
     }
 
     /// <summary>

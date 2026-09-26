@@ -243,6 +243,8 @@
                           DisplayMemberPath="Label"
                           AutomationProperties.Name="Folder grouping" Margin="0,0,0,12" />
                 <TextBlock Text="Root child groups folders by the first level; Exact keeps each folder; Depth groups by the number of levels below."
+                           TextWrapping="Wrap" Foreground="{StaticResource Text.Secondary}" Margin="0,0,0,6" />
+                <TextBlock Text="Changing grouping affects new visits. Earlier rows stay under the grouping used when they were recorded."
                            TextWrapping="Wrap" Foreground="{StaticResource Text.Secondary}" Margin="0,0,0,16" />
 
                 <Grid Margin="0,0,0,16">
