@@ -17,6 +17,7 @@ public partial class ActivityWindow : Window
     private readonly INetworkDriveResolver _networkDrives;
     private readonly Action<string, Window> _addAsPlace;
     private readonly DispatcherTimer _refreshTimer;
+    private readonly DispatcherTimer _returnRefreshTimer;
 
     public ActivityWindow(Window owner, ActivityStore store, ActivityTrackingHost host,
         INetworkDriveResolver networkDrives, Action indicatorChanged, Action<string, Window> addAsPlace)
@@ -35,7 +36,24 @@ public partial class ActivityWindow : Window
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _refreshTimer.Tick += (_, _) => _viewModel.RefreshPeriod();
         _refreshTimer.Start();
-        Closed += (_, _) => _refreshTimer.Stop();
+        _returnRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _returnRefreshTimer.Tick += (_, _) =>
+        {
+            _returnRefreshTimer.Stop();
+            _viewModel.RefreshPeriod();
+        };
+        Activated += (_, _) =>
+        {
+            _viewModel.RefreshPeriod();
+            // The host can record Explorer's final foreground interval on its next 1.5 s tick.
+            _returnRefreshTimer.Stop();
+            _returnRefreshTimer.Start();
+        };
+        Closed += (_, _) =>
+        {
+            _refreshTimer.Stop();
+            _returnRefreshTimer.Stop();
+        };
     }
 
     private void AddRoot_Click(object sender, RoutedEventArgs e)

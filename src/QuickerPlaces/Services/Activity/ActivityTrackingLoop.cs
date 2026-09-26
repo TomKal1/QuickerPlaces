@@ -36,6 +36,7 @@ public sealed class ActivityTrackingLoop
     private readonly IUserPresence _presence;
     private readonly IMonotonicClock _clock;
     private readonly HashSet<string> _loggedFailures = new(StringComparer.Ordinal);
+    private readonly int[] _sampleCounts = new int[Enum.GetValues<TrackerSampleStatus>().Length];
 
     private IReadOnlyList<TrackedRootConfig> _roots = Array.Empty<TrackedRootConfig>();
     private TimeSpan _lastFlush;
@@ -76,6 +77,15 @@ public sealed class ActivityTrackingLoop
 
     /// <summary>How many ticks failed because the probe threw.</summary>
     public int ProbeFailures { get; private set; }
+
+    /// <summary>Path-free count of probe outcomes during this host run.</summary>
+    public int SamplesWith(TrackerSampleStatus status) => _sampleCounts[(int)status];
+
+    /// <summary>Visits emitted by the tracker and accepted by the store.</summary>
+    public int RecordedVisits { get; private set; }
+
+    /// <summary>Presence checks that skipped the probe because all enabled roots were idle.</summary>
+    public int IdleWakes { get; private set; }
 
     /// <summary>Whether the host is waiting for the next idle-presence check.</summary>
     public bool IsIdle => _idle;
@@ -140,6 +150,7 @@ public sealed class ActivityTrackingLoop
 
         if (_presence.IdleFor >= _roots.Max(r => r.IdleTimeout))
         {
+            IdleWakes++;
             if (!_idle)
             {
                 _idle = true;
@@ -170,7 +181,10 @@ public sealed class ActivityTrackingLoop
         try
         {
             Ticks++;
-            _store.Record(_tracker.Tick());
+            var intervals = _tracker.Tick();
+            _sampleCounts[(int)_tracker.LastSampleStatus]++;
+            _store.Record(intervals);
+            RecordedVisits += intervals.Count(interval => interval.StartsVisit);
         }
         catch (Exception ex)
         {

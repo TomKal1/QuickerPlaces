@@ -4,6 +4,18 @@ using System.Linq;
 
 namespace QuickerPlaces.Services.Activity;
 
+/// <summary>The reason a probe sample could or could not credit a tracked root; contains no path.</summary>
+public enum TrackerSampleStatus
+{
+    NoExplorerWindows,
+    ExplorerInBackground,
+    ForegroundOutsideRoots,
+    AmbiguousForeground,
+    UserIdle,
+    Eligible,
+    Locked
+}
+
 /// <summary>
 /// The accounting loop of Phase 9's folder activity tracking (plan 5.1):
 /// turns successive probe passes into time credited to folders under the
@@ -70,6 +82,9 @@ public sealed class FolderActivityTracker
     /// </summary>
     public TimeSpan PollInterval { get; private set; } = ForegroundPollInterval;
 
+    /// <summary>Aggregate result of the latest sample, for path-free diagnostics.</summary>
+    public TrackerSampleStatus LastSampleStatus { get; private set; }
+
     /// <summary>
     /// The enabled roots to track. A root with unchanged settings keeps its
     /// current visit; changing its grouping starts a fresh visit under the
@@ -113,6 +128,7 @@ public sealed class FolderActivityTracker
     {
         if (_presence.SessionLocked)
         {
+            LastSampleStatus = TrackerSampleStatus.Locked;
             DiscardGap();
             return Array.Empty<ActivityInterval>();
         }
@@ -125,10 +141,16 @@ public sealed class FolderActivityTracker
             : null;
 
         var intervals = new List<ActivityInterval>();
+        var eligible = false;
+        var ambiguous = false;
+        var idle = false;
         foreach (var root in _roots)
         {
-            var folder = ForegroundFolder(foreground, root);
+            var folder = ForegroundFolder(foreground, root, out var rootAmbiguous);
             var present = _presence.IdleFor < root.IdleTimeout;
+            eligible |= folder is not null && present;
+            ambiguous |= rootAmbiguous;
+            idle |= folder is not null && !present;
             _visits.TryGetValue(root.RootId, out var visit);
 
             if (visit is not null && visit.WasForeground && span is { } elapsed && present)
@@ -142,6 +164,12 @@ public sealed class FolderActivityTracker
         }
 
         _previousTick = now;
+        LastSampleStatus = eligible ? TrackerSampleStatus.Eligible
+            : ambiguous ? TrackerSampleStatus.AmbiguousForeground
+            : idle ? TrackerSampleStatus.UserIdle
+            : foreground.Count > 0 ? TrackerSampleStatus.ForegroundOutsideRoots
+            : windows.Count > 0 ? TrackerSampleStatus.ExplorerInBackground
+            : TrackerSampleStatus.NoExplorerWindows;
         PollInterval = foreground.Count > 0 ? ForegroundPollInterval : BackgroundPollInterval;
         return intervals;
     }
@@ -169,19 +197,23 @@ public sealed class FolderActivityTracker
     /// The folder the foreground window credits under <paramref name="root"/>,
     /// or null when there is none, or when the foreground tabs disagree (D14).
     /// </summary>
-    private static string? ForegroundFolder(IReadOnlyList<ShellWindowSnapshot> foreground, TrackedRootConfig root)
+    private static string? ForegroundFolder(IReadOnlyList<ShellWindowSnapshot> foreground, TrackedRootConfig root,
+        out bool ambiguous)
     {
         string? folder = null;
+        var outside = false;
+        ambiguous = false;
         foreach (var window in foreground)
         {
             var credited = RootPathMatcher.Credit(window.Path, root);
-            if (credited is null || (folder is not null && !SameFolder(folder, credited)))
-                return null;
-
+            if (credited is null)
+                outside = true;
+            else if (folder is not null && !SameFolder(folder, credited))
+                ambiguous = true;
             folder ??= credited;
         }
-
-        return folder;
+        ambiguous |= outside && folder is not null;
+        return ambiguous || outside ? null : folder;
     }
 
     /// <summary>

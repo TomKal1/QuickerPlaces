@@ -59,7 +59,7 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Folder Activity" FontSize="22" FontWeight="Bold" />
-            <TextBlock Text="Choose which folders QuickerPlaces tracks while it is running."
+            <TextBlock Text="Only the active File Explorer window is tracked. Return here to see new visits."
                        Foreground="{StaticResource Text.Secondary}" Margin="0,4,0,0" />
             <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Status.Warning}"
                        TextWrapping="Wrap" Margin="0,10,0,0" />

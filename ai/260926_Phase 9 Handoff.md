@@ -6,7 +6,7 @@ date: 2026-09-26
 
 # Phase 9 hand-off — app verification
 
-Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 531 tests pass after the short-visit timing fix.
+Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 532 tests pass. The Depth 2 check remains unresolved; see [the investigation summary](260926_Phase%209%20Depth%20Tracking%20Investigation.md) for the latest evidence and diagnostic instructions.
 
 ## What has already been checked
 

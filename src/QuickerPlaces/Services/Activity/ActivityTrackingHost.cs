@@ -121,6 +121,13 @@ public sealed class ActivityTrackingHost : IDisposable
             {
                 DiagnosticLog.Warn($"Folder activity final flush failed with {ex.GetType().Name} (0x{ex.HResult:X8}).");
             }
+            DiagnosticLog.Info($"Folder activity samples: ticks={_loop.Ticks} failures={_loop.ProbeFailures} " +
+                $"noExplorer={_loop.SamplesWith(TrackerSampleStatus.NoExplorerWindows)} " +
+                $"background={_loop.SamplesWith(TrackerSampleStatus.ExplorerInBackground)} " +
+                $"outsideRoots={_loop.SamplesWith(TrackerSampleStatus.ForegroundOutsideRoots)} " +
+                $"ambiguous={_loop.SamplesWith(TrackerSampleStatus.AmbiguousForeground)} " +
+                $"idleSamples={_loop.SamplesWith(TrackerSampleStatus.UserIdle)} idleWakes={_loop.IdleWakes} " +
+                $"eligible={_loop.SamplesWith(TrackerSampleStatus.Eligible)} visits={_loop.RecordedVisits}.");
             _presence.Signal -= Signal;
             _presence.Dispose();
             _probe.Dispose();

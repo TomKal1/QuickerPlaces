@@ -483,6 +483,7 @@ public sealed class FolderActivityTrackerTests
         h.Steps(10);
 
         Assert.Empty(h.Recorded);
+        Assert.Equal(TrackerSampleStatus.AmbiguousForeground, h.Tracker.LastSampleStatus);
     }
 
     [Fact]
@@ -495,6 +496,7 @@ public sealed class FolderActivityTrackerTests
         h.Steps(10);
 
         Assert.Empty(h.Recorded);
+        Assert.Equal(TrackerSampleStatus.AmbiguousForeground, h.Tracker.LastSampleStatus);
     }
 
     [Fact]
@@ -508,6 +510,23 @@ public sealed class FolderActivityTrackerTests
 
         Assert.Equal(Seconds(4), h.TimeIn(Acme));
         Assert.Equal(1, h.VisitsTo(Acme));
+        Assert.Equal(TrackerSampleStatus.Eligible, h.Tracker.LastSampleStatus);
+    }
+
+    [Fact]
+    public void DiagnosticStatus_DistinguishesNoWindow_BackgroundAndOutsideRoot()
+    {
+        var h = new TrackerHarness(Jobs);
+        h.Tick();
+        Assert.Equal(TrackerSampleStatus.NoExplorerWindows, h.Tracker.LastSampleStatus);
+
+        h.Probe.Windows.Add(new ShellWindowSnapshot(Elsewhere, 1, false));
+        h.Step();
+        Assert.Equal(TrackerSampleStatus.ExplorerInBackground, h.Tracker.LastSampleStatus);
+
+        h.Probe.Windows[0] = h.Probe.Windows[0] with { IsForeground = true };
+        h.Step();
+        Assert.Equal(TrackerSampleStatus.ForegroundOutsideRoots, h.Tracker.LastSampleStatus);
     }
 
     [Fact]

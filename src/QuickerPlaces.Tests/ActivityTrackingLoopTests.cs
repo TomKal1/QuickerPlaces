@@ -238,6 +238,7 @@ public sealed class ActivityTrackingLoopTests
         Run(40);                                        // ten minutes away
         Assert.Equal(writes + 1, _storage.WriteCount);
         Assert.Equal(samples, _probe.Samples);
+        Assert.Equal(41, _loop.IdleWakes);
 
         _presence.IdleFor = TimeSpan.Zero;
         Run(1);                                         // back: the gap is discarded, not capped onto Acme
