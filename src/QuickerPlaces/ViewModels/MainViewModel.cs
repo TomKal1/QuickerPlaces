@@ -32,6 +32,10 @@ public sealed class MainViewModel : ObservableObject
     private readonly AppSettings _settings;
     private readonly PlacesService _placesService;
 
+    // Every launch goes through this (Phase 3 D23): it alone decides that
+    // an open counts, and records it (D24).
+    private readonly PlaceLauncher _launcher;
+
     private bool _isGridExpanded;
     private string _searchText = string.Empty;
     private string? _globalHotkeyText;
@@ -62,6 +66,7 @@ public sealed class MainViewModel : ObservableObject
     {
         _settings = settings;
         _placesService = placesService;
+        _launcher = new PlaceLauncher(placesService, new WindowsShell());
         _isGridExpanded = settings.IsGridExpanded;
 
         Places = new ObservableCollection<PlaceViewModel>(_placesService.Places.Select(p => new PlaceViewModel(p)));
@@ -288,29 +293,30 @@ public sealed class MainViewModel : ObservableObject
         if (place is null)
             return;
 
-        try
+        var outcome = _launcher.Open(place.Model);
+        switch (outcome.Status)
         {
-            if (place.Type == PlaceType.Folder && !Directory.Exists(place.Resource))
-            {
+            case OpenStatus.Missing:
                 MessageForm.Show(
                     $"This folder no longer exists:\n{place.Resource}",
                     AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
                 return;
-            }
 
-            // UseShellExecute lets Windows pick the right handler either
-            // way: Explorer for a folder path, the default browser for a
-            // URL — no need to branch on Type here.
-            Process.Start(new ProcessStartInfo(place.Resource) { UseShellExecute = true });
+            case OpenStatus.Failed:
+                // Fail gracefully (SI §6.3) — a malformed or no-longer-openable
+                // resource should never crash the app.
+                MessageForm.Show(
+                    $"Couldn't open \"{place.Alias}\":\n{outcome.ErrorMessage}",
+                    AppName, MessageFormButtons.OK, MessageFormIcon.Error);
+                return;
         }
-        catch (Exception ex)
-        {
-            // Fail gracefully (SI §6.3) — a malformed or no-longer-openable
-            // resource should never crash the app.
-            MessageForm.Show(
-                $"Couldn't open \"{place.Alias}\":\n{ex.Message}",
-                AppName, MessageFormButtons.OK, MessageFormIcon.Error);
-        }
+
+        // Launched, so the open was recorded (D24) unless recovery blocked
+        // it. A failed save of that record shows the banner, never undoes the
+        // launch (D26). The row and its bubble share this view model, so one
+        // Refresh updates both.
+        RefreshPersistenceState(outcome.Persistence);
+        place.Refresh();
     }
 
     private void RenameAlias(PlaceViewModel? place)
@@ -736,8 +742,8 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             // UseShellExecute so Windows opens it with whatever the user
-            // has associated with .log files — the same approach Open()
-            // uses for a place's own resource.
+            // has associated with .log files — the same approach
+            // WindowsShell uses for a place's own resource.
             Process.Start(new ProcessStartInfo(logPath) { UseShellExecute = true });
         }
         catch (Exception ex)

@@ -37,6 +37,8 @@
     <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
     <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
+    <Compile Include="..\QuickerPlaces\Services\IShell.cs" Link="Linked\Services\IShell.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceLauncher.cs" Link="Linked\Services\PlaceLauncher.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
