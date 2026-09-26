@@ -143,6 +143,17 @@ public partial class MainWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        // The remembered sort is already applied to the view (MainViewModel's
+        // constructor); this shows its arrow. Done once the grid is loaded, so
+        // nothing in its own start-up can clear the arrow afterwards. A
+        // remembered sort with no column to show it (Favourite, whose column
+        // became the star beside the alias) would be a sort nobody can see
+        // or undo, so it goes back to stored order instead.
+        if (DataContext is MainViewModel { CurrentSort: { } remembered } viewModel && !HasColumnFor(remembered.Key))
+            viewModel.ClearSort();
+
+        UpdateSortArrows();
+
         // Surfaced here (rather than from OnSourceInitialized, where the
         // error is found) so a loaded, on-screen window exists for
         // MessageForm to center on. A problem loading places.json never
@@ -355,11 +366,73 @@ public partial class MainWindow : Window
             viewModel.ResumeStatusTimer();
     }
 
+    // -----------------------------------------------------------------
+    // Sorting (Phase 3 D29). The DataGrid's own sorting is replaced, not
+    // extended: it would set SortDescriptions, which can't express "never
+    // opened is oldest" or the alias tie-break, and each column's first
+    // direction is PlaceSort's to choose. Each column's SortMemberPath is its PlaceSortKey
+    // name, and nothing else reads it.
+    // -----------------------------------------------------------------
+
+    private void PlacesGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        e.Handled = true;
+
+        if (DataContext is not MainViewModel viewModel ||
+            !Enum.TryParse<PlaceSortKey>(e.Column.SortMemberPath, out var key))
+            return;
+
+        viewModel.SortBy(key);
+        UpdateSortArrows();
+    }
+
+    private bool HasColumnFor(PlaceSortKey key)
+    {
+        foreach (var column in PlacesGrid.Columns)
+        {
+            if (Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var columnKey) && columnKey == key)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Shows the current sort's arrow on its column, and none on the others.</summary>
+    private void UpdateSortArrows()
+    {
+        var sort = (DataContext as MainViewModel)?.CurrentSort;
+
+        foreach (var column in PlacesGrid.Columns)
+        {
+            column.SortDirection = sort is { } active && Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var key) && key == active.Key
+                ? active.Direction
+                : null;
+        }
+    }
+
     /// <summary>Double-click on a grid row = Open (SI §6.3), the same action as the row's top context-menu item.</summary>
     private void Row_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        // A quick double-click on the row's favourite star is two toggles,
+        // not an open: the row raises MouseDoubleClick even though the star
+        // button handled both clicks.
+        if (IsInsideButton(e.OriginalSource as DependencyObject))
+            return;
+
         if (sender is DataGridRow { Item: PlaceViewModel place } && DataContext is MainViewModel viewModel)
             viewModel.OpenCommand.Execute(place);
+    }
+
+    private static bool IsInsideButton(DependencyObject? element)
+    {
+        for (var current = element; current is not null and not DataGridRow;
+             current = current is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
+        {
+            if (current is System.Windows.Controls.Primitives.ButtonBase)
+                return true;
+        }
+
+        return false;
     }
 
     // -----------------------------------------------------------------

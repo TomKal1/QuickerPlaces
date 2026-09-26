@@ -109,9 +109,11 @@ public sealed class PlacesService
     /// 5.3). Version 2 (Phase 2) made DateAdded a UTC DateTimeOffset and
     /// added DeletedAt; a version 1 store is migrated in memory on load by
     /// PlacesStoreMigration (D11) and reaches disk only with the next
-    /// successful save.
+    /// successful save. Version 3 (Phase 3) added Id, LastOpenedAt and
+    /// OpenCount; a version 2 store — or a version 1 store, after its own
+    /// step — is migrated on by PlacesStoreMigration.MigrateV2ToV3 (D28).
     /// </summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     /// <summary>
     /// What happened the last time the store was loaded — see
@@ -274,6 +276,7 @@ public sealed class PlacesService
 
         var place = new Place
         {
+            Id = Guid.NewGuid(),
             Alias = alias.Trim(),
             Type = type,
             Resource = resource.Trim(),
@@ -376,6 +379,33 @@ public sealed class PlacesService
             // Active only: a deleted favourite's remembered slot (D9)
             // would otherwise leave a gap in the bubble numbering.
         }
+
+        return Persist();
+    }
+
+    /// <summary>
+    /// Records one launch that Windows accepted (Phase 3 D24): LastOpenedAt
+    /// from the clock, OpenCount plus one (saturating), then saved at once
+    /// (roadmap §4.12). Called only by PlaceLauncher, which alone decides
+    /// that a launch counts. Does nothing, and writes nothing, for a place
+    /// in Recently Deleted or no longer in the store. Refused while recovery
+    /// is unresolved (D3); the launch has already happened either way, which
+    /// is why neither case is an error the caller must show (D26).
+    ///
+    /// Like every other mutation this is a forward change (D1): if the save
+    /// fails, the usage stays in memory and the banner offers Retry.
+    /// </summary>
+    public PersistenceResult RecordOpen(Place place)
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        if (place.DeletedAt is not null || !_places.Contains(place))
+            return PersistenceResult.Ok();
+
+        place.LastOpenedAt = _time.GetUtcNow().ToUniversalTime();
+        if (place.OpenCount < int.MaxValue)
+            place.OpenCount++;
 
         return Persist();
     }
@@ -739,8 +769,9 @@ public sealed class PlacesService
     /// The version decides how the file is read (D17): missing is treated
     /// as 1, as import always has; 1 goes through the same
     /// PlacesStoreMigration as the store, with this service's clock and
-    /// zone, so its dates follow the same rule; 2 is read as is; anything
-    /// newer is refused. Import stays lenient about a missing version where
+    /// zone, so its dates follow the same rule; 1 and 2 then go through
+    /// v2 → v3, which gives them fresh ids (Phase 3 D28); 3 is read as is;
+    /// anything newer is refused. Import stays lenient about a missing version where
     /// the store is strict because the risks differ: the store's gate stops
     /// a foreign file being loaded and then overwritten, while import is
     /// additive, reviewed row by row, and never writes the source file.
@@ -777,10 +808,13 @@ public sealed class PlacesService
                     return (new List<Place>(), "That file was exported by a newer version of QuickerPlaces. Update QuickerPlaces to import it.");
             }
 
-            // Import never logs the migration: it changes nothing stored, and
-            // the file itself is never written back.
+            // The same chain as the store (D28). Import never logs a
+            // migration: it changes nothing stored, and the file itself is
+            // never written back.
             if (version == 1)
                 PlacesStoreMigration.MigrateV1ToV2(root, _time.LocalTimeZone, _time.GetUtcNow());
+            if (version <= 2)
+                PlacesStoreMigration.MigrateV2ToV3(root);
 
             var store = root.Deserialize<PlacesStore>(JsonOptions);
             var incoming = (store?.Places ?? new List<Place>())
@@ -830,6 +864,15 @@ public sealed class PlacesService
     /// changed since the preview was shown) and silently skips any that no
     /// longer pass.
     ///
+    /// Keeps the candidate's DateAdded, LastOpenedAt and OpenCount, so an
+    /// export/import round trip is lossless (roadmap §4.18, Phase 3 D33),
+    /// normalised as the loader does: UTC, and a count of 0 or more. Keeps
+    /// its Id too, unless it is empty or already held by any record in the
+    /// store — active, deleted, or added earlier in this batch — when it
+    /// gets a fresh one. Restoring your own backup therefore keeps each
+    /// place's identity, and someone else's export can never share one of
+    /// yours. Favourite state is still not imported.
+    ///
     /// Persists once for the whole batch (test 19), not once per record —
     /// D2's whole-store write makes per-record saves both wasteful and
     /// pointless. A failed persist still leaves every successfully-added
@@ -843,6 +886,10 @@ public sealed class PlacesService
 
         var imported = new List<Place>();
 
+        // Every record, deleted ones included (D7): an id held by a place in
+        // Recently Deleted is still that place's, and a restore brings it back.
+        var takenIds = _places.Select(p => p.Id).ToHashSet();
+
         foreach (var candidate in selectedCandidates)
         {
             if (!ValidateAlias(candidate.Alias).Success)
@@ -850,14 +897,21 @@ public sealed class PlacesService
             if (!ValidateResource(candidate.Resource, candidate.Type).Success)
                 continue;
 
+            var id = candidate.Id != Guid.Empty && takenIds.Add(candidate.Id)
+                ? candidate.Id
+                : NewUniqueId(takenIds);
+
             var place = new Place
             {
+                Id = id,
                 Alias = candidate.Alias.Trim(),
                 Type = candidate.Type,
                 Resource = candidate.Resource.Trim(),
                 IsFavourite = false,
                 FavouriteOrder = null,
-                DateAdded = _time.GetUtcNow()
+                DateAdded = candidate.DateAdded.ToUniversalTime(),
+                LastOpenedAt = candidate.LastOpenedAt?.ToUniversalTime(),
+                OpenCount = Math.Max(0, candidate.OpenCount)
             };
 
             _places.Add(place);
@@ -963,10 +1017,22 @@ public sealed class PlacesService
                 // (DiagnosticLog's privacy rule). The zone is logged because
                 // it is the assumption roadmap §4.7 asks to be recorded.
                 DiagnosticLog.Info(
-                    $"Migrating places store at {_storage.StoreFilePath} from schemaVersion 1 to {CurrentSchemaVersion} in memory " +
+                    $"Migrating places store at {_storage.StoreFilePath} from schemaVersion 1 to 2 in memory " +
                     $"(written with the next successful save): {report.Records} place(s); dateAdded converted to UTC exactly for " +
                     $"{report.ExactOffsets} that carried an offset, interpreted as local time in time zone \"{report.ZoneId}\" for " +
                     $"{report.InterpretedAsLocal} that had none, and set to the current time for {report.MissingDates} that were missing.");
+            }
+
+            if (version <= 2)
+            {
+                // Chained after v1 → v2 (D28): the same in-memory-only rule,
+                // so a v1 or v2 file on disk stays untouched until a save
+                // succeeds. Ids are given here, once; a later load reads them.
+                var v3Report = PlacesStoreMigration.MigrateV2ToV3(root);
+                DiagnosticLog.Info(
+                    $"Migrating places store at {_storage.StoreFilePath} from schemaVersion 2 to 3 in memory " +
+                    $"(written with the next successful save): {v3Report.Records} place(s) given an id; " +
+                    $"{v3Report.StrayFieldsRemoved} stray usage value(s) removed.");
             }
 
             var store = root.Deserialize<PlacesStore>(JsonOptions);
@@ -994,14 +1060,41 @@ public sealed class PlacesService
 
             // A hand-edited file can carry any offset; normalise so that
             // only UTC is ever held in memory, and so written back (§3).
+            // Likewise a negative count, and an id that is empty or repeats
+            // one already seen — a copied record. The first holder keeps a
+            // repeated id (D27, D28).
+            var seenIds = new HashSet<Guid>();
+            var usageNormalised = 0;
+            var idsReplaced = 0;
             foreach (var place in places)
             {
                 place.DateAdded = place.DateAdded.ToUniversalTime();
                 place.DeletedAt = place.DeletedAt?.ToUniversalTime();
+
+                if (place.LastOpenedAt is { } lastOpened && lastOpened.Offset != TimeSpan.Zero)
+                {
+                    place.LastOpenedAt = lastOpened.ToUniversalTime();
+                    usageNormalised++;
+                }
+
+                if (place.OpenCount < 0)
+                {
+                    place.OpenCount = 0;
+                    usageNormalised++;
+                }
+
+                if (place.Id == Guid.Empty || !seenIds.Add(place.Id))
+                {
+                    place.Id = NewUniqueId(seenIds);
+                    idsReplaced++;
+                }
             }
 
             var deleted = places.Count(p => p.DeletedAt is not null);
-            DiagnosticLog.Info($"Loaded {places.Count - deleted} place(s) and {deleted} in Recently Deleted from {_storage.StoreFilePath} (schemaVersion {version}).");
+            var normalised = usageNormalised + idsReplaced > 0
+                ? $"; normalised {usageNormalised} usage value(s) and {idsReplaced} id(s)"
+                : string.Empty;
+            DiagnosticLog.Info($"Loaded {places.Count - deleted} place(s) and {deleted} in Recently Deleted from {_storage.StoreFilePath} (schemaVersion {version}){normalised}.");
             return (places, StoreLoadOutcome.Ok);
         }
         catch (JsonException ex)
@@ -1009,6 +1102,16 @@ public sealed class PlacesService
             DiagnosticLog.Error($"Places store at {_storage.StoreFilePath} is not valid JSON, or could not be migrated.", ex);
             return (new List<Place>(), StoreLoadOutcome.Damaged);
         }
+    }
+
+    /// <summary>A fresh Guid not in <paramref name="taken"/>, which it is then added to.</summary>
+    private static Guid NewUniqueId(HashSet<Guid> taken)
+    {
+        Guid id;
+        do
+            id = Guid.NewGuid();
+        while (!taken.Add(id));
+        return id;
     }
 
     private static bool RequiresRecovery(StoreLoadOutcome outcome)

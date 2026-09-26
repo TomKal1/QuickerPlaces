@@ -318,12 +318,78 @@ The plan's section 8, merged with the UI checks listed by step 8. Record a resul
 - [ ] Deny write permission on `places.json`. A Remove shows the banner, and so does an Undo. Retry clears it once permission returns. → **Untested.**
 - [ ] With write permission still denied: each dialog action shows the error line in the dialog, and the banner appears after closing. Restoring permission and using Retry clears both. → **Untested.**
 
-### Known issue found, not fixed
+### Known issue found, not fixed (since resolved for the grid by Phase 3)
 
 **Dates in the main grid ignore the user's locale.** Nothing sets `FrameworkElement.Language`, so WPF formats bindings as en-US: the Date Added column's `{0:d}` shows month/day/year whatever the Windows region is. The Recently Deleted dialog formats its dates in code with `CultureInfo.CurrentCulture`, so the two windows can disagree. This predates Phase 2 and was found in step 8. The usual fix is to override `FrameworkElement.LanguageProperty`'s metadata from `CultureInfo.CurrentCulture.IetfLanguageTag` once at startup. Phase 3's Last Opened column would inherit the problem.
 
+*Resolved for the grid in Phase 3:* Date Added left the grid, and Last Opened is formatted in the view model with `CultureInfo.CurrentCulture` (Phase 3 D31), so the main grid no longer formats any date through a `StringFormat`. `FrameworkElement.Language` is still not set. That only matters if a later phase adds a XAML `StringFormat` date (Phase 3 plan §12, question 6).
+
+## Phase 3 — Usage tracking and sorting
+
+Phase 3 is planned in detail in [`ai/260925_Phase 3 Detailed Plan.md`](260925_Phase%203%20Detailed%20Plan.md). Its decisions D23–D33 are in that plan's section 4 and are not restated here. It was implemented on 2026-09-25 on `claude/phase-3-usage-tracking`, one commit per step of the plan's section 10 (`e250fbb` to `3e77208`), plus one fix from a self-review (`479388b`). Phase 2 had been merged to `main` (PR #6) before the plan was written.
+
+### What was built
+
+- **Schema v3** (`PlacesService.CurrentSchemaVersion = 3`). `Place` gains `Id` (a `Guid`, declared first so it is written first), `LastOpenedAt` (UTC, written only when set) and `OpenCount`. `PlacesStoreMigration.MigrateV2ToV3` gives every record a fresh id and removes any stray `lastOpenedAt`/`openCount`, which v2 never gave a meaning. The loader chains v1 → v2 → v3 in memory and still never writes. Version 3 binds directly, and 4 is now `WrittenByNewerVersion`. After binding, an offset `LastOpenedAt` becomes UTC, a negative `OpenCount` becomes 0, and an empty or repeated `Id` is replaced (the first holder keeps a repeated one). The load log line counts those normalisations, never naming a place.
+- **A stable place identity (D27)**, assigned by the migration, `TryAdd` and import, and never changed by rename, edit, remove or restore. Nothing displays it yet; Phase 5 keys per-file application choices by it.
+- **Recording an open (D24, D26).** `PlacesService.RecordOpen` is the only writer of usage: it stamps the injected clock's now, adds one (saturating at `int.MaxValue`) and saves at once. It ignores a deleted place or one not in the store, and recovery refuses it like every mutation. `PlaceLauncher`, over an `IShell` seam, is the only caller. It records an open only when the folder pre-check passed (URLs have none) and the shell did not throw. `MainViewModel.Open` just turns its `OpenOutcome` into messages. `WindowsShell` is the production `Directory.Exists` and `Process.Start`. A failed launch logs the place type and exception type only; a recorded open logs nothing.
+- **Export and import (D33).** Export writes version 3 with the new fields. Import runs the store's migration chain, and keeps each candidate's `DateAdded`, `LastOpenedAt` and `OpenCount` (normalised as on load). It keeps its `Id` unless the id is empty or already held by any record, active, deleted, or earlier in the batch. Favourite state is still not imported.
+- **Sorting (D29, D30).** `PlaceSort` is a UI-free comparer over seven keys (every column plus `DateAdded`), with ties broken by alias then destination, and never-opened places treated as the oldest. `PlaceSort.Next` is the header-click cycle: a column's first direction (newest, most, favourites first for the usage columns; A–Z for text), then the other, then back to stored order. `MainWindow` replaces the DataGrid's own sorting with a `Sorting` handler that calls `MainViewModel.SortBy`. The sort is applied as the view's `CustomSort`, never to `Places`. `AppSettings` v3 remembers it as two strings, read leniently by `PlaceSort.Parse`.
+- **The grid (D31, D32).** Date Added is replaced by **Last Opened** (local short date and time, or "—") and a right-aligned **Opens**. When the grid is sorted by Last Opened or Opens, a recorded open re-sorts the view at once.
+
+### Where the build departs from the plan
+
+| Plan | Built | Why |
+|---|---|---|
+| 5.1: the migration assigns `record["id"]` | It writes the Guid's text (`ToString("D")`), not a Guid-typed node | A `JsonValue` built in code from a `Guid` refuses `GetValue<string>`, which a parsed one accepts: the same class of quirk as Phase 2's dates. Written as text, the migrated tree looks exactly like one parsed from a v3 file (`e250fbb`) |
+| Section 7: the existing fixture tests change only their assertions | Phase 2's `V2FixtureFile_IsWrittenBackExactly` is replaced by `V3FixtureFile_IsWrittenBackExactly` | A v3 build migrates `places.v2.json`, so it can no longer write that file back unchanged. The v2 fixture itself is untouched (`58ac9de`) |
+| Section 10 step 5 updates the version-pinned export and import tests | Done in step 2 | Bumping `CurrentSchemaVersion` in step 2 broke them at once: exports read 3, and 3 was no longer "newer". The purge test's `WrittenByNewerVersion` case moved to 4 too (`58ac9de`) |
+| Step 2: `CommitImport` unchanged until step 5 | Step 2 gives imported places a fresh `Id` | Otherwise step 2 would have added imported places with `Guid.Empty` (`58ac9de`) |
+| Section 7: tests 28–33 extend `PlacesServiceTests` | Test 29 extends it; the rest are in `PlacesServiceImportExportV3Tests` | Easier to read as a group (`d88a252`) |
+| — | Phase 2's `CommitImport_StampsTheClock` became `CommitImport_KeepsTheCandidatesDateAdded_AsUtc` | D33 reverses what it asserted (`d88a252`) |
+| — | `PlaceType.Label()` holds "Folder"/"URL", used by both `PlaceViewModel.TypeLabel` and the type sort | So the sort compares exactly the text the column shows, without a service depending on a view model (`0d6d307`) |
+| D30: `Parse` returns null for anything unrecognised | Matches key names exactly (case-insensitive) rather than through `Enum.TryParse` | `Enum.TryParse` also accepts numbers, padding and flag syntax: a hand-edited `"Alias, Type"` read as `Type`. Found in a self-review of the diff (`479388b`) |
+| D31: fixed widths for Type, Favourite, Last Opened and Opens (90, 90, 150, 70), with Opens right-aligned | Every column is proportional (star) with a `MinWidth`, and the short columns have a `MaxWidth` too. Favourite and Opens are centred, header included. The theme's `DataGridColumnHeader` template is replaced so a sorted column shows an accent chevron (Segoe `E70E`/`E70D`) and a brighter title, app-wide, which includes Recently Deleted | The user's first look at the running app. Fixed columns never shrink until the star columns are crushed, and a column whose edge is dragged becomes fixed, so a narrower window squeezed Alias and Path / URL to nothing. The default header's sort triangle was all but invisible on the dark theme. The widths were checked in a WPF window resized in code, and the headers by rendering the real theme offscreen |
+| D31: a Favourite checkbox column | No Favourite column. A star sits in the Alias cell straight after the alias text: gold and always shown for a favourite, a faint outline shown only on the hovered or selected row otherwise. Clicking it toggles favourite (`ToggleFavouriteCommand`, as Ctrl+D). A long alias trims to "…" and keeps its star beside it. A double-click on the star doesn't also open the place. With no column to sort by favourite, a remembered Favourite sort falls back to stored order at startup (`MainViewModel.ClearSort`) rather than being in force without an arrow. `PlaceSortKey.Favourite` stays, unused by the grid, so `PlaceSort` and its tests are unchanged | The user asked for it over two looks at the running app: first a star column (`c3dffdf`), then the star beside the alias (`55d9a95`). The checkbox was read-only. The alias used to sit in a horizontal `StackPanel`, which gave it unlimited width, so it never trimmed; a left-aligned `DockPanel` that measures the star first fixes that. The star is not focusable, so Tab and the arrow keys still move by row, and Ctrl+D stays the keyboard route. `PlaceViewModel.FavouriteGlyph` and `FavouriteToolTip` are tested |
+| D29: a header click cycles first direction, the other, then no sort (stored order) | First direction, then flipping up and down only. Stored order is just the state before any header is clicked (or when nothing is remembered). The indicator is an accent Up/Down arrow (Segoe `E74A`/`E74B`, 13 pt), larger than the first chevron, plus a 2 px accent underline on the sorted header | The user asked for both on their third look at the running app. The third, unsorted click surprised them more than having no way back to stored order bothered them |
+| Section 10: run the suite under two `TZ` values after steps 2, 3 and 7 | Not done | The suite ran on Windows, where .NET ignores `TZ`. Every date test in this phase injects its zone (`ManualTimeProvider`, `TestZones`, and `FormatLastOpened`'s zone parameter), so none reads the machine's. Run the `TZ` pass in the next Linux session anyway |
+
+### Verification status — read this before calling Phase 3 done
+
+**2026-09-25, when implemented: all 311 tests pass on Windows, and the app builds with 0 warnings. The app has not been run.** The session that built it deliberately didn't launch the app: `places.json` lives at a fixed `%AppData%` path with no override, and the first open would have migrated the real store to v3.
+
+**Later on 2026-09-25: the user ran it on their own data**, over several rounds of screenshots. Each round's findings were fixed on the branch: the table of departures above has the rows, and "Found by the hands-on look" below has the list. Afterwards all 329 tests pass and the app builds with 0 warnings. The user then closed the manual verification: the items below that the hands-on use did not exercise are **not done, and the user judged them not needed**. They are recorded as such and are not to be read as passed.
+
+### Found by the hands-on look, 2026-09-25
+
+1. **Columns didn't scale with the window.** A narrower window crushed Alias and Path / URL while the fixed short columns kept their width. Every column is now proportional, with minimum and maximum widths (`f692008`).
+2. **Favourite and Opens weren't centred**, and **the sort indicator was nearly invisible.** They are now centred, and the header has its own template with a sort arrow (`f692008`), made larger with an accent underline in `3692e5d`.
+3. **The favourite checkbox couldn't be clicked.** It was replaced by a clickable star, first in its own column (`c3dffdf`), then straight after the alias (`55d9a95`).
+4. **Sorting cycled through a third, unsorted click.** It now flips between up and down only (`3692e5d`).
+5. **A new folder's alias had to be typed.** It now defaults to the deepest folder name (`ce1cc87`).
+6. **Message boxes cut off the end of each line.** The text sat in a horizontal `StackPanel` that let it wrap only at a fixed 320 px. With the 36 px icon that was wider than the 356 px of content width inside the 420 px window. It is now a two-column `Grid`, so the text wraps to the width left. This predates Phase 3; the user found it through the import message. It affected every `MessageForm`.
+
+### Manual verification checklist
+
+The items, with what each must show, are the Phase 3 plan's section 8.
+
+- [x] **Upgrade a real file.** Passed in use: the user's existing places loaded intact under the v3 build, and their opens were recorded and kept across restarts. The file-level details (the `id`s on disk, `places.bak.json` holding the v2 file, the log line) were not inspected.
+- [ ] Downgrade refusal → **Not done; not needed** (user, 2026-09-25).
+- [x] **Every open path counts once.** Passed in use for opening from the grid: Opens rose by one and Last Opened moved to the time of each open. The bubble, Ctrl+1–9 and search-box paths were not separately confirmed.
+- [ ] Missing folder → **Not done; not needed.**
+- [ ] Failed launch → **Not done; not needed.**
+- [x] **Sorting.** Passed, after the changes in items 2 and 4 above: the first direction per column, flipping, the arrow and underline.
+- [ ] Re-sort after an open → **Not done; not needed.**
+- [ ] Undo while sorted → **Not done; not needed.**
+- [ ] Remembered → **Not done; not needed.**
+- [ ] Search with a usage sort → **Not done; not needed.**
+- [x] **Width.** Passed after item 1 above, maximised and in a smaller window.
+- [ ] Locale → **Not done; not needed.** The user's dates show in US format, as their region would, so the check would not have shown a difference.
+- [ ] Save failure → **Not done; not needed.**
+- [x] **Export and import**, in part: importing a file whose places all already exist offers nothing and says so (after item 6's fix to the message). A round trip into a fresh profile was not done; the automated round-trip test covers it.
+
 ## Current status
 
-As of 2026-09-25, Phase 1 is on `main`, and Phase 2 is implemented on `claude/roadmap-status-4tv9nf`, which is not yet merged. Both manual checklists were walked in part on 2026-09-25. The everyday UI passed, three findings were fixed (above), and the failure-path and special-setup items are still untested. All 238 tests pass, and the solution builds with 0 warnings on Windows (`dotnet build QuickerPlaces.sln`, `dotnet test QuickerPlaces.sln` from `src\`).
+As of 2026-09-25, Phases 1 and 2 are on `main` (Phase 2 through PR #6), with their manual checklists closed. The user accepted the untested items as untested; they stay recorded as untested and are not to be read as passed.
 
-**The user accepted the untested items as untested on 2026-09-25**, so the manual verification of both phases is closed. They stay recorded as untested against their items and are not to be read as passed. Next is to merge Phase 2 to `main` through a pull request, then write the Phase 3 detailed plan. That plan was deferred until Phase 2 landed (`ai/README.md`, "Working on a phase"). Where to pick up is in `ai/260925_Phase 2 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.
+Phase 3 is implemented on `claude/phase-3-usage-tracking`, with the fixes from the user's hands-on use, and its manual verification is closed as recorded above. All 329 tests pass, and the solution builds with 0 warnings on Windows (`dotnet build QuickerPlaces.sln`, `dotnet test QuickerPlaces.sln` from `src\`). Next: push the branch and merge it through a pull request, then write the Phase 4 detailed plan (general file support). The Linux `TZ` pass is still owed (see the departures table). Where to pick up is in `ai/260925_Phase 3 Handoff.md`. The roadmap itself is `ai/260901_Professional Improvements Plan.md`, indexed in `ai/README.md`.

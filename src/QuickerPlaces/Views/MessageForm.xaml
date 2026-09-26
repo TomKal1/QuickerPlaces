@@ -24,15 +24,26 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top">
+        <!--
+            A two-column Grid, not a horizontal StackPanel: a StackPanel gives
+            the text unlimited width, so it wrapped only at a fixed MaxWidth,
+            which with the icon was wider than the window's client area once
+            the window border was taken off, clipping the end of each line.
+            The star column wraps the text to the room actually left.
+        -->
+        <Grid Grid.Row="0" VerticalAlignment="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
             <Border x:Name="IconBadge" Width="36" Height="36" CornerRadius="18"
                     VerticalAlignment="Top" Margin="0,0,14,0">
                 <TextBlock x:Name="IconGlyph" FontWeight="Bold" FontSize="16"
                            Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
-            <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="14"
-                       MaxWidth="320" VerticalAlignment="Center" />
-        </StackPanel>
+            <TextBlock x:Name="MessageText" Grid.Column="1" TextWrapping="Wrap" FontSize="14"
+                       VerticalAlignment="Center" />
+        </Grid>
 
         <StackPanel x:Name="ButtonPanel" Grid.Row="1" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,24,0,0" />

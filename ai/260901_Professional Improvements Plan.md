@@ -1,10 +1,10 @@
 # QuickerPlaces — Professional Improvements Implementation Plan
 
-**Status:** Phases 1 and 2 implemented (all 238 tests pass; both manual checklists closed on 2026-09-25, with the failure-path items accepted as untested; Phase 2 is not yet merged to `main`); Phases 3 to 9 planned, and Phase 3 is next, after the checklists  
+**Status:** Phases 1 and 2 implemented and merged to `main` (238 tests pass; both manual checklists closed on 2026-09-25, with the failure-path items accepted as untested); Phase 3 implemented on `claude/phase-3-usage-tracking` (329 tests pass; manual verification closed; not yet merged); Phases 4 to 9 planned, and Phase 4 is next  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-25 — Phase 2 implemented, ahead of the Phase 1 checklist, at the user's request; its detailed plan linked  
+**Last revised:** 2026-09-25 — Phase 3 implemented; Phase 2 merged  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
-**Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
+**Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 3](260925_Phase%203%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
 ## 1. Product direction
 
@@ -197,6 +197,8 @@ Permanent deletion must require confirmation.
 - If restore conflicts with a newer active record, do not silently skip it. Explain the conflict and let the user edit the alias or destination before restoring.
 
 ### Phase 3 — Usage tracking and sorting
+
+A separate, file-level plan for this phase is maintained in `ai/260925_Phase 3 Detailed Plan.md`. Beyond this section it adds a stable place `Id` to the v3 schema for Phase 5 (D27), and defines a recorded open in one launch gateway that Phases 4, 5 and 9 build on (D23, D24).
 
 #### 4.11 Data model
 

@@ -20,13 +20,15 @@ Click **Add Folder** or **Add URL** in the header. Either opens the same small d
 1. **Alias** — the name you'll use to recognize this place. Must be unique; "Docs" and "docs" count as the same alias, so you'll be blocked (with a clear message) if you try to reuse one.
 2. **Path or URL** — for a folder, either type the path or use the **Browse...** button to pick it; for a URL, type it in (e.g. `https://wiki.example.com`). This also has to be unique — you can't save the same path or URL twice. Note that this check is exact: `C:\Projects` and `C:\Projects\` are treated as different values, as are `http://` and `https://` versions of the same site, so use whichever form you actually want to keep.
 
+For a folder, the **Alias** fills itself in with the folder's own name as soon as you pick or paste the path: `C:\Users\Thomas\Downloads\UFGS_M` suggests **UFGS_M**. Change it if you want something else. Once you've typed your own alias, changing the path leaves it alone.
+
 Click **Save**, and the new place appears immediately at the bottom of the grid.
 
 If you enter a folder path, QuickerPlaces checks that it's a syntactically valid, *full* path. It has to start from a drive (`C:\Projects`) or a network share (`\\server\share`); a relative path like `Projects` is rejected. It does not require the folder to already exist on disk, so you can save a place for a folder you're about to create. A URL is checked for being well-formed but is never contacted or pinged when you save it.
 
 ## Working with a place in the grid
 
-Every row in the **All Places** grid shows the Alias, Type (Folder or URL), the Path/URL, whether it's a Favourite, and the date it was added.
+Every row in the **All Places** grid shows the Alias, Type (Folder or URL), the Path/URL, when you **Last Opened** it, and how many **Opens** it has (see "Last Opened and Opens" below). The date you added a place is still kept, and exported, but no longer has a column. A gold star after an alias means that place is a favourite. Point at any other row, or select it, and a faint star appears after its alias: click it to make the place a favourite, or click a gold star to stop it being one.
 
 - **Double-click a row** to open it — a folder opens in File Explorer, a URL opens in your default browser.
 - **Right-click a row** for the full menu:
@@ -43,6 +45,16 @@ Every row in the **All Places** grid shows the Alias, Type (Folder or URL), the 
 
 If a place can no longer be opened — the folder's been deleted, or the URL is malformed — you'll get a clear message instead of the app crashing or silently doing nothing.
 
+## Sorting the grid
+
+Click a column header to sort by it. **Last Opened** and **Opens** start with the most recent and the most used. The other columns start A to Z. Click the same header again to reverse it; each click flips it between up and down. The sorted column's header has an arrow showing the direction and a coloured line along its bottom edge. Until you first click a header, the grid is in the order you added your places.
+
+Places with the same value, such as several that have never been opened, are listed by alias. A place you've never opened always counts as the oldest, so it's at the bottom when Last Opened shows the newest first.
+
+The sort is remembered on this computer, and is in place the next time QuickerPlaces starts.
+
+Sorted by Last Opened, newest first, the grid keeps itself in order: a place you open moves straight to the top. Combined with the search box this is a quick way back to recent work. Type a few letters, press **Enter**, and the most recently opened match opens.
+
 ## Searching
 
 Type in the **Search places** box above the grid (or press **Ctrl+F** to jump there) and the grid narrows as you type. A place matches when every word you type appears somewhere in its alias or its path/URL, ignoring case. So `wiki prod` finds an alias "Prod Wiki", and it also finds an alias "Wiki" that points at `https://prod.example.com`. The header shows how many places match, e.g. **All Places (3 of 12)**.
@@ -57,13 +69,27 @@ The ✕ button beside the box also clears it. Searching only filters the grid; y
 
 ## Favourites
 
-Any place can be a favourite. Toggling **Favourite** (from the grid's right-click menu, or from a bubble's own right-click menu) adds or removes it from the bubble row above the grid.
+Any place can be a favourite. Click the star after its alias in the grid (it appears when you point at the row), or press **Ctrl+D** with the row selected, or choose **Toggle Favourite** from its right-click menu. A gold star means it's a favourite, and it gets a bubble in the row above the grid. Clicking the gold star, or **Remove from Favourites** on the bubble's own right-click menu, takes it off again.
 
 - **Click a bubble** to open that place — identical to double-clicking its row.
 - **Drag a bubble** left or right to reorder the row. The order you leave them in is remembered.
 - **Right-click a bubble** for a shortcut menu: **Open**, **Copy Path/URL**, or **Remove from Favourites** — you don't need to go back to the grid just to unpin something.
 - **Hover over a bubble** to see where it points.
 - **Ctrl+1** to **Ctrl+9** open the first nine bubbles, in their left-to-right order.
+
+## Last Opened and Opens
+
+The grid's **Last Opened** column shows the date and time you last opened a place from QuickerPlaces, in your regional date format. **Opens** shows how many times you have. A place you've never opened shows **—** and 0.
+
+What counts, precisely: an open counts when QuickerPlaces asks Windows to open the place and Windows accepts. That's the same whether you double-click a row, press Enter, use the right-click **Open**, click a bubble, press Ctrl+1 to Ctrl+9, or press Enter in the search box. Some things don't count:
+
+- Opening the same folder or website some other way, such as from File Explorer, a browser bookmark or another program. QuickerPlaces only knows about what it opened.
+- A folder that no longer exists. You get the "no longer exists" message, and nothing changes.
+- A place Windows refuses to open. You get the "Couldn't open" message, and nothing changes.
+
+Windows accepting the request is all QuickerPlaces can see. If the program that receives it then fails, for example a browser that can't reach the site, the open has still been counted.
+
+These numbers never change your favourites or their order. Removing a place to Recently Deleted and restoring it keeps them.
 
 ## Recently Deleted
 
@@ -182,6 +208,7 @@ A few more rules:
 
 - Only places in your list count as collisions. A place in the file whose alias or path/URL matches only something in your Recently Deleted is still offered. (Restoring that old one later then goes through the Restore Place dialog.)
 - Removed places in a file are skipped. Exports never contain them, but a copied `places.json` can.
+- Each imported place keeps its Last Opened, Opens and the date it was first added, as they were in the file, so exporting and importing again loses nothing but favourite status. Exports from versions before Last Opened existed import as never opened.
 - Exports made by older versions of QuickerPlaces still import.
 - A file exported by a newer version of QuickerPlaces is refused with "That file was exported by a newer version of QuickerPlaces. Update QuickerPlaces to import it." Nothing is offered from it.
 
@@ -191,12 +218,16 @@ QuickerPlaces keeps a few small plain-text files, all safe to open in a text edi
 
 - **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes. It holds Recently Deleted too.
 - **A backup of the previous version:** `%AppData%\QuickerPlaces\QuickerPlaces\places.bak.json` — QuickerPlaces keeps the previous contents of `places.json` every time it saves, automatically, right next to it. You don't need to do anything to get this; it's just there as an extra safety net.
-- **Window layout** (size, position, whether the grid is collapsed) and the **global hotkey**: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change the shortcut in Settings.
+- **Window layout** (size, position, whether the grid is collapsed, how it's sorted) and the **global hotkey**: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change the shortcut in Settings.
+
+Last Opened and Opens are stored with each place in `places.json`, so they go wherever that file goes. The sort is in `settings.json`, which stays on this computer.
 - **The diagnostic log:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log` — see "Where the log lives" above.
 
 You never need to touch any of these files by hand, but if you ever want to move your places to another machine, copying `places.json` across is all it takes (Recently Deleted goes with it). The folder icon at the left of the header opens the folder that holds `places.json` in File Explorer, with the file selected. The backup and any set-aside damaged files (see "The startup recovery prompt") are in the same folder.
 
 **Upgrading from a version without Recently Deleted.** This version stores `places.json` in a new format: dates are kept in UTC (the grid still shows your local date), and removed places are marked rather than deleted. The first time it starts, it converts your existing file in memory and writes nothing. The converted file is saved with your first change, and right after that save `places.bak.json` is your pre-upgrade file, until the next save replaces it. From then on, an older version of QuickerPlaces that has the startup recovery prompt says the file was written by a newer version, and leaves it untouched. A version from before the recovery prompt existed doesn't check: it would show the places in Recently Deleted as ordinary places, and forget they were removed the next time it saved. Don't go back to one of those with this file.
+
+**Upgrading from a version without Last Opened.** The same happens again: the file is converted in memory when QuickerPlaces starts and saved in the new format with your first change, usually the first place you open. Every place starts as never opened. Right after that first save `places.bak.json` is your pre-upgrade file, and any earlier version of QuickerPlaces with the recovery prompt, including the one with Recently Deleted, says the file was written by a newer version and leaves it untouched.
 
 ## If something goes wrong
 

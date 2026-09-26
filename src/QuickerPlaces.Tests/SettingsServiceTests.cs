@@ -77,6 +77,51 @@ public sealed class SettingsServiceTests : IDisposable
         Assert.False(loaded.IsGridExpanded);
     }
 
+    /// <summary>Phase 3 test 38: the remembered sort round-trips, as the two strings PlaceSort.Format writes (D30).</summary>
+    [Fact]
+    public void Places_sort_round_trips()
+    {
+        NewService().Save(new AppSettings { PlacesSortKey = "LastOpened", PlacesSortDirection = "descending" });
+
+        var loaded = NewService().Load();
+
+        Assert.Equal(3, AppSettings.CurrentSchemaVersion);
+        Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
+        Assert.Equal("LastOpened", loaded.PlacesSortKey);
+        Assert.Equal("descending", loaded.PlacesSortDirection);
+    }
+
+    /// <summary>Phase 3 test 38: a version 2 file has no sort, which is stored order; its hotkey and bounds are kept (no settings migration).</summary>
+    [Fact]
+    public void A_version_2_file_loads_unsorted_and_keeps_everything_else()
+    {
+        File.WriteAllText(_temp.File("settings.json"), """{ "schemaVersion": 2, "windowLeft": 10, "globalHotkey": "Ctrl+Shift+Q" }""");
+
+        var loaded = NewService().Load();
+
+        Assert.Null(loaded.PlacesSortKey);
+        Assert.Null(loaded.PlacesSortDirection);
+        Assert.Equal(10, loaded.WindowLeft);
+        Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
+    }
+
+    /// <summary>
+    /// Phase 3 test 38: an unrecognised sort costs only the sort. The fields
+    /// are strings, not enums, precisely so a bad value can't make
+    /// deserialisation throw and reset every setting (D30).
+    /// </summary>
+    [Fact]
+    public void An_unrecognised_sort_leaves_the_other_settings_intact()
+    {
+        File.WriteAllText(_temp.File("settings.json"), """{ "schemaVersion": 3, "windowLeft": 10, "globalHotkey": "Ctrl+Shift+Q", "placesSortKey": "Nonsense", "placesSortDirection": "sideways" }""");
+
+        var loaded = NewService().Load();
+
+        Assert.Equal(10, loaded.WindowLeft);
+        Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
+        Assert.Null(PlaceSort.Parse(loaded.PlacesSortKey, loaded.PlacesSortDirection));
+    }
+
     [Theory]
     [InlineData("Ctrl+Shift+Q")]
     [InlineData("None")]

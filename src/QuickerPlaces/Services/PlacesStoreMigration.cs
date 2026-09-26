@@ -18,6 +18,7 @@ namespace QuickerPlaces.Services;
 public static class PlacesStoreMigration
 {
     private const int V2 = 2;
+    private const int V3 = 3;
 
     /// <summary>
     /// Rewrites a schemaVersion 1 document in place as schemaVersion 2 (D11). Throws
@@ -76,6 +77,62 @@ public static class PlacesStoreMigration
 
         root["schemaVersion"] = V2;
         return new MigrationReport(records, exactOffsets, interpretedAsLocal, missingDates, localZone.Id);
+    }
+
+    /// <summary>
+    /// Rewrites a schemaVersion 2 document in place as schemaVersion 3 (Phase 3 D28): a
+    /// fresh id per record, any stray lastOpenedAt/openCount removed. Throws JsonException
+    /// for a shape it cannot migrate, as MigrateV1ToV2 does, so D6's catch classifies the
+    /// store Damaged.
+    /// </summary>
+    /// <param name="root">The whole parsed document. Only its "places" records and "schemaVersion" are touched.</param>
+    public static MigrationV3Report MigrateV2ToV3(JsonObject root)
+    {
+        var records = 0;
+        var strayFields = 0;
+
+        switch (root["places"])
+        {
+            case null:
+                // Left for the loader's own "no usable place list" check, as in MigrateV1ToV2.
+                break;
+
+            case JsonArray places:
+                foreach (var entry in places)
+                {
+                    if (entry is null)
+                        continue;
+
+                    if (entry is not JsonObject record)
+                        throw new JsonException("A stored place is not a JSON object.");
+
+                    records++;
+
+                    // v2 never gave these a meaning, so a hand-edited one must
+                    // not start meaning "opened" on upgrade (the same reasoning
+                    // as v1's stray deletedAt). Missing usage binds to the
+                    // defaults: never opened, count 0 (roadmap §4.11).
+                    if (record.Remove("lastOpenedAt"))
+                        strayFields++;
+                    if (record.Remove("openCount"))
+                        strayFields++;
+
+                    // Every record gets its identity here, once (D27). An id
+                    // already in a v2 file meant nothing, so it is replaced
+                    // rather than trusted. Written as the text System.Text.Json
+                    // itself writes for a Guid, so the node looks exactly like
+                    // one parsed from a v3 file (a Guid-typed JsonValue built in
+                    // code refuses GetValue<string>).
+                    record["id"] = Guid.NewGuid().ToString("D");
+                }
+                break;
+
+            default:
+                throw new JsonException("The stored place list is not a JSON array.");
+        }
+
+        root["schemaVersion"] = V3;
+        return new MigrationV3Report(records, strayFields);
     }
 
     private enum DateKind
@@ -151,3 +208,8 @@ public static class PlacesStoreMigration
 /// <param name="MissingDates">Records without a dateAdded, given the clock's now.</param>
 /// <param name="ZoneId">TimeZoneInfo.Id of the zone offset-less values were interpreted in.</param>
 public readonly record struct MigrationReport(int Records, int ExactOffsets, int InterpretedAsLocal, int MissingDates, string ZoneId);
+
+/// <summary>What the v2 → v3 migration did, for the log line (counts only: never aliases or destinations).</summary>
+/// <param name="Records">Non-null place records migrated, each given a fresh id.</param>
+/// <param name="StrayFieldsRemoved">lastOpenedAt/openCount properties found in v2 records and removed.</param>
+public readonly record struct MigrationV3Report(int Records, int StrayFieldsRemoved);

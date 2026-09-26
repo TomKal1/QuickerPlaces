@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using QuickerPlaces.Models;
 using QuickerPlaces.Mvvm;
 
@@ -30,7 +31,7 @@ public sealed class PlaceViewModel : ObservableObject
     public PlaceType Type => Model.Type;
 
     /// <summary>"Folder" or "URL" — for the DataGrid's Type column.</summary>
-    public string TypeLabel => Model.Type == PlaceType.Folder ? "Folder" : "URL";
+    public string TypeLabel => Model.Type.Label();
 
     /// <summary>
     /// Icon-font glyph for this place's Type, rendered with the theme's
@@ -53,12 +54,41 @@ public sealed class PlaceViewModel : ObservableObject
 
     public int? FavouriteOrder => Model.FavouriteOrder;
 
+    /// <summary>The grid's clickable star: Segoe FavoriteStarFill for a favourite, the FavoriteStar outline otherwise.</summary>
+    public string FavouriteGlyph => Model.IsFavourite ? "" : "";
+
+    /// <summary>The star's hover text: what clicking it will do, with the keyboard equivalent.</summary>
+    public string FavouriteToolTip => Model.IsFavourite ? "Remove from favourites (Ctrl+D)" : "Add to favourites (Ctrl+D)";
+
     /// <summary>
     /// When the place was added, in local time for the grid's {0:d} column.
     /// The model holds UTC; binding that directly would show tomorrow's
     /// date for an evening add east of Greenwich.
     /// </summary>
     public DateTime DateAdded => Model.DateAdded.LocalDateTime;
+
+    /// <summary>When QuickerPlaces last launched this place (UTC), or null if never (Phase 3 D24).</summary>
+    public DateTimeOffset? LastOpenedAt => Model.LastOpenedAt;
+
+    /// <summary>How many times QuickerPlaces has launched this place — the grid's Opens column.</summary>
+    public int OpenCount => Model.OpenCount;
+
+    /// <summary>The grid's Last Opened column: "—" if never, otherwise local short date and time (D31).</summary>
+    public string LastOpenedText => FormatLastOpened(Model.LastOpenedAt, TimeZoneInfo.Local, CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// Formats a last-opened instant in <paramref name="zone"/> with
+    /// <paramref name="culture"/>'s short date and short time ("g"): date
+    /// and time, because a launcher is used many times a day and a date
+    /// alone would make every place opened today look alike. Formatted
+    /// here rather than by a XAML StringFormat, which would ignore the
+    /// user's regional settings (D31). The zone and culture are parameters
+    /// so tests never depend on the machine's.
+    /// </summary>
+    public static string FormatLastOpened(DateTimeOffset? value, TimeZoneInfo zone, CultureInfo culture)
+        => value is { } opened
+            ? TimeZoneInfo.ConvertTime(opened, zone).DateTime.ToString("g", culture)
+            : "—";
 
     /// <summary>
     /// Raises a property-changed notification for every property on this

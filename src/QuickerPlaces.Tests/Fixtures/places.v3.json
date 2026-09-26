@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 3,
+  "places": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "alias": "Downloads",
+      "type": "folder",
+      "resource": "C:\\Users\\Test\\Downloads",
+      "isFavourite": true,
+      "favouriteOrder": 0,
+      "dateAdded": "2026-01-14T23:30:00+00:00",
+      "lastOpenedAt": "2026-09-24T21:15:00+00:00",
+      "openCount": 12
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "alias": "QuickerPlaces Repo",
+      "type": "url",
+      "resource": "https://github.com/example/quickerplaces",
+      "isFavourite": true,
+      "favouriteOrder": 1,
+      "dateAdded": "2026-02-03T04:05:22+00:00",
+      "lastOpenedAt": "2026-09-10T08:00:00+00:00",
+      "openCount": 1
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "alias": "Reports",
+      "type": "folder",
+      "resource": "D:\\Archive\\Reports",
+      "isFavourite": false,
+      "favouriteOrder": null,
+      "dateAdded": "2025-11-19T22:12:47+00:00",
+      "deletedAt": "2026-09-24T17:45:00+00:00",
+      "lastOpenedAt": "2026-09-23T12:00:00+00:00",
+      "openCount": 3
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "alias": "reports",
+      "type": "folder",
+      "resource": "D:\\Reports",
+      "isFavourite": false,
+      "favouriteOrder": null,
+      "dateAdded": "2026-09-24T18:02:10+00:00",
+      "openCount": 0
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000005",
+      "alias": "Timesheets",
+      "type": "folder",
+      "resource": "D:\\Admin\\Timesheets",
+      "isFavourite": false,
+      "favouriteOrder": null,
+      "dateAdded": "2026-03-01T09:00:00+00:00",
+      "lastOpenedAt": "2026-09-24T21:15:30+00:00",
+      "openCount": 2
+    }
+  ]
+}

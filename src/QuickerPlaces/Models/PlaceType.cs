@@ -9,3 +9,9 @@ public enum PlaceType
     /// <summary>A URL, opened in the system default browser.</summary>
     Url
 }
+
+public static class PlaceTypeExtensions
+{
+    /// <summary>"Folder" or "URL": the grid's Type column, and what sorting by type compares (Phase 3 D29).</summary>
+    public static string Label(this PlaceType type) => type == PlaceType.Folder ? "Folder" : "URL";
+}

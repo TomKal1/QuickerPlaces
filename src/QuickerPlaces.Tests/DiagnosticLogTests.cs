@@ -12,7 +12,9 @@ namespace QuickerPlaces.Tests;
 /// at its size cap instead of growing without bound, and it never records a
 /// written alias or resource. Also the Phase 2 plan's test 21: the v1 → v2
 /// migration's log line records its assumption, and still no alias or
-/// destination; and test 46: the purge logs a count, never which places. Every test redirects DiagnosticLog at a TempDirectory
+/// destination; and test 46: the purge logs a count, never which places.
+/// Phase 3's test 40: a failed launch names only the failure, and a
+/// recorded open logs nothing. Every test redirects DiagnosticLog at a TempDirectory
 /// via UseDirectoryForTests — never real AppData — and afterwards points
 /// it back at the run-wide TestLogDirectory (not the real location).
 ///
@@ -180,6 +182,46 @@ public sealed class DiagnosticLogTests
             var logContents = File.ReadAllText(DiagnosticLog.LogFilePath);
 
             Assert.Contains("Purged 1 place(s) from Recently Deleted after seven days (after load).", logContents);
+            Assert.DoesNotContain(secretAlias, logContents);
+            Assert.DoesNotContain(secretResource, logContents);
+        }
+        finally
+        {
+            DiagnosticLog.UseDirectoryForTests(TestLogDirectory.Path);
+        }
+    }
+
+    /// <summary>
+    /// Phase 3 test 40: a failed launch logs the place type and the
+    /// exception type, never the alias or destination, and a recorded open
+    /// logs nothing at all — a line per launch would be a record of the
+    /// user's activity in a file they did not ask for (D26).
+    /// </summary>
+    [Fact]
+    public void LaunchLog_NamesOnlyTheFailure_AndARecordedOpenLogsNothing()
+    {
+        using var tempDirectory = new TempDirectory();
+        DiagnosticLog.UseDirectoryForTests(tempDirectory.Path);
+        try
+        {
+            const string secretAlias = "MySecretProjectAlias";
+            const string secretResource = "https://secret.example.com/project";
+            var service = new PlacesService(new FakePlacesStorage(), new ManualTimeProvider(new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero)));
+            Assert.True(service.TryAdd(secretAlias, PlaceType.Url, secretResource, out var place, out _).Success);
+            var shell = new FakeShell();
+            var launcher = new PlaceLauncher(service, shell);
+            var logBefore = File.Exists(DiagnosticLog.LogFilePath) ? File.ReadAllText(DiagnosticLog.LogFilePath) : string.Empty;
+
+            Assert.Equal(OpenStatus.Launched, launcher.Open(place!).Status);
+            var logAfterOpen = File.Exists(DiagnosticLog.LogFilePath) ? File.ReadAllText(DiagnosticLog.LogFilePath) : string.Empty;
+            Assert.Equal(logBefore, logAfterOpen);
+
+            shell.ThrowOnOpen = new InvalidOperationException($"Cannot open {secretResource}");
+            Assert.Equal(OpenStatus.Failed, launcher.Open(place!).Status);
+            var logContents = File.ReadAllText(DiagnosticLog.LogFilePath);
+
+            Assert.Contains("InvalidOperationException", logContents);
+            Assert.Contains("url", logContents, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(secretAlias, logContents);
             Assert.DoesNotContain(secretResource, logContents);
         }

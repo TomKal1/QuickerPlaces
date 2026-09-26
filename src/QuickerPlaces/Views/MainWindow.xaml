@@ -314,7 +314,8 @@
                       IsReadOnly="True"
                       CanUserAddRows="False"
                       SelectionMode="Single"
-                      PreviewKeyDown="PlacesGrid_PreviewKeyDown">
+                      PreviewKeyDown="PlacesGrid_PreviewKeyDown"
+                      Sorting="PlacesGrid_Sorting">
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow">
                         <Setter Property="Tag" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext}" />
@@ -323,37 +324,112 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <!-- Template column so the type glyph can sit beside the alias; SortMemberPath keeps header-click sorting by Alias. -->
-                    <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="*">
+                    <!--
+                        Every SortMemberPath is a PlaceSortKey name, read only
+                        by PlacesGrid_Sorting, which replaces the DataGrid's own
+                        sorting (Phase 3 D29) — so it names the key, not a
+                        bound property.
+
+                        Every width is proportional (a star value), so the
+                        whole grid scales with the window rather than only
+                        Alias and Path / URL absorbing a change. A fixed pixel
+                        column never shrinks until the star columns are
+                        crushed, and a column whose edge was dragged became a
+                        fixed pixel one. MinWidth keeps each column readable
+                        at the window's 700 px minimum. MaxWidth stops the
+                        short columns spreading on a wide screen, leaving the
+                        extra room to Alias and Path / URL, which have none.
+                    -->
+                    <!--
+                        Template column: the type glyph, the alias, and the
+                        favourite star straight after the alias text. The inner
+                        DockPanel is left-aligned and measures the star first,
+                        so the star sits right after the text while it fits,
+                        and a long alias trims to "…" rather than pushing the
+                        star out of the cell. (The StackPanel this replaces
+                        gave the alias unlimited width, so it never trimmed.)
+
+                        The star is gold on a favourite, always. On any other
+                        place a faint outline appears only on the row under the
+                        pointer or the selected row, where it would be clicked,
+                        so the list isn't covered in empty stars. Clicking it
+                        toggles favourite: the same command as Ctrl+D and the
+                        menu's Toggle Favourite. It is not focusable, so the
+                        keyboard still moves by row; Ctrl+D is the keyboard
+                        route.
+                    -->
+                    <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="2*" MinWidth="110">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding TypeGlyph}" Style="{StaticResource TextBlock.Glyph}" />
-                                    <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                                <DockPanel VerticalAlignment="Center">
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding TypeGlyph}" Style="{StaticResource TextBlock.Glyph}" />
+                                    <DockPanel HorizontalAlignment="Left">
+                                        <Button DockPanel.Dock="Right" Margin="4,0,0,0"
+                                                Command="{Binding DataContext.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="{Binding FavouriteToolTip}"
+                                                AutomationProperties.Name="{Binding FavouriteToolTip}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource Button.GridIcon}">
+                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsFavourite}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <TextBlock Text="{Binding FavouriteGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="13">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource Text.Faint}" />
+                                                        <!-- Later triggers win: a favourite stays gold whether hovered or selected. -->
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                                <Setter Property="Foreground" Value="#CCFFFFFF" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsFavourite}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource Favourite.Star}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Button>
+                                        <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                </DockPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="90" />
-                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" />
+                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" SortMemberPath="Type" Width="0.7*" MinWidth="64" MaxWidth="100" />
+                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" SortMemberPath="Destination" Width="3*" MinWidth="140" />
                     <!--
-                        Mode=OneWay is required here, not just decorative:
-                        DataGridCheckBoxColumn's cell (display AND edit) is a
-                        live CheckBox bound via IsChecked, which defaults to
-                        TwoWay in its own property metadata — the column's
-                        IsReadOnly only stops the user from clicking into edit
-                        mode, it doesn't change the binding WPF actually builds.
-                        Text columns don't hit this because their read-only
-                        display element is a plain TextBlock (OneWay by
-                        default); only the editable TextBox — never
-                        instantiated while IsReadOnly — would default TwoWay.
-                        Without an explicit Mode here, binding IsFavourite
-                        (get-only on PlaceViewModel) throws
-                        InvalidOperationException as soon as the column tries
-                        to bind.
+                        Last Opened replaces Date Added, which is still stored
+                        and exported (roadmap §4.13). Formatted in the view
+                        model with the user's regional settings, not by a
+                        StringFormat, which would ignore them (D31).
                     -->
-                    <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" Width="90" IsReadOnly="True" />
-                    <DataGridTextColumn Header="Date Added" Binding="{Binding DateAdded, StringFormat={}{0:d}}" Width="110" />
+                    <DataGridTextColumn Header="Last Opened" Binding="{Binding LastOpenedText}" SortMemberPath="LastOpened"
+                                        Width="1.4*" MinWidth="128" MaxWidth="180" />
+                    <DataGridTextColumn Header="Opens" Binding="{Binding OpenCount}" SortMemberPath="Opens"
+                                        Width="0.6*" MinWidth="62" MaxWidth="90"
+                                        HeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="TextAlignment" Value="Center" />
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                 </DataGrid.Columns>
             </DataGrid>
 

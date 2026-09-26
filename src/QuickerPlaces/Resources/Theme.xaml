@@ -65,6 +65,41 @@
     -->
     <FontFamily x:Key="Font.Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
+    <!--
+        A favourite's star in the grid. Gold rather than the accent, so it
+        stays visible on a selected row, whose background is the accent.
+    -->
+    <SolidColorBrush x:Key="Favourite.Star" Color="#FFF5C451" />
+
+    <!--
+        A bare glyph button inside a grid cell (the favourite star): no chrome,
+        a hand cursor, and a brighter glyph under the pointer. Not focusable, so
+        Tab and the arrow keys keep moving through rows, not into cells; the
+        keyboard route is the row's own shortcut (Ctrl+D).
+    -->
+    <Style x:Key="Button.GridIcon" TargetType="Button">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}" Padding="4,1" CornerRadius="4">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#22FFFFFF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- A type glyph sitting next to text (grid Alias cell, bubble label). -->
     <Style x:Key="TextBlock.Glyph" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource Font.Icons}" />
@@ -459,6 +494,31 @@
         <Setter Property="RowHeaderWidth" Value="0" />
         <Setter Property="CanUserResizeRows" Value="False" />
     </Style>
+    <!-- The column-resize handles at each edge of a header: invisible, 8 px wide, with the resize cursor. -->
+    <Style x:Key="DataGridColumnHeader.Gripper" TargetType="Thumb">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="SizeWE" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border Background="{TemplateBinding Background}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        Replaces the default header template, whose sort indicator is a small
+        grey triangle above the text that is all but invisible on this theme.
+        A sorted column shows an accent arrow beside its title (up for
+        ascending, down for descending), a brighter title, and an accent
+        underline across its header. Grids that sort
+        themselves, like Recently Deleted, get the same indicator, since it
+        follows the column's SortDirection. PART_LeftHeaderGripper and
+        PART_RightHeaderGripper are the names DataGridColumnHeader looks for
+        to support resizing a column by dragging its edge.
+    -->
     <Style TargetType="DataGridColumnHeader">
         <Setter Property="Background" Value="{StaticResource Bg.Elevated}" />
         <Setter Property="Foreground" Value="{StaticResource Text.Secondary}" />
@@ -466,6 +526,62 @@
         <Setter Property="BorderThickness" Value="0,0,1,1" />
         <Setter Property="Padding" Value="8,6" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridColumnHeader">
+                    <Grid>
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                <TextBlock x:Name="SortGlyph" Grid.Column="1" Margin="6,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{StaticResource Font.Icons}" FontSize="13" FontWeight="Normal"
+                                           Foreground="{StaticResource Accent.Hover}"
+                                           Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                        <!-- An accent underline on the sorted column's header, so which column is sorted reads at a glance. -->
+                        <Border x:Name="SortBar" Height="2" VerticalAlignment="Bottom"
+                                Background="{StaticResource Accent}" Visibility="Collapsed" />
+                        <Thumb x:Name="PART_LeftHeaderGripper" HorizontalAlignment="Left" Style="{StaticResource DataGridColumnHeader.Gripper}" />
+                        <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right" Style="{StaticResource DataGridColumnHeader.Gripper}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <!-- Segoe Fluent Icons / MDL2 Up and Down arrows. -->
+                        <Trigger Property="SortDirection" Value="Ascending">
+                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE74A;" />
+                            <Setter TargetName="SortGlyph" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="SortBar" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                        </Trigger>
+                        <Trigger Property="SortDirection" Value="Descending">
+                            <Setter TargetName="SortGlyph" Property="Text" Value="&#xE74B;" />
+                            <Setter TargetName="SortGlyph" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="SortBar" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A header centred over its column, for narrow columns whose cells are centred (Favourite, Opens). -->
+    <Style x:Key="DataGridColumnHeader.Centered" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
     </Style>
     <Style TargetType="DataGridCell">
         <Setter Property="Background" Value="Transparent" />

@@ -32,11 +32,16 @@ public sealed class MainViewModel : ObservableObject
     private readonly AppSettings _settings;
     private readonly PlacesService _placesService;
 
+    // Every launch goes through this (Phase 3 D23): it alone decides that
+    // an open counts, and records it (D24).
+    private readonly PlaceLauncher _launcher;
+
     private bool _isGridExpanded;
     private string _searchText = string.Empty;
     private string? _globalHotkeyText;
     private string? _statusMessage;
     private bool _statusOffersUndo;
+    private PlaceSort? _currentSort;
 
     // Most recent removal on top. Session-only: undo history isn't saved;
     // after a restart, Recently Deleted is the way back (D19). Holds the
@@ -62,19 +67,26 @@ public sealed class MainViewModel : ObservableObject
     {
         _settings = settings;
         _placesService = placesService;
+        _launcher = new PlaceLauncher(placesService, new WindowsShell());
         _isGridExpanded = settings.IsGridExpanded;
 
         Places = new ObservableCollection<PlaceViewModel>(_placesService.Places.Select(p => new PlaceViewModel(p)));
         FavouritePlaces = new ObservableCollection<PlaceViewModel>();
 
-        // The grid binds to this filtered view rather than to Places
-        // directly. It's the collection's default view, so the DataGrid's
-        // own column-header sorting keeps working on top of the filter.
+        // The grid binds to this filtered, sorted view rather than to Places
+        // directly. Sorting is the view's too (Phase 3 D29), never the
+        // collection's: Places must stay in stored order for
+        // InsertRestored.
         PlacesView = CollectionViewSource.GetDefaultView(Places);
         PlacesView.Filter = item => item is PlaceViewModel place && PlaceSearch.Matches(place.Model, SearchText);
         // Listening on the view (not on Places) means the view has already
         // re-filtered by the time the header/empty-state text is recomputed.
         PlacesView.CollectionChanged += (_, _) => RaiseGridStatusChanged();
+
+        // The sort remembered in settings.json (D30); anything it doesn't
+        // recognise is the stored order.
+        _currentSort = PlaceSort.Parse(settings.PlacesSortKey, settings.PlacesSortDirection);
+        ApplySort();
 
         // Commands must exist before RebuildFavourites() runs below — it
         // calls ExportCommand.RaiseCanExecuteChanged(), and on a fresh
@@ -135,7 +147,7 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>All stored places, in insertion order — the DataGrid's built-in column-header sorting covers everything beyond that.</summary>
+    /// <summary>All stored places, in stored order. Never sorted: <see cref="PlacesView"/> is (D29).</summary>
     public ObservableCollection<PlaceViewModel> Places { get; }
 
     /// <summary>Favourited places only, ordered by FavouriteOrder — backs the bubble row above the grid.</summary>
@@ -143,6 +155,47 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>Places filtered by <see cref="SearchText"/> — what the DataGrid actually shows.</summary>
     public ICollectionView PlacesView { get; }
+
+    /// <summary>The grid's sort, or null for stored order. Changed by <see cref="SortBy"/>; remembered in settings.json (D30).</summary>
+    public PlaceSort? CurrentSort
+    {
+        get => _currentSort;
+        private set => SetProperty(ref _currentSort, value);
+    }
+
+    /// <summary>
+    /// A click on the column header for <paramref name="key"/>: its first
+    /// direction, then flipping up and down (PlaceSort.Next).
+    /// MainWindow calls this in place of the DataGrid's own sorting.
+    /// </summary>
+    public void SortBy(PlaceSortKey key)
+    {
+        CurrentSort = PlaceSort.Next(CurrentSort, key);
+        ApplySort();
+    }
+
+    /// <summary>Returns the grid to stored order. MainWindow calls this for a remembered sort that no column shows any more, so a sort is never in force without its arrow.</summary>
+    public void ClearSort()
+    {
+        CurrentSort = null;
+        ApplySort();
+    }
+
+    /// <summary>
+    /// Sorts the view by <see cref="CurrentSort"/>, or returns it to stored
+    /// order. A CustomSort rather than SortDescriptions: it compares without
+    /// reflection, and only a comparer can say "never opened is oldest" and
+    /// break ties by alias (D29). Setting it refreshes the view.
+    /// </summary>
+    private void ApplySort()
+    {
+        if (PlacesView is not ListCollectionView view)
+            return;
+
+        view.CustomSort = CurrentSort is { } sort
+            ? Comparer<object>.Create((a, b) => sort.Comparer.Compare(((PlaceViewModel)a).Model, ((PlaceViewModel)b).Model))
+            : null;
+    }
 
     /// <summary>The grid's search box text. Every whitespace-separated term must appear in the alias or path/URL (see <see cref="PlaceSearch"/>).</summary>
     public string SearchText
@@ -288,29 +341,36 @@ public sealed class MainViewModel : ObservableObject
         if (place is null)
             return;
 
-        try
+        var outcome = _launcher.Open(place.Model);
+        switch (outcome.Status)
         {
-            if (place.Type == PlaceType.Folder && !Directory.Exists(place.Resource))
-            {
+            case OpenStatus.Missing:
                 MessageForm.Show(
                     $"This folder no longer exists:\n{place.Resource}",
                     AppName, MessageFormButtons.OK, MessageFormIcon.Warning);
                 return;
-            }
 
-            // UseShellExecute lets Windows pick the right handler either
-            // way: Explorer for a folder path, the default browser for a
-            // URL — no need to branch on Type here.
-            Process.Start(new ProcessStartInfo(place.Resource) { UseShellExecute = true });
+            case OpenStatus.Failed:
+                // Fail gracefully (SI §6.3) — a malformed or no-longer-openable
+                // resource should never crash the app.
+                MessageForm.Show(
+                    $"Couldn't open \"{place.Alias}\":\n{outcome.ErrorMessage}",
+                    AppName, MessageFormButtons.OK, MessageFormIcon.Error);
+                return;
         }
-        catch (Exception ex)
-        {
-            // Fail gracefully (SI §6.3) — a malformed or no-longer-openable
-            // resource should never crash the app.
-            MessageForm.Show(
-                $"Couldn't open \"{place.Alias}\":\n{ex.Message}",
-                AppName, MessageFormButtons.OK, MessageFormIcon.Error);
-        }
+
+        // Launched, so the open was recorded (D24) unless recovery blocked
+        // it. A failed save of that record shows the banner, never undoes the
+        // launch (D26). The row and its bubble share this view model, so one
+        // Refresh updates both.
+        RefreshPersistenceState(outcome.Persistence);
+        place.Refresh();
+
+        // Only a usage sort can change because of an open, so only it pays
+        // for re-sorting the view; the row moves to its new place at once
+        // (D32). No other sort sees a reset.
+        if (CurrentSort?.Key is PlaceSortKey.LastOpened or PlaceSortKey.Opens)
+            PlacesView.Refresh();
     }
 
     private void RenameAlias(PlaceViewModel? place)
@@ -703,6 +763,11 @@ public sealed class MainViewModel : ObservableObject
     public void PersistToSettings()
     {
         _settings.IsGridExpanded = IsGridExpanded;
+
+        // Both null is the stored order (D30).
+        var sort = CurrentSort?.Format();
+        _settings.PlacesSortKey = sort?.Key;
+        _settings.PlacesSortDirection = sort?.Direction;
     }
 
     /// <summary>
@@ -736,8 +801,8 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             // UseShellExecute so Windows opens it with whatever the user
-            // has associated with .log files — the same approach Open()
-            // uses for a place's own resource.
+            // has associated with .log files — the same approach
+            // WindowsShell uses for a place's own resource.
             Process.Start(new ProcessStartInfo(logPath) { UseShellExecute = true });
         }
         catch (Exception ex)

@@ -100,7 +100,7 @@ public sealed class PlacesServiceSchemaV2Tests
         Assert.Equal(StoreLoadOutcome.Ok, second.LoadOutcome);
         Assert.Equal(before, second.Places.Select(p => (p.Alias, p.DateAdded)));
         Assert.Equal(new DateTimeOffset(2026, 1, 14, 23, 30, 0, TimeSpan.Zero), second.Places[0].DateAdded);
-        Assert.Equal(2, JsonNode.Parse(storage.LastWritten!)!["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PlacesService.CurrentSchemaVersion, JsonNode.Parse(storage.LastWritten!)!["schemaVersion"]!.GetValue<int>());
     }
 
     /// <summary>
@@ -140,13 +140,13 @@ public sealed class PlacesServiceSchemaV2Tests
         Assert.Equal(new[] { "Pinned", "Wiki" }, service.Places.Select(p => p.Alias));
     }
 
-    /// <summary>Test 16, version 3: WrittenByNewerVersion, and the file is left byte-identical.</summary>
+    /// <summary>Test 16, a version newer than this build (4 since Phase 3's test 5): WrittenByNewerVersion, and the file is left byte-identical.</summary>
     [Fact]
-    public void Version3_IsWrittenByNewerVersion_AndTheFileIsUntouched()
+    public void NewerVersion_IsWrittenByNewerVersion_AndTheFileIsUntouched()
     {
         using var dir = new TempDirectory();
         var path = dir.File("places.json");
-        File.WriteAllText(path, """{ "schemaVersion": 3, "places": [] }""");
+        File.WriteAllText(path, """{ "schemaVersion": 4, "places": [] }""");
         var originalBytes = File.ReadAllBytes(path);
 
         var service = new PlacesService(new FilePlacesStorage(dir.Path, "places.json"), Clock());
@@ -390,14 +390,21 @@ public sealed class PlacesServiceSchemaV2Tests
         Assert.Null(reloadedNew.DeletedAt);
     }
 
-    /// <summary>Not a numbered plan test: CommitImport stamps DateAdded from the injected clock too (5.2).</summary>
+    /// <summary>
+    /// Not a numbered plan test. Phase 2 had CommitImport stamp DateAdded
+    /// from the clock; since Phase 3's D33 an import keeps the candidate's
+    /// own DateAdded, as UTC, so a round trip is lossless.
+    /// </summary>
     [Fact]
-    public void CommitImport_StampsTheClock()
+    public void CommitImport_KeepsTheCandidatesDateAdded_AsUtc()
     {
         var service = new PlacesService(new FakePlacesStorage(), Clock());
+        var original = new DateTimeOffset(2025, 6, 2, 20, 15, 0, TimeSpan.FromHours(10));
 
-        var (imported, _) = service.CommitImport(new[] { new Place { Alias = "A", Type = PlaceType.Url, Resource = "https://a.example.com" } });
+        var (imported, _) = service.CommitImport(new[] { new Place { Alias = "A", Type = PlaceType.Url, Resource = "https://a.example.com", DateAdded = original } });
 
-        Assert.Equal(Now, Assert.Single(imported).DateAdded);
+        var added = Assert.Single(imported);
+        Assert.Equal(original, added.DateAdded);
+        Assert.Equal(TimeSpan.Zero, added.DateAdded.Offset);
     }
 }

@@ -484,10 +484,14 @@ public sealed class PlacesServiceTests : IDisposable
         Add(source, "Docs", PlaceType.Folder, Folder("Docs"));
         var wiki = Add(source, "Wiki", PlaceType.Url, "https://wiki.example.com");
         source.ToggleFavourite(wiki);
+        _clock.Advance(TimeSpan.FromHours(3));
+        source.RecordOpen(wiki);
+        source.RecordOpen(wiki);
 
         var exportFile = Path.Combine(_temp.Path, "export.json");
         Assert.Null(source.Export(source.Places, exportFile));
 
+        _clock.Advance(TimeSpan.FromDays(1));
         var target = NewServiceAt("other.json");
         var (candidates, error) = target.GetImportCandidates(exportFile);
         Assert.Null(error);
@@ -499,13 +503,20 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.All(target.Places, p => Assert.False(p.IsFavourite));
         Assert.Equal(2, NewServiceAt("other.json").Places.Count);
 
-        // Phase 2 test 39: and the export reads as version 2.
-        Assert.Equal(2, JsonNode.Parse(File.ReadAllText(exportFile))!["schemaVersion"]!.GetValue<int>());
+        // Phase 3 test 29: lossless for everything but favourite state (D33)
+        // — the id, the original DateAdded, and the usage.
+        Assert.Equal(
+            source.Places.Select(p => (p.Id, p.Alias, p.DateAdded, p.LastOpenedAt, p.OpenCount)),
+            NewServiceAt("other.json").Places.Select(p => (p.Id, p.Alias, p.DateAdded, p.LastOpenedAt, p.OpenCount)));
+        Assert.Equal(2, target.Places.Single(p => p.Alias == "Wiki").OpenCount);
+
+        // Phase 2 test 39: and the export reads as this build's version (3 since Phase 3).
+        Assert.Equal(PlacesService.CurrentSchemaVersion, JsonNode.Parse(File.ReadAllText(exportFile))!["schemaVersion"]!.GetValue<int>());
     }
 
     /// <summary>
     /// Phase 2 test 33: Export leaves out places in Recently Deleted even
-    /// when the caller passes them, writes schemaVersion 2, and no record
+    /// when the caller passes them, writes this build's schemaVersion, and no record
     /// has a deletedAt key (D16).
     /// </summary>
     [Fact]
@@ -521,7 +532,7 @@ public sealed class PlacesServiceTests : IDisposable
         Assert.Null(service.Export(service.Places.Concat(service.RecentlyDeleted), exportFile));
 
         var written = JsonNode.Parse(File.ReadAllText(exportFile))!;
-        Assert.Equal(2, written["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PlacesService.CurrentSchemaVersion, written["schemaVersion"]!.GetValue<int>());
         var places = written["places"]!.AsArray();
         Assert.Equal(new[] { "Docs", "Mail" }, places.Select(p => p!["alias"]!.GetValue<string>()));
         Assert.All(places, p => Assert.False(p!.AsObject().ContainsKey("deletedAt")));
@@ -705,7 +716,7 @@ public sealed class PlacesServiceTests : IDisposable
     {
         var exportFile = Path.Combine(_temp.Path, "export.json");
         File.WriteAllText(exportFile, """
-            { "schemaVersion": 3, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
+            { "schemaVersion": 4, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
             """);
 
         var (candidates, error) = NewService().GetImportCandidates(exportFile);

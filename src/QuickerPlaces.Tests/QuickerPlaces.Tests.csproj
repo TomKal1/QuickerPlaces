@@ -34,10 +34,14 @@
     <Compile Include="..\QuickerPlaces\Models\PlaceType.cs" Link="Linked\Models\PlaceType.cs" />
     <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\StoreLoadOutcome.cs" Link="Linked\Models\StoreLoadOutcome.cs" />
+    <Compile Include="..\QuickerPlaces\Services\AliasSuggestion.cs" Link="Linked\Services\AliasSuggestion.cs" />
     <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
     <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
+    <Compile Include="..\QuickerPlaces\Services\IShell.cs" Link="Linked\Services\IShell.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceLauncher.cs" Link="Linked\Services\PlaceLauncher.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceSort.cs" Link="Linked\Services\PlaceSort.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
@@ -63,7 +67,7 @@
 
   <ItemGroup>
     <!--
-      Fixtures/places.v1.json and places.v2.json are read via
+      Fixtures/places.v1.json, places.v2.json and places.v3.json are read via
       AppContext.BaseDirectory at test time (not as embedded resources), so
       they need to land next to the test assembly in the output directory.
       Every test that reads them does so the same way — see
@@ -73,6 +77,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Fixtures\places.v2.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Fixtures\places.v3.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
