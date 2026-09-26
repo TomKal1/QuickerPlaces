@@ -57,6 +57,16 @@ public static class RootPathMatcher
     }
 
     /// <summary>
+    /// <paramref name="path"/> spelled the one way the store keeps a root:
+    /// backslashes, no repeated or trailing separator (a drive root keeps
+    /// its one), "." and ".." resolved, and casing as given. Null when it is
+    /// not a rooted filesystem path (D13). Two roots are the same folder when
+    /// their normalized spellings are equal ignoring case.
+    /// </summary>
+    public static string? Normalize(string? path)
+        => Parse(path) is { } parsed ? Join(parsed, Array.Empty<string>()) : null;
+
+    /// <summary>
     /// A path split into segments. A drive path's first segment is the drive
     /// ("C:"); a UNC path's first two are the server and share.
     /// </summary>

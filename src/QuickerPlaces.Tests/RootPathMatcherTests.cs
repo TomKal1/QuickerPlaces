@@ -174,6 +174,35 @@ public sealed class RootPathMatcherTests
         Assert.Null(RootPathMatcher.Credit(@"\\fileserver\projects\Jobs\Acme", Root(@"J:\Jobs")));
     }
 
+    // ---- Normalize: the spelling the store keeps a root under ----
+
+    [Theory]
+    [InlineData(@"C:\Jobs", @"C:\Jobs")]
+    [InlineData(@"C:/Jobs/", @"C:\Jobs")]
+    [InlineData(@"  C:\Jobs\\Acme\.\..\Beta\  ", @"C:\Jobs\Beta")]
+    [InlineData(@"c:\jobs", @"c:\jobs")]                                    // casing is kept
+    [InlineData(@"J:\", @"J:\")]
+    [InlineData(@"J:/", @"J:\")]
+    [InlineData(@"\\fileserver\projects\Jobs\", @"\\fileserver\projects\Jobs")]
+    [InlineData(@"//fileserver/projects", @"\\fileserver\projects")]
+    public void Normalize_GivesOneSpellingPerFolder(string path, string expected)
+    {
+        Assert.Equal(expected, RootPathMatcher.Normalize(path));
+    }
+
+    [Theory]
+    [InlineData("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}")]
+    [InlineData("https://example.com/Jobs")]
+    [InlineData(@"Jobs\Acme")]
+    [InlineData(@"C:Jobs")]
+    [InlineData(@"\\fileserver")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void Normalize_RefusesWhatIsNotAFolderPath(string? path)
+    {
+        Assert.Null(RootPathMatcher.Normalize(path));
+    }
+
     [Fact]
     public void AnUnusableEquivalentPrefix_IsIgnored()
     {
