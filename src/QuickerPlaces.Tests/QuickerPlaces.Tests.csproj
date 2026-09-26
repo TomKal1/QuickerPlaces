@@ -46,6 +46,7 @@
     <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
+    <Compile Include="..\QuickerPlaces\Services\ValidationResult.cs" Link="Linked\Services\ValidationResult.cs" />
     <!--
       Phase 9's folder activity tracking (ai/260914_Folder Activity Tracking
       Plan.md 5.1, 5.2): the tracker, the path matcher and the seams they
