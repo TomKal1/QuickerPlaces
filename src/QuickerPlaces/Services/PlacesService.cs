@@ -383,6 +383,33 @@ public sealed class PlacesService
         return Persist();
     }
 
+    /// <summary>
+    /// Records one launch that Windows accepted (Phase 3 D24): LastOpenedAt
+    /// from the clock, OpenCount plus one (saturating), then saved at once
+    /// (roadmap §4.12). Called only by PlaceLauncher, which alone decides
+    /// that a launch counts. Does nothing, and writes nothing, for a place
+    /// in Recently Deleted or no longer in the store. Refused while recovery
+    /// is unresolved (D3); the launch has already happened either way, which
+    /// is why neither case is an error the caller must show (D26).
+    ///
+    /// Like every other mutation this is a forward change (D1): if the save
+    /// fails, the usage stays in memory and the banner offers Retry.
+    /// </summary>
+    public PersistenceResult RecordOpen(Place place)
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        if (place.DeletedAt is not null || !_places.Contains(place))
+            return PersistenceResult.Ok();
+
+        place.LastOpenedAt = _time.GetUtcNow().ToUniversalTime();
+        if (place.OpenCount < int.MaxValue)
+            place.OpenCount++;
+
+        return Persist();
+    }
+
     /// <summary>Reassigns FavouriteOrder for every current favourite to match <paramref name="orderedFavourites"/> (0-based, dense). Used after a bubble drag-reorder. Any place in Recently Deleted in the list is skipped: the bubbles the caller passes are active places.</summary>
     public PersistenceResult SetFavouriteOrder(IReadOnlyList<Place> orderedFavourites)
     {
