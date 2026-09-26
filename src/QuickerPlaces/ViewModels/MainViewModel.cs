@@ -404,6 +404,11 @@ public sealed class MainViewModel : ObservableObject
         RefreshPersistenceState(persistence);
         place.Refresh();
         RebuildFavourites();
+
+        // As for an open under a usage sort (D32): sorted by favourite, the
+        // row moves to its new group at once.
+        if (CurrentSort?.Key is PlaceSortKey.Favourite)
+            PlacesView.Refresh();
     }
 
     /// <summary>

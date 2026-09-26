@@ -54,6 +54,12 @@ public sealed class PlaceViewModel : ObservableObject
 
     public int? FavouriteOrder => Model.FavouriteOrder;
 
+    /// <summary>The grid's clickable star: Segoe FavoriteStarFill for a favourite, the FavoriteStar outline otherwise.</summary>
+    public string FavouriteGlyph => Model.IsFavourite ? "" : "";
+
+    /// <summary>The star's hover text: what clicking it will do, with the keyboard equivalent.</summary>
+    public string FavouriteToolTip => Model.IsFavourite ? "Remove from favourites (Ctrl+D)" : "Add to favourites (Ctrl+D)";
+
     /// <summary>
     /// When the place was added, in local time for the grid's {0:d} column.
     /// The model holds UTC; binding that directly would show tomorrow's

@@ -339,7 +339,52 @@
                         at the window's 700 px minimum. MaxWidth stops the
                         short columns spreading on a wide screen, leaving the
                         extra room to Alias and Path / URL, which have none.
+                        The star column is the exception: an icon, so a fixed
+                        48 px, just wide enough for its header star plus the
+                        sort chevron.
                     -->
+                    <!--
+                        Favourite, as a star beside the alias: filled gold for a
+                        favourite, an outline otherwise, and clicking it toggles
+                        (the same command as Ctrl+D and the menu's Toggle
+                        Favourite). Its header star sorts favourites first.
+                    -->
+                    <DataGridTemplateColumn SortMemberPath="Favourite" Width="48" CanUserResize="False"
+                                            HeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
+                        <DataGridTemplateColumn.Header>
+                            <TextBlock Text="&#xE735;" FontFamily="{StaticResource Font.Icons}" FontSize="12"
+                                       ToolTip="Favourites (click to sort)" AutomationProperties.Name="Favourite" />
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource Button.GridIcon}"
+                                        Command="{Binding DataContext.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip="{Binding FavouriteToolTip}"
+                                        AutomationProperties.Name="{Binding FavouriteToolTip}">
+                                    <TextBlock Text="{Binding FavouriteGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="14">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource Text.Faint}" />
+                                                <!-- Later triggers win: a favourite stays gold whether hovered or selected. -->
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                        <Setter Property="Foreground" Value="#CCFFFFFF" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsFavourite}" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource Favourite.Star}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <!-- Template column so the type glyph can sit beside the alias. -->
                     <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="2*" MinWidth="110">
                         <DataGridTemplateColumn.CellTemplate>
@@ -353,32 +398,6 @@
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" SortMemberPath="Type" Width="0.7*" MinWidth="64" MaxWidth="100" />
                     <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" SortMemberPath="Destination" Width="3*" MinWidth="140" />
-                    <!--
-                        Mode=OneWay is required here, not just decorative:
-                        DataGridCheckBoxColumn's cell (display AND edit) is a
-                        live CheckBox bound via IsChecked, which defaults to
-                        TwoWay in its own property metadata — the column's
-                        IsReadOnly only stops the user from clicking into edit
-                        mode, it doesn't change the binding WPF actually builds.
-                        Text columns don't hit this because their read-only
-                        display element is a plain TextBlock (OneWay by
-                        default); only the editable TextBox — never
-                        instantiated while IsReadOnly — would default TwoWay.
-                        Without an explicit Mode here, binding IsFavourite
-                        (get-only on PlaceViewModel) throws
-                        InvalidOperationException as soon as the column tries
-                        to bind.
-                    -->
-                    <DataGridCheckBoxColumn Header="Favourite" Binding="{Binding IsFavourite, Mode=OneWay}" SortMemberPath="Favourite"
-                                            Width="0.8*" MinWidth="78" MaxWidth="100" IsReadOnly="True"
-                                            HeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
-                        <!-- Based on the column's own default, which already centres the box across and keeps it inert; this centres it down the row too. -->
-                        <DataGridCheckBoxColumn.ElementStyle>
-                            <Style TargetType="CheckBox" BasedOn="{x:Static DataGridCheckBoxColumn.DefaultElementStyle}">
-                                <Setter Property="VerticalAlignment" Value="Center" />
-                            </Style>
-                        </DataGridCheckBoxColumn.ElementStyle>
-                    </DataGridCheckBoxColumn>
                     <!--
                         Last Opened replaces Date Added, which is still stored
                         and exported (roadmap §4.13). Formatted in the view

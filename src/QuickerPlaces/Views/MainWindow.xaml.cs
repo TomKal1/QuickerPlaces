@@ -396,8 +396,26 @@ public partial class MainWindow : Window
     /// <summary>Double-click on a grid row = Open (SI §6.3), the same action as the row's top context-menu item.</summary>
     private void Row_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        // A quick double-click on the row's favourite star is two toggles,
+        // not an open: the row raises MouseDoubleClick even though the star
+        // button handled both clicks.
+        if (IsInsideButton(e.OriginalSource as DependencyObject))
+            return;
+
         if (sender is DataGridRow { Item: PlaceViewModel place } && DataContext is MainViewModel viewModel)
             viewModel.OpenCommand.Execute(place);
+    }
+
+    private static bool IsInsideButton(DependencyObject? element)
+    {
+        for (var current = element; current is not null and not DataGridRow;
+             current = current is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
+        {
+            if (current is System.Windows.Controls.Primitives.ButtonBase)
+                return true;
+        }
+
+        return false;
     }
 
     // -----------------------------------------------------------------

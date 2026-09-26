@@ -26,7 +26,7 @@ If you enter a folder path, QuickerPlaces checks that it's a syntactically valid
 
 ## Working with a place in the grid
 
-Every row in the **All Places** grid shows the Alias, Type (Folder or URL), the Path/URL, whether it's a Favourite, when you **Last Opened** it, and how many **Opens** it has (see "Last Opened and Opens" below). The date you added a place is still kept, and exported, but no longer has a column.
+Every row in the **All Places** grid shows a star (gold if the place is a favourite), the Alias, Type (Folder or URL), the Path/URL, when you **Last Opened** it, and how many **Opens** it has (see "Last Opened and Opens" below). Click a row's star to make it a favourite, or click the gold star to stop it being one. The date you added a place is still kept, and exported, but no longer has a column.
 
 - **Double-click a row** to open it — a folder opens in File Explorer, a URL opens in your default browser.
 - **Right-click a row** for the full menu:
@@ -45,7 +45,7 @@ If a place can no longer be opened — the folder's been deleted, or the URL is 
 
 ## Sorting the grid
 
-Click a column header to sort by it. **Last Opened** and **Opens** start with the most recent and the most used, and **Favourite** starts with your favourites. The other columns start A to Z. Click the same header again to reverse it, and a third time to go back to the order you added your places in. An arrow on the header shows the sort in use.
+Click a column header to sort by it. **Last Opened** and **Opens** start with the most recent and the most used, and the star column starts with your favourites. The other columns start A to Z. Click the same header again to reverse it, and a third time to go back to the order you added your places in. An arrow on the header shows the sort in use.
 
 Places with the same value, such as several that have never been opened, are listed by alias. A place you've never opened always counts as the oldest, so it's at the bottom when Last Opened shows the newest first.
 
@@ -67,7 +67,7 @@ The ✕ button beside the box also clears it. Searching only filters the grid; y
 
 ## Favourites
 
-Any place can be a favourite. Toggling **Favourite** (from the grid's right-click menu, or from a bubble's own right-click menu) adds or removes it from the bubble row above the grid.
+Any place can be a favourite. Click the star at the start of its row in the grid, or press **Ctrl+D** with the row selected, or choose **Toggle Favourite** from its right-click menu. A gold star means it's a favourite, and it gets a bubble in the row above the grid. Clicking the gold star, or **Remove from Favourites** on the bubble's own right-click menu, takes it off again.
 
 - **Click a bubble** to open that place — identical to double-clicking its row.
 - **Drag a bubble** left or right to reorder the row. The order you leave them in is remembered.

@@ -29,6 +29,18 @@ public sealed class PlaceViewModelTests
         Assert.Equal(new DateTime(2026, 9, 25, 7, 15, 0).ToString("g", us), PlaceViewModel.FormatLastOpened(Opened, TestZones.PlusTen, us));
     }
 
+    /// <summary>The grid's star: filled for a favourite, an outline otherwise, with a tooltip saying what a click will do.</summary>
+    [Theory]
+    [InlineData(true, "", "Remove from favourites (Ctrl+D)")]
+    [InlineData(false, "", "Add to favourites (Ctrl+D)")]
+    public void FavouriteStar_ShowsTheStateAndWhatAClickDoes(bool isFavourite, string glyph, string toolTip)
+    {
+        var place = new PlaceViewModel(new QuickerPlaces.Models.Place { Alias = "Docs", Resource = "https://docs.example.com", IsFavourite = isFavourite });
+
+        Assert.Equal(glyph, place.FavouriteGlyph);
+        Assert.Equal(toolTip, place.FavouriteToolTip);
+    }
+
     [Fact]
     public void TheZoneDecidesTheLocalDate()
         => Assert.Equal("24/09/2026 16:15", PlaceViewModel.FormatLastOpened(Opened, TestZones.MinusFive, CultureInfo.GetCultureInfo("en-GB")));

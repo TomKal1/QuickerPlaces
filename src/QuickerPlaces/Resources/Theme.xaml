@@ -65,6 +65,41 @@
     -->
     <FontFamily x:Key="Font.Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
+    <!--
+        A favourite's star in the grid. Gold rather than the accent, so it
+        stays visible on a selected row, whose background is the accent.
+    -->
+    <SolidColorBrush x:Key="Favourite.Star" Color="#FFF5C451" />
+
+    <!--
+        A bare glyph button inside a grid cell (the favourite star): no chrome,
+        a hand cursor, and a brighter glyph under the pointer. Not focusable, so
+        Tab and the arrow keys keep moving through rows, not into cells; the
+        keyboard route is the row's own shortcut (Ctrl+D).
+    -->
+    <Style x:Key="Button.GridIcon" TargetType="Button">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}" Padding="4,1" CornerRadius="4">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#22FFFFFF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- A type glyph sitting next to text (grid Alias cell, bubble label). -->
     <Style x:Key="TextBlock.Glyph" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource Font.Icons}" />
