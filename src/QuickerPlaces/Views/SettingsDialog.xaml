@@ -12,12 +12,12 @@
         WindowStartupLocation="CenterOwner"
         d:DesignHeight="260" d:DesignWidth="460">
     <!--
-        App settings. For now that's just the global hotkey; window size and
-        the list's collapsed state are remembered automatically and don't
-        need a setting. Same plain themed-Window shape as PlaceFormDialog.
+        App settings: global hotkey, tray and Windows startup opt-ins.
+        Window size and the list's collapsed state are remembered automatically.
     -->
     <Grid Margin="24">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -49,11 +49,20 @@
             <Button Content="Turn Off" Padding="10,4" Click="TurnOffButton_Click" />
         </StackPanel>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{StaticResource Status.Error}"
+        <StackPanel Grid.Row="3" Margin="0,0,0,14">
+            <CheckBox x:Name="MinimizeToTrayCheck" Content="Keep running in the tray when I close the window"
+                      Margin="0,0,0,8" />
+            <CheckBox x:Name="StartWithWindowsCheck" Content="Start with Windows in the tray" />
+            <TextBlock Text="Both options are off by default. The tray menu has Open, Pause tracking, and Exit."
+                       TextWrapping="Wrap" Foreground="{StaticResource Text.Secondary}"
+                       FontSize="12" Margin="0,7,0,0" />
+        </StackPanel>
+
+        <TextBlock x:Name="ErrorText" Grid.Row="4" Foreground="{StaticResource Status.Error}"
                    TextWrapping="Wrap" MaxWidth="412" HorizontalAlignment="Left"
                    Margin="0,0,0,14" Visibility="Collapsed" />
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Cancel" Margin="0,0,8,0" IsCancel="True" Click="CancelButton_Click" />
             <Button Content="Save" Style="{StaticResource Button.Primary}" IsDefault="True" Click="SaveButton_Click" />
         </StackPanel>

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>QuickerPlaces.ActivityProbe</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Separate executable: no reference to the app and no access to its real stores. -->
+    <Compile Include="../QuickerPlaces/AppInfo.cs" Link="Linked/AppInfo.cs" />
+    <Compile Include="../QuickerPlaces/Models/Activity/*.cs" Link="Linked/Models/Activity/%(Filename)%(Extension)" />
+    <Compile Include="../QuickerPlaces/Models/PersistenceResult.cs" Link="Linked/Models/PersistenceResult.cs" />
+    <Compile Include="../QuickerPlaces/Models/StoreLoadOutcome.cs" Link="Linked/Models/StoreLoadOutcome.cs" />
+    <Compile Include="../QuickerPlaces/Services/Activity/*.cs" Link="Linked/Services/Activity/%(Filename)%(Extension)" />
+    <Compile Include="../QuickerPlaces/Services/DiagnosticLog.cs" Link="Linked/Services/DiagnosticLog.cs" />
+    <Compile Include="../QuickerPlaces/Services/FilePlacesStorage.cs" Link="Linked/Services/FilePlacesStorage.cs" />
+    <Compile Include="../QuickerPlaces/Services/IPlacesStorage.cs" Link="Linked/Services/IPlacesStorage.cs" />
+    <Compile Include="../QuickerPlaces/Services/ValidationResult.cs" Link="Linked/Services/ValidationResult.cs" />
+  </ItemGroup>
+</Project>

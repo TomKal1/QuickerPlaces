@@ -1,9 +1,9 @@
 namespace QuickerPlaces.Models;
 
 /// <summary>
-/// Persisted window/UI chrome settings, serialized as JSON by
-/// SettingsService. Deliberately holds only machine-specific presentation
-/// state (window bounds, grid collapsed/expanded) — the actual Places data
+/// Persisted machine-local UI and launch settings, serialized as JSON by
+/// SettingsService. Holds window bounds, grid state, shortcuts, tray and
+/// startup opt-ins — the actual Places data
 /// lives in its own file via PlacesService/PlacesStore (see
 /// Services/PlacesService.cs), since that data is write-through-on-every-
 /// change and conceptually separate from "how big was the window last
@@ -28,8 +28,11 @@ public sealed class AppSettings
     /// 3: added PlacesSortKey and PlacesSortDirection (Phase 3 D30). No
     /// migration needed either: a version-2 file lacks them, which reads as
     /// no sort — the stored order it already showed.
+    ///
+    /// 4: added MinimizeToTray and StartWithWindows (Phase 9 D25), both off
+    /// when absent from an older file.
     /// </summary>
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -68,4 +71,10 @@ public sealed class AppSettings
 
     /// <summary>See <see cref="PlacesSortKey"/>.</summary>
     public string? PlacesSortDirection { get; set; }
+
+    /// <summary>Closing the main window hides it to the tray instead of exiting.</summary>
+    public bool MinimizeToTray { get; set; }
+
+    /// <summary>Register a per-user Windows sign-in launch, starting in the tray.</summary>
+    public bool StartWithWindows { get; set; }
 }

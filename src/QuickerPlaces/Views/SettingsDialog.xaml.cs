@@ -16,10 +16,11 @@ public partial class SettingsDialog : Window
 {
     private const string Disabled = "None";
 
-    private readonly Func<string, string?> _tryApply;
+    private readonly Func<SettingsChoice, string?> _tryApply;
     private string _hotkeyText;
 
-    private SettingsDialog(Window owner, string? currentHotkey, Func<string, string?> tryApply)
+    private SettingsDialog(Window owner, string? currentHotkey, bool minimizeToTray,
+        bool startWithWindows, Func<SettingsChoice, string?> tryApply)
     {
         InitializeComponent();
 
@@ -27,23 +28,26 @@ public partial class SettingsDialog : Window
         _tryApply = tryApply;
         _hotkeyText = HotkeyGesture.IsDisabled(currentHotkey) ? Disabled : currentHotkey!.Trim();
         ShowHotkey(_hotkeyText);
+        MinimizeToTrayCheck.IsChecked = minimizeToTray;
+        StartWithWindowsCheck.IsChecked = startWithWindows;
 
         Loaded += (_, _) => HotkeyBox.Focus();
     }
 
-    /// <summary>The saved hotkey text ("Ctrl+Alt+Space", or "None" when turned off). Set only when Save succeeded.</summary>
-    public string? SavedHotkey { get; private set; }
+    /// <summary>The applied choices, set only when Save succeeded.</summary>
+    public SettingsChoice? SavedSettings { get; private set; }
 
     /// <summary>
     /// Shows the dialog. <paramref name="tryApply"/> is called with the
-    /// chosen text on Save and returns an error message, or null once the
-    /// hotkey is live. Returns the saved text, or null if cancelled.
+    /// choices on Save and returns an error message, or null once applied.
+    /// Returns the saved choices, or null if cancelled.
     /// </summary>
-    public static string? Show(Window owner, string? currentHotkey, Func<string, string?> tryApply)
+    public static SettingsChoice? Show(Window owner, string? currentHotkey, bool minimizeToTray,
+        bool startWithWindows, Func<SettingsChoice, string?> tryApply)
     {
-        var dialog = new SettingsDialog(owner, currentHotkey, tryApply);
+        var dialog = new SettingsDialog(owner, currentHotkey, minimizeToTray, startWithWindows, tryApply);
         dialog.ShowDialog();
-        return dialog.SavedHotkey;
+        return dialog.SavedSettings;
     }
 
     private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -96,14 +100,16 @@ public partial class SettingsDialog : Window
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        var error = _tryApply(_hotkeyText);
+        var choice = new SettingsChoice(_hotkeyText,
+            MinimizeToTrayCheck.IsChecked == true, StartWithWindowsCheck.IsChecked == true);
+        var error = _tryApply(choice);
         if (error is not null)
         {
             ShowError(error);
             return;
         }
 
-        SavedHotkey = _hotkeyText;
+        SavedSettings = choice;
         DialogResult = true;
     }
 
@@ -140,3 +146,5 @@ public partial class SettingsDialog : Window
     private static string KeyName(Key key)
         => key is >= Key.D0 and <= Key.D9 ? ((char)('0' + (key - Key.D0))).ToString() : key.ToString();
 }
+
+public sealed record SettingsChoice(string Hotkey, bool MinimizeToTray, bool StartWithWindows);

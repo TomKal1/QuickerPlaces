@@ -78,6 +78,16 @@ public partial class PlaceFormDialog : Window
         return dialog.CreatedPlace;
     }
 
+    /// <summary>Starts Add Folder from an Activity row, with its path and suggested alias filled in.</summary>
+    public static Place? ShowAddFolderPrefilled(string folderPath, PlacesService placesService, Window owner)
+    {
+        var dialog = new PlaceFormDialog(PlaceFormMode.AddFolder, PlaceType.Folder, placesService,
+            editingPlace: null, owner: owner);
+        dialog.ResourceTextBox.Text = folderPath;
+        dialog.ShowDialog();
+        return dialog.CreatedPlace;
+    }
+
     public static bool ShowRenameAlias(Place place, PlacesService placesService)
     {
         var dialog = new PlaceFormDialog(PlaceFormMode.RenameAlias, place.Type, placesService, editingPlace: place);

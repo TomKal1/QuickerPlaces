@@ -5,10 +5,10 @@
     <!--
         No StartupUri: App.xaml.cs constructs MainWindow itself so it can
         inject MainViewModel/AppSettings via constructor. ShutdownMode is
-        left at its WPF default (OnLastWindowClose) — QuickerPlaces always
-        has exactly one window and closing it should exit the app (SI §1),
-        so the default behavior is exactly what's wanted, unlike the tray-
-        capable template this was forked from.
+        left at its WPF default (OnLastWindowClose) — the main window stays
+        open while owned dialogs, including Activity, are shown, and closing
+        it exits the app unless the opted-in tray setting intercepts the
+        close and hides the main window.
 
         ThemeMode="Dark" is WPF's built-in Fluent theming (added in .NET 9,
         no package needed) — without it, the window's title bar is drawn by

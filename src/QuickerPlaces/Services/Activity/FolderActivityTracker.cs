@@ -1,0 +1,320 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace QuickerPlaces.Services.Activity;
+
+/// <summary>The reason a probe sample could or could not credit a tracked root; contains no path.</summary>
+public enum TrackerSampleStatus
+{
+    NoExplorerWindows,
+    ExplorerInBackground,
+    ForegroundOutsideRoots,
+    AmbiguousForeground,
+    UserIdle,
+    Eligible,
+    Locked
+}
+
+/// <summary>
+/// The accounting loop of Phase 9's folder activity tracking (plan 5.1):
+/// turns successive probe passes into time credited to folders under the
+/// tracked roots. The host (step 3) calls <see cref="Tick"/> on its own STA
+/// thread every <see cref="PollInterval"/>, and <see cref="DiscardGap"/> on
+/// lock and suspend; the store (step 2) sums what Tick returns.
+///
+/// No COM, no P/Invoke and no machine clock: the probe, presence, the
+/// monotonic clock and the TimeProvider are all injected, so every rule
+/// below is a unit test. UI-free and linked into the test project.
+///
+/// - D6: each tick credits the time since the previous one to the folder
+///   that was in the foreground at the previous one, measured on the
+///   monotonic clock and capped at twice the poll interval. A lock or a
+///   suspend discards the gap outright.
+/// - D7: only the foreground folder, and only while the user has been idle
+///   for less than the root's timeout.
+/// - D9: a visit counts once it has been seen in the foreground past its
+///   dwell threshold, and time accrues from the threshold, not from arrival.
+///   A counted visit survives another app taking the foreground, with no
+///   time credited away (D39). A visit still inside its dwell is dropped by idle, a lock or a
+///   suspend, so its dwell starts again.
+/// - D14: when the foreground tabs credit different folders, or one credits
+///   none, nothing is credited until they agree.
+/// - D19: time is split at local midnight in the injected clock's zone.
+/// </summary>
+public sealed class FolderActivityTracker
+{
+    /// <summary>How often to tick while an Explorer window is in the foreground (D2).</summary>
+    public static readonly TimeSpan ForegroundPollInterval = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>
+    /// How often to look for Explorer while another app is in front. The
+    /// cached probe is cheap enough to use the foreground cadence: a 15 s
+    /// check missed short visits before the dwell threshold could start.
+    /// Idle and locked sessions still use the host's longer/indefinite wait.
+    /// </summary>
+    public static readonly TimeSpan BackgroundPollInterval = TimeSpan.FromSeconds(1.5);
+
+    private readonly IShellWindowProbe _probe;
+    private readonly IUserPresence _presence;
+    private readonly IMonotonicClock _clock;
+    private readonly TimeProvider _timeProvider;
+
+    private List<TrackedRootConfig> _roots = new();
+
+    /// <summary>Each root's current visit, by RootId; counted visits can survive a background interval.</summary>
+    private readonly Dictionary<string, Visit> _visits = new(StringComparer.Ordinal);
+
+    /// <summary>The monotonic time of the previous tick; null when there is none to measure from.</summary>
+    private TimeSpan? _previousTick;
+
+    public FolderActivityTracker(IShellWindowProbe probe, IUserPresence presence, IMonotonicClock clock, TimeProvider timeProvider)
+    {
+        _probe = probe;
+        _presence = presence;
+        _clock = clock;
+        _timeProvider = timeProvider;
+    }
+
+    /// <summary>
+    /// How long the host should wait before the next tick (D2), which is also
+    /// what the next tick's cap is measured against (D6).
+    /// </summary>
+    public TimeSpan PollInterval { get; private set; } = ForegroundPollInterval;
+
+    /// <summary>Aggregate result of the latest sample, for path-free diagnostics.</summary>
+    public TrackerSampleStatus LastSampleStatus { get; private set; }
+
+    /// <summary>
+    /// The enabled roots to track. A root with unchanged settings keeps its
+    /// current visit; changing its grouping starts a fresh visit under the
+    /// new folder key. A removed root stops being credited at once.
+    /// </summary>
+    public void SetRoots(IEnumerable<TrackedRootConfig> roots)
+    {
+        var updated = roots.ToList();
+        var previous = _roots.ToDictionary(r => r.RootId, StringComparer.Ordinal);
+        var kept = updated.Select(r => r.RootId).ToHashSet(StringComparer.Ordinal);
+        foreach (var rootId in _visits.Keys.Where(id => !kept.Contains(id)).ToList())
+            _visits.Remove(rootId);
+        foreach (var root in updated)
+        {
+            if (previous.TryGetValue(root.RootId, out var before) &&
+                (before.Rollup != root.Rollup || before.Depth != root.Depth ||
+                 !string.Equals(before.Path, root.Path, StringComparison.OrdinalIgnoreCase) ||
+                 !before.EquivalentPrefixes.SequenceEqual(root.EquivalentPrefixes, StringComparer.OrdinalIgnoreCase)))
+                _visits.Remove(root.RootId);
+        }
+        _roots = updated;
+    }
+
+    /// <summary>
+    /// Forgets the time since the previous tick, for a lock, a suspend or a
+    /// resume (D6): the next tick measures from itself.
+    /// </summary>
+    public void DiscardGap()
+    {
+        _previousTick = null;
+        foreach (var rootId in _visits.Where(v => !v.Value.Counted).Select(v => v.Key).ToList())
+            _visits.Remove(rootId);
+    }
+
+    /// <summary>
+    /// Samples the probe and returns the time credited since the previous
+    /// tick, split by root, folder and local day. While the session is locked
+    /// it neither samples nor credits anything.
+    /// </summary>
+    public IReadOnlyList<ActivityInterval> Tick()
+    {
+        if (_presence.SessionLocked)
+        {
+            LastSampleStatus = TrackerSampleStatus.Locked;
+            DiscardGap();
+            return Array.Empty<ActivityInterval>();
+        }
+
+        var now = _clock.Elapsed;
+        var windows = _probe.Sample();
+        var foreground = windows.Where(w => w.IsForeground).ToList();
+        TimeSpan? span = _previousTick is { } previous
+            ? Min(now - previous, PollInterval + PollInterval)
+            : null;
+
+        var intervals = new List<ActivityInterval>();
+        var eligible = false;
+        var ambiguous = false;
+        var idle = false;
+        foreach (var root in _roots)
+        {
+            var folder = ForegroundFolder(foreground, root, out var rootAmbiguous);
+            var present = _presence.IdleFor < root.IdleTimeout;
+            eligible |= folder is not null && present;
+            ambiguous |= rootAmbiguous;
+            idle |= folder is not null && !present;
+            _visits.TryGetValue(root.RootId, out var visit);
+
+            if (visit is not null && visit.WasForeground && span is { } elapsed && present)
+                Accrue(root, visit, SameFolder(visit.Folder, folder), now, elapsed, intervals);
+
+            var next = NextVisit(visit, folder, windows.Count > 0 && foreground.Count == 0, present, now);
+            if (next is null)
+                _visits.Remove(root.RootId);
+            else
+                _visits[root.RootId] = next;
+        }
+
+        _previousTick = now;
+        LastSampleStatus = eligible ? TrackerSampleStatus.Eligible
+            : ambiguous ? TrackerSampleStatus.AmbiguousForeground
+            : idle ? TrackerSampleStatus.UserIdle
+            : foreground.Count > 0 ? TrackerSampleStatus.ForegroundOutsideRoots
+            : windows.Count > 0 ? TrackerSampleStatus.ExplorerInBackground
+            : TrackerSampleStatus.NoExplorerWindows;
+        PollInterval = foreground.Count > 0 ? ForegroundPollInterval : BackgroundPollInterval;
+        return intervals;
+    }
+
+    private sealed class Visit
+    {
+        public Visit(string folder, TimeSpan arrivedAt)
+        {
+            Folder = folder;
+            ArrivedAt = arrivedAt;
+        }
+
+        public string Folder { get; }
+
+        public TimeSpan ArrivedAt { get; }
+
+        /// <summary>True once the visit has crossed its dwell threshold and been counted (D9).</summary>
+        public bool Counted { get; set; }
+
+        /// <summary>False during another application's foreground interval, so return does not credit that gap.</summary>
+        public bool WasForeground { get; set; } = true;
+    }
+
+    /// <summary>
+    /// The folder the foreground window credits under <paramref name="root"/>,
+    /// or null when there is none, or when the foreground tabs disagree (D14).
+    /// </summary>
+    private static string? ForegroundFolder(IReadOnlyList<ShellWindowSnapshot> foreground, TrackedRootConfig root,
+        out bool ambiguous)
+    {
+        string? folder = null;
+        var outside = false;
+        ambiguous = false;
+        foreach (var window in foreground)
+        {
+            var credited = RootPathMatcher.Credit(window.Path, root);
+            if (credited is null)
+                outside = true;
+            else if (folder is not null && !SameFolder(folder, credited))
+                ambiguous = true;
+            folder ??= credited;
+        }
+        ambiguous |= outside && folder is not null;
+        return ambiguous || outside ? null : folder;
+    }
+
+    /// <summary>
+    /// Credits the last <paramref name="elapsed"/> to the visit's folder. A
+    /// visit not yet counted is credited only if it is still there and past
+    /// its dwell threshold, and only from the threshold on (D9).
+    /// </summary>
+    private void Accrue(TrackedRootConfig root, Visit visit, bool stillThere, TimeSpan now, TimeSpan elapsed, List<ActivityInterval> into)
+    {
+        var from = now - elapsed;
+        var startsVisit = false;
+        if (!visit.Counted)
+        {
+            var crossing = visit.ArrivedAt + root.DwellThreshold;
+            if (!stillThere || now < crossing)
+                return;
+
+            from = Max(from, crossing);
+            visit.Counted = true;
+            startsVisit = true;
+        }
+
+        if (now > from || startsVisit)
+            Emit(root.RootId, visit.Folder, now - from, startsVisit, into);
+    }
+
+    /// <summary>
+    /// The root's visit after this tick: the same one while its folder stays
+    /// in the foreground, a new one when another folder arrives, and none
+    /// when no folder is there. While the user is away no visit arrives, and
+    /// one still inside its dwell is dropped (D7, D9).
+    /// </summary>
+    private static Visit? NextVisit(Visit? visit, string? folder, bool anotherAppForeground, bool present, TimeSpan now)
+    {
+        if (folder is null)
+        {
+            if (anotherAppForeground && visit?.Counted == true)
+            {
+                visit.WasForeground = false;
+                return visit;
+            }
+
+            return null;
+        }
+
+        if (visit is not null && SameFolder(visit.Folder, folder) && (visit.Counted || present))
+        {
+            visit.WasForeground = true;
+            return visit;
+        }
+
+        return present ? new Visit(folder, now) : null;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="duration"/>, ending now on the wall clock, split
+    /// at each local midnight it spans (D19). A visit is counted on the first
+    /// piece only.
+    /// </summary>
+    private void Emit(string rootId, string folder, TimeSpan duration, bool startsVisit, List<ActivityInterval> into)
+    {
+        var zone = _timeProvider.LocalTimeZone;
+        var end = _timeProvider.GetUtcNow();
+        var start = end - duration;
+        var day = LocalDate(start, zone);
+        var endDay = LocalDate(end, zone);
+
+        while (day < endDay)
+        {
+            var midnight = LocalMidnightUtc(day.AddDays(1), zone);
+            into.Add(new ActivityInterval(rootId, folder, day, midnight - start, startsVisit, midnight));
+            startsVisit = false;
+            start = midnight;
+            day = day.AddDays(1);
+        }
+
+        if (end > start || startsVisit)
+            into.Add(new ActivityInterval(rootId, folder, day, end - start, startsVisit, end));
+    }
+
+    private static DateOnly LocalDate(DateTimeOffset utc, TimeZoneInfo zone)
+        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utc, zone).DateTime);
+
+    /// <summary>
+    /// The UTC instant <paramref name="day"/> begins in <paramref name="zone"/>.
+    /// In a zone whose clocks skip midnight, the day begins at the first
+    /// minute that exists.
+    /// </summary>
+    private static DateTimeOffset LocalMidnightUtc(DateOnly day, TimeZoneInfo zone)
+    {
+        var local = day.ToDateTime(TimeOnly.MinValue);
+        while (zone.IsInvalidTime(local))
+            local = local.AddMinutes(1);
+
+        return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone), TimeSpan.Zero);
+    }
+
+    private static bool SameFolder(string? a, string? b)
+        => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
+
+    private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
+}

@@ -1,10 +1,13 @@
 using System;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Activity;
 using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views;
@@ -13,19 +16,76 @@ public partial class MainWindow : Window
 {
     private readonly AppSettings _settings;
     private readonly SettingsService _settingsService;
+    private readonly ActivityStore _activityStore;
+    private readonly ActivityTrackingHost _activityHost;
+    private TrayIcon? _trayIcon;
+    private bool _exitRequested;
     private GlobalHotkey? _globalHotkey;
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
 
-    public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService)
+    public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
+        ActivityStore activityStore, ActivityTrackingHost activityHost)
     {
         InitializeComponent();
         DataContext = viewModel;
         _settings = settings;
         _settingsService = settingsService;
+        _activityStore = activityStore;
+        _activityHost = activityHost;
         RestoreWindowState(settings);
+        UpdateActivityIndicator();
     }
+
+    private void ActivityButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel) return;
+        var window = new ActivityWindow(this, _activityStore, _activityHost,
+            new NetworkDriveResolver(), UpdateActivityIndicator,
+            (folder, owner) => viewModel.AddFolderFromActivity(folder, owner));
+        window.ShowDialog();
+        UpdateActivityIndicator();
+    }
+
+    private void OptionsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (OptionsButton.ContextMenu is not { } menu) return;
+        menu.PlacementTarget = OptionsButton;
+        menu.IsOpen = true;
+    }
+
+    public void UpdateActivityIndicator()
+    {
+        var count = _activityStore.EnabledRoots().Count;
+        var text = count > 0 && _activityHost.IsPaused
+            ? "Recents — tracking paused"
+            : count > 0
+            ? $"Recents — tracking {count} {(count == 1 ? "folder" : "folders")}"
+            : _activityStore.Roots.Count > 0 ? "Recents — paused" : "Recents — no folders tracked";
+        ActivityButton.ToolTip = text;
+        AutomationProperties.SetName(ActivityButton, text);
+        ActivityDot.Visibility = count > 0 && !_activityHost.IsPaused ? Visibility.Visible : Visibility.Collapsed;
+        _trayIcon?.Refresh(_settings);
+    }
+
+    public AppSettings Settings => _settings;
+
+    public void AttachTrayIcon(TrayIcon trayIcon)
+    {
+        _trayIcon = trayIcon;
+        trayIcon.Refresh(_settings);
+    }
+
+    public void ExitFromTray()
+    {
+        _exitRequested = true;
+        Show();
+        Close();
+        if (IsLoaded) _exitRequested = false;
+    }
+
+    public void AllowSessionEnd() => _exitRequested = true;
 
     // -----------------------------------------------------------------
     // Global hotkey + bring-to-front. The hotkey needs this window's HWND,
@@ -75,11 +135,13 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        OptionsButton.ContextMenu.IsOpen = false;
         // Paused while the dialog is open: otherwise pressing the current
         // hotkey in the capture box would fire it instead of recording it.
         ApplyGlobalHotkey(null);
 
-        var saved = SettingsDialog.Show(this, _settings.GlobalHotkey, ApplyGlobalHotkey);
+        var saved = SettingsDialog.Show(this, _settings.GlobalHotkey,
+            _settings.MinimizeToTray, _settings.StartWithWindows, ApplySettingsChoice);
         if (saved is null)
         {
             // Cancelled: put back what was there. If that fails again, it
@@ -87,17 +149,44 @@ public partial class MainWindow : Window
             ApplyGlobalHotkey(_settings.GlobalHotkey);
             return;
         }
+    }
 
-        // Saved now rather than on exit, so a crash can't lose the choice.
-        _settings.GlobalHotkey = saved;
+    private string? ApplySettingsChoice(SettingsChoice choice)
+    {
+        var error = ApplyGlobalHotkey(choice.Hotkey);
+        if (error is not null) return error;
+        if (!StartupRegistration.TryApply(choice.StartWithWindows, out error))
+        {
+            ApplyGlobalHotkey(_settings.GlobalHotkey);
+            return error;
+        }
+        _settings.GlobalHotkey = choice.Hotkey;
+        _settings.MinimizeToTray = choice.MinimizeToTray;
+        _settings.StartWithWindows = choice.StartWithWindows;
         PersistWindowState(_settings);
         _settingsService.Save(_settings);
+        _trayIcon?.Refresh(_settings);
+        return null;
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_settings.MinimizeToTray && !_exitRequested)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+        base.OnClosing(e);
+        if (e.Cancel) _exitRequested = false;
     }
 
     protected override void OnClosed(EventArgs e)
     {
         _globalHotkey?.Dispose();
         _globalHotkey = null;
+        _trayIcon?.Dispose();
+        _trayIcon = null;
         base.OnClosed(e);
     }
 
@@ -163,7 +252,7 @@ public partial class MainWindow : Window
         {
             MessageForm.Show(
                 $"The shortcut for bringing QuickerPlaces to the front isn't active.\n\n{_globalHotkeyError}\n\n" +
-                "To choose a different one, or turn it off, click the Settings (gear) button at the top of the window.",
+                "To choose a different one, or turn it off, open Options next to Hide List and choose Settings.",
                 AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }

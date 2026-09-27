@@ -1,16 +1,19 @@
+using System;
 using System.Windows;
 using System.Windows.Input;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Activity;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
 
 namespace QuickerPlaces;
 
 /// <summary>
-/// Startup/shutdown orchestration. QuickerPlaces has no tray icon and no
-/// background/silent run mode (see SI §1/§3) — it is a normal window app:
-/// one window shows on launch, and closing it exits the process. Window
+/// Startup/shutdown orchestration. The main window shows on launch unless
+/// the opted-in Windows sign-in entry passes --tray. Normal close exits;
+/// close-to-tray is used only when its setting is enabled. Exit includes
+/// the activity host's bounded final flush. Window
 /// chrome (bounds, grid-expanded state) is saved once here on clean exit;
 /// Places data itself is saved continuously by PlacesService as the user
 /// edits it (see Services/PlacesService.cs), independent of this.
@@ -67,8 +70,16 @@ public partial class App : Application
         }
 
         var mainViewModel = new MainViewModel(settings, placesService);
+        var activityStore = ActivityTrackingHost.CreateStore();
+        var activityHost = new ActivityTrackingHost(activityStore);
 
-        var mainWindow = new MainWindow(mainViewModel, settings, settingsService);
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost);
+        var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
+        mainWindow.AttachTrayIcon(trayIcon);
+        if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))
+            DiagnosticLog.Warn($"Could not reconcile Windows startup setting: {startupError}");
+
+        SessionEnding += (_, _) => mainWindow.AllowSessionEnd();
 
         mainWindow.Closing += (_, e) =>
         {
@@ -91,13 +102,26 @@ public partial class App : Application
                 }
             }
 
+            activityHost.Dispose();
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
             DiagnosticLog.Info($"{AppInfo.Name} exiting cleanly.");
             singleInstance.Dispose();
         };
 
+        if (settings.StartWithWindows && Array.Exists(e.Args,
+                arg => string.Equals(arg, "--tray", StringComparison.OrdinalIgnoreCase)))
+        {
+            var firstLoad = true;
+            mainWindow.Loaded += (_, _) =>
+            {
+                if (!firstLoad) return;
+                firstLoad = false;
+                mainWindow.Hide();
+            };
+        }
         mainWindow.Show();
+        activityHost.Start();
 
         // A second launch attempt signals SingleInstance instead of
         // starting up (above); this is what the running instance does

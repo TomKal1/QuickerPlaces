@@ -427,3 +427,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# QuickerPlaces: local verification build copies (not source)
+_verify_bin/
