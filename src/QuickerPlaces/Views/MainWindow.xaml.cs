@@ -48,14 +48,21 @@ public partial class MainWindow : Window
         UpdateActivityIndicator();
     }
 
+    private void OptionsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (OptionsButton.ContextMenu is not { } menu) return;
+        menu.PlacementTarget = OptionsButton;
+        menu.IsOpen = true;
+    }
+
     public void UpdateActivityIndicator()
     {
         var count = _activityStore.EnabledRoots().Count;
         var text = count > 0 && _activityHost.IsPaused
-            ? "Activity — tracking paused"
+            ? "Recents — tracking paused"
             : count > 0
-            ? $"Activity — tracking {count} {(count == 1 ? "folder" : "folders")}"
-            : _activityStore.Roots.Count > 0 ? "Activity — paused" : "Activity — no folders tracked";
+            ? $"Recents — tracking {count} {(count == 1 ? "folder" : "folders")}"
+            : _activityStore.Roots.Count > 0 ? "Recents — paused" : "Recents — no folders tracked";
         ActivityButton.ToolTip = text;
         AutomationProperties.SetName(ActivityButton, text);
         ActivityDot.Visibility = count > 0 && !_activityHost.IsPaused ? Visibility.Visible : Visibility.Collapsed;
@@ -128,6 +135,7 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        OptionsButton.ContextMenu.IsOpen = false;
         // Paused while the dialog is open: otherwise pressing the current
         // hotkey in the capture box would fire it instead of recording it.
         ApplyGlobalHotkey(null);
@@ -244,7 +252,7 @@ public partial class MainWindow : Window
         {
             MessageForm.Show(
                 $"The shortcut for bringing QuickerPlaces to the front isn't active.\n\n{_globalHotkeyError}\n\n" +
-                "To choose a different one, or turn it off, click the Settings (gear) button at the top of the window.",
+                "To choose a different one, or turn it off, open Options next to Hide List and choose Settings.",
                 AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }

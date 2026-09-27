@@ -1,4 +1,5 @@
 using System;
+using QuickerPlaces.Models.Activity;
 
 namespace QuickerPlaces.Services.Activity;
 
@@ -12,4 +13,11 @@ public sealed record ActivityRootSnapshot(TrackedRootConfig Config, bool Enabled
     public string RootId => Config.RootId;
 
     public string Path => Config.Path;
+
+    public string TrackingToolTip => $"{Path}\nFolder grouping: " + (Config.Rollup switch
+    {
+        RollupMode.Exact => "All subfolders",
+        RollupMode.Depth => $"Chosen depth below root (level {Config.Depth})",
+        _ => "First folder below root"
+    });
 }

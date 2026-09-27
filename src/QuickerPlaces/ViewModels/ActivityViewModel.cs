@@ -22,6 +22,7 @@ public sealed class ActivityViewModel : ObservableObject
     private readonly CultureInfo _culture;
     private ActivityRootSnapshot? _selectedRoot;
     private string? _errorMessage;
+    private string? _statusMessage;
     private RollupMode _rollup;
     private string _depthText = "1";
     private string _dwellSecondsText = "5";
@@ -29,6 +30,7 @@ public sealed class ActivityViewModel : ObservableObject
     private string _equivalentPrefixesText = "";
     private ActivityPeriodMode _periodMode = ActivityPeriodMode.Week;
     private DateOnly _anchorDate;
+    private int _calendarYear;
     private string _periodNotice = "";
     private string _periodSummary = "";
     private string _groupingNotice = "";
@@ -41,12 +43,21 @@ public sealed class ActivityViewModel : ObservableObject
         _time = time ?? TimeProvider.System;
         _culture = culture ?? CultureInfo.CurrentCulture;
         _anchorDate = Today();
+        _calendarYear = _anchorDate.Year;
         Reload();
     }
 
     public ObservableCollection<ActivityRootSnapshot> Roots { get; } = new();
     public ObservableCollection<ActivityFolderRow> PeriodRows { get; } = new();
+    public ObservableCollection<ActivityCalendarMonth> CalendarMonths { get; } = new();
     public ObservableCollection<ActivityCalendarWeek> CalendarWeeks { get; } = new();
+    public ObservableCollection<ActivityCalendarMonthMarker> CalendarMonthMarkers { get; } = new();
+    private int _calendarStripWidth;
+    public int CalendarStripWidth
+    {
+        get => _calendarStripWidth;
+        private set => SetProperty(ref _calendarStripWidth, value);
+    }
     private IReadOnlyList<string> _calendarWeekdayLabels = Array.Empty<string>();
     public IReadOnlyList<string> CalendarWeekdayLabels => _calendarWeekdayLabels;
 
@@ -54,7 +65,7 @@ public sealed class ActivityViewModel : ObservableObject
         new[]
         {
             new ActivityRollupOption(RollupMode.RootChild, "First folder below root"),
-            new ActivityRollupOption(RollupMode.Exact, "Each exact folder"),
+            new ActivityRollupOption(RollupMode.Exact, "All subfolders"),
             new ActivityRollupOption(RollupMode.Depth, "Chosen depth below root")
         };
 
@@ -64,13 +75,31 @@ public sealed class ActivityViewModel : ObservableObject
     public bool HasSelection => SelectedRoot is not null;
     public bool IsDepthRollup => Rollup == RollupMode.Depth;
     public bool HasError => ErrorMessage is not null;
+    public string? StatusMessage
+    {
+        get => _statusMessage;
+        private set => SetProperty(ref _statusMessage, value);
+    }
+
+    public void DismissStatus() => StatusMessage = null;
     public bool HasUnsavedChanges => _store.HasUnsavedChanges;
     public bool HasPeriodRows => PeriodRows.Count > 0;
     public bool CanMoveNext => PeriodTo < Today();
+    public int CalendarYear => _calendarYear;
+    public string CalendarYearLabel => $"{_calendarYear} activity";
+    public int EarliestCalendarYear => Today().AddDays(-364).Year;
     public ActivityPeriodMode PeriodMode => _periodMode;
+    public bool IsWeekMode => _periodMode == ActivityPeriodMode.Week;
+    public bool IsMonthMode => _periodMode == ActivityPeriodMode.Month;
+    public bool IsDayMode => _periodMode == ActivityPeriodMode.Day;
     public string PeriodNotice => string.IsNullOrEmpty(_groupingNotice)
         ? _periodNotice
         : string.IsNullOrEmpty(_periodNotice) ? _groupingNotice : $"{_periodNotice} {_groupingNotice}";
+    public string AboutSelectedFolderText => SelectedRoot is not { } selected
+        ? "No tracked folder selected."
+        : $"{selected.Path}{Environment.NewLine}{SelectedStatusText}{Environment.NewLine}{TrackingStartedText}" +
+          (string.IsNullOrWhiteSpace(PeriodNotice) ? "" :
+              $"{Environment.NewLine}{Environment.NewLine}For {PeriodLabel}:{Environment.NewLine}{PeriodNotice}");
     public string PeriodSummary => _periodSummary;
     public string EmptyPeriodText => SelectedRoot is null
         ? "Add a root to see activity."
@@ -106,13 +135,21 @@ public sealed class ActivityViewModel : ObservableObject
                 RefreshPeriod();
                 return;
             }
-            Rollup = value.Config.Rollup;
-            DepthText = value.Config.Depth.ToString(CultureInfo.InvariantCulture);
-            DwellSecondsText = value.Config.DwellThreshold.TotalSeconds.ToString(CultureInfo.InvariantCulture);
-            IdleMinutesText = value.Config.IdleTimeout.TotalMinutes.ToString(CultureInfo.InvariantCulture);
-            EquivalentPrefixesText = string.Join(Environment.NewLine, value.Config.EquivalentPrefixes);
+            ResetSelectedSettingsDraft();
             RefreshPeriod();
         }
+    }
+
+    public void ResetSelectedSettingsDraft()
+    {
+        if (SelectedRoot is not { } selected) return;
+        Rollup = selected.Config.Rollup;
+        DepthText = selected.Config.Depth.ToString(CultureInfo.InvariantCulture);
+        DwellSecondsText = selected.Config.DwellThreshold.TotalSeconds.ToString(CultureInfo.InvariantCulture);
+        IdleMinutesText = selected.Config.IdleTimeout.TotalMinutes.ToString(CultureInfo.InvariantCulture);
+        EquivalentPrefixesText = string.Join(Environment.NewLine, selected.Config.EquivalentPrefixes);
+        if (!_store.HasUnsavedChanges)
+            ErrorMessage = null;
     }
 
     public RollupMode Rollup
@@ -185,6 +222,7 @@ public sealed class ActivityViewModel : ObservableObject
 
     public bool SaveSelectedSettings()
     {
+        DismissStatus();
         if (SelectedRoot is not { } selected) return false;
         if (!int.TryParse(DepthText, NumberStyles.None, CultureInfo.InvariantCulture, out var depth) || depth < 1)
             return Fail("Depth must be a whole number of at least 1.");
@@ -216,6 +254,8 @@ public sealed class ActivityViewModel : ObservableObject
             _groupingNotice = "Grouping saved. Earlier rows keep the grouping used when they were recorded; new visits use this setting.";
             OnPropertyChanged(nameof(PeriodNotice));
         }
+        if (persistence.Saved && !_store.HasUnsavedChanges)
+            StatusMessage = "Folder settings updated.";
         return true;
     }
 
@@ -252,28 +292,54 @@ public sealed class ActivityViewModel : ObservableObject
     public void SetPeriodMode(ActivityPeriodMode mode)
     {
         _periodMode = mode;
+        _calendarYear = _anchorDate.Year;
         RefreshPeriod();
     }
 
     public void ShowDay(DateOnly day)
     {
-        _anchorDate = day > Today() ? Today() : day;
         _periodMode = ActivityPeriodMode.Day;
+        SelectCalendarDate(day);
+    }
+
+    public void SelectCalendarDate(DateOnly day)
+    {
+        _anchorDate = day;
+        _calendarYear = _anchorDate.Year;
         RefreshPeriod();
     }
 
-    public void MovePeriod(int direction)
+    public void ShowToday()
     {
-        if (direction is not (-1 or 1)) return;
+        _calendarYear = Today().Year;
+        ShowDay(Today());
+    }
+
+    public bool SelectCalendarYear(int year)
+    {
+        if (year < EarliestCalendarYear || year >= DateOnly.MaxValue.Year)
+            return false;
+        _calendarYear = year;
+        RefreshCalendar();
+        return true;
+    }
+
+    public void MovePeriod(int direction) => MoveCalendarSelection(direction, horizontal: false);
+
+    public bool MoveCalendarSelection(int direction, bool horizontal)
+    {
+        if (direction is not (-1 or 1)) return false;
         var next = _periodMode switch
         {
             ActivityPeriodMode.Month => new DateOnly(_anchorDate.Year, _anchorDate.Month, 1).AddMonths(direction),
-            ActivityPeriodMode.Day => _anchorDate.AddDays(direction),
+            ActivityPeriodMode.Day => _anchorDate.AddDays(direction * (horizontal ? 7 : 1)),
             _ => _anchorDate.AddDays(direction * 7)
         };
-        if (direction > 0 && next > Today()) return;
+        if (direction > 0 && next > Today()) return false;
         _anchorDate = next;
+        _calendarYear = _anchorDate.Year;
         RefreshPeriod();
+        return true;
     }
 
     public void RefreshPeriod()
@@ -286,7 +352,7 @@ public sealed class ActivityViewModel : ObservableObject
             _store.QueryPeriod(selected.RootId, PeriodFrom, PeriodTo) is { } period)
         {
             foreach (var folder in period.Folders)
-                PeriodRows.Add(new ActivityFolderRow(folder, _time.LocalTimeZone, _culture));
+                PeriodRows.Add(new ActivityFolderRow(folder, _time.LocalTimeZone, _culture, selected.Path));
 
             if (period.StartsBeforeTracking)
                 _periodNotice = $"Tracking started on {period.TrackingStartedOn.ToDateTime(TimeOnly.MinValue).ToString("d", _culture)}. Earlier days were not recorded.";
@@ -304,6 +370,9 @@ public sealed class ActivityViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(PeriodMode));
+        OnPropertyChanged(nameof(IsWeekMode));
+        OnPropertyChanged(nameof(IsMonthMode));
+        OnPropertyChanged(nameof(IsDayMode));
         OnPropertyChanged(nameof(PeriodFrom));
         OnPropertyChanged(nameof(PeriodTo));
         OnPropertyChanged(nameof(PeriodLabel));
@@ -316,15 +385,27 @@ public sealed class ActivityViewModel : ObservableObject
 
     private void RefreshCalendar()
     {
+        CalendarMonths.Clear();
         CalendarWeeks.Clear();
+        CalendarMonthMarkers.Clear();
+        CalendarStripWidth = 0;
+        OnPropertyChanged(nameof(CalendarYear));
+        OnPropertyChanged(nameof(CalendarYearLabel));
+        OnPropertyChanged(nameof(EarliestCalendarYear));
         if (SelectedRoot is not { } root || _store.QueryDayTotals(root.RootId) is not { } totals)
             return;
 
         var started = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(root.TrackingStartedAt,
             _time.LocalTimeZone).DateTime);
-        var calendar = ActivityCalendar.Build(totals, started, Today(), _culture);
+        var calendar = ActivityCalendar.BuildYear(totals, started, Today(), _calendarYear, _culture,
+            PeriodFrom, PeriodTo);
+        foreach (var month in calendar.Months)
+            CalendarMonths.Add(month);
         foreach (var week in calendar.Weeks)
             CalendarWeeks.Add(week);
+        foreach (var marker in calendar.MonthMarkers)
+            CalendarMonthMarkers.Add(marker);
+        CalendarStripWidth = calendar.StripWidth;
         _calendarWeekdayLabels = calendar.WeekdayLabels;
         OnPropertyChanged(nameof(CalendarWeekdayLabels));
     }
@@ -365,7 +446,7 @@ public sealed record ActivityRollupOption(RollupMode Mode, string Label);
 
 public enum ActivityPeriodMode { Week, Month, Day }
 
-public sealed record ActivityFolderRow(FolderActivity Activity, TimeZoneInfo Zone, CultureInfo Culture)
+public sealed record ActivityFolderRow(FolderActivity Activity, TimeZoneInfo Zone, CultureInfo Culture, string RootPath)
 {
     public string Folder => Activity.Folder;
     public TimeSpan Time => Activity.Time;
@@ -373,4 +454,21 @@ public sealed record ActivityFolderRow(FolderActivity Activity, TimeZoneInfo Zon
     public int Visits => Activity.Visits;
     public DateTimeOffset LastVisited => Activity.LastVisited;
     public string LastVisitedText => ActivityFormat.LastVisited(LastVisited, Zone, Culture);
+    public int Level
+    {
+        get
+        {
+            var root = RootPath.TrimEnd('\\', '/');
+            if (!Folder.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return 0;
+            if (Folder.Length > root.Length && Folder[root.Length] is not ('\\' or '/')) return 0;
+            var below = Folder[root.Length..].TrimStart('\\', '/');
+            return below.Length == 0 ? 0 : below.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        }
+    }
+    public string LevelLabel => Level switch
+    {
+        0 => "Root folder",
+        1 => "Level 1 · directly below root",
+        _ => $"Level {Level} · below root"
+    };
 }
