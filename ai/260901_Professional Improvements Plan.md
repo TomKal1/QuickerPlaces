@@ -1,8 +1,8 @@
 # QuickerPlaces — Professional Improvements Implementation Plan
 
-**Status:** Phases 1, 2 and 3 implemented and merged to `main` (Phase 3 through PR #7; 329 tests pass; every manual checklist closed); Phase 9 is next, then 4 → 6 → 7 → 8 → 5 (§1.1)  
+**Status:** Phases 1, 2, 3 and 9 implemented and merged to `main` (547 tests pass; every manual checklist closed); Phase 4 is next, then 6 → 7 → 8 → 5 (§1.1)  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-25 — the release split withdrawn for a plain order of work, with Phase 9 moved up to next (§1.1); the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 merged  
+**Last revised:** 2026-09-27 — Phase 9 merged; Phase 4 is next. 2026-09-25 — the release split withdrawn for a plain order of work, with Phase 9 moved up to next (§1.1); the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 merged  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 3](260925_Phase%203%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
@@ -31,8 +31,8 @@ The planned release adds:
 | Order | Phase | State |
 |---|---|---|
 | 1–3 | Phases 1, 2, 3: persistence, Recently Deleted, usage tracking and sorting | Done, on `main` |
-| **Next** | **Phase 9: opt-in root folder activity tracking** ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) | Plan refreshed 2026-09-25 (its §0.1, D17–D26); being implemented |
-| Then | Phase 4: general file support | Planned |
+| 4th | Phase 9: opt-in root folder activity tracking ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) | Done, on `main` (2026-09-27); some live checks not done, judged not needed (plan §9 step 8) |
+| **Next** | **Phase 4: general file support** | Planned; its detailed plan is written next |
 | Then | Phase 6: explicit multi-folder import | Planned |
 | Then | Phase 7: search and retrieval polish | Planned |
 | Then | Phase 8: distribution (publish profiles, clean-machine check) | Planned; must also check Phase 9's COM interop in a single-file build |

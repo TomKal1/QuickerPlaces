@@ -1,11 +1,11 @@
 ---
 title: QuickerPlaces — Folder Activity Tracking Detailed Plan
-status: in progress on claude/phase-9-folder-activity — steps 1 to 7 built; 531 tests and a warning-free build, with live application checks pending
+status: implemented — steps 1 to 8 done on claude/phase-9-folder-activity and merged to main on 2026-09-27; 547 tests and a warning-free build; manual verification closed (Depth 2 and the Recents redesign passed in use; the remaining live checks not done, judged not needed by the user)
 created: 2026-09-14
 parent: ai/260901_Professional Improvements Plan.md
 covers: sections 4.28 to 4.33 (Phase 9 — Opt-in root folder activity tracking)
 builds_on: ai/260925_Phase 3 Handoff.md §5; ai/260925_Phase 3 Detailed Plan.md D23–D33; ai/BUILD_SUMMARY.md
-last_revised: 2026-09-26 — first D37 stress failed; event-fed probe implemented, passed Windows navigation, restart, lock and five-entry performance checks, and the user accepted the performance gate. 2026-09-25 — step 3 implementation and D37–D39. Earlier — step 2 built with D32–D36, step 1 with D27–D31, and the Phase 3 refresh with D17–D26. 2026-09-15 — longest period is a month, not a year (D16)
+last_revised: 2026-09-27 — step 8 closed: the Recents redesign recorded, the remaining live checks closed as not done and not needed, merged to main. 2026-09-26 — first D37 stress failed; event-fed probe implemented, passed Windows navigation, restart, lock and five-entry performance checks, and the user accepted the performance gate. 2026-09-25 — step 3 implementation and D37–D39. Earlier — step 2 built with D32–D36, step 1 with D27–D31, and the Phase 3 refresh with D17–D26. 2026-09-15 — longest period is a month, not a year (D16)
 ---
 
 # Phase 9 — Opt-in root folder activity tracking
@@ -408,7 +408,7 @@ This is a tool for one person to see their own work. It is not an employee monit
 5. The Activity window's periods: Week, Month and Day, the grid with Last visited, and Add as Place. *Built 2026-09-26: culture-aware period boundaries and labels, sortable folder rows, expired-detail wording and day totals, live refresh, and the normal Add Folder dialog prefilled from a row.*
 6. The calendar heat map (D20). *Built 2026-09-26: 365 days in culture-aligned weeks, four nonzero-time quartiles, separate pre-tracking cells, accessible day labels and tooltips, and click-through to Day. The UI-free calendar and period tests bring the suite to 525.*
 7. Tray and start-with-Windows: `AppSettings` version 4, the Settings check boxes, hide-to-tray, `--tray` (D25). *Built 2026-09-26: both switches default off; the tray has Open, Pause/Resume tracking and Exit; pausing flushes and sleeps without sampling; the per-user Run entry starts with `--tray`. Three new tests bring the suite to 528. Live tray and sign-in behaviour remain for manual verification.*
-8. Manual verification on Windows; record the section 6 numbers; update `USERGUIDE.md`, `BUILD_SUMMARY.md` and a hand-off.
+8. Manual verification on Windows; record the section 6 numbers; update `USERGUIDE.md`, `BUILD_SUMMARY.md` and a hand-off. *Closed 2026-09-27.* The section 6 numbers are recorded. The Depth 2 Activity UI check passed (2026-09-26). The user then reworked the window's presentation (Activity became **Recents**, with tracked-folder cards, a January-to-December year strip, and a separate folder settings dialog; header actions moved into an **Options** menu) and used it on Windows; 547 tests pass. The remaining hand-off checks — the full add/visit/Add-as-Place walk, stop/resume/delete, tray and sign-in start, and mapped-drive equivalence — are **not done, and the user judged them not needed**. They are recorded as such and are not to be read as passed; section 10's "every manual item has been performed" is met only in that sense.
 
 Steps 1 and 2 are the phase's real content and are fully testable in isolation. If the phase stalls after step 3 because the performance budget is not met, nothing user-visible has shipped and nothing has been recorded.
 

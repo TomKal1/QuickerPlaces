@@ -1,10 +1,12 @@
 ---
-status: Phase 9 steps 1–7 implemented locally; live application checks pending
+status: closed 2026-09-27 — Phase 9 merged to main; remaining live checks not done, judged not needed by the user
 branch: claude/phase-9-folder-activity
 date: 2026-09-26
 ---
 
 # Phase 9 hand-off — app verification
+
+> **Closed 2026-09-27.** After this hand-off the user reworked the Activity UI into **Recents** (tracked-folder cards with a right-click menu, a year strip, a folder settings dialog, and an **Options** menu for the old header buttons) and used it on Windows. The build has zero warnings and 547 tests pass. The four checks under "Short live check still needed" were **not done, and the user judged them not needed**; they are not to be read as passed. The branch was merged to `main`. The labels below ("Activity in the header", "Root settings") describe the UI before the redesign; see `USERGUIDE.md` for the current names. Next is Phase 4 (roadmap §1.1).
 
 Read [the Phase 9 plan](260914_Folder%20Activity%20Tracking%20Plan.md) for decisions and the performance record. The tracker, activity store, Explorer probe, host, Activity UI, calendar, and optional tray/startup controls are implemented. The tray/startup checkpoint is `e164286` and the first documentation checkpoint is `9b9b032`. Nothing has been pushed. The solution builds with zero warnings and 532 tests pass. The Depth 2 manual check passed; see [the investigation summary](260926_Phase%209%20Depth%20Tracking%20Investigation.md) for its history and remaining limits.
 
