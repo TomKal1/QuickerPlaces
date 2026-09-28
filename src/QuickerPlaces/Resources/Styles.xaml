@@ -144,6 +144,7 @@
     </ControlTemplate>
 
     <Style TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
         <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
@@ -198,6 +199,7 @@
 
     <!-- A favourite: a small tan-leather card (FavouriteCard in the Design System). -->
     <Style x:Key="Button.Favourite" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
         <Setter Property="Background" Value="{DynamicResource Leather}" />
         <Setter Property="Foreground" Value="{DynamicResource On.Leather}" />
         <Setter Property="Height" Value="32" />
@@ -303,7 +305,7 @@
                 <ControlTemplate TargetType="ContentControl">
                     <Border Padding="6,1" CornerRadius="4" BorderThickness="1"
                             BorderBrush="{DynamicResource Border.Strong}" Background="{DynamicResource Bg.Raised}">
-                        <TextBlock Text="{TemplateBinding Content}" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="11" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Text.Secondary}" />
                     </Border>
                 </ControlTemplate>
@@ -320,7 +322,7 @@
                 <ControlTemplate TargetType="ContentControl">
                     <Border Padding="7,0" CornerRadius="9" BorderThickness="1"
                             BorderBrush="{DynamicResource Border.Default}" Background="{DynamicResource Bg.Raised}">
-                        <TextBlock Text="{TemplateBinding Content}" FontSize="12" FontWeight="Bold"
+                        <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="12" FontWeight="Bold"
                                    Foreground="{DynamicResource Text.Secondary}" />
                     </Border>
                 </ControlTemplate>
@@ -372,6 +374,7 @@
 
     <!-- Combo box: fully retemplated so the dropdown matches the theme. -->
     <Style TargetType="ComboBox">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
         <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
@@ -407,7 +410,7 @@
                                 </ControlTemplate>
                             </ToggleButton.Template>
                         </ToggleButton>
-                        <Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
+                        <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
                                AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
                             <Border MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}"
                                     Margin="0,4,0,0" Padding="4" CornerRadius="8" BorderThickness="1"
@@ -457,6 +460,7 @@
 
     <!-- Checkbox: a 16 px box that fills Highlight with a tick. -->
     <Style TargetType="CheckBox">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -506,6 +510,7 @@
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
     <Style x:Key="RadioButton.Segment" TargetType="RadioButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
         <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="{DynamicResource Border.Default}" />
@@ -544,6 +549,7 @@
         colour.
     -->
     <Style x:Key="RadioButton.Swatch" TargetType="RadioButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
         <Setter Property="Width" Value="64" />
         <Setter Property="Margin" Value="0,0,18,0" />
         <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
@@ -581,6 +587,7 @@
 
     <!-- A tracked folder in Recents: a selectable pill. -->
     <Style x:Key="ListBoxItem.Chip" TargetType="ListBoxItem">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
         <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
         <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
@@ -741,13 +748,17 @@
     <!-- Scroll bars: a thin thumb, no arrows. -->
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent" />
+        <!-- The default 17 px minimums would override the 10 px size set below. -->
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
                     <Grid Background="{TemplateBinding Background}">
                         <Track x:Name="PART_Track" IsDirectionReversed="True" Orientation="{TemplateBinding Orientation}">
                             <Track.DecreaseRepeatButton>
-                                <RepeatButton Background="Transparent" BorderThickness="0" Command="ScrollBar.PageUpCommand" Opacity="0" />
+                                <RepeatButton Background="Transparent" BorderThickness="0" Command="ScrollBar.PageUpCommand" Opacity="0"
+                                              Focusable="False" IsTabStop="False" />
                             </Track.DecreaseRepeatButton>
                             <Track.Thumb>
                                 <Thumb>
@@ -759,7 +770,8 @@
                                 </Thumb>
                             </Track.Thumb>
                             <Track.IncreaseRepeatButton>
-                                <RepeatButton Background="Transparent" BorderThickness="0" Command="ScrollBar.PageDownCommand" Opacity="0" />
+                                <RepeatButton Background="Transparent" BorderThickness="0" Command="ScrollBar.PageDownCommand" Opacity="0"
+                                              Focusable="False" IsTabStop="False" />
                             </Track.IncreaseRepeatButton>
                         </Track>
                     </Grid>

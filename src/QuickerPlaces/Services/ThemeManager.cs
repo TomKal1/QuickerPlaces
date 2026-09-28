@@ -22,6 +22,10 @@ public sealed class ThemeManager : IDisposable
 
     private readonly Application _app;
 
+    // What the last successful Apply put on screen, so a re-apply that would
+    // change nothing (most UserPreferenceChanged events) repaints no window.
+    private (bool Dark, HighlightColors Colors)? _applied;
+
     public ThemeManager(Application app)
     {
         _app = app;
@@ -42,20 +46,29 @@ public sealed class ThemeManager : IDisposable
             AppTheme.System => WindowsAppsUseDarkTheme(),
             _ => true
         };
+        var colors = HighlightPalette.For(highlight, dark,
+            highlight == HighlightPreset.Windows ? ReadWindowsAccent() : null);
+        if (_applied == (dark, colors))
+            return;
 
         SwapPalette(dark ? DarkPalette : LightPalette);
 
-#pragma warning disable WPF0001 // ThemeMode is marked experimental; here it only drives the title bar and the Fluent menus.
+        // ThemeMode does more than draw the title bar and menus: it applies
+        // the implicit Window style to every Window subclass (MainWindow and
+        // the dialogs) and supplies the Fluent implicit styles this app
+        // doesn't override (ListBox, ListBoxItem, RadioButton, ScrollViewer,
+        // TextBlock, MenuItem, ContextMenu...). Removing it would strip every
+        // window's background, foreground and font.
+#pragma warning disable WPF0001 // ThemeMode is marked experimental.
         _app.ThemeMode = dark ? ThemeMode.Dark : ThemeMode.Light;
 #pragma warning restore WPF0001
 
-        var colors = HighlightPalette.For(highlight, dark,
-            highlight == HighlightPreset.Windows ? ReadWindowsAccent() : null);
         SetBrush("Highlight", colors.Fill);
         SetBrush("Highlight.Hover", colors.Hover);
         SetBrush("Highlight.Text", colors.Text);
         SetBrush("Highlight.Soft", colors.Soft);
         SetBrush("On.Highlight", colors.OnFill);
+        _applied = (dark, colors);
     }
 
     public void Dispose() => SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
@@ -94,9 +107,25 @@ public sealed class ThemeManager : IDisposable
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
-        // Raised on a system-events thread; the resources belong to the UI thread.
+        // Subscribed on the STA UI thread, so SystemEvents raises this on that
+        // thread; BeginInvoke is a safeguard in case it ever arrives elsewhere.
         if (Theme == AppTheme.System || Highlight == HighlightPreset.Windows)
-            _app.Dispatcher.BeginInvoke(() => Apply(Theme, Highlight));
+            _app.Dispatcher.BeginInvoke(ReapplyAfterSystemChange);
+    }
+
+    private void ReapplyAfterSystemChange()
+    {
+        try
+        {
+            Apply(Theme, Highlight);
+        }
+        catch (Exception ex)
+        {
+            // A failed re-apply keeps the current look rather than crashing
+            // the app over a Windows setting change. No message text: it
+            // could carry a path.
+            DiagnosticLog.Warn($"Could not re-apply the theme after a Windows setting changed; keeping the current look ({ex.GetType().Name}, 0x{ex.HResult:X8}).");
+        }
     }
 
     /// <summary>Windows' own "app mode" setting; dark when it can't be read.</summary>

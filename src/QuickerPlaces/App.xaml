@@ -7,7 +7,13 @@
         (OnLastWindowClose).
 
         ThemeMode is not set here any more: ThemeManager sets it to Dark or
-        Light together with the palette (UI refresh U4). The palette merged
+        Light together with the palette (UI refresh U4). ThemeMode is still
+        load-bearing: it applies the implicit Window style to every Window
+        subclass (MainWindow and the dialogs) and supplies the Fluent
+        implicit styles Styles.xaml doesn't override (ListBox, ListBoxItem,
+        RadioButton, ScrollViewer, TextBlock, MenuItem, ContextMenu...), so
+        removing it would strip every window's background, foreground and
+        font. The palette merged
         first is only the starting point; ThemeManager swaps it before any
         window opens. Styles.xaml merges Icons.xaml itself so its
         StaticResource references resolve while it loads.
