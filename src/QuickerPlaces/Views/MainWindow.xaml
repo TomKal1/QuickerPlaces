@@ -136,8 +136,8 @@
             entirely from the view model.
         -->
         <Border Grid.Row="0" Margin="0,0,0,12" Padding="12,10" CornerRadius="10"
-                Background="{StaticResource Bg.Elevated}"
-                BorderBrush="{StaticResource Status.Warning}"
+                Background="{DynamicResource Bg.Raised}"
+                BorderBrush="{DynamicResource Signal}"
                 BorderThickness="1"
                 Focusable="False"
                 Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -148,7 +148,7 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Text="{Binding PersistenceMessage}"
-                           Foreground="{StaticResource Status.Warning}"
+                           Foreground="{DynamicResource Signal}"
                            TextWrapping="Wrap" VerticalAlignment="Center" />
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
@@ -169,7 +169,7 @@
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Width="32" Height="32" CornerRadius="10"
-                    Background="{StaticResource Accent}" VerticalAlignment="Top">
+                    Background="{DynamicResource Highlight}" VerticalAlignment="Top">
                 <TextBlock Text="{Binding Monogram}" FontWeight="Bold" FontSize="14"
                            Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
@@ -177,7 +177,7 @@
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" ClipToBounds="True">
                 <TextBlock Text="{Binding AppName}" FontSize="22" FontWeight="Bold" />
                 <TextBlock Text="{Binding SubHeaderText}" FontSize="13"
-                           Foreground="{StaticResource Text.Secondary}" Margin="0,2,0,0"
+                           Foreground="{DynamicResource Text.Secondary}" Margin="0,2,0,0"
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
@@ -188,7 +188,7 @@
                             <TextBlock Text="&#xE823;" FontFamily="{StaticResource Font.Icons}" FontSize="15"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                             <Ellipse x:Name="ActivityDot" Width="5" Height="5"
-                                     Fill="{StaticResource Accent.Hover}" Stroke="{StaticResource Bg.Panel}"
+                                     Fill="{DynamicResource Highlight.Text}" Stroke="{DynamicResource Bg.Panel}"
                                      StrokeThickness="1" HorizontalAlignment="Right" VerticalAlignment="Top"
                                      Visibility="Collapsed" />
                         </Grid>
@@ -210,7 +210,7 @@
         -->
         <Grid Grid.Row="2" Margin="0,0,0,12">
             <TextBlock Text="Right-click a place below and choose &quot;Toggle Favourite&quot; to pin it here."
-                       Foreground="{StaticResource Text.Faint}" FontStyle="Italic"
+                       Foreground="{DynamicResource Text.Tertiary}" FontStyle="Italic"
                        Visibility="{Binding FavouritePlaces.Count, Converter={StaticResource CollectionCountToVisibilityConverter}}" />
 
             <ItemsControl x:Name="FavouritesItemsControl" ItemsSource="{Binding FavouritePlaces}"
@@ -266,7 +266,7 @@
                          ToolTip="Search by alias or path/URL (Ctrl+F). Enter opens the top result; Down moves into the list; Esc clears." />
                 <!-- Placeholder text: hit-test invisible so clicks land on the TextBox underneath. -->
                 <TextBlock Grid.Column="0" Text="Search places (Ctrl+F)" IsHitTestVisible="False"
-                           Margin="9,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Text.Faint}">
+                           Margin="9,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Setter Property="Visibility" Value="Collapsed" />
@@ -291,10 +291,10 @@
                         Click="OptionsButton_Click" Margin="0,0,8,0"
                         ToolTip="Options" AutomationProperties.Name="Options">
                     <Button.ContextMenu>
-                        <ContextMenu Placement="Bottom" Background="{StaticResource Bg.Elevated}"
+                        <ContextMenu Placement="Bottom" Background="{DynamicResource Bg.Raised}"
                                      FontFamily="{StaticResource Font.Sans}" FontSize="13"
-                                     Foreground="{StaticResource Text.Primary}"
-                                     BorderBrush="{StaticResource Border.Strong}">
+                                     Foreground="{DynamicResource Text.Primary}"
+                                     BorderBrush="{DynamicResource Border.Strong}">
                             <MenuItem Header="Settings" Click="SettingsButton_Click">
                                 <MenuItem.Icon>
                                     <TextBlock Text="&#xE713;" FontFamily="{StaticResource Font.Icons}" />
@@ -424,17 +424,17 @@
                                             <TextBlock Text="{Binding FavouriteGlyph}" FontFamily="{StaticResource Font.Icons}" FontSize="13">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="{StaticResource Text.Faint}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource Text.Tertiary}" />
                                                         <!-- Later triggers win: a favourite stays gold whether hovered or selected. -->
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
                                                                 <Setter Property="Foreground" Value="#CCFFFFFF" />
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
-                                                                <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding IsFavourite}" Value="True">
-                                                                <Setter Property="Foreground" Value="{StaticResource Favourite.Star}" />
+                                                                <Setter Property="Foreground" Value="{DynamicResource Signal}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -473,7 +473,7 @@
             <TextBlock Text="{Binding EmptyGridMessage}" IsHitTestVisible="False"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,48,16,0"
                        TextWrapping="Wrap" TextAlignment="Center"
-                       Foreground="{StaticResource Text.Faint}" FontStyle="Italic">
+                       Foreground="{DynamicResource Text.Tertiary}" FontStyle="Italic">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Style.Triggers>
@@ -496,7 +496,7 @@
             nothing calls Focus() when it appears.
         -->
         <Border x:Name="StatusBar" Grid.Row="5" Margin="0,8,0,0" Padding="12,6" CornerRadius="8"
-                Background="{StaticResource Bg.Elevated}" BorderBrush="{StaticResource Border.Default}" BorderThickness="1"
+                Background="{DynamicResource Bg.Raised}" BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
                 Focusable="False"
                 MouseEnter="StatusBar_MouseEnter"
                 MouseLeave="StatusBar_MouseLeave"

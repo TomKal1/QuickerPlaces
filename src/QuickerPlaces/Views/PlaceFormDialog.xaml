@@ -50,7 +50,7 @@
             </Grid>
         </StackPanel>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{StaticResource Status.Error}"
+        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{DynamicResource Danger}"
                    TextWrapping="Wrap" MaxWidth="412" HorizontalAlignment="Left"
                    Margin="0,0,0,14" Visibility="Collapsed" />
 

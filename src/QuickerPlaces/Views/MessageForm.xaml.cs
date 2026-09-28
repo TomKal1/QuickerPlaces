@@ -50,7 +50,9 @@ public partial class MessageForm : Window
         else
         {
             IconGlyph.Text = GlyphFor(icon);
-            IconBadge.Background = BrushFor(icon);
+            var brush = BrushFor(icon);
+            IconBadge.BorderBrush = brush;
+            IconGlyph.Foreground = brush;
         }
     }
 
@@ -174,17 +176,17 @@ public partial class MessageForm : Window
     {
         MessageFormIcon.Info => "i",
         MessageFormIcon.Warning => "!",
-        MessageFormIcon.Error => "X",
+        MessageFormIcon.Error => "×",
         MessageFormIcon.Question => "?",
         _ => string.Empty
     };
 
     private Brush BrushFor(MessageFormIcon icon) => icon switch
     {
-        MessageFormIcon.Info => (Brush)FindResource("Status.Info"),
-        MessageFormIcon.Warning => (Brush)FindResource("Status.Warning"),
-        MessageFormIcon.Error => (Brush)FindResource("Status.Error"),
-        MessageFormIcon.Question => (Brush)FindResource("Accent"),
+        MessageFormIcon.Info => (Brush)FindResource("Info"),
+        MessageFormIcon.Warning => (Brush)FindResource("Signal"),
+        MessageFormIcon.Error => (Brush)FindResource("Danger"),
+        MessageFormIcon.Question => (Brush)FindResource("Highlight.Text"),
         _ => Brushes.Transparent
     };
 }

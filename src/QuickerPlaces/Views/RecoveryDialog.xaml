@@ -32,7 +32,7 @@
         <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top">
             <Border x:Name="IconBadge" Width="36" Height="36" CornerRadius="18"
                     VerticalAlignment="Top" Margin="0,0,14,0"
-                    Background="{StaticResource Status.Warning}">
+                    Background="{DynamicResource Signal}">
                 <TextBlock Text="!" FontWeight="Bold" FontSize="16"
                            Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
@@ -41,7 +41,7 @@
         </StackPanel>
 
         <TextBlock x:Name="PathText" Grid.Row="1" TextWrapping="Wrap" FontSize="12"
-                   Foreground="{StaticResource Text.Secondary}"
+                   Foreground="{DynamicResource Text.Secondary}"
                    Margin="0,12,0,0" />
 
         <StackPanel x:Name="ButtonPanel" Grid.Row="2" Orientation="Horizontal"

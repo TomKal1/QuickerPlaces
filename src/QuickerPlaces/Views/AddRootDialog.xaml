@@ -16,7 +16,7 @@
         <TextBlock Grid.Row="0" Text="Track activity under this folder?"
                    FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
         <TextBlock x:Name="RootPathText" Grid.Row="1" TextWrapping="Wrap"
-                   FontFamily="{StaticResource Font.Mono}" Foreground="{StaticResource Accent.Hover}"
+                   FontFamily="{StaticResource Font.Mono}" Foreground="{DynamicResource Highlight.Text}"
                    Margin="0,0,0,16" />
         <StackPanel Grid.Row="2" Margin="0,0,0,16">
             <TextBlock Text="QuickerPlaces will record folder paths under this root, visit counts, and the time each folder is in the foreground while you are active."

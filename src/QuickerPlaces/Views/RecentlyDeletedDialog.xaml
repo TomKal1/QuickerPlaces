@@ -85,12 +85,12 @@
                        IsHitTestVisible="False"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,32,16,0"
                        TextWrapping="Wrap" TextAlignment="Center"
-                       Foreground="{StaticResource Text.Faint}" FontStyle="Italic"
+                       Foreground="{DynamicResource Text.Tertiary}" FontStyle="Italic"
                        Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </Grid>
 
         <!-- The dialog's own error line (plan 5.5): a failed save, shown here rather than only behind the modal. -->
-        <TextBlock Grid.Row="2" Text="{Binding ErrorMessage}" Foreground="{StaticResource Status.Error}"
+        <TextBlock Grid.Row="2" Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}"
                    TextWrapping="Wrap" Margin="0,12,0,0"
                    Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
 

@@ -28,7 +28,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,8">
             <TextBlock Text="Shortcut to bring QuickerPlaces to the front" FontWeight="SemiBold" Margin="0,0,0,4" />
             <TextBlock Text="Works from any app while QuickerPlaces is running. Click the box and press the keys you want, including Ctrl, Alt or Win."
-                       Foreground="{StaticResource Text.Secondary}" TextWrapping="Wrap" FontSize="12" />
+                       Foreground="{DynamicResource Text.Secondary}" TextWrapping="Wrap" FontSize="12" />
         </StackPanel>
 
         <!--
@@ -54,11 +54,11 @@
                       Margin="0,0,0,8" />
             <CheckBox x:Name="StartWithWindowsCheck" Content="Start with Windows in the tray" />
             <TextBlock Text="Both options are off by default. The tray menu has Open, Pause tracking, and Exit."
-                       TextWrapping="Wrap" Foreground="{StaticResource Text.Secondary}"
+                       TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}"
                        FontSize="12" Margin="0,7,0,0" />
         </StackPanel>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="4" Foreground="{StaticResource Status.Error}"
+        <TextBlock x:Name="ErrorText" Grid.Row="4" Foreground="{DynamicResource Danger}"
                    TextWrapping="Wrap" MaxWidth="412" HorizontalAlignment="Left"
                    Margin="0,0,0,14" Visibility="Collapsed" />
 

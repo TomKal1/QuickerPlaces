@@ -52,7 +52,7 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{StaticResource Status.Error}"
+        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{DynamicResource Danger}"
                    TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" />
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
