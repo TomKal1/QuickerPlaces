@@ -78,15 +78,16 @@
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackingSignal.cs" Link="Linked\Services\Activity\TrackingSignal.cs" />
     <!--
-      Project sessions (ai/260928_PDF Project Sessions Plan.md): the store,
-      the open-PDF resolver, the launcher and the two view models. The
+      Project sessions and shared document code (ai/260928_PDF Project
+      Sessions Plan.md): document kinds and paths, the open-document resolver, the launcher and the two view models. The
       Windows probe that gathers the resolver's evidence is app-only.
     -->
     <Compile Include="..\QuickerPlaces\Models\Sessions\ProjectSession.cs" Link="Linked\Models\Sessions\ProjectSession.cs" />
     <Compile Include="..\QuickerPlaces\Models\Sessions\SessionsDocument.cs" Link="Linked\Models\Sessions\SessionsDocument.cs" />
-    <Compile Include="..\QuickerPlaces\Services\Sessions\OpenPdfResolver.cs" Link="Linked\Services\Sessions\OpenPdfResolver.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionLauncher.cs" Link="Linked\Services\Sessions\SessionLauncher.cs" />
-    <Compile Include="..\QuickerPlaces\Services\Sessions\SessionPaths.cs" Link="Linked\Services\Sessions\SessionPaths.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\DocumentKind.cs" Link="Linked\Services\Documents\DocumentKind.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionsViewModel.cs" Link="Linked\ViewModels\SessionsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionEditorViewModel.cs" Link="Linked\ViewModels\SessionEditorViewModel.cs" />

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 
@@ -18,10 +19,10 @@ namespace QuickerPlaces.Views;
 public partial class SessionsWindow : Window
 {
     private readonly SessionStore _store;
-    private readonly WindowsOpenPdfProbe _probe;
+    private readonly WindowsOpenDocumentProbe _probe;
     private readonly SessionsViewModel _viewModel;
 
-    private SessionsWindow(Window owner, SessionStore store, IShell shell, WindowsOpenPdfProbe probe)
+    private SessionsWindow(Window owner, SessionStore store, IShell shell, WindowsOpenDocumentProbe probe)
     {
         InitializeComponent();
         Owner = owner;
@@ -30,7 +31,7 @@ public partial class SessionsWindow : Window
         _viewModel = new SessionsViewModel(store, new SessionLauncher(store, shell));
         DataContext = _viewModel;
 
-        // Start where the work is: the list when there are sessions, Save open PDFs when there are none.
+        // Start where the work is: the list when there are sessions, Save open files when there are none.
         Loaded += (_, _) =>
         {
             if (_viewModel.HasAnySessions)
@@ -41,7 +42,7 @@ public partial class SessionsWindow : Window
     }
 
     /// <summary>Shows the window modally over <paramref name="owner"/>.</summary>
-    public static void Show(Window owner, SessionStore store, IShell shell, WindowsOpenPdfProbe probe)
+    public static void Show(Window owner, SessionStore store, IShell shell, WindowsOpenDocumentProbe probe)
         => new SessionsWindow(owner, store, shell, probe).ShowDialog();
 
     private void SaveOpen_Click(object sender, RoutedEventArgs e)
@@ -82,7 +83,7 @@ public partial class SessionsWindow : Window
         if (FilesGrid.SelectedItem is SessionFileViewModel file)
             _viewModel.OpenFile(file);
         else
-            MessageForm.Show("Select a PDF in the list first, or use Open all.", Title, owner: this);
+            MessageForm.Show("Select a file in the list first, or use Open all.", Title, owner: this);
     }
 
     private void TagChip_Click(object sender, RoutedEventArgs e)

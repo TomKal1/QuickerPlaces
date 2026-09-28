@@ -3,46 +3,48 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace QuickerPlaces.Services.Sessions;
+namespace QuickerPlaces.Services.Documents;
 
 /// <summary>
-/// Decides which PDFs are open from what Windows will tell an ordinary
-/// program (sessions plan §4, D6–D9). No documented Windows API lists the
-/// documents another application has open, so the answer is assembled from
-/// three best-effort clues and handed to the user to review, never saved
-/// unseen:
+/// Decides which PDF, Word and Excel files are open from what Windows will
+/// tell an ordinary program (sessions plan §4, D6–D9). No documented Windows
+/// API lists the documents another application has open, so the answer is
+/// assembled from best-effort clues and handed to the user to review, never
+/// saved unseen:
 ///
-/// - <b>Window titles.</b> PDF viewers put the active document's file name
-///   in their title ("A-101.pdf - Adobe Acrobat Pro", "A-101.pdf - Personal
-///   - Microsoft Edge"), and some the full path. A title shows only the
-///   active tab.
-/// - <b>Command lines.</b> The file a viewer was started with, for a
-///   viewer started by opening a PDF. A single-instance viewer keeps that
-///   command line after the file is closed, so on its own it only suggests.
+/// - <b>Window titles.</b> Viewers put the active document's file name in
+///   their title ("A-101.pdf - Adobe Acrobat Pro", "Budget.xlsx - Excel"),
+///   and some the full path. Word and Excel leave the extension out when
+///   Explorer hides extensions ("Report - Word"), so for their windows the
+///   name without its extension counts too, at the start of the title. A
+///   title shows only the active tab or document.
+/// - <b>Command lines.</b> The file a program was started with. A
+///   single-instance program keeps that command line after the file is
+///   closed, so on its own it only suggests.
 /// - <b>Files in use.</b> Restart Manager's answer to "is anything using
-///   this file", asked of the candidates found here. Viewers that hold
-///   their documents open (Acrobat, Revu) answer for every tab; ones that
-///   read a file and let go (browsers, SumatraPDF) never do.
+///   this file", asked of the candidates found here. Acrobat, Revu, Word and
+///   Excel hold their documents open and answer for every one; browsers and
+///   SumatraPDF read a file and let go, and never do.
 ///
 /// A title gives a file name, not a path, so it is matched to a path from
 /// the other clues and Windows' Recent Items, which also supply the
 /// "recently opened" suggestions. A title that matches no known path is
 /// reported so the user can add that file by hand.
 ///
-/// Pure logic over plain inputs: WindowsOpenPdfProbe gathers them. UI-free
-/// and linked into the test project.
+/// Pure logic over plain inputs: WindowsOpenDocumentProbe gathers them.
+/// UI-free and linked into the test project.
 /// </summary>
-public static class OpenPdfResolver
+public static class OpenDocumentResolver
 {
-    /// <summary>How many recently opened PDFs are offered at most, newest first.</summary>
+    /// <summary>How many recently opened documents are offered at most, newest first.</summary>
     public const int MaxRecentSuggestions = 30;
 
     /// <summary>
-    /// Every PDF path the evidence names, before asking which are in use:
-    /// full paths in titles, paths on command lines, and recent documents.
-    /// Each once, in that order.
+    /// Every document path the evidence names, before asking which are in
+    /// use: full paths in titles, paths on command lines, and recent
+    /// documents. Each once, in that order.
     /// </summary>
-    public static IReadOnlyList<string> CandidatePaths(OpenPdfEvidence evidence)
+    public static IReadOnlyList<string> CandidatePaths(OpenDocumentEvidence evidence)
     {
         var paths = new List<string>();
         foreach (var window in evidence.Windows)
@@ -51,32 +53,32 @@ public static class OpenPdfResolver
             paths.AddRange(PathsInCommandLine(window.CommandLine));
         }
 
-        paths.AddRange(evidence.RecentDocuments.Select(r => SessionPaths.NormalizePdf(r.Path)).OfType<string>());
+        paths.AddRange(evidence.RecentDocuments.Select(r => DocumentPaths.Normalize(r.Path)).OfType<string>());
         return Distinct(paths);
     }
 
     /// <summary>
     /// Resolves the evidence into the review list: files judged open first,
-    /// in the order found, then recently opened ones, newest first. Files in
+    /// in the order found, then suggestions, newest first. Files in
     /// <paramref name="inUse"/> count as open.
     /// </summary>
-    public static OpenPdfScan Resolve(OpenPdfEvidence evidence, IEnumerable<string> inUse)
+    public static OpenDocumentScan Resolve(OpenDocumentEvidence evidence, IEnumerable<string> inUse)
     {
-        var inUseSet = new HashSet<string>(inUse.Select(p => SessionPaths.NormalizePdf(p) ?? p), StringComparer.OrdinalIgnoreCase);
+        var inUseSet = new HashSet<string>(inUse.Select(p => DocumentPaths.Normalize(p) ?? p), StringComparer.OrdinalIgnoreCase);
         var recents = evidence.RecentDocuments
-            .Select(r => (Path: SessionPaths.NormalizePdf(r.Path), r.LastOpenedAt))
+            .Select(r => (Path: DocumentPaths.Normalize(r.Path), r.LastOpenedAt))
             .Where(r => r.Path is not null)
             .GroupBy(r => r.Path!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Max(r => r.LastOpenedAt), StringComparer.OrdinalIgnoreCase);
 
-        var open = new List<PdfCandidate>();
+        var open = new List<DocumentCandidate>();
         var openPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var unmatched = new List<string>();
 
         void MarkOpen(string path, string reason)
         {
             if (openPaths.Add(path))
-                open.Add(new PdfCandidate(path, true, reason, recents.TryGetValue(path, out var at) ? at : null));
+                open.Add(new DocumentCandidate(path, true, reason, recents.TryGetValue(path, out var at) ? at : null));
         }
 
         // Every path any clue names, so a title's bare file name can be matched to one.
@@ -97,9 +99,9 @@ public static class OpenPdfResolver
             // Longest file name first, so "Set - A-101.pdf" wins over "A-101.pdf" in the same title.
             // A name the title already spells out as a full path is settled: another folder's file of that name isn't open.
             var names = known
-                .Select(SessionPaths.FileName)
+                .Select(DocumentPaths.FileName)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Where(n => !titlePaths.Any(p => string.Equals(SessionPaths.FileName(p), n, StringComparison.OrdinalIgnoreCase)))
+                .Where(n => !titlePaths.Any(p => string.Equals(DocumentPaths.FileName(p), n, StringComparison.OrdinalIgnoreCase)))
                 .OrderByDescending(n => n.Length);
             var claimed = new List<(int Start, int End)>();
             foreach (var name in names)
@@ -113,7 +115,18 @@ public static class OpenPdfResolver
                 matchedInTitle = true;
             }
 
-            if (!matchedInTitle && GuessNameInTitle(window.Title) is { } guess)
+            // Word and Excel may show the name without its extension, and only at the start of the title.
+            if (!matchedInTitle && window.OfficeKind is { } officeKind && OfficeTitleName(window.Title) is { } stem)
+            {
+                var path = ChooseByStem(stem, officeKind, commandLinePaths, inUseSet, recents, known);
+                if (path is not null)
+                {
+                    MarkOpen(path, $"Open in {window.AppName}");
+                    matchedInTitle = true;
+                }
+            }
+
+            if (!matchedInTitle && GuessNameInTitle(window.Title, window.OfficeKind) is { } guess)
                 unmatched.Add($"{guess} ({window.AppName})");
         }
 
@@ -121,14 +134,14 @@ public static class OpenPdfResolver
             MarkOpen(path, "In use by an open program");
 
         // Named on a command line but not confirmed: shown as a suggestion, as a recent file is.
-        var suggestions = new List<PdfCandidate>();
+        var suggestions = new List<DocumentCandidate>();
         var suggested = new HashSet<string>(openPaths, StringComparer.OrdinalIgnoreCase);
         foreach (var window in evidence.Windows)
         {
             foreach (var path in PathsInCommandLine(window.CommandLine))
             {
                 if (suggested.Add(path))
-                    suggestions.Add(new PdfCandidate(path, false, $"{window.AppName} was started with it", recents.TryGetValue(path, out var at) ? at : null));
+                    suggestions.Add(new DocumentCandidate(path, false, $"{window.AppName} was started with it", recents.TryGetValue(path, out var at) ? at : null));
             }
         }
 
@@ -137,20 +150,20 @@ public static class OpenPdfResolver
             if (suggestions.Count >= MaxRecentSuggestions)
                 break;
             if (suggested.Add(path))
-                suggestions.Add(new PdfCandidate(path, false, "Recently opened", at));
+                suggestions.Add(new DocumentCandidate(path, false, "Recently opened", at));
         }
 
-        return new OpenPdfScan(open.Concat(suggestions).ToList(), unmatched.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+        return new OpenDocumentScan(open.Concat(suggestions).ToList(), unmatched.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
 
-    /// <summary>Full drive or UNC paths to PDFs written out in a window title, as some viewers do.</summary>
+    /// <summary>Full drive or UNC paths to documents written out in a window title, as some viewers do.</summary>
     public static IReadOnlyList<string> PathsInTitle(string? title)
     {
         var paths = new List<string>();
         if (string.IsNullOrEmpty(title))
             return paths;
 
-        foreach (var end in PdfEnds(title))
+        foreach (var end in DocumentNameEnds(title))
         {
             // The earliest start that makes a valid path wins: a drive letter or "\\" before it.
             for (var start = 0; start < end; start++)
@@ -162,7 +175,7 @@ public static class OpenPdfResolver
                 if (start > 0 && char.IsLetterOrDigit(title[start - 1]))
                     continue;
 
-                if (SessionPaths.NormalizePdf(title[start..end]) is { } path)
+                if (DocumentPaths.Normalize(title[start..end]) is { } path)
                 {
                     paths.Add(path);
                     break;
@@ -174,8 +187,8 @@ public static class OpenPdfResolver
     }
 
     /// <summary>
-    /// PDF paths among a command line's arguments, split as Windows splits
-    /// them (double quotes group, backslashes are literal), including
+    /// Document paths among a command line's arguments, split as Windows
+    /// splits them (double quotes group, backslashes are literal), including
     /// "file:" URLs that a browser was given.
     /// </summary>
     public static IReadOnlyList<string> PathsInCommandLine(string? commandLine)
@@ -191,23 +204,30 @@ public static class OpenPdfResolver
             if (candidate.StartsWith('-') || (candidate.StartsWith('/') && !candidate.StartsWith("//")))
                 continue;
 
-            if (SessionPaths.NormalizePdf(candidate) is { } path)
+            if (DocumentPaths.Normalize(candidate) is { } path)
                 paths.Add(path);
         }
 
         return Distinct(paths);
     }
 
-    /// <summary>The PDF file name a title seems to show, for the "couldn't match" line, or null if it shows none.</summary>
-    public static string? GuessNameInTitle(string? title)
+    /// <summary>
+    /// The document name a title seems to show, for the "couldn't match"
+    /// line, or null if it shows none. For a Word or Excel window, the name
+    /// before " - Word" counts even without an extension.
+    /// </summary>
+    public static string? GuessNameInTitle(string? title, DocumentKind? officeKind = null)
     {
         if (string.IsNullOrEmpty(title))
             return null;
 
-        foreach (var end in PdfEnds(title))
+        foreach (var end in DocumentNameEnds(title))
         {
             // Back to the nearest thing a viewer puts around a name: " - ", a bracket, a quote, a bar, a separator.
-            var start = end - ".pdf".Length;
+            var start = end;
+            while (start > 0 && title[start - 1] != '.')
+                start--;
+            start--;
             while (start > 0)
             {
                 var c = title[start - 1];
@@ -219,32 +239,62 @@ public static class OpenPdfResolver
             }
 
             var name = title[start..end].Trim();
-            if (name.Length > ".pdf".Length)
+            if (name.Length > 0 && name.LastIndexOf('.') > 0)
                 return name;
         }
 
-        return null;
+        return officeKind is null ? null : OfficeTitleName(title);
+    }
+
+    /// <summary>
+    /// The document name at the start of a Word or Excel title, before
+    /// " - " and any "[Read-Only]" or "[Compatibility Mode]" marker:
+    /// "Report" for "Report [Read-Only] - Word". Null for a title with no
+    /// " - ", such as Word's own start screen.
+    /// </summary>
+    public static string? OfficeTitleName(string? title)
+    {
+        if (string.IsNullOrEmpty(title))
+            return null;
+
+        var dash = title.IndexOf(" - ", StringComparison.Ordinal);
+        if (dash <= 0)
+            return null;
+
+        var name = title[..dash];
+        var bracket = name.IndexOf(" [", StringComparison.Ordinal);
+        if (bracket > 0)
+            name = name[..bracket];
+
+        name = name.Trim();
+        return name.Length == 0 ? null : name;
     }
 
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
 
-    /// <summary>The index just past each ".pdf" in <paramref name="text"/> that ends a name (not "x.pdfs" or "x.pdf2").</summary>
-    private static IEnumerable<int> PdfEnds(string text)
+    /// <summary>The index just past each recognised extension in <paramref name="text"/> that ends a name (not "x.pdfs" or "x.docx2").</summary>
+    private static IEnumerable<int> DocumentNameEnds(string text)
     {
-        var from = 0;
-        while (from < text.Length)
+        var ends = new SortedSet<int>();
+        foreach (var extension in DocumentKinds.Extensions)
         {
-            var at = text.IndexOf(".pdf", from, StringComparison.OrdinalIgnoreCase);
-            if (at < 0)
-                yield break;
+            var from = 0;
+            while (from < text.Length)
+            {
+                var at = text.IndexOf(extension, from, StringComparison.OrdinalIgnoreCase);
+                if (at < 0)
+                    break;
 
-            var end = at + ".pdf".Length;
-            if (end == text.Length || !char.IsLetterOrDigit(text[end]))
-                yield return end;
-            from = end;
+                var end = at + extension.Length;
+                if (at > 0 && (end == text.Length || !char.IsLetterOrDigit(text[end])))
+                    ends.Add(end);
+                from = end;
+            }
         }
+
+        return ends;
     }
 
     /// <summary>
@@ -282,13 +332,25 @@ public static class OpenPdfResolver
     private static string Choose(string name, IReadOnlyList<string> commandLinePaths, HashSet<string> inUse,
         Dictionary<string, DateTimeOffset> recents, IReadOnlyList<string> known)
     {
-        bool Named(string path) => string.Equals(SessionPaths.FileName(path), name, StringComparison.OrdinalIgnoreCase);
-
-        return commandLinePaths.FirstOrDefault(Named)
-            ?? known.Where(Named).FirstOrDefault(inUse.Contains)
-            ?? known.Where(Named).Where(recents.ContainsKey).OrderByDescending(p => recents[p]).FirstOrDefault()
-            ?? known.First(Named);
+        bool Named(string path) => string.Equals(DocumentPaths.FileName(path), name, StringComparison.OrdinalIgnoreCase);
+        return Pick(Named, commandLinePaths, inUse, recents, known)!;
     }
+
+    /// <summary>As <see cref="Choose"/>, for a Word or Excel title's name without its extension; null when no known file of that kind has it.</summary>
+    private static string? ChooseByStem(string stem, DocumentKind kind, IReadOnlyList<string> commandLinePaths, HashSet<string> inUse,
+        Dictionary<string, DateTimeOffset> recents, IReadOnlyList<string> known)
+    {
+        bool Named(string path) => DocumentKinds.FromPath(path) == kind &&
+            string.Equals(DocumentPaths.Stem(path), stem, StringComparison.OrdinalIgnoreCase);
+        return Pick(Named, commandLinePaths, inUse, recents, known);
+    }
+
+    private static string? Pick(Func<string, bool> named, IReadOnlyList<string> commandLinePaths, HashSet<string> inUse,
+        Dictionary<string, DateTimeOffset> recents, IReadOnlyList<string> known)
+        => commandLinePaths.FirstOrDefault(named)
+            ?? known.Where(named).FirstOrDefault(inUse.Contains)
+            ?? known.Where(named).Where(recents.ContainsKey).OrderByDescending(p => recents[p]).FirstOrDefault()
+            ?? known.FirstOrDefault(named);
 
     private static IEnumerable<string> SplitCommandLine(string? commandLine)
     {
@@ -341,7 +403,7 @@ public static class OpenPdfResolver
         }
         catch (Exception)
         {
-            // Left as it is: NormalizePdf refuses it if it isn't a path.
+            // Left as it is: Normalize refuses it if it isn't a path.
         }
 
         return path.Replace('/', '\\');
@@ -351,35 +413,36 @@ public static class OpenPdfResolver
         => paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 }
 
-/// <summary>What <see cref="OpenPdfResolver"/> works from, gathered by the probe.</summary>
-/// <param name="Windows">Visible top-level windows whose titles mention a PDF, with their program's name and command line.</param>
-/// <param name="RecentDocuments">PDFs in Windows' Recent Items, with when each was last opened.</param>
-public sealed record OpenPdfEvidence(IReadOnlyList<ViewerWindow> Windows, IReadOnlyList<RecentDocument> RecentDocuments)
+/// <summary>What <see cref="OpenDocumentResolver"/> works from, gathered by the probe.</summary>
+/// <param name="Windows">Visible top-level windows whose titles mention a document, or that belong to Word or Excel, with their program's name and command line.</param>
+/// <param name="RecentDocuments">Documents in Windows' Recent Items, with when each was last opened.</param>
+public sealed record OpenDocumentEvidence(IReadOnlyList<ViewerWindow> Windows, IReadOnlyList<RecentDocument> RecentDocuments)
 {
-    public static OpenPdfEvidence Empty { get; } = new(Array.Empty<ViewerWindow>(), Array.Empty<RecentDocument>());
+    public static OpenDocumentEvidence Empty { get; } = new(Array.Empty<ViewerWindow>(), Array.Empty<RecentDocument>());
 }
 
 /// <param name="Title">The window's title as Windows reports it.</param>
 /// <param name="AppName">A readable name for the program that owns it ("Adobe Acrobat").</param>
 /// <param name="CommandLine">That program's command line, or null if it couldn't be read.</param>
-public sealed record ViewerWindow(string Title, string AppName, string? CommandLine);
+/// <param name="OfficeKind">Word or Excel when the window is that program's document window (by its window class), else null.</param>
+public sealed record ViewerWindow(string Title, string AppName, string? CommandLine, DocumentKind? OfficeKind = null);
 
-/// <summary>A PDF from Windows' Recent Items.</summary>
+/// <summary>A document from Windows' Recent Items.</summary>
 public sealed record RecentDocument(string Path, DateTimeOffset LastOpenedAt);
 
 /// <summary>One file in the review list.</summary>
-/// <param name="Path">The PDF's full path.</param>
+/// <param name="Path">The document's full path.</param>
 /// <param name="IsLikelyOpen">True when a clue says it is open now; these start ticked.</param>
 /// <param name="Reason">Why it is listed, for the user: "Open in Adobe Acrobat", "Recently opened".</param>
 /// <param name="LastOpenedAt">When Recent Items says it was last opened, if it does.</param>
-public sealed record PdfCandidate(string Path, bool IsLikelyOpen, string Reason, DateTimeOffset? LastOpenedAt);
+public sealed record DocumentCandidate(string Path, bool IsLikelyOpen, string Reason, DateTimeOffset? LastOpenedAt);
 
 /// <summary>The result of a scan.</summary>
 /// <param name="Candidates">Files judged open, then suggestions.</param>
-/// <param name="UnmatchedTitles">PDF names seen in window titles that no known path matched, with the program, for the user to add by hand.</param>
-public sealed record OpenPdfScan(IReadOnlyList<PdfCandidate> Candidates, IReadOnlyList<string> UnmatchedTitles)
+/// <param name="UnmatchedTitles">Document names seen in window titles that no known path matched, with the program, for the user to add by hand.</param>
+public sealed record OpenDocumentScan(IReadOnlyList<DocumentCandidate> Candidates, IReadOnlyList<string> UnmatchedTitles)
 {
-    public static OpenPdfScan Empty { get; } = new(Array.Empty<PdfCandidate>(), Array.Empty<string>());
+    public static OpenDocumentScan Empty { get; } = new(Array.Empty<DocumentCandidate>(), Array.Empty<string>());
 
     /// <summary>Set by the probe when part of the scan failed or ran out of time, for one line under the list.</summary>
     public string? Warning { get; init; }

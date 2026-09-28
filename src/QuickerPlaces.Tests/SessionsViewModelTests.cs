@@ -56,7 +56,7 @@ public sealed class SessionsViewModelTests
         Assert.Equal("Tower B", vm.SelectedRow!.Name);
         Assert.Equal(new[] { "A-101.pdf", "A-102.pdf" }, vm.SelectedFiles.Select(f => f.FileName));
         Assert.Equal(@"C:\Jobs\Tower B", vm.SelectedFiles[0].Folder);
-        Assert.StartsWith("2 PDFs · saved ", vm.SelectedRow.DetailText);
+        Assert.StartsWith("2 files · saved ", vm.SelectedRow.DetailText);
         Assert.Equal(new[] { "All tags", "Markups (1)", "Tower A (1)", "Tower B (1)" }, vm.TagFilters.Select(t => t.Label));
     }
 
@@ -118,7 +118,7 @@ public sealed class SessionsViewModelTests
         vm.OpenSelected();
 
         Assert.Equal(new[] { Spec }, _shell.Opened);
-        Assert.Equal("Opened 1 PDF from \"Tower A\".", vm.StatusMessage);
+        Assert.Equal("Opened 1 file from \"Tower A\".", vm.StatusMessage);
         Assert.False(vm.HasError);
         Assert.Equal("Tower A", vm.SelectedRow!.Name);
         Assert.Equal("Tower A", vm.Rows[0].Name);
@@ -135,7 +135,7 @@ public sealed class SessionsViewModelTests
         vm.OpenSelected();
 
         Assert.Equal(new[] { A101 }, _shell.Opened);
-        Assert.Equal("1 PDF couldn't be found and wasn't opened: A-102.pdf.", vm.ErrorMessage);
+        Assert.Equal("1 file couldn't be found and wasn't opened: A-102.pdf.", vm.ErrorMessage);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class SessionsViewModelTests
         Add("Tower B", new[] { "Markups" }, A101);
         var vm = NewViewModel();
         Assert.Contains("\"Tower B\"", vm.DeleteConfirmation);
-        Assert.Contains("Its PDFs stay where they are.", vm.DeleteConfirmation);
+        Assert.Contains("Its files stay where they are.", vm.DeleteConfirmation);
 
         vm.DeleteSelected();
 
@@ -194,7 +194,7 @@ public sealed class SessionsViewModelTests
         Assert.Equal("", vm.SearchText);
         Assert.Equal(2, vm.Rows.Count);
         Assert.Equal("Tower B", vm.SelectedRow!.Name);
-        Assert.Equal("Saved \"Tower B\" with 1 PDF.", vm.StatusMessage);
+        Assert.Equal("Saved \"Tower B\" with 1 file.", vm.StatusMessage);
     }
 
     [Fact]

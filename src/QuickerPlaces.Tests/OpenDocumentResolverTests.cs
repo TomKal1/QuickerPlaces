@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Documents;
 using Xunit;
 
 namespace QuickerPlaces.Tests;
@@ -10,7 +10,7 @@ namespace QuickerPlaces.Tests;
 /// titles matched to paths, paths in titles and on command lines, files in
 /// use, and Recent Items as suggestions.
 /// </summary>
-public sealed class OpenPdfResolverTests
+public sealed class OpenDocumentResolverTests
 {
     private const string A101 = @"C:\Jobs\Tower B\A-101.pdf";
     private const string A102 = @"C:\Jobs\Tower B\A-102.pdf";
@@ -23,12 +23,12 @@ public sealed class OpenPdfResolverTests
 
     private static ViewerWindow Window(string title, string app = "Adobe Acrobat", string? commandLine = null) => new(title, app, commandLine);
 
-    private static OpenPdfScan Resolve(ViewerWindow[] windows, RecentDocument[] recents, params string[] inUse)
-        => OpenPdfResolver.Resolve(new OpenPdfEvidence(windows, recents), inUse);
+    private static OpenDocumentScan Resolve(ViewerWindow[] windows, RecentDocument[] recents, params string[] inUse)
+        => OpenDocumentResolver.Resolve(new OpenDocumentEvidence(windows, recents), inUse);
 
-    private static string[] OpenPaths(OpenPdfScan scan) => scan.Candidates.Where(c => c.IsLikelyOpen).Select(c => c.Path).ToArray();
+    private static string[] OpenPaths(OpenDocumentScan scan) => scan.Candidates.Where(c => c.IsLikelyOpen).Select(c => c.Path).ToArray();
 
-    private static string[] SuggestedPaths(OpenPdfScan scan) => scan.Candidates.Where(c => !c.IsLikelyOpen).Select(c => c.Path).ToArray();
+    private static string[] SuggestedPaths(OpenDocumentScan scan) => scan.Candidates.Where(c => !c.IsLikelyOpen).Select(c => c.Path).ToArray();
 
     [Theory]
     [InlineData("A-101.pdf - Adobe Acrobat Pro (64-bit)")]
@@ -144,14 +144,14 @@ public sealed class OpenPdfResolverTests
     [Fact]
     public void RecentSuggestions_AreNewestFirst_Deduplicated_AndCapped()
     {
-        var recents = Enumerable.Range(0, OpenPdfResolver.MaxRecentSuggestions + 5)
+        var recents = Enumerable.Range(0, OpenDocumentResolver.MaxRecentSuggestions + 5)
             .Select(i => Recent($@"C:\Jobs\R{i:00}.pdf", i))
             .Append(Recent(@"c:\jobs\r00.PDF", 500))
             .ToArray();
 
         var scan = Resolve(Array.Empty<ViewerWindow>(), recents);
 
-        Assert.Equal(OpenPdfResolver.MaxRecentSuggestions, scan.Candidates.Count);
+        Assert.Equal(OpenDocumentResolver.MaxRecentSuggestions, scan.Candidates.Count);
         Assert.Equal(@"C:\Jobs\R00.pdf", scan.Candidates[0].Path);
         Assert.Equal(Now, scan.Candidates[0].LastOpenedAt);
         Assert.Equal(@"C:\Jobs\R01.pdf", scan.Candidates[1].Path);
@@ -169,11 +169,11 @@ public sealed class OpenPdfResolverTests
     [Fact]
     public void CandidatePaths_ListsEveryPathNamed_Once()
     {
-        var evidence = new OpenPdfEvidence(
+        var evidence = new OpenDocumentEvidence(
             new[] { Window($"{Spec} - Revu", commandLine: $@"Revu.exe ""{A101}"" ""{Spec}""") },
             new[] { Recent(A101, 1), Recent(A102, 2) });
 
-        Assert.Equal(new[] { Spec, A101, A102 }, OpenPdfResolver.CandidatePaths(evidence));
+        Assert.Equal(new[] { Spec, A101, A102 }, OpenDocumentResolver.CandidatePaths(evidence));
     }
 
     [Theory]
@@ -185,7 +185,7 @@ public sealed class OpenPdfResolverTests
     [InlineData(@"Acrobat.exe", new string[0])]
     [InlineData(null, new string[0])]
     public void PathsInCommandLine_FindsPdfArguments(string? commandLine, string[] expected)
-        => Assert.Equal(expected, OpenPdfResolver.PathsInCommandLine(commandLine));
+        => Assert.Equal(expected, OpenDocumentResolver.PathsInCommandLine(commandLine));
 
     [Theory]
     [InlineData("A-101.pdf - Adobe Acrobat Pro", "A-101.pdf")]
@@ -195,5 +195,81 @@ public sealed class OpenPdfResolverTests
     [InlineData("Price list.pdfx", null)]
     [InlineData(".pdf", null)]
     public void GuessNameInTitle_TakesTheNameAViewerShows(string title, string? expected)
-        => Assert.Equal(expected, OpenPdfResolver.GuessNameInTitle(title));
+        => Assert.Equal(expected, OpenDocumentResolver.GuessNameInTitle(title));
+
+    private const string Report = @"C:\Jobs\Tower B\Report.docx";
+    private const string OldReport = @"C:\Jobs\Tower A\Report.docx";
+    private const string Budget = @"C:\Jobs\Tower B\Budget.xlsx";
+
+    [Theory]
+    [InlineData("Report.docx - Word")]
+    [InlineData("Report - Word")]
+    [InlineData("Report [Read-Only] - Word")]
+    [InlineData("Report  -  Compatibility Mode - Word")]
+    public void AWordTitle_WithOrWithoutItsExtension_IsMatched(string title)
+    {
+        var scan = Resolve(new[] { new ViewerWindow(title, "Microsoft Word", null, DocumentKind.Word) }, new[] { Recent(Report, 5), Recent(Budget, 6) });
+
+        Assert.Equal(new[] { Report }, OpenPaths(scan));
+        Assert.Equal("Open in Microsoft Word", scan.Candidates[0].Reason);
+    }
+
+    [Fact]
+    public void AnExtensionlessName_OnlyCountsForThatProgramsKind()
+    {
+        const string reportPdf = @"C:\Jobs\Report.pdf";
+
+        var scan = Resolve(new[] { new ViewerWindow("Report - Word", "Microsoft Word", null, DocumentKind.Word) }, new[] { Recent(reportPdf, 1) });
+
+        Assert.Empty(OpenPaths(scan));
+        Assert.Equal(new[] { "Report (Microsoft Word)" }, scan.UnmatchedTitles);
+    }
+
+    [Fact]
+    public void AnExtensionlessName_InANonOfficeWindow_IsNotMatched()
+    {
+        var scan = Resolve(new[] { Window("Report - Notepad", "Notepad") }, new[] { Recent(Report, 1) });
+
+        Assert.Empty(OpenPaths(scan));
+        Assert.Empty(scan.UnmatchedTitles);
+    }
+
+    [Fact]
+    public void TwoWordFilesWithTheSameName_TheOneInUseWins()
+    {
+        var scan = Resolve(new[] { new ViewerWindow("Report - Word", "Microsoft Word", null, DocumentKind.Word) },
+            new[] { Recent(Report, 1), Recent(OldReport, 60) }, OldReport);
+
+        Assert.Equal(new[] { OldReport }, OpenPaths(scan));
+    }
+
+    [Fact]
+    public void ExcelWorkbooksInUse_AreOpen_AndAnUnsavedBookIsReported()
+    {
+        var scan = Resolve(new[] { new ViewerWindow("Book1 - Excel", "Microsoft Excel", null, DocumentKind.Excel) },
+            new[] { Recent(Budget, 3) }, Budget);
+
+        Assert.Equal(new[] { Budget }, OpenPaths(scan));
+        Assert.Equal(new[] { "Book1 (Microsoft Excel)" }, scan.UnmatchedTitles);
+    }
+
+    [Fact]
+    public void WordsStartScreen_IsNotReported()
+    {
+        var scan = Resolve(new[] { new ViewerWindow("Word", "Microsoft Word", null, DocumentKind.Word) }, Array.Empty<RecentDocument>());
+
+        Assert.Empty(scan.UnmatchedTitles);
+    }
+
+    [Theory]
+    [InlineData(@"WINWORD.EXE /n ""C:\Jobs\Tower B\Report.docx""", new[] { Report })]
+    [InlineData(@"EXCEL.EXE ""C:\Jobs\Tower B\Budget.xlsx"" /e", new[] { Budget })]
+    public void PathsInCommandLine_FindsOfficeArguments(string commandLine, string[] expected)
+        => Assert.Equal(expected, OpenDocumentResolver.PathsInCommandLine(commandLine));
+
+    [Theory]
+    [InlineData("Budget.xlsx - Excel", "Budget.xlsx")]
+    [InlineData("Minutes v2.docx - Word", "Minutes v2.docx")]
+    public void GuessNameInTitle_TakesOfficeNamesWithExtensions(string title, string expected)
+        => Assert.Equal(expected, OpenDocumentResolver.GuessNameInTitle(title));
 }

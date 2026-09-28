@@ -8,8 +8,8 @@
         Sessions plan §5. A thin view over SessionsViewModel, as the Recently
         Deleted dialog is over its own: the list of saved sessions on the
         left, with a search box and tag chips above it; the selected
-        session's PDFs on the right, with Open all, Edit and Delete; Save
-        open PDFs in the header. The code-behind only asks before Delete and
+        session's files on the right, with Open all, Edit and Delete; Save
+        open files in the header. The code-behind only asks before Delete and
         shows the Save Session dialog.
     -->
     <Window.Resources>
@@ -122,15 +122,15 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <TextBlock Text="Project Sessions" FontSize="22" FontWeight="Bold" />
-                <TextBlock Text="Save the PDFs you have open as a tagged session, then reopen them together later."
+                <TextBlock Text="Save the PDF, Word and Excel files you have open as a tagged session, then reopen them together later."
                            Foreground="{StaticResource Text.Secondary}" Margin="0,4,0,0" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Status.Warning}"
                            TextWrapping="Wrap" Margin="0,8,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
             </StackPanel>
-            <Button Grid.Column="1" x:Name="SaveOpenButton" Content="_Save open PDFs…"
+            <Button Grid.Column="1" x:Name="SaveOpenButton" Content="_Save open files…"
                     Style="{StaticResource Button.Primary}" VerticalAlignment="Top" Margin="12,0,0,0"
                     IsEnabled="{Binding CanChange}"
-                    ToolTip="Find the PDFs open now, check the list, and save them as a session"
+                    ToolTip="Find the files open now, check the list, and save them as a session"
                     Click="SaveOpen_Click" />
         </Grid>
 
@@ -152,7 +152,7 @@
                 <Grid Grid.Row="0" Margin="0,0,0,8">
                     <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.Name="Search sessions"
-                             ToolTip="Search by session name, tag or PDF name" PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                             ToolTip="Search by session name, tag or file name" PreviewKeyDown="SearchBox_PreviewKeyDown" />
                     <TextBlock Text="Search sessions" IsHitTestVisible="False" Margin="9,0,0,0"
                                VerticalAlignment="Center" Foreground="{StaticResource Text.Faint}">
                         <TextBlock.Style>
@@ -246,11 +246,11 @@
                         <DataGrid Grid.Row="3" x:Name="FilesGrid" ItemsSource="{Binding SelectedFiles}"
                                   AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                                   CanUserDeleteRows="False" SelectionMode="Single" HeadersVisibility="Column"
-                                  GridLinesVisibility="Horizontal" AutomationProperties.Name="PDFs in this session"
+                                  GridLinesVisibility="Horizontal" AutomationProperties.Name="Files in this session"
                                   KeyboardNavigation.TabNavigation="Once"
                                   MouseDoubleClick="FilesGrid_MouseDoubleClick" PreviewKeyDown="FilesGrid_PreviewKeyDown">
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="PDF" SortMemberPath="FileName" Width="*">
+                                <DataGridTemplateColumn Header="File" SortMemberPath="FileName" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -267,17 +267,17 @@
 
                         <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,12,0,0">
                             <Button Content="_Open all" Style="{StaticResource Button.Primary}" Margin="0,0,8,0"
-                                    ToolTip="Open every PDF in this session (Enter)" Click="OpenAll_Click" />
-                            <Button Content="Open selected PDF" Margin="0,0,8,0"
-                                    ToolTip="Open just the PDF selected above (or double-click it)" Click="OpenFile_Click" />
+                                    ToolTip="Open every file in this session (Enter)" Click="OpenAll_Click" />
+                            <Button Content="Open selected file" Margin="0,0,8,0"
+                                    ToolTip="Open just the file selected above (or double-click it)" Click="OpenFile_Click" />
                             <Button Content="_Edit…" Margin="0,0,8,0" IsEnabled="{Binding CanEditSelection}"
-                                    ToolTip="Rename, retag, or add and remove PDFs" Click="Edit_Click" />
+                                    ToolTip="Rename, retag, or add and remove files" Click="Edit_Click" />
                             <Button Content="_Delete…" IsEnabled="{Binding CanEditSelection}"
-                                    ToolTip="Delete this session. Its PDFs are not touched." Click="Delete_Click" />
+                                    ToolTip="Delete this session. Its files are not touched." Click="Delete_Click" />
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Choose a session to see its PDFs." Foreground="{StaticResource Text.Faint}"
+                    <TextBlock Text="Choose a session to see its files." Foreground="{StaticResource Text.Faint}"
                                FontStyle="Italic" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">

@@ -112,7 +112,7 @@ public sealed class SessionStoreTests
         var result = store.TryCreate("Empty", null, Array.Empty<string>(), out _, out _);
 
         Assert.False(result.Success);
-        Assert.Equal("Choose at least one PDF for the session.", result.ErrorMessage);
+        Assert.Equal("Choose at least one file for the session.", result.ErrorMessage);
     }
 
     [Theory]

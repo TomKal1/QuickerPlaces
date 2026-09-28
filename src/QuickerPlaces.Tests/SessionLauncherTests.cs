@@ -51,7 +51,7 @@ public sealed class SessionLauncherTests
 
         Assert.Equal(new[] { A101, Spec }, _shell.Opened);
         Assert.Equal(new[] { A102 }, outcome.Missing);
-        Assert.Equal("1 PDF couldn't be found and wasn't opened: A-102.pdf.", outcome.Summary);
+        Assert.Equal("1 file couldn't be found and wasn't opened: A-102.pdf.", outcome.Summary);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class SessionLauncherTests
         var outcome = _launcher.Open(_session);
 
         Assert.Empty(outcome.Launched);
-        Assert.Equal("3 PDFs couldn't be found and weren't opened: A-101.pdf, A-102.pdf, Spec.pdf.", outcome.Summary);
+        Assert.Equal("3 files couldn't be found and weren't opened: A-101.pdf, A-102.pdf, Spec.pdf.", outcome.Summary);
         Assert.Null(_store.Find(_session.Id)!.LastOpenedAt);
         Assert.Equal(1, _storage.WriteCount);
     }
@@ -110,7 +110,7 @@ public sealed class SessionLauncherTests
 
         var outcome = _launcher.Open(big!);
 
-        Assert.Equal("5 PDFs couldn't be found and weren't opened: 1.pdf, 2.pdf, 3.pdf and 2 more.", outcome.Summary);
+        Assert.Equal("5 files couldn't be found and weren't opened: 1.pdf, 2.pdf, 3.pdf and 2 more.", outcome.Summary);
     }
 
     [Fact]

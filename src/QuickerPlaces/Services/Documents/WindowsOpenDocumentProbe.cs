@@ -9,20 +9,19 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace QuickerPlaces.Services.Sessions;
+namespace QuickerPlaces.Services.Documents;
 
 /// <summary>
-/// Gathers <see cref="OpenPdfResolver"/>'s evidence from Windows (sessions
-/// plan §4) when the user asks for a scan, and never otherwise: nothing
-/// watches in the background.
+/// Gathers <see cref="OpenDocumentResolver"/>'s evidence from Windows
+/// (sessions plan §4) when the user asks for a scan, and never otherwise:
+/// nothing watches in the background.
 ///
-/// - Top-level windows (EnumWindows) whose titles mention ".pdf", with the
-///   owning program's description and command line
-///   (NtQueryInformationProcess, ProcessCommandLineInformation).
-/// - Shortcuts to PDFs in the documented Recent Items folder
-///   (FOLDERID_Recent), resolved through IShellLink without searching for
-///   moved targets. Explorer's undocumented AutomaticDestinations storage is
-///   not read (roadmap §2).
+/// - Top-level windows (EnumWindows) whose titles mention a PDF, Word or
+///   Excel file, and Word's and Excel's document windows (window classes
+///   OpusApp and XLMAIN, whatever their titles say), with the owning
+///   program's description and command line (NtQueryInformationProcess,
+///   ProcessCommandLineInformation).
+/// - Recent Items, through the shared <see cref="WindowsRecentItems"/>.
 /// - For each candidate that exists, whether a program has it open,
 ///   through Restart Manager, ignoring Explorer's preview and indexing
 ///   processes, which hold a file only to show or index it.
@@ -33,7 +32,7 @@ namespace QuickerPlaces.Services.Sessions;
 ///
 /// App-only: it calls Windows, so it is not linked into the test project.
 /// </summary>
-public sealed class WindowsOpenPdfProbe
+public sealed class WindowsOpenDocumentProbe
 {
     /// <summary>Recent Items older than this are not suggested.</summary>
     private static readonly TimeSpan RecentWindow = TimeSpan.FromDays(14);
@@ -50,7 +49,11 @@ public sealed class WindowsOpenPdfProbe
     /// <summary>The whole scan's budget, after which what was found so far is returned.</summary>
     private static readonly TimeSpan ScanBudget = TimeSpan.FromSeconds(10);
 
-    /// <summary>Processes that open a PDF only to preview, index or scan it.</summary>
+    private readonly WindowsRecentItems _recentItems;
+
+    public WindowsOpenDocumentProbe(WindowsRecentItems recentItems) => _recentItems = recentItems;
+
+    /// <summary>Processes that open a document only to preview, index or scan it.</summary>
     private static readonly HashSet<string> IgnoredHolders = new(StringComparer.OrdinalIgnoreCase)
     {
         "explorer", "prevhost", "SearchProtocolHost", "SearchIndexer", "SearchFilterHost",
@@ -58,9 +61,9 @@ public sealed class WindowsOpenPdfProbe
     };
 
     /// <summary>Scans on a worker thread. Never throws: a failure becomes the scan's Warning.</summary>
-    public Task<OpenPdfScan> ScanAsync() => Task.Run(Scan);
+    public Task<OpenDocumentScan> ScanAsync() => Task.Run(Scan);
 
-    private static OpenPdfScan Scan()
+    private OpenDocumentScan Scan()
     {
         var clock = Stopwatch.StartNew();
         var warnings = new List<string>();
@@ -72,7 +75,7 @@ public sealed class WindowsOpenPdfProbe
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Warn($"Listing PDF windows failed ({ex.GetType().Name}).");
+            DiagnosticLog.Warn($"Listing document windows failed ({ex.GetType().Name}).");
             windows = Array.Empty<ViewerWindow>();
             warnings.Add("Open windows couldn't be read.");
         }
@@ -80,7 +83,7 @@ public sealed class WindowsOpenPdfProbe
         IReadOnlyList<RecentDocument> recents;
         try
         {
-            recents = ReadRecentDocuments();
+            recents = _recentItems.Read(DateTimeOffset.UtcNow - RecentWindow, MaxRecentShortcuts);
         }
         catch (Exception ex)
         {
@@ -89,14 +92,14 @@ public sealed class WindowsOpenPdfProbe
             warnings.Add("Windows' recent files couldn't be read.");
         }
 
-        var evidence = new OpenPdfEvidence(windows, recents);
+        var evidence = new OpenDocumentEvidence(windows, recents);
         var inUse = new List<string>();
         var slowServers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var existing = new List<string>();
         var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var timedOut = false;
 
-        foreach (var path in OpenPdfResolver.CandidatePaths(evidence))
+        foreach (var path in OpenDocumentResolver.CandidatePaths(evidence))
         {
             if (clock.Elapsed > ScanBudget)
             {
@@ -139,20 +142,20 @@ public sealed class WindowsOpenPdfProbe
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Warn($"Checking which PDFs are in use failed ({ex.GetType().Name}).");
+            DiagnosticLog.Warn($"Checking which documents are in use failed ({ex.GetType().Name}).");
             warnings.Add("Files open in the background couldn't be checked, so only the front document of each window was found.");
         }
 
         if (slowServers.Count > 0)
             warnings.Add($"{(slowServers.Count == 1 ? "A network share was" : "Some network shares were")} slow to answer, so {(slowServers.Count == 1 ? "its" : "their")} files weren't checked.");
         if (timedOut)
-            warnings.Add("The scan took too long and stopped early. Add any missing PDFs by hand.");
+            warnings.Add("The scan took too long and stopped early. Add any missing files by hand.");
 
         // A recent file that no longer exists isn't worth suggesting; one on a slow share is kept, unchecked.
-        var kept = new OpenPdfEvidence(windows, recents.Where(r => !missing.Contains(SessionPaths.NormalizePdf(r.Path) ?? r.Path)).ToList());
-        var scan = OpenPdfResolver.Resolve(kept, inUse);
+        var kept = new OpenDocumentEvidence(windows, recents.Where(r => !missing.Contains(DocumentPaths.Normalize(r.Path) ?? r.Path)).ToList());
+        var scan = OpenDocumentResolver.Resolve(kept, inUse);
 
-        DiagnosticLog.Info($"PDF scan: {windows.Count} window(s), {recents.Count} recent, {inUse.Count} in use, " +
+        DiagnosticLog.Info($"Document scan: {windows.Count} window(s), {recents.Count} recent, {inUse.Count} in use, " +
                            $"{scan.Candidates.Count(c => c.IsLikelyOpen)} judged open, {scan.UnmatchedTitles.Count} unmatched, {clock.ElapsedMilliseconds} ms.");
 
         return warnings.Count == 0 ? scan : scan with { Warning = string.Join(" ", warnings) };
@@ -164,7 +167,7 @@ public sealed class WindowsOpenPdfProbe
 
     private static IReadOnlyList<ViewerWindow> FindViewerWindows()
     {
-        var found = new List<(string Title, uint ProcessId)>();
+        var found = new List<(string Title, uint ProcessId, DocumentKind? OfficeKind)>();
         var own = (uint)Environment.ProcessId;
 
         EnumWindows((hwnd, _) =>
@@ -181,22 +184,23 @@ public sealed class WindowsOpenPdfProbe
                 return true;
 
             var title = text.ToString();
-            if (title.IndexOf(".pdf", StringComparison.OrdinalIgnoreCase) < 0)
+            var officeKind = OfficeKindOf(hwnd);
+            if (officeKind is null && !DocumentKinds.Extensions.Any(e => title.Contains(e, StringComparison.OrdinalIgnoreCase)))
                 return true;
 
             GetWindowThreadProcessId(hwnd, out var processId);
             if (processId != own)
-                found.Add((title, processId));
+                found.Add((title, processId, officeKind));
             return true;
         }, IntPtr.Zero);
 
         var programs = new Dictionary<uint, (string AppName, string? CommandLine)>();
         var windows = new List<ViewerWindow>();
-        foreach (var (title, processId) in found)
+        foreach (var (title, processId, officeKind) in found)
         {
             if (!programs.TryGetValue(processId, out var program))
                 programs[processId] = program = DescribeProcess(processId);
-            windows.Add(new ViewerWindow(title, program.AppName, program.CommandLine));
+            windows.Add(new ViewerWindow(title, program.AppName, program.CommandLine, officeKind));
         }
 
         return windows;
@@ -262,59 +266,6 @@ public sealed class WindowsOpenPdfProbe
         finally
         {
             Marshal.FreeHGlobal(buffer);
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Recent Items
-    // ---------------------------------------------------------------
-
-    private static IReadOnlyList<RecentDocument> ReadRecentDocuments()
-    {
-        var folder = Environment.GetFolderPath(Environment.SpecialFolder.Recent);
-        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
-            return Array.Empty<RecentDocument>();
-
-        // Every shortcut, not just "*.pdf.lnk": the target decides, whatever the shortcut happens to be called.
-        var since = DateTime.UtcNow - RecentWindow;
-        var shortcuts = new DirectoryInfo(folder)
-            .EnumerateFiles("*.lnk")
-            .Where(f => f.LastWriteTimeUtc >= since)
-            .OrderByDescending(f => f.LastWriteTimeUtc)
-            .Take(MaxRecentShortcuts)
-            .ToList();
-
-        var documents = new List<RecentDocument>();
-        foreach (var shortcut in shortcuts)
-        {
-            if (ShortcutTarget(shortcut.FullName) is { } target && target.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-                documents.Add(new RecentDocument(target, new DateTimeOffset(shortcut.LastWriteTimeUtc, TimeSpan.Zero)));
-        }
-
-        return documents;
-    }
-
-    /// <summary>The path a shortcut points at, as stored: no search for a moved target, so no network access.</summary>
-    private static string? ShortcutTarget(string shortcutPath)
-    {
-        object? link = null;
-        try
-        {
-            link = new ShellLink();
-            ((IPersistFile)link).Load(shortcutPath, 0);
-            var target = new StringBuilder(1024);
-            ((IShellLinkW)link).GetPath(target, target.Capacity, IntPtr.Zero, SlgpRawPath);
-            var path = Environment.ExpandEnvironmentVariables(target.ToString());
-            return path.Length == 0 ? null : path;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-        finally
-        {
-            if (link is not null)
-                Marshal.FinalReleaseComObject(link);
         }
     }
 
@@ -389,13 +340,27 @@ public sealed class WindowsOpenPdfProbe
         return end < 0 ? path[2..] : path[2..end];
     }
 
+    /// <summary>Word or Excel when <paramref name="hwnd"/> is that program's main window, by its window class, which doesn't change with language or title.</summary>
+    private static DocumentKind? OfficeKindOf(IntPtr hwnd)
+    {
+        var name = new StringBuilder(64);
+        if (GetClassName(hwnd, name, name.Capacity) <= 0)
+            return null;
+
+        return name.ToString() switch
+        {
+            "OpusApp" => DocumentKind.Word,
+            "XLMAIN" => DocumentKind.Excel,
+            _ => null,
+        };
+    }
+
     // ---------------------------------------------------------------
     // Interop
     // ---------------------------------------------------------------
 
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const int ProcessCommandLineInformation = 60;
-    private const uint SlgpRawPath = 0x4;
     private const int RmSessionKeyLength = 32;
     private const int ErrorMoreData = 234;
 
@@ -414,6 +379,9 @@ public sealed class WindowsOpenPdfProbe
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hwnd, StringBuilder className, int maxCount);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
@@ -478,36 +446,5 @@ public sealed class WindowsOpenPdfProbe
 
         [MarshalAs(UnmanagedType.Bool)]
         public bool Restartable;
-    }
-
-    [ComImport]
-    [Guid("00021401-0000-0000-C000-000000000046")]
-    private class ShellLink
-    {
-    }
-
-    [ComImport]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    [Guid("000214F9-0000-0000-C000-000000000046")]
-    private interface IShellLinkW
-    {
-        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int maxPath, IntPtr findData, uint flags);
-        void GetIDList(out IntPtr idList);
-        void SetIDList(IntPtr idList);
-        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int maxName);
-        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
-        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int maxPath);
-        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
-        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int maxPath);
-        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
-        void GetHotkey(out short hotkey);
-        void SetHotkey(short hotkey);
-        void GetShowCmd(out int showCmd);
-        void SetShowCmd(int showCmd);
-        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder iconPath, int iconPathLength, out int iconIndex);
-        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string iconPath, int iconIndex);
-        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string relativePath, uint reserved);
-        void Resolve(IntPtr hwnd, uint flags);
-        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
     }
 }

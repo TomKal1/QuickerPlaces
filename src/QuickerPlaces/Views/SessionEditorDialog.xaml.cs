@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Win32;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 
@@ -19,9 +20,9 @@ namespace QuickerPlaces.Views;
 public partial class SessionEditorDialog : Window
 {
     private readonly SessionEditorViewModel _viewModel;
-    private readonly WindowsOpenPdfProbe _probe;
+    private readonly WindowsOpenDocumentProbe _probe;
 
-    private SessionEditorDialog(Window owner, SessionEditorViewModel viewModel, WindowsOpenPdfProbe probe)
+    private SessionEditorDialog(Window owner, SessionEditorViewModel viewModel, WindowsOpenDocumentProbe probe)
     {
         InitializeComponent();
         Owner = owner;
@@ -40,7 +41,7 @@ public partial class SessionEditorDialog : Window
     }
 
     /// <summary>Shows the dialog modally. True when the session was saved.</summary>
-    public static bool Show(Window owner, SessionEditorViewModel viewModel, WindowsOpenPdfProbe probe)
+    public static bool Show(Window owner, SessionEditorViewModel viewModel, WindowsOpenDocumentProbe probe)
         => new SessionEditorDialog(owner, viewModel, probe).ShowDialog() == true;
 
     private async System.Threading.Tasks.Task ScanAsync()
@@ -58,8 +59,8 @@ public partial class SessionEditorDialog : Window
         catch (Exception ex)
         {
             // ScanAsync catches what it expects; anything else must still leave the dialog usable.
-            DiagnosticLog.Error("PDF scan failed unexpectedly.", ex);
-            _viewModel.ApplyScan(OpenPdfScan.Empty with { Warning = "Open PDFs couldn't be looked for. Use Add PDFs to choose them." });
+            DiagnosticLog.Error("Document scan failed unexpectedly.", ex);
+            _viewModel.ApplyScan(OpenDocumentScan.Empty with { Warning = "Open files couldn't be looked for. Use Add files to choose them." });
         }
         finally
         {
@@ -74,8 +75,8 @@ public partial class SessionEditorDialog : Window
     {
         var picker = new OpenFileDialog
         {
-            Title = "Add PDFs to the session",
-            Filter = "PDF files (*.pdf)|*.pdf",
+            Title = "Add files to the session",
+            Filter = DocumentKinds.FileDialogFilter,
             Multiselect = true,
             CheckFileExists = true,
         };

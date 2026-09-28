@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using QuickerPlaces.Models;
+using QuickerPlaces.Services.Documents;
 
 namespace QuickerPlaces.Services.Sessions;
 
@@ -59,7 +60,7 @@ public sealed class SessionLauncher
             catch (Exception ex)
             {
                 // The type of failure only, never the path (Phase 3 D26).
-                DiagnosticLog.Warn($"Opening a PDF from a session failed ({ex.GetType().Name}).");
+                DiagnosticLog.Warn($"Opening a file from a session failed ({ex.GetType().Name}).");
                 failed.Add(new SessionFileFailure(file, ex.Message));
             }
         }
@@ -100,11 +101,11 @@ public sealed record SessionOpenOutcome(
         }
     }
 
-    private static string Count(int n) => n == 1 ? "1 PDF" : $"{n} PDFs";
+    private static string Count(int n) => n == 1 ? "1 file" : $"{n} files";
 
     private static string Names(IReadOnlyList<string> paths)
     {
-        var names = paths.Take(3).Select(SessionPaths.FileName);
+        var names = paths.Take(3).Select(DocumentPaths.FileName);
         var more = paths.Count > 3 ? $" and {paths.Count - 3} more" : "";
         return string.Join(", ", names) + more;
     }

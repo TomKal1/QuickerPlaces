@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using QuickerPlaces.Mvvm;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.ViewModels;
@@ -44,7 +45,7 @@ public sealed class SessionEditorViewModel : ObservableObject
 
     public bool IsNew => _editing is null;
 
-    public string Title => IsNew ? "Save Open PDFs" : "Edit Session";
+    public string Title => IsNew ? "Save Open Files" : "Edit Session";
 
     public string Name
     {
@@ -74,7 +75,7 @@ public sealed class SessionEditorViewModel : ObservableObject
     public int IncludedCount => Files.Count(f => f.IsIncluded);
 
     /// <summary>"3 of 7 PDFs ticked", under the list.</summary>
-    public string IncludedText => $"{IncludedCount} of {SessionsViewModel.PdfCount(Files.Count)} ticked";
+    public string IncludedText => $"{IncludedCount} of {SessionsViewModel.FileCount(Files.Count)} ticked";
 
     public bool IsScanning
     {
@@ -112,7 +113,7 @@ public sealed class SessionEditorViewModel : ObservableObject
     /// except that one judged open is ticked. The summary says how many were
     /// judged open and names the windows that couldn't be matched to a file.
     /// </summary>
-    public void ApplyScan(OpenPdfScan scan)
+    public void ApplyScan(OpenDocumentScan scan)
     {
         var added = 0;
         foreach (var candidate in scan.Candidates)
@@ -134,14 +135,14 @@ public sealed class SessionEditorViewModel : ObservableObject
         {
             open switch
             {
-                0 => "No open PDFs were found. Tick any recently opened ones below, or use Add PDFs.",
-                1 => "Found 1 open PDF. Check the list, then Save.",
-                _ => $"Found {open} open PDFs. Check the list, then Save.",
+                0 => "No open files were found. Tick any recently opened ones below, or use Add files.",
+                1 => "Found 1 open file. Check the list, then Save.",
+                _ => $"Found {open} open files. Check the list, then Save.",
             },
         };
 
         if (scan.UnmatchedTitles.Count > 0)
-            lines.Add($"Also open, but not matched to a file: {string.Join(", ", scan.UnmatchedTitles)}. Use Add PDFs to include {(scan.UnmatchedTitles.Count == 1 ? "it" : "them")}.");
+            lines.Add($"Also open, but not matched to a file: {string.Join(", ", scan.UnmatchedTitles)}. Use Add files to include {(scan.UnmatchedTitles.Count == 1 ? "it" : "them")}.");
         if (!string.IsNullOrEmpty(scan.Warning))
             lines.Add(scan.Warning);
 
@@ -156,7 +157,7 @@ public sealed class SessionEditorViewModel : ObservableObject
         var refused = new List<string>();
         foreach (var path in paths)
         {
-            var normalized = SessionPaths.NormalizePdf(path);
+            var normalized = DocumentPaths.Normalize(path);
             if (normalized is null)
             {
                 refused.Add(path);
@@ -170,7 +171,7 @@ public sealed class SessionEditorViewModel : ObservableObject
         }
 
         if (refused.Count > 0)
-            ErrorMessage = $"Only PDFs can be added: {string.Join(", ", refused.Select(SessionPaths.FileName))}.";
+            ErrorMessage = $"Only PDF, Word and Excel files can be added: {string.Join(", ", refused.Select(DocumentPaths.FileName))}.";
         OnPropertyChanged(nameof(IncludedText));
     }
 
@@ -280,9 +281,9 @@ public sealed class SessionFileChoiceViewModel : ObservableObject
 
     public string Path { get; }
 
-    public string FileName => SessionPaths.FileName(Path);
+    public string FileName => DocumentPaths.FileName(Path);
 
-    public string Folder => SessionPaths.Folder(Path);
+    public string Folder => DocumentPaths.Folder(Path);
 
     /// <summary>Why it is listed: "Open in Adobe Acrobat", "Recently opened", "Added by you", "In this session".</summary>
     public string Reason { get; }

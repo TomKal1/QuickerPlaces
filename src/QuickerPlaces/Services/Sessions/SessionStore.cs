@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.Sessions;
+using QuickerPlaces.Services.Documents;
 
 namespace QuickerPlaces.Services.Sessions;
 
@@ -300,15 +301,15 @@ public sealed class SessionStore
 
         foreach (var raw in files ?? Array.Empty<string>())
         {
-            var file = SessionPaths.NormalizePdf(raw);
+            var file = DocumentPaths.Normalize(raw);
             if (file is null)
-                return ValidationResult.Fail($"\"{raw}\" isn't a full path to a PDF, so it can't be saved in a session.");
+                return ValidationResult.Fail($"\"{raw}\" isn't a full path to a PDF, Word or Excel file, so it can't be saved in a session.");
             if (!cleanFiles.Any(f => string.Equals(f, file, StringComparison.OrdinalIgnoreCase)))
                 cleanFiles.Add(file);
         }
 
         if (cleanFiles.Count == 0)
-            return ValidationResult.Fail("Choose at least one PDF for the session.");
+            return ValidationResult.Fail("Choose at least one file for the session.");
 
         return ValidationResult.Ok();
     }
@@ -427,7 +428,7 @@ public sealed class SessionStore
         }
         catch (Exception ex)
         {
-            // Counts and the file path only, never a session name or a PDF path.
+            // Counts and the file path only, never a session name or a file path.
             DiagnosticLog.Error($"Failed to save {_sessions.Count} session(s) to {_storage.StoreFilePath}; kept in memory for the next save.", ex);
             return PersistenceResult.Fail(
                 $"Couldn't save your sessions to \"{_storage.StoreFilePath}\". {ex.Message} QuickerPlaces will try again when it next saves.");

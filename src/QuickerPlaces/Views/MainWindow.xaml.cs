@@ -8,6 +8,7 @@ using System.Windows.Media;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 
@@ -20,6 +21,7 @@ public partial class MainWindow : Window
     private readonly ActivityStore _activityStore;
     private readonly ActivityTrackingHost _activityHost;
     private readonly SessionStore _sessionStore;
+    private readonly WindowsRecentItems _recentItems;
     private TrayIcon? _trayIcon;
     private bool _exitRequested;
     private GlobalHotkey? _globalHotkey;
@@ -28,7 +30,8 @@ public partial class MainWindow : Window
     private Point _bubbleDragStartPoint;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
-        ActivityStore activityStore, ActivityTrackingHost activityHost, SessionStore sessionStore)
+        ActivityStore activityStore, ActivityTrackingHost activityHost, SessionStore sessionStore,
+        WindowsRecentItems recentItems)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -37,6 +40,7 @@ public partial class MainWindow : Window
         _activityStore = activityStore;
         _activityHost = activityHost;
         _sessionStore = sessionStore;
+        _recentItems = recentItems;
         RestoreWindowState(settings);
         UpdateActivityIndicator();
     }
@@ -52,7 +56,7 @@ public partial class MainWindow : Window
     }
 
     private void SessionsButton_Click(object sender, RoutedEventArgs e)
-        => SessionsWindow.Show(this, _sessionStore, new WindowsShell(), new WindowsOpenPdfProbe());
+        => SessionsWindow.Show(this, _sessionStore, new WindowsShell(), new WindowsOpenDocumentProbe(_recentItems));
 
     private void OptionsButton_Click(object sender, RoutedEventArgs e)
     {

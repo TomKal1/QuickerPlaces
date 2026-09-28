@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Tests.Fakes;
 using QuickerPlaces.ViewModels;
@@ -22,11 +23,11 @@ public sealed class SessionEditorViewModelTests
         _store = new SessionStore(_storage, new ManualTimeProvider());
     }
 
-    private static OpenPdfScan Scan(params PdfCandidate[] candidates) => new(candidates, Array.Empty<string>());
+    private static OpenDocumentScan Scan(params DocumentCandidate[] candidates) => new(candidates, Array.Empty<string>());
 
-    private static PdfCandidate Open(string path) => new(path, true, "Open in Adobe Acrobat", null);
+    private static DocumentCandidate Open(string path) => new(path, true, "Open in Adobe Acrobat", null);
 
-    private static PdfCandidate Suggested(string path) => new(path, false, "Recently opened", null);
+    private static DocumentCandidate Suggested(string path) => new(path, false, "Recently opened", null);
 
     [Fact]
     public void AScan_TicksOpenFiles_AndListsSuggestionsUnticked()
@@ -37,8 +38,8 @@ public sealed class SessionEditorViewModelTests
 
         Assert.Equal(new[] { true, true, false }, vm.Files.Select(f => f.IsIncluded));
         Assert.Equal("Open in Adobe Acrobat", vm.Files[0].Reason);
-        Assert.Equal("2 of 3 PDFs ticked", vm.IncludedText);
-        Assert.Equal("Found 2 open PDFs. Check the list, then Save.", vm.ScanSummary);
+        Assert.Equal("2 of 3 files ticked", vm.IncludedText);
+        Assert.Equal("Found 2 open files. Check the list, then Save.", vm.ScanSummary);
     }
 
     [Fact]
@@ -46,11 +47,11 @@ public sealed class SessionEditorViewModelTests
     {
         var vm = new SessionEditorViewModel(_store, null);
 
-        vm.ApplyScan(new OpenPdfScan(new[] { Suggested(Spec) }, new[] { "Spec sheet.pdf (Microsoft Edge)" }) { Warning = "Part of the scan took too long." });
+        vm.ApplyScan(new OpenDocumentScan(new[] { Suggested(Spec) }, new[] { "Spec sheet.pdf (Microsoft Edge)" }) { Warning = "Part of the scan took too long." });
 
         Assert.Equal(
-            "No open PDFs were found. Tick any recently opened ones below, or use Add PDFs.\n" +
-            "Also open, but not matched to a file: Spec sheet.pdf (Microsoft Edge). Use Add PDFs to include it.\n" +
+            "No open files were found. Tick any recently opened ones below, or use Add files.\n" +
+            "Also open, but not matched to a file: Spec sheet.pdf (Microsoft Edge). Use Add files to include it.\n" +
             "Part of the scan took too long.",
             vm.ScanSummary);
     }
@@ -80,7 +81,7 @@ public sealed class SessionEditorViewModelTests
         Assert.Equal(new[] { A101, A102 }, vm.Files.Select(f => f.Path));
         Assert.All(vm.Files, f => Assert.True(f.IsIncluded));
         Assert.Equal("Added by you", vm.Files[1].Reason);
-        Assert.Equal("Only PDFs can be added: notes.txt.", vm.ErrorMessage);
+        Assert.Equal("Only PDF, Word and Excel files can be added: notes.txt.", vm.ErrorMessage);
     }
 
     [Fact]
@@ -107,7 +108,7 @@ public sealed class SessionEditorViewModelTests
         vm.Name = "Tower B";
 
         Assert.False(vm.Save());
-        Assert.Equal("Choose at least one PDF for the session.", vm.ErrorMessage);
+        Assert.Equal("Choose at least one file for the session.", vm.ErrorMessage);
         Assert.Null(vm.SavedId);
         Assert.Empty(_store.Sessions);
     }
@@ -175,6 +176,6 @@ public sealed class SessionEditorViewModelTests
 
         vm.SetAllIncluded(false);
         Assert.Equal(0, vm.IncludedCount);
-        Assert.Equal("0 of 2 PDFs ticked", vm.IncludedText);
+        Assert.Equal("0 of 2 files ticked", vm.IncludedText);
     }
 }

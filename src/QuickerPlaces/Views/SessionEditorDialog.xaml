@@ -6,8 +6,8 @@
         ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
     <!--
         Sessions plan §5, D9: the review step. Name and tags at the top; the
-        PDFs found or added, each with a tick, in the middle; what the scan
-        found under the list. Only ticked PDFs are saved, and nothing is
+        files found or added, each with a tick, in the middle; what the scan
+        found under the list. Only ticked files are saved, and nothing is
         saved until Save. DataContext is a SessionEditorViewModel; the
         code-behind runs the scan off the UI thread and the file picker.
     -->
@@ -103,11 +103,11 @@
 
         <DockPanel Grid.Row="2" Margin="0,4,0,8">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button x:Name="ScanButton" Content="Find open PDFs" Margin="0,0,8,0" Click="Scan_Click"
-                        ToolTip="Look again for PDFs open now; files already listed keep their ticks" />
-                <Button Content="_Add PDFs…" Click="AddFiles_Click" ToolTip="Choose PDFs to add by hand" />
+                <Button x:Name="ScanButton" Content="Find open files" Margin="0,0,8,0" Click="Scan_Click"
+                        ToolTip="Look again for files open now; files already listed keep their ticks" />
+                <Button Content="_Add files…" Click="AddFiles_Click" ToolTip="Choose PDF, Word or Excel files to add by hand" />
             </StackPanel>
-            <TextBlock Text="PDFs" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Text="Files" FontWeight="SemiBold" VerticalAlignment="Center" />
             <TextBlock Text="{Binding IncludedText}" Foreground="{StaticResource Text.Secondary}"
                        VerticalAlignment="Center" Margin="10,0,0,0" />
         </DockPanel>
@@ -116,7 +116,7 @@
             <DataGrid x:Name="FilesGrid" ItemsSource="{Binding Files}" AutoGenerateColumns="False"
                       IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
                       SelectionMode="Extended" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                      AutomationProperties.Name="PDFs to save" KeyboardNavigation.TabNavigation="Once"
+                      AutomationProperties.Name="Files to save" KeyboardNavigation.TabNavigation="Once"
                       PreviewKeyDown="FilesGrid_PreviewKeyDown">
                 <DataGrid.Columns>
                     <DataGridTemplateColumn Header="Save" Width="52" SortMemberPath="IsIncluded">
@@ -128,7 +128,7 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="PDF" SortMemberPath="FileName" Width="*">
+                    <DataGridTemplateColumn Header="File" SortMemberPath="FileName" Width="*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding FileName}" VerticalAlignment="Center"
@@ -141,7 +141,7 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <TextBlock Text="Looking for open PDFs…" IsHitTestVisible="False"
+            <TextBlock Text="Looking for open files…" IsHitTestVisible="False"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Foreground="{StaticResource Text.Secondary}" FontStyle="Italic"
                        Visibility="{Binding IsScanning, Converter={StaticResource BooleanToVisibilityConverter}}" />
@@ -152,7 +152,7 @@
                 <Button Content="Tick all" Margin="0,0,8,0" Click="TickAll_Click" />
                 <Button Content="Untick all" Margin="0,0,8,0" Click="UntickAll_Click" />
                 <Button Content="_Remove from list" Click="Remove_Click"
-                        ToolTip="Take the selected PDFs out of this list (the files are not touched)" />
+                        ToolTip="Take the selected files out of this list (the files are not touched)" />
             </StackPanel>
             <TextBlock Text="Space ticks the selected rows." Foreground="{StaticResource Text.Faint}"
                        VerticalAlignment="Center" />

@@ -4,6 +4,7 @@ using System.Windows.Input;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
@@ -76,7 +77,10 @@ public partial class App : Application
 
         var sessionStore = SessionStore.CreateDefault();
 
-        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore);
+        // One Recent Items reader, shared by the session scan and Recent Files tracking, so its shortcut cache is shared too.
+        var recentItems = new WindowsRecentItems();
+
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using QuickerPlaces.Mvvm;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.ViewModels;
@@ -20,7 +21,7 @@ namespace QuickerPlaces.ViewModels;
 public sealed class SessionsViewModel : ObservableObject
 {
     /// <summary>Shown in place of the list when nothing has been saved.</summary>
-    public const string EmptyMessage = "No sessions yet. Open the PDFs you're working on, then choose Save open PDFs.";
+    public const string EmptyMessage = "No sessions yet. Open the files you're working on, then choose Save open files.";
 
     /// <summary>Shown in place of the list when the search or tag hides every session.</summary>
     public const string NoMatchesMessage = "No sessions match. Clear the search or choose All tags.";
@@ -113,7 +114,7 @@ public sealed class SessionsViewModel : ObservableObject
 
     public bool CanEditSelection => HasSelection && CanChange;
 
-    /// <summary>What the last action did, when it went well ("Opened 4 PDFs from Tower B").</summary>
+    /// <summary>What the last action did, when it went well ("Opened 4 files from Tower B").</summary>
     public string? StatusMessage
     {
         get => _statusMessage;
@@ -136,7 +137,7 @@ public sealed class SessionsViewModel : ObservableObject
     /// <summary>The confirmation Delete asks, naming the session and saying the PDFs are untouched.</summary>
     public string DeleteConfirmation => _selectedRow is null
         ? ""
-        : $"Delete the session \"{_selectedRow.Name}\"?\n\nOnly the session is deleted. Its PDFs stay where they are.";
+        : $"Delete the session \"{_selectedRow.Name}\"?\n\nOnly the session is deleted. Its files stay where they are.";
 
     /// <summary>Opens every PDF in the selected session.</summary>
     public void OpenSelected()
@@ -205,7 +206,7 @@ public sealed class SessionsViewModel : ObservableObject
         if (persistenceMessage is not null)
             ErrorMessage = persistenceMessage;
         else if (_selectedRow is { } row)
-            StatusMessage = $"Saved \"{row.Name}\" with {PdfCount(row.Session.Files.Count)}.";
+            StatusMessage = $"Saved \"{row.Name}\" with {FileCount(row.Session.Files.Count)}.";
     }
 
     /// <summary>True when <paramref name="session"/> passes <paramref name="search"/> and <paramref name="tag"/>: every word of the search in its name, a tag or a file name, and the tag among its tags.</summary>
@@ -218,10 +219,10 @@ public sealed class SessionsViewModel : ObservableObject
         return words.All(word =>
             session.Name.Contains(word, StringComparison.CurrentCultureIgnoreCase) ||
             session.Tags.Any(t => t.Contains(word, StringComparison.CurrentCultureIgnoreCase)) ||
-            session.Files.Any(f => SessionPaths.FileName(f).Contains(word, StringComparison.CurrentCultureIgnoreCase)));
+            session.Files.Any(f => DocumentPaths.FileName(f).Contains(word, StringComparison.CurrentCultureIgnoreCase)));
     }
 
-    internal static string PdfCount(int n) => n == 1 ? "1 PDF" : $"{n} PDFs";
+    internal static string FileCount(int n) => n == 1 ? "1 file" : $"{n} files";
 
     private void ApplyFilter(string? selectId)
     {
@@ -239,7 +240,7 @@ public sealed class SessionsViewModel : ObservableObject
         var selectedId = row.Id;
         ClearMessages();
         if (outcome.Launched.Count > 0)
-            StatusMessage = $"Opened {PdfCount(outcome.Launched.Count)} from \"{row.Name}\".";
+            StatusMessage = $"Opened {FileCount(outcome.Launched.Count)} from \"{row.Name}\".";
         ErrorMessage = outcome.Summary;
 
         // Last opened changed, and with it the order.
@@ -274,12 +275,12 @@ public sealed class SessionRowViewModel
 
     public bool HasTags => Session.Tags.Count > 0;
 
-    /// <summary>"4 PDFs · saved 28/09/2026 14:05 · opened 29/09/2026 09:12", in the user's own date format.</summary>
+    /// <summary>"4 files · saved 28/09/2026 14:05 · opened 29/09/2026 09:12", in the user's own date format.</summary>
     public string DetailText
     {
         get
         {
-            var text = $"{SessionsViewModel.PdfCount(Session.Files.Count)} · saved {Local(Session.UpdatedAt)}";
+            var text = $"{SessionsViewModel.FileCount(Session.Files.Count)} · saved {Local(Session.UpdatedAt)}";
             return Session.LastOpenedAt is { } opened ? $"{text} · opened {Local(opened)}" : text;
         }
     }
@@ -295,9 +296,9 @@ public sealed class SessionFileViewModel
 
     public string Path { get; }
 
-    public string FileName => SessionPaths.FileName(Path);
+    public string FileName => DocumentPaths.FileName(Path);
 
-    public string Folder => SessionPaths.Folder(Path);
+    public string Folder => DocumentPaths.Folder(Path);
 }
 
 /// <summary>One choice in the tag filter.</summary>
