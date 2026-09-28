@@ -737,6 +737,9 @@ public sealed class MainViewModel : ObservableObject
             FavouritePlaces.Add(place);
 
         ExportCommand.RaiseCanExecuteChanged();
+
+        foreach (var favourite in FavouritePlaces)
+            favourite.Refresh();
     }
 
     /// <summary>
