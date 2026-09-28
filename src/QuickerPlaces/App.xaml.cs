@@ -85,7 +85,8 @@ public partial class App : Application
         var recentFilesStore = RecentFilesStore.CreateDefault();
         var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
 
-        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems);
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems,
+            placesService, recentFilesStore, recentFilesHost);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))

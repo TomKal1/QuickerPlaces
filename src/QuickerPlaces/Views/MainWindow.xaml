@@ -195,6 +195,16 @@
                         <TextBlock Text="Recents" Margin="6,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
+                <!-- The Library (ai/260928_PDF Project Sessions Plan.md §6): saved and recent folders, links and files together. -->
+                <Button x:Name="LibraryButton" Click="LibraryButton_Click" Margin="0,0,8,0"
+                        ToolTip="Everything together: saved places and sessions, recent folders and files, by type or tag"
+                        AutomationProperties.Name="Library">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8F1;" FontFamily="{StaticResource Font.Icons}" FontSize="15"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="Library" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <!-- Project sessions (ai/260928_PDF Project Sessions Plan.md): saved, tagged sets of open PDF, Word and Excel files. -->
                 <Button x:Name="SessionsButton" Click="SessionsButton_Click" Margin="0,0,8,0"
                         ToolTip="Save the files you have open as a tagged session, or reopen one"

@@ -380,6 +380,23 @@ public sealed class MainViewModel : ObservableObject
             PlacesView.Refresh();
     }
 
+    /// <summary>
+    /// A place was opened somewhere else — the Library — through its own
+    /// PlaceLauncher: show the new Last Opened and Opens, re-sort a usage
+    /// sort, and show a failed save of the record, as Open does here.
+    /// </summary>
+    public void NotePlaceOpened(Place place, PersistenceResult persistence)
+    {
+        RefreshPersistenceState(persistence);
+        var row = Places.FirstOrDefault(p => ReferenceEquals(p.Model, place) || p.Model.Id == place.Id);
+        if (row is null)
+            return;
+
+        row.Refresh();
+        if (CurrentSort?.Key is PlaceSortKey.LastOpened or PlaceSortKey.Opens)
+            PlacesView.Refresh();
+    }
+
     private void RenameAlias(PlaceViewModel? place)
     {
         if (place is null)

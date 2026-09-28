@@ -264,6 +264,17 @@ public sealed class LibraryViewModel : ObservableObject
         }
     }
 
+    /// <summary>The other side of <see cref="TrackEverywhere"/>, for the second radio button.</summary>
+    public bool TrackUnderTrackedFolders
+    {
+        get => !TrackEverywhere;
+        set
+        {
+            if (value)
+                TrackEverywhere = false;
+        }
+    }
+
     /// <summary>One line about what Recent Files is doing.</summary>
     public string RecentFilesStatus
     {
@@ -551,6 +562,7 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(TrackWord));
         OnPropertyChanged(nameof(TrackExcel));
         OnPropertyChanged(nameof(TrackEverywhere));
+        OnPropertyChanged(nameof(TrackUnderTrackedFolders));
         OnPropertyChanged(nameof(RecentFilesStatus));
     }
 
