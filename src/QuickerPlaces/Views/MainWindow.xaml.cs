@@ -143,12 +143,17 @@ public partial class MainWindow : Window
         ApplyGlobalHotkey(null);
 
         var saved = SettingsDialog.Show(this, _settings.GlobalHotkey,
-            _settings.MinimizeToTray, _settings.StartWithWindows, ApplySettingsChoice);
+            _settings.MinimizeToTray, _settings.StartWithWindows,
+            ThemePreference.ParseTheme(_settings.Theme), ThemePreference.ParseHighlight(_settings.Highlight),
+            _themeManager.Apply, ApplySettingsChoice);
         if (saved is null)
         {
-            // Cancelled: put back what was there. If that fails again, it
-            // was already failing before (and reported at startup).
+            // Cancelled (Cancel, Esc or the title bar's close button): put
+            // back what was there, including any previewed appearance. If
+            // the hotkey fails again, it was already failing before (and
+            // reported at startup).
             ApplyGlobalHotkey(_settings.GlobalHotkey);
+            _themeManager.Apply(ThemePreference.ParseTheme(_settings.Theme), ThemePreference.ParseHighlight(_settings.Highlight));
             return;
         }
     }
@@ -165,6 +170,9 @@ public partial class MainWindow : Window
         _settings.GlobalHotkey = choice.Hotkey;
         _settings.MinimizeToTray = choice.MinimizeToTray;
         _settings.StartWithWindows = choice.StartWithWindows;
+        _settings.Theme = ThemePreference.Format(choice.Theme);
+        _settings.Highlight = ThemePreference.Format(choice.Highlight);
+        _themeManager.Apply(choice.Theme, choice.Highlight);
         PersistWindowState(_settings);
         _settingsService.Save(_settings);
         _trayIcon?.Refresh(_settings);

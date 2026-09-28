@@ -1,70 +1,108 @@
 <Window x:Class="QuickerPlaces.Views.SettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        mc:Ignorable="d"
         Title="Settings"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         SizeToContent="Height"
-        Width="460"
-        WindowStartupLocation="CenterOwner"
-        d:DesignHeight="260" d:DesignWidth="460">
+        Width="480"
+        WindowStartupLocation="CenterOwner">
     <!--
-        App settings: global hotkey, tray and Windows startup opt-ins.
-        Window size and the list's collapsed state are remembered automatically.
+        App settings: appearance (previewed live, reverted on Cancel), the
+        global hotkey, and the tray and Windows startup opt-ins. Window size
+        and the list's collapsed state are remembered automatically.
     -->
-    <Grid Margin="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <StackPanel Margin="24,22,24,20">
+        <TextBlock Text="APPEARANCE" Style="{StaticResource TextBlock.Caps}" HorizontalAlignment="Left" />
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,8">
-            <TextBlock Text="Shortcut to bring QuickerPlaces to the front" FontWeight="SemiBold" Margin="0,0,0,4" />
-            <TextBlock Text="Works from any app while QuickerPlaces is running. Click the box and press the keys you want, including Ctrl, Alt or Win."
-                       Foreground="{DynamicResource Text.Secondary}" TextWrapping="Wrap" FontSize="12" />
+        <TextBlock Text="Theme" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,12,0,8" />
+        <Border Style="{StaticResource Border.SegmentGroup}">
+            <UniformGrid Rows="1">
+                <RadioButton x:Name="ThemeLight" GroupName="Theme" Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5"
+                             Checked="Appearance_Changed" AutomationProperties.Name="Light theme">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Sun}" />
+                        <TextBlock Text="Light" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="ThemeDark" GroupName="Theme" Style="{StaticResource RadioButton.Segment}" Tag="0"
+                             Checked="Appearance_Changed" AutomationProperties.Name="Dark theme">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Moon}" />
+                        <TextBlock Text="Dark" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="ThemeSystem" GroupName="Theme" Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0"
+                             BorderThickness="0" Checked="Appearance_Changed" AutomationProperties.Name="Match the Windows theme">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Monitor}" />
+                        <TextBlock Text="Match Windows" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+            </UniformGrid>
+        </Border>
+
+        <TextBlock Text="Highlight colour" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,20,0,2" />
+        <TextBlock Text="Colours the main button, selected rows and switches." Style="{StaticResource TextBlock.Hint}" />
+        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <RadioButton x:Name="HighlightGreen" GroupName="Highlight" Style="{StaticResource RadioButton.Swatch}"
+                         Background="{DynamicResource Preset.Green}" Checked="Appearance_Changed" AutomationProperties.Name="Hull green">
+                <TextBlock Text="Hull green" TextWrapping="Wrap" TextAlignment="Center" />
+            </RadioButton>
+            <RadioButton x:Name="HighlightBlue" GroupName="Highlight" Style="{StaticResource RadioButton.Swatch}"
+                         Background="{DynamicResource Preset.Blue}" Checked="Appearance_Changed" AutomationProperties.Name="Steel blue">
+                <TextBlock Text="Steel blue" TextWrapping="Wrap" TextAlignment="Center" />
+            </RadioButton>
+            <RadioButton x:Name="HighlightRed" GroupName="Highlight" Style="{StaticResource RadioButton.Swatch}"
+                         Background="{DynamicResource Preset.Red}" Checked="Appearance_Changed" AutomationProperties.Name="Tail red">
+                <TextBlock Text="Tail red" TextWrapping="Wrap" TextAlignment="Center" />
+            </RadioButton>
+            <RadioButton x:Name="HighlightCognac" GroupName="Highlight" Style="{StaticResource RadioButton.Swatch}"
+                         Background="{DynamicResource Preset.Cognac}" Checked="Appearance_Changed" AutomationProperties.Name="Cognac">
+                <TextBlock Text="Cognac" TextWrapping="Wrap" TextAlignment="Center" />
+            </RadioButton>
+            <RadioButton x:Name="HighlightWindows" GroupName="Highlight" Style="{StaticResource RadioButton.Swatch}" Tag="windows"
+                         Background="{DynamicResource Bg.Raised}" Checked="Appearance_Changed" AutomationProperties.Name="Windows accent colour">
+                <TextBlock Text="Windows accent" TextWrapping="Wrap" TextAlignment="Center" />
+            </RadioButton>
         </StackPanel>
 
+        <Separator />
+
+        <TextBlock Text="SHORTCUT" Style="{StaticResource TextBlock.Caps}" HorizontalAlignment="Left" />
+        <TextBlock Text="Bring QuickerPlaces to the front" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,12,0,2" />
+        <TextBlock Text="Works from any app while QuickerPlaces is running. Click the box, then press the keys you want, including Ctrl, Alt or Win."
+                   Style="{StaticResource TextBlock.Hint}" />
         <!--
             Read-only so typing never inserts characters: the key handler
-            turns each key press into a hotkey instead. Tab, and Enter/Esc
-            with no modifiers, are let through so the dialog stays usable
-            from the keyboard.
+            turns each key press into a hotkey. Tab, and Enter/Esc with no
+            modifiers, are let through so the dialog stays keyboard-usable.
         -->
-        <TextBox x:Name="HotkeyBox" Grid.Row="1" Margin="0,0,0,8"
+        <TextBox x:Name="HotkeyBox" Margin="0,10,0,0"
                  IsReadOnly="True" IsReadOnlyCaretVisible="False"
                  PreviewKeyDown="HotkeyBox_PreviewKeyDown"
                  PreviewKeyUp="HotkeyBox_PreviewKeyUp"
                  AutomationProperties.Name="Global shortcut"
                  ToolTip="Press a key combination. Backspace turns the shortcut off." />
-
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,14">
-            <Button Content="Reset to Default" Padding="10,4" Margin="0,0,8,0" Click="ResetButton_Click" />
-            <Button Content="Turn Off" Padding="10,4" Click="TurnOffButton_Click" />
+        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+            <Button Content="Reset to default" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="ResetButton_Click" />
+            <Button Content="Turn off" Style="{StaticResource Button.Compact}" Click="TurnOffButton_Click" />
         </StackPanel>
 
-        <StackPanel Grid.Row="3" Margin="0,0,0,14">
-            <CheckBox x:Name="MinimizeToTrayCheck" Content="Keep running in the tray when I close the window"
-                      Margin="0,0,0,8" />
-            <CheckBox x:Name="StartWithWindowsCheck" Content="Start with Windows in the tray" />
-            <TextBlock Text="Both options are off by default. The tray menu has Open, Pause tracking, and Exit."
-                       TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}"
-                       FontSize="12" Margin="0,7,0,0" />
-        </StackPanel>
+        <Separator />
 
-        <TextBlock x:Name="ErrorText" Grid.Row="4" Foreground="{DynamicResource Danger}"
-                   TextWrapping="Wrap" MaxWidth="412" HorizontalAlignment="Left"
-                   Margin="0,0,0,14" Visibility="Collapsed" />
+        <TextBlock Text="TRAY" Style="{StaticResource TextBlock.Caps}" HorizontalAlignment="Left" />
+        <CheckBox x:Name="MinimizeToTrayCheck" Content="Keep running in the tray when I close the window" Margin="0,12,0,10" />
+        <CheckBox x:Name="StartWithWindowsCheck" Content="Start with Windows in the tray" />
+        <TextBlock Text="Both are off by default. The tray menu has Open, Pause tracking and Exit."
+                   Style="{StaticResource TextBlock.Hint}" Margin="0,8,0,0" />
 
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Danger}" TextWrapping="Wrap"
+                   Margin="0,14,0,0" Visibility="Collapsed" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
             <Button Content="Cancel" Margin="0,0,8,0" IsCancel="True" Click="CancelButton_Click" />
             <Button Content="Save" Style="{StaticResource Button.Primary}" IsDefault="True" Click="SaveButton_Click" />
         </StackPanel>
-    </Grid>
+    </StackPanel>
 </Window>
