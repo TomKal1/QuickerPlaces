@@ -18,7 +18,7 @@
     <SolidColorBrush x:Key="Border.Strong" Color="#FF3D4542" />
     <SolidColorBrush x:Key="Text.Primary" Color="#FFEBE9E3" />
     <SolidColorBrush x:Key="Text.Secondary" Color="#FFA7ADAA" />
-    <SolidColorBrush x:Key="Text.Tertiary" Color="#FF7F8683" />
+    <SolidColorBrush x:Key="Text.Tertiary" Color="#FF848B88" />
     <SolidColorBrush x:Key="Trim.Band" Color="#FF080A09" />
     <SolidColorBrush x:Key="Trim.Line" Color="#FFAEB4B1" />
     <SolidColorBrush x:Key="Brand.Green" Color="#FF1F5C4D" />

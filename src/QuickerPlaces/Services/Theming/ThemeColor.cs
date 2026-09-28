@@ -35,7 +35,11 @@ public readonly record struct ThemeColor(byte A, byte R, byte G, byte B)
     /// <summary>WCAG relative luminance, 0 (black) to 1 (white).</summary>
     public double RelativeLuminance => 0.2126 * Channel(R) + 0.7152 * Channel(G) + 0.0722 * Channel(B);
 
-    /// <summary>WCAG contrast ratio, 1 to 21.</summary>
+    /// <summary>
+    /// WCAG contrast ratio, 1 to 21. Both colours must be opaque: alpha is
+    /// not composited against a background first, so a translucent colour's
+    /// alpha is silently ignored.
+    /// </summary>
     public static double Contrast(ThemeColor a, ThemeColor b)
     {
         var (light, dark) = a.RelativeLuminance >= b.RelativeLuminance
