@@ -393,4 +393,45 @@ public sealed class SessionStoreTests
         Assert.Single(Directory.GetFiles(dir.Path, "sessions.corrupt-*.json"));
         Assert.Equal("the user's places", File.ReadAllText(dir.File("places.json")));
     }
+
+    [Fact]
+    public void EveryReopen_IsKept_ForTheYearView_AndDaysCountSavesAndReopensByTag()
+    {
+        // ManualTimeProvider's zone is UTC+10.
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 9, 28, 0, 0, 0, TimeSpan.Zero));
+        var storage = new FakePlacesStorage();
+        var store = NewStore(storage, time);
+        var tower = Create(store, "Tower B", new[] { "Tower B" });
+        Create(store, "Admin", new[] { "admin" }, A102);
+        time.Advance(TimeSpan.FromDays(1));
+        store.MarkOpened(tower.Id);
+        store.MarkOpened(tower.Id);
+
+        var reloaded = NewStore(storage, time);
+        Assert.Equal(2, reloaded.Find(tower.Id)!.OpenedAt.Count);
+
+        var days = reloaded.QueryDays();
+        Assert.Equal(2, days[new DateOnly(2026, 9, 28)].Saved);
+        Assert.Equal(0, days[new DateOnly(2026, 9, 28)].Reopens);
+        Assert.Equal(2, days[new DateOnly(2026, 9, 29)].Reopens);
+        Assert.Equal(new[] { "Tower B" }, days[new DateOnly(2026, 9, 29)].Names);
+
+        var tagged = reloaded.QueryDays("TOWER B");
+        Assert.Equal(1, tagged[new DateOnly(2026, 9, 28)].Saved);
+        Assert.Equal(new[] { "Tower B" }, tagged[new DateOnly(2026, 9, 28)].Names);
+    }
+
+    [Fact]
+    public void ReopenHistory_IsKeptAYear()
+    {
+        var time = new ManualTimeProvider();
+        var store = NewStore(time: time);
+        var session = Create(store, "Tower B");
+        store.MarkOpened(session.Id);
+        time.Advance(TimeSpan.FromDays(SessionStore.HistoryDays + 1));
+
+        store.MarkOpened(session.Id);
+
+        Assert.Equal(new[] { time.UtcNow }, store.Find(session.Id)!.OpenedAt);
+    }
 }

@@ -9,8 +9,22 @@ namespace QuickerPlaces.ViewModels;
 /// <summary>One year of day cells, laid out by culture-specific weeks.</summary>
 public static class ActivityCalendar
 {
-    /// <summary>A January-to-December activity strip with aligned weeks and month markers.</summary>
+    /// <summary>A January-to-December activity strip with aligned weeks and month markers, from folder totals.</summary>
     public static ActivityCalendarYearResult BuildYear(IReadOnlyDictionary<DateOnly, ActivityDayTotal> totals,
+        DateOnly trackingStartedOn, DateOnly today, int year, CultureInfo culture,
+        DateOnly? selectedFrom = null, DateOnly? selectedTo = null)
+        => BuildYear(totals.ToDictionary(pair => pair.Key, pair => new CalendarDay(
+                pair.Value.Time.TotalMilliseconds,
+                $"{ActivityFormat.Duration(pair.Value.Time)} in {pair.Value.Folders} {(pair.Value.Folders == 1 ? "folder" : "folders")}")),
+            trackingStartedOn, today, year, culture, selectedFrom, selectedTo);
+
+    /// <summary>
+    /// The same year strip from any per-day weight: a day's shade ranks its
+    /// weight among the year's other nonzero days, and its label is
+    /// "date — summary". Recent Files (opens per day) and project sessions
+    /// (reopens per day) use this; folders use the overload above.
+    /// </summary>
+    public static ActivityCalendarYearResult BuildYear(IReadOnlyDictionary<DateOnly, CalendarDay> days,
         DateOnly trackingStartedOn, DateOnly today, int year, CultureInfo culture,
         DateOnly? selectedFrom = null, DateOnly? selectedTo = null)
     {
@@ -19,9 +33,9 @@ public static class ActivityCalendar
         var last = new DateOnly(year, 12, 31);
         var keptFrom = today.AddDays(-364);
         var firstDayOfWeek = (int)culture.DateTimeFormat.FirstDayOfWeek;
-        var nonzero = totals.Where(pair => pair.Key >= first && pair.Key <= last &&
-                pair.Key >= keptFrom && pair.Key <= today && pair.Value.Time > TimeSpan.Zero)
-            .Select(pair => pair.Value.Time).OrderBy(value => value).ToArray();
+        var nonzero = days.Where(pair => pair.Key >= first && pair.Key <= last &&
+                pair.Key >= keptFrom && pair.Key <= today && pair.Value.Weight > 0)
+            .Select(pair => pair.Value.Weight).OrderBy(value => value).ToArray();
         var months = new List<ActivityCalendarMonth>(12);
 
         for (var month = 1; month <= 12; month++)
@@ -55,12 +69,12 @@ public static class ActivityCalendar
                         continue;
                     }
 
-                    totals.TryGetValue(date, out var total);
-                    var intensity = total is null || total.Time <= TimeSpan.Zero ? 0
-                        : Math.Clamp((int)Math.Ceiling(4.0 * UpperRank(nonzero, total.Time) / nonzero.Length), 1, 4);
-                    var label = total is null || total.Time <= TimeSpan.Zero
+                    days.TryGetValue(date, out var day);
+                    var intensity = day is null || day.Weight <= 0 ? 0
+                        : Math.Clamp((int)Math.Ceiling(4.0 * UpperRank(nonzero, day.Weight) / nonzero.Length), 1, 4);
+                    var label = day is null || day.Weight <= 0
                         ? $"{dateText} — no activity"
-                        : $"{dateText} — {ActivityFormat.Duration(total.Time)} in {total.Folders} {(total.Folders == 1 ? "folder" : "folders")}";
+                        : $"{dateText} — {day.Summary}";
                     cells[offset] = new ActivityCalendarCell(date, true, true, intensity, label,
                         isSelected, date == today);
                 }
@@ -116,7 +130,7 @@ public static class ActivityCalendar
         var firstWeek = first.AddDays(-(((int)first.DayOfWeek - firstDayOfWeek + 7) % 7));
         var lastWeek = today.AddDays(-(((int)today.DayOfWeek - firstDayOfWeek + 7) % 7));
         var nonzero = totals.Where(pair => pair.Key >= first && pair.Key <= today && pair.Value.Time > TimeSpan.Zero)
-            .Select(pair => pair.Value.Time).OrderBy(value => value).ToArray();
+            .Select(pair => pair.Value.Time.TotalMilliseconds).OrderBy(value => value).ToArray();
         var weeks = new List<ActivityCalendarWeek>();
 
         for (var week = firstWeek; week <= lastWeek; week = week.AddDays(7))
@@ -134,7 +148,7 @@ public static class ActivityCalendar
                 var tracked = date >= trackingStartedOn;
                 totals.TryGetValue(date, out var total);
                 var intensity = !tracked ? -1 : total is null || total.Time <= TimeSpan.Zero
-                    ? 0 : Math.Clamp((int)Math.Ceiling(4.0 * UpperRank(nonzero, total.Time) / nonzero.Length), 1, 4);
+                    ? 0 : Math.Clamp((int)Math.Ceiling(4.0 * UpperRank(nonzero, total.Time.TotalMilliseconds) / nonzero.Length), 1, 4);
                 var dateText = date.ToDateTime(TimeOnly.MinValue).ToString("ddd d MMM yyyy", culture);
                 var label = !tracked
                     ? $"{dateText} — not tracked; tracking started {trackingStartedOn.ToDateTime(TimeOnly.MinValue).ToString("d", culture)}"
@@ -153,7 +167,7 @@ public static class ActivityCalendar
         return new ActivityCalendarResult(weeks, labels);
     }
 
-    private static int UpperRank(IReadOnlyList<TimeSpan> sorted, TimeSpan value)
+    private static int UpperRank(IReadOnlyList<double> sorted, double value)
     {
         var low = 0;
         var high = sorted.Count;
@@ -166,6 +180,9 @@ public static class ActivityCalendar
         return low;
     }
 }
+
+/// <summary>One day for the year strip: how much happened (any unit; only the ranking matters) and what to say about it.</summary>
+public sealed record CalendarDay(double Weight, string Summary);
 
 public sealed record ActivityCalendarResult(IReadOnlyList<ActivityCalendarWeek> Weeks,
     IReadOnlyList<string> WeekdayLabels);

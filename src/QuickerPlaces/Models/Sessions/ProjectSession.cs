@@ -35,4 +35,7 @@ public sealed class ProjectSession
 
     /// <summary>When the session was last reopened from QuickerPlaces, or null if never.</summary>
     public DateTimeOffset? LastOpenedAt { get; set; }
+
+    /// <summary>Every reopen, oldest first, in UTC, kept a year (SessionStore.HistoryDays): the year view's session days.</summary>
+    public List<DateTimeOffset> OpenedAt { get; set; } = new();
 }

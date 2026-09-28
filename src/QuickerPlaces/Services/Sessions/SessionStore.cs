@@ -40,6 +40,9 @@ public sealed class SessionStore
     public const int MaxTagLength = 40;
     public const int MaxTags = 20;
 
+    /// <summary>Days of reopen history kept per session, for the year view.</summary>
+    public const int HistoryDays = 365;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -230,8 +233,43 @@ public sealed class SessionStore
         if (session is null)
             return PersistenceResult.Ok();
 
-        session.LastOpenedAt = _time.GetUtcNow();
+        var now = _time.GetUtcNow();
+        session.LastOpenedAt = now;
+        session.OpenedAt.Add(now);
+        var keepFrom = now.AddDays(-HistoryDays);
+        session.OpenedAt.RemoveAll(o => o < keepFrom);
         return SaveNow();
+    }
+
+    /// <summary>
+    /// Per local day, how many sessions were saved and how many reopens there
+    /// were, and which sessions, for the year view. Only sessions with
+    /// <paramref name="tag"/> when one is given.
+    /// </summary>
+    public IReadOnlyDictionary<DateOnly, SessionDayTotal> QueryDays(string? tag = null)
+    {
+        var days = new Dictionary<DateOnly, (int Saved, int Reopens, List<string> Names)>();
+        void Add(DateTimeOffset instant, string name, bool saved)
+        {
+            var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, _time.LocalTimeZone).DateTime);
+            if (!days.TryGetValue(date, out var day))
+                day = (0, 0, new List<string>());
+            if (!day.Names.Contains(name, StringComparer.OrdinalIgnoreCase))
+                day.Names.Add(name);
+            days[date] = saved ? (day.Saved + 1, day.Reopens, day.Names) : (day.Saved, day.Reopens + 1, day.Names);
+        }
+
+        foreach (var session in _sessions)
+        {
+            if (tag is not null && !session.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            Add(session.CreatedAt, session.Name, saved: true);
+            foreach (var opened in session.OpenedAt)
+                Add(opened, session.Name, saved: false);
+        }
+
+        return days.ToDictionary(d => d.Key, d => new SessionDayTotal(d.Value.Saved, d.Value.Reopens, d.Value.Names));
     }
 
     /// <summary>Rewrites sessions.json if a change is still waiting to reach disk.</summary>
@@ -360,6 +398,7 @@ public sealed class SessionStore
                 .Where(t => t.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            session.OpenedAt = (session.OpenedAt ?? new List<DateTimeOffset>()).OrderBy(o => o).ToList();
             session.Files = (session.Files ?? new List<string>())
                 .Where(f => !string.IsNullOrWhiteSpace(f))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -409,7 +448,7 @@ public sealed class SessionStore
 
     private static SessionSnapshot Snapshot(ProjectSession session)
         => new(session.Id, session.Name, session.Tags.ToArray(), session.Files.ToArray(),
-            session.CreatedAt, session.UpdatedAt, session.LastOpenedAt);
+            session.CreatedAt, session.UpdatedAt, session.LastOpenedAt, session.OpenedAt.ToArray());
 }
 
 /// <summary>An immutable copy of one saved session, for the UI.</summary>
@@ -420,11 +459,15 @@ public sealed record SessionSnapshot(
     IReadOnlyList<string> Files,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    DateTimeOffset? LastOpenedAt)
+    DateTimeOffset? LastOpenedAt,
+    IReadOnlyList<DateTimeOffset> OpenedAt)
 {
     /// <summary>The later of when it was last reopened and last changed: what the list is ordered by.</summary>
     public DateTimeOffset LastUsedAt => LastOpenedAt is { } opened && opened > UpdatedAt ? opened : UpdatedAt;
 }
+
+/// <summary>One day of sessions, for the year view: how many were saved, how many reopens, and their names.</summary>
+public sealed record SessionDayTotal(int Saved, int Reopens, IReadOnlyList<string> Names);
 
 /// <summary>A tag in use and how many sessions carry it.</summary>
 public sealed record TagCount(string Tag, int Sessions);
