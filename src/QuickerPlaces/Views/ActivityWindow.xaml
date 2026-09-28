@@ -37,12 +37,27 @@
             </Setter>
         </Style>
         <!--
+            A day cell's focus ring: the shared ring's Signal stroke, hugging
+            the 12 px cell so it stays inside the 14 px pitch instead of
+            overlapping the neighbours.
+        -->
+        <Style x:Key="FocusVisual.CalendarDay">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border Margin="-2" CornerRadius="3" BorderThickness="1.5"
+                                BorderBrush="{DynamicResource Signal}" SnapsToDevicePixels="True" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!--
             One day of the year strip. 12 px cells at a 14 px pitch, which
             ActivityCalendar's strip width and month markers assume (UI
             refresh U12). Leather heat: Heat.0 (none) to Heat.4 (most).
         -->
         <Style x:Key="Button.CalendarDay" TargetType="Button">
-            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.CalendarDay}" />
             <Setter Property="Width" Value="12" />
             <Setter Property="Height" Value="12" />
             <Setter Property="Margin" Value="1" />
@@ -71,8 +86,8 @@
             </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Intensity}" Value="-1">
+                    <!-- Keeps the 1 px Border.Default outline: the fill alone nearly matches Bg.Panel in Dark. -->
                     <Setter Property="Background" Value="{DynamicResource Heat.Untracked}" />
-                    <Setter Property="BorderThickness" Value="0" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Intensity}" Value="1">
                     <Setter Property="Background" Value="{DynamicResource Heat.1}" />
