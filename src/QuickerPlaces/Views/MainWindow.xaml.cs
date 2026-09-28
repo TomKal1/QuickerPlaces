@@ -254,7 +254,7 @@ public partial class MainWindow : Window
         {
             MessageForm.Show(
                 $"The shortcut for bringing QuickerPlaces to the front isn't active.\n\n{_globalHotkeyError}\n\n" +
-                "To choose a different one, or turn it off, open Options next to Hide List and choose Settings.",
+                "To choose a different one, or turn it off, open Options next to Hide list and choose Settings.",
                 AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }
