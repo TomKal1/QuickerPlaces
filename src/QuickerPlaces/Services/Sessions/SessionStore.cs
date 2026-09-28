@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.Sessions;
 using QuickerPlaces.Services.Documents;
@@ -46,9 +45,6 @@ public sealed class SessionStore
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
-
-    /// <summary>Duplicate keys are refused at parse time, as places.json's are, so they classify as Damaged.</summary>
-    private static readonly JsonDocumentOptions DocumentOptions = new() { AllowDuplicateProperties = false };
 
     private readonly IPlacesStorage _storage;
     private readonly TimeProvider _time;
@@ -331,55 +327,13 @@ public sealed class SessionStore
     /// </summary>
     private (List<ProjectSession> sessions, StoreLoadOutcome outcome) Load()
     {
-        if (!_storage.Exists)
-            return (new List<ProjectSession>(), StoreLoadOutcome.NotPresent);
+        var (document, outcome) = JsonStoreLoader.Load<SessionsDocument>(_storage, CurrentSchemaVersion, "sessions", "Sessions store", JsonOptions);
+        if (document is null)
+            return (new List<ProjectSession>(), outcome);
 
-        string json;
-        try
-        {
-            json = _storage.Read();
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Error($"Sessions store at {_storage.StoreFilePath} could not be opened; sessions are read-only for this session.", ex);
-            return (new List<ProjectSession>(), StoreLoadOutcome.Unreadable);
-        }
-
-        try
-        {
-            var root = JsonNode.Parse(json, documentOptions: DocumentOptions) as JsonObject;
-            if (root?["schemaVersion"] is not JsonValue versionValue ||
-                versionValue.GetValueKind() != JsonValueKind.Number ||
-                !versionValue.TryGetValue<int>(out var version) ||
-                version < 1)
-            {
-                DiagnosticLog.Warn($"Sessions store at {_storage.StoreFilePath} has no usable schemaVersion; treating as damaged.");
-                return (new List<ProjectSession>(), StoreLoadOutcome.Damaged);
-            }
-
-            if (version > CurrentSchemaVersion)
-            {
-                DiagnosticLog.Warn($"Sessions store at {_storage.StoreFilePath} has schemaVersion {version}, newer than this build's {CurrentSchemaVersion}.");
-                return (new List<ProjectSession>(), StoreLoadOutcome.WrittenByNewerVersion);
-            }
-
-            // The list must be there: SessionsDocument's initializer would otherwise read a missing one as empty.
-            var document = root["sessions"] is JsonArray ? root.Deserialize<SessionsDocument>(JsonOptions) : null;
-            if (document?.Sessions is null)
-            {
-                DiagnosticLog.Warn($"Sessions store at {_storage.StoreFilePath} holds no usable session list; treating as damaged.");
-                return (new List<ProjectSession>(), StoreLoadOutcome.Damaged);
-            }
-
-            var sessions = Normalize(document.Sessions);
-            DiagnosticLog.Info($"Loaded {sessions.Count} session(s) from {_storage.StoreFilePath}.");
-            return (sessions, StoreLoadOutcome.Ok);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Error($"Sessions store at {_storage.StoreFilePath} is not a valid sessions document.", ex);
-            return (new List<ProjectSession>(), StoreLoadOutcome.Damaged);
-        }
+        var loaded = Normalize(document.Sessions);
+        DiagnosticLog.Info($"Loaded {loaded.Count} session(s) from {_storage.StoreFilePath}.");
+        return (loaded, StoreLoadOutcome.Ok);
     }
 
     /// <summary>

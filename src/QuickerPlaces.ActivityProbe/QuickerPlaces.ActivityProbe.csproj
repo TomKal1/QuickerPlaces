@@ -17,6 +17,7 @@
     <Compile Include="../QuickerPlaces/Services/DiagnosticLog.cs" Link="Linked/Services/DiagnosticLog.cs" />
     <Compile Include="../QuickerPlaces/Services/FilePlacesStorage.cs" Link="Linked/Services/FilePlacesStorage.cs" />
     <Compile Include="../QuickerPlaces/Services/IPlacesStorage.cs" Link="Linked/Services/IPlacesStorage.cs" />
+    <Compile Include="../QuickerPlaces/Services/JsonStoreLoader.cs" Link="Linked/Services/JsonStoreLoader.cs" />
     <Compile Include="../QuickerPlaces/Services/ValidationResult.cs" Link="Linked/Services/ValidationResult.cs" />
   </ItemGroup>
 </Project>
