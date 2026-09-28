@@ -96,6 +96,13 @@ public readonly record struct PlaceSort(PlaceSortKey Key, ListSortDirection Dire
     public (string Key, string Direction) Format()
         => (Key.ToString(), Direction == ListSortDirection.Ascending ? "ascending" : "descending");
 
+    /// <summary>
+    /// The sort the places grid can show: Type has no column there since the
+    /// UI refresh (the type icon shows it), so a remembered Type sort is the
+    /// stored order instead.
+    /// </summary>
+    public static PlaceSort? ForPlacesGrid(PlaceSort? sort) => sort?.Key == PlaceSortKey.Type ? null : sort;
+
     private static ListSortDirection Opposite(ListSortDirection direction)
         => direction == ListSortDirection.Ascending ? ListSortDirection.Descending : ListSortDirection.Ascending;
 

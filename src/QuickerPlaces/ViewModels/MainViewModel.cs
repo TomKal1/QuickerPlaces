@@ -85,7 +85,7 @@ public sealed class MainViewModel : ObservableObject
 
         // The sort remembered in settings.json (D30); anything it doesn't
         // recognise is the stored order.
-        _currentSort = PlaceSort.Parse(settings.PlacesSortKey, settings.PlacesSortDirection);
+        _currentSort = PlaceSort.ForPlacesGrid(PlaceSort.Parse(settings.PlacesSortKey, settings.PlacesSortDirection));
         ApplySort();
 
         // Commands must exist before RebuildFavourites() runs below — it

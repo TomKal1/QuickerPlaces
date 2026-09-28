@@ -190,4 +190,18 @@ public sealed class PlaceSortTests
     [InlineData("Alias", "0")]
     public void Parse_ReturnsNoSort_ForAnythingItDoesNotRecognise(string? key, string? direction)
         => Assert.Null(PlaceSort.Parse(key, direction));
+
+    /// <summary>
+    /// UI refresh: the places grid has no Type column any more, so a Type
+    /// sort remembered from an older version would show no header arrow.
+    /// It becomes the stored order; every other sort survives.
+    /// </summary>
+    [Fact]
+    public void ForPlacesGrid_DropsATypeSort()
+    {
+        Assert.Null(PlaceSort.ForPlacesGrid(new PlaceSort(PlaceSortKey.Type, ListSortDirection.Ascending)));
+        Assert.Null(PlaceSort.ForPlacesGrid(null));
+        var alias = new PlaceSort(PlaceSortKey.Alias, ListSortDirection.Descending);
+        Assert.Equal(alias, PlaceSort.ForPlacesGrid(alias));
+    }
 }
