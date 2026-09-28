@@ -5,6 +5,7 @@ using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
@@ -80,6 +81,10 @@ public partial class App : Application
         // One Recent Items reader, shared by the session scan and Recent Files tracking, so its shortcut cache is shared too.
         var recentItems = new WindowsRecentItems();
 
+        // Recent Files: off until turned on; the tray's Pause tracking pauses it with folder tracking.
+        var recentFilesStore = RecentFilesStore.CreateDefault();
+        var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
+
         var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
@@ -111,6 +116,7 @@ public partial class App : Application
 
             // A session change the Sessions window reported as unsaved gets one more try; a failure is logged there.
             sessionStore.RetrySave();
+            recentFilesHost.Dispose();
             activityHost.Dispose();
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
@@ -131,6 +137,7 @@ public partial class App : Application
         }
         mainWindow.Show();
         activityHost.Start();
+        recentFilesHost.Start();
 
         // A second launch attempt signals SingleInstance instead of
         // starting up (above); this is what the running instance does

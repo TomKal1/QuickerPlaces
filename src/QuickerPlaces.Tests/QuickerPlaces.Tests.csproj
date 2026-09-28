@@ -90,6 +90,8 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
+    <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
+    <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionsViewModel.cs" Link="Linked\ViewModels\SessionsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionEditorViewModel.cs" Link="Linked\ViewModels\SessionEditorViewModel.cs" />
     <!--
