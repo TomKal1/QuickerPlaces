@@ -35,23 +35,33 @@ public static class HighlightPalette
             : Preset("#8A5530", "#734526", "#86522E", dark),
         HighlightPreset.Windows when windowsAccent is { } accent => FromAccent(accent, dark),
         _ => dark
-            ? Preset("#2A7563", "#33866F", "#7CC7AD", dark)
+            // Hover is #32846E, not the Design System's #33866F: that value
+            // only reaches 4.39:1 against the white on-fill text Button.Primary
+            // puts on it, so it's nudged one step darker on the fill-to-hover
+            // line to clear 4.5:1 (see HullGreen_MatchesTheDesignSystem).
+            ? Preset("#2A7563", "#32846E", "#7CC7AD", dark)
             : Preset("#1F5C4D", "#174A3E", "#1F6B58", dark)
     };
 
     /// <summary>
-    /// Turns any accent into a readable highlight: black or white text,
-    /// whichever contrasts more, with the fill pushed away from that text
-    /// until it reaches 4.5:1; and a text colour pushed toward the theme's
-    /// own text until it reaches 4.5:1 on the ground.
+    /// Turns any accent into a readable highlight: white text if the accent
+    /// itself gives white text at least 4.5:1 (so Windows' own blue,
+    /// #0078D4, keeps the white text Windows shows for it), otherwise
+    /// whichever of black/white contrasts more; the fill is then pushed
+    /// away from that text until it reaches 4.5:1 too (a guard that in
+    /// practice never takes a step, since the better of black/white always
+    /// clears 4.5:1 against any colour); and a text colour is pushed
+    /// toward the theme's own text until it reaches 4.5:1 on the ground.
     /// </summary>
     public static HighlightColors FromAccent(ThemeColor accent, bool dark)
     {
         var fill = accent.WithAlpha(255);
-        var onFill = ThemeColor.Contrast(fill, ThemeColor.White) >= ThemeColor.Contrast(fill, ThemeColor.Black)
+        var whiteContrast = ThemeColor.Contrast(fill, ThemeColor.White);
+        var onFill = whiteContrast >= MinimumContrast
             ? ThemeColor.White
-            : ThemeColor.Black;
+            : whiteContrast >= ThemeColor.Contrast(fill, ThemeColor.Black) ? ThemeColor.White : ThemeColor.Black;
         var awayFromText = onFill == ThemeColor.White ? ThemeColor.Black : ThemeColor.White;
+        // Guard only (see the doc comment): this normally takes no steps.
         fill = PushUntil(fill, awayFromText, onFill);
 
         var ground = GroundFor(dark);

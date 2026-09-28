@@ -20,7 +20,7 @@ public readonly record struct ThemeColor(byte A, byte R, byte G, byte B)
         if (text is null || text.Length is not (7 or 9) || text[0] != '#')
             throw new FormatException($"Expected #RRGGBB or #AARRGGBB, got \"{text}\".");
 
-        if (!uint.TryParse(text.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
+        if (!uint.TryParse(text.AsSpan(1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var value))
             throw new FormatException($"\"{text}\" is not a hex colour.");
 
         return text.Length == 7

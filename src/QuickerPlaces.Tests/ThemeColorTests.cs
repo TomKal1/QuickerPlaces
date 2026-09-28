@@ -18,6 +18,7 @@ public sealed class ThemeColorTests
     [InlineData("#12151")]
     [InlineData("#GG1514")]
     [InlineData("")]
+    [InlineData("#12151 ")] // trailing whitespace must not be tolerated (AllowHexSpecifier, not HexNumber)
     public void Parse_RejectsOtherShapes(string text)
         => Assert.Throws<FormatException>(() => ThemeColor.Parse(text));
 
