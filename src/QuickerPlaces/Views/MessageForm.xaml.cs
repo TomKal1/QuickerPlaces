@@ -10,10 +10,10 @@ namespace QuickerPlaces.Views;
 /// native TaskDialog — every dialog the app shows should go through
 /// MessageForm.Show(...) instead of either of those. See README.md
 /// "Dialogs" for why: MessageBox/TaskDialog render with the OS's own
-/// default light chrome and system font, breaking the dark/violet theme
+/// default light chrome and system font, breaking the app's theme
 /// the same way the unstyled title bar and ComboBox popup did earlier.
 /// Being a plain Window, MessageForm inherits the app-wide Window style
-/// (background, font) from Theme.xaml for free, and builds its buttons
+/// (background, font) from Styles.xaml for free, and builds its buttons
 /// from the same Button/Button.Primary styles as the rest of the app.
 ///
 /// This does mean the ViewModel layer calls into a View type directly

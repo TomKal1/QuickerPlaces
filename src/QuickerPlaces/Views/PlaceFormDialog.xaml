@@ -15,9 +15,9 @@
         edit dialogs (Rename Alias / Edit Path-URL), and Restore Place (the
         D15 restore-conflict flow) share this one Window — ConfigureFields()
         in the code-behind shows/hides the explanation and the Alias and
-        Resource panels per PlaceFormMode. A plain themed Window like
-        MessageForm, so it picks up Bg.Glow/Font.Sans/Text.Primary from
-        Theme.xaml for free.
+        Resource panels per PlaceFormMode. A plain Window like MessageForm,
+        so it picks up the implicit Window style (Bg.Base, Font.Sans,
+        Text.Primary) from Styles.xaml for free.
     -->
     <Grid Margin="24">
         <Grid.RowDefinitions>
@@ -33,19 +33,19 @@
                    HorizontalAlignment="Left" Margin="0,0,0,16" Visibility="Collapsed" />
 
         <StackPanel x:Name="AliasPanel" Grid.Row="1" Margin="0,0,0,14">
-            <TextBlock Text="Alias" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <TextBlock Text="Name" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,0,6" />
             <TextBox x:Name="AliasTextBox" />
         </StackPanel>
 
         <StackPanel x:Name="ResourcePanel" Grid.Row="2" Margin="0,0,0,14">
-            <TextBlock x:Name="ResourceLabel" Text="Folder path" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <TextBlock x:Name="ResourceLabel" Text="Folder path" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,0,6" />
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="ResourceTextBox" Grid.Column="0" />
-                <Button x:Name="BrowseButton" Grid.Column="1" Content="Browse..." Margin="8,0,0,0"
+                <TextBox x:Name="ResourceTextBox" Grid.Column="0" FontFamily="{StaticResource Font.Mono}" />
+                <Button x:Name="BrowseButton" Grid.Column="1" Content="Browse…" Margin="8,0,0,0"
                         Click="BrowseButton_Click" />
             </Grid>
         </StackPanel>

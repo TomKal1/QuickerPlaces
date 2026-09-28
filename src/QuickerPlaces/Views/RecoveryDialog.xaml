@@ -19,8 +19,8 @@
         reading "Yes". RecoveryDialog instead takes an ordered list of
         custom-labelled RecoveryOptions and builds its button row from
         them in code-behind — see RecoveryDialog.xaml.cs. Being a plain
-        Window, it picks up the app-wide Bg.Glow/Text.Primary/Font.Sans
-        style from Theme.xaml automatically, same as MessageForm.
+        Window, it picks up the implicit Window style (Bg.Base,
+        Text.Primary, Font.Sans) from Styles.xaml, same as MessageForm.
     -->
     <Grid Margin="24">
         <Grid.RowDefinitions>
@@ -30,17 +30,18 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top">
-            <Border x:Name="IconBadge" Width="36" Height="36" CornerRadius="18"
-                    VerticalAlignment="Top" Margin="0,0,14,0"
-                    Background="{DynamicResource Signal}">
-                <TextBlock Text="!" FontWeight="Bold" FontSize="16"
-                           Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Border x:Name="IconBadge" Width="36" Height="36" CornerRadius="18" BorderThickness="2"
+                    Background="{DynamicResource Bg.Raised}" BorderBrush="{DynamicResource Signal}"
+                    VerticalAlignment="Top" Margin="0,0,14,0">
+                <TextBlock Text="!" FontWeight="ExtraBold" FontSize="16" Foreground="{DynamicResource Signal}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="14"
                        MaxWidth="360" VerticalAlignment="Center" />
         </StackPanel>
 
         <TextBlock x:Name="PathText" Grid.Row="1" TextWrapping="Wrap" FontSize="12"
+                   FontFamily="{StaticResource Font.Mono}"
                    Foreground="{DynamicResource Text.Secondary}"
                    Margin="0,12,0,0" />
 

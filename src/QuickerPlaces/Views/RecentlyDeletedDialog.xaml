@@ -54,23 +54,22 @@
                       KeyboardNavigation.TabNavigation="Once"
                       SelectionChanged="ItemsGrid_SelectionChanged">
                 <DataGrid.Columns>
-                    <!-- Type glyph beside the alias, as in the main grid; SortMemberPath keeps header-click sorting by Alias. -->
-                    <DataGridTemplateColumn Header="Alias" SortMemberPath="Alias" Width="*">
+                    <!-- Type icon beside the name, as in the main grid; SortMemberPath keeps header-click sorting by Alias. -->
+                    <DataGridTemplateColumn Header="NAME" SortMemberPath="Alias" Width="*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding TypeGlyph}" Style="{StaticResource TextBlock.Glyph}" />
+                                    <Path Style="{StaticResource Icon.RowPlaceType}" />
                                     <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="70" />
-                    <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" />
+                    <DataGridTextColumn Header="FOLDER OR LINK" Binding="{Binding Resource}" Width="2*" ElementStyle="{StaticResource Cell.Path}" />
                     <!-- Rows arrive newest deletion first; SortDirection only shows that order's arrow. Both date columns sort on the UTC instant, not the text. -->
-                    <DataGridTextColumn Header="Deleted" Binding="{Binding DeletedText}" SortMemberPath="DeletedAt"
-                                        SortDirection="Descending" Width="140" />
-                    <DataGridTextColumn Header="Days remaining" Binding="{Binding DaysRemainingText}" SortMemberPath="DeletedAt" Width="120">
+                    <DataGridTextColumn Header="DELETED" Binding="{Binding DeletedText}" SortMemberPath="DeletedAt"
+                                        SortDirection="Descending" Width="160" />
+                    <DataGridTextColumn Header="DAYS REMAINING" Binding="{Binding DaysRemainingText}" SortMemberPath="DeletedAt" Width="120">
                         <DataGridTextColumn.CellStyle>
                             <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                                 <Setter Property="ToolTip" Value="{Binding ExpiryToolTip}" />
@@ -85,7 +84,7 @@
                        IsHitTestVisible="False"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,32,16,0"
                        TextWrapping="Wrap" TextAlignment="Center"
-                       Foreground="{DynamicResource Text.Tertiary}" FontStyle="Italic"
+                       Foreground="{DynamicResource Text.Tertiary}"
                        Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </Grid>
 
