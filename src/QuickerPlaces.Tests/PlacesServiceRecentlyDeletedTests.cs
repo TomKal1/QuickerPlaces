@@ -84,7 +84,7 @@ public sealed class PlacesServiceRecentlyDeletedTests
         Assert.Same(docs, conflict!.Place);
         Assert.Same(newDocs, conflict.AliasHeldBy);
         Assert.Null(conflict.ResourceHeldBy);
-        Assert.Equal("\"Docs\" can't be restored as it was: another place is now called \"docs\". Change the alias below, then restore.", conflict.Explanation);
+        Assert.Equal("\"Docs\" can't be restored as it was: another place is now called \"docs\". Change the name below, then restore.", conflict.Explanation);
     }
 
     /// <summary>Test 47: an active place holding the destination is named as the destination holder, for a folder path or a URL; with the alias held by another place as well, both are named.</summary>
@@ -103,7 +103,7 @@ public sealed class PlacesServiceRecentlyDeletedTests
         Assert.Null(docsConflict.AliasHeldBy);
         Assert.Same(projects, docsConflict.ResourceHeldBy);
         Assert.Equal("\"Docs\" can't be restored as it was: \"Projects\" now uses its folder path. Change the folder path below, then restore.", docsConflict.Explanation);
-        Assert.Equal("\"Wiki\" can't be restored as it was: \"New Wiki\" now uses its URL. Change the URL below, then restore.", service.GetRestoreConflict(wiki)!.Explanation);
+        Assert.Equal("\"Wiki\" can't be restored as it was: \"New Wiki\" now uses its link. Change the link below, then restore.", service.GetRestoreConflict(wiki)!.Explanation);
 
         var docsAlias = AddFolder(service, "DOCS", "Other");
 
@@ -126,7 +126,7 @@ public sealed class PlacesServiceRecentlyDeletedTests
 
         Assert.Same(again, conflict.AliasHeldBy);
         Assert.Same(again, conflict.ResourceHeldBy);
-        Assert.Equal("\"Docs\" can't be restored as it was: another place, \"docs\", now has its alias and its folder path. Change them below, then restore.", conflict.Explanation);
+        Assert.Equal("\"Docs\" can't be restored as it was: another place, \"docs\", now has its name and its folder path. Change them below, then restore.", conflict.Explanation);
     }
 
     /// <summary>
