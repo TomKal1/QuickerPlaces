@@ -386,7 +386,7 @@
                                     </ItemsControl>
                                 <ScrollViewer x:Name="CalendarScroll" Height="140" Focusable="True" HorizontalScrollBarVisibility="Auto"
                                               VerticalScrollBarVisibility="Disabled">
-                                    <Grid Width="{Binding CalendarStripWidth}" Height="117">
+                                    <Grid Width="{Binding CalendarStripWidth}" Height="117" VerticalAlignment="Top">
                                         <ItemsControl ItemsSource="{Binding CalendarWeeks}" Margin="0,19,0,0">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
