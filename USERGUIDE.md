@@ -6,7 +6,7 @@ QuickerPlaces is a small always-on-top-of-your-workflow window for storing folde
 
 When QuickerPlaces opens you'll see, top to bottom:
 
-- A header with the app name, **Recents**, **Sessions**, **Add Folder**, and **Add URL**. Recents keeps the activity icon and shows a dot while folder tracking is on. The **Options** menu beside **Hide List** holds **Settings**, **Recently Deleted**, **Places File**, **Import Places**, and **Export Places**.
+- A header with the app name, **Recents**, **Library**, **Sessions**, **Add Folder**, and **Add URL**. Recents keeps the activity icon and shows a dot while folder tracking is on. The **Options** menu beside **Hide List** holds **Settings**, **Recently Deleted**, **Places File**, **Import Places**, and **Export Places**.
 - A row of **favourite bubbles** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
 - The **All Places** header with a count, a **search box**, the hamburger **Options** menu, and a **Hide List** / **Show List** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
@@ -113,24 +113,50 @@ In **Settings**, **Keep running in the tray when I close the window** makes clos
 
 ## Project Sessions
 
-A **session** is a named, tagged set of PDFs you had open together — the drawings and specs for one job, say — saved so you can see it later and open them all again in one go.
+A **session** is a named, tagged set of files you had open together — the drawings, specs and spreadsheets for one job, say — saved so you can see it later and open them all again in one go. Sessions hold PDF, Word and Excel files.
 
-**Saving what's open.** Open the PDFs you're working on, then click **Sessions** in the header and **Save open PDFs…**. QuickerPlaces looks for the PDFs open right now and lists them for you to check: the ones it believes are open are ticked, and PDFs you opened recently are listed below them, unticked, in case it missed one. Give the session a name, add tags if you like (separate them with commas — *Tower B, markups, RFI 12*; tags you've used before are one click away under the box), tick exactly the PDFs you want, and click **Save**. Nothing is saved until you do, and only ticked PDFs are saved.
+**Saving what's open.** Open the files you're working on, then click **Sessions** in the header and **Save open files…**. QuickerPlaces looks for the PDF, Word and Excel files open right now and lists them for you to check: the ones it believes are open are ticked, and files you opened recently are listed below them, unticked, in case it missed one. Give the session a name, add tags if you like (separate them with commas — *Tower B, markups, RFI 12*; tags you've used before are one click away under the box), tick exactly the files you want, and click **Save**. Nothing is saved until you do, and only ticked files are saved.
 
-- **Add PDFs…** picks files by hand. **Find open PDFs** looks again, keeping your ticks. **Remove from list** (or Delete) drops the selected rows from the list — the files themselves are never touched. Space ticks or unticks the selected rows.
-- **What QuickerPlaces can see.** Windows has no list of the documents other programs have open, so QuickerPlaces pieces it together from window titles, the files a viewer was started with, the files programs are holding open, and Windows' own list of recent files. Acrobat, Reader and Bluebeam Revu keep their PDFs open, so every tab should be found. A web browser or SumatraPDF shows only the front tab in its title, so other tabs can't be seen — add those with **Add PDFs…**. If a window shows a PDF name that couldn't be matched to a file, the line under the list names it so you know to add it. A viewer that shows a PDF's own title instead of its file name can't be matched at all. Always glance down the list before saving.
+- **Add files…** picks files by hand. **Find open files** looks again, keeping your ticks. **Remove from list** (or Delete) drops the selected rows from the list — the files themselves are never touched. Space ticks or unticks the selected rows.
+- **What QuickerPlaces can see.** Windows has no list of the documents other programs have open, so QuickerPlaces pieces it together from window titles, the files a program was started with, the files programs are holding open, and Windows' own list of recent files. Acrobat, Reader, Bluebeam Revu, Word and Excel keep their files open, so every tab and document should be found — Word and Excel even when Explorer hides extensions and the title just says "Report - Word". A web browser or SumatraPDF shows only the front tab in its title, so other tabs can't be seen — add those with **Add files…**. If a window shows a document name that couldn't be matched to a file, the line under the list names it so you know to add it. Always glance down the list before saving.
 
-**Finding and reopening a session.** The **Project Sessions** window lists your sessions, most recently used first, each with its tags, how many PDFs it has, and when it was saved and last opened. Type in the search box to find a session by its name, a tag, or the name of a PDF in it; click a tag chip to show only sessions with that tag (**All tags** shows everything again). Select a session to see its PDFs on the right, then:
+**Finding and reopening a session.** The **Project Sessions** window lists your sessions, most recently used first, each with its tags, how many files it has, and when it was saved and last opened. Type in the search box to find a session by its name, a tag, or the name of a file in it; click a tag chip to show only sessions with that tag (**All tags** shows everything again). Select a session to see its files on the right, then:
 
-- **Open all** (or Enter, or double-click the session) opens every PDF in it with your usual PDF viewer. A PDF that has since been moved, renamed or deleted is skipped and named in red; the rest still open.
-- **Open selected PDF** (or double-click a PDF, or Enter on it) opens just that one.
-- **Edit…** renames the session, changes its tags, or adds and removes PDFs (**Find open PDFs** adds what's open now).
-- **Delete…** deletes the session after asking. Only the session goes; its PDFs stay where they are.
+- **Open all** (or Enter, or double-click the session) opens every file in it with its usual program. A file that has since been moved, renamed or deleted is skipped and named in red; the rest still open.
+- **Open selected file** (or double-click a file, or Enter on it) opens just that one.
+- **Edit…** renames the session, changes its tags, or adds and removes files (**Find open files** adds what's open now).
+- **Delete…** deletes the session after asking. Only the session goes; its files stay where they are.
 
-Opening a session doesn't count as opening a place: Last Opened and Opens in the main grid are unaffected, and a session's PDFs never appear there.
+Opening a session doesn't count as opening a place: Last Opened and Opens in the main grid are unaffected, and a session's files never appear there.
 
-Sessions are saved in `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside your places, the moment you save, edit or delete one. They aren't part of **Export Places**. If a save fails, the Sessions window says so in red; the change is kept and tried again with the next change and when QuickerPlaces closes.
+Sessions are saved in `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside your places, the moment you save, edit, reopen or delete one. They aren't part of **Export Places**. If a save fails, the Sessions window says so in red; the change is kept and tried again with the next change and when QuickerPlaces closes.
 
+## Recent Files
+
+**Recent Files is off until you turn it on.** It is to files what Folder Activity (Recents) is to folders: when on, it notes which PDF, Word and Excel files you open, and when, so you can find them again in the **Library**. It is separate from sessions — it never adds anything to a session, and saving a session records nothing here.
+
+Turn it on in the **Library** (the **Library** button in the header), in the **Recent Files** panel at the bottom: tick **Record the PDF, Word and Excel files I open**. From then on, while QuickerPlaces is running (in the window or the tray), it reads Windows' own Recent Items once a minute — and whenever you open the Library — and records the files opened since. It records which file and when; never what's in it, how long you had it open, or which program opened it. Nothing opened before you turned it on, or while it was off, is recorded.
+
+- **Kinds:** untick PDF, Word or Excel to stop recording that kind from now on.
+- **Where:** by default, only files under folders you track in Recents are recorded — if you track none, nothing is. Choose **Anywhere** to record files wherever they are.
+- **Pause tracking** in the tray menu pauses Recent Files along with folder tracking.
+- Right-click a file in the Library and choose **Remove from Recent Files** to forget it, or use **Delete Recent Files history…** to forget everything. Neither touches your files, places or sessions.
+
+It is best effort: it sees what Windows' Recent Items sees, which covers files opened from Explorer and from most programs' Open dialogs, but a program can skip it, a policy can turn it off, and two opens of the same file within a minute count once. Recent Files keeps a year of history in `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json`, on this computer only, and it is never exported.
+
+## The Library
+
+The **Library** (in the header) shows everything QuickerPlaces knows about in one list: your saved places, the files in your sessions, the folders from Recents, and the files from Recent Files. The same thing appears once — a folder you saved and also visit shows as one row, with your alias; a file in two sessions shows once, with both sessions' tags. The **Where from** column says what each row is: *Saved place*, *In Tower B*, *Visited 3 times*, *Opened once*, or several of these.
+
+- **Kind chips** — All, Folders, Links, PDFs, Word, Excel — show one kind, with how many of each there are.
+- **Show All, Saved or Recent** — Saved is your places and session files; Recent is Recents' folders and Recent Files.
+- **Group by Type or Tag** — by tag, each session tag gets its own group, a file with two tags appears under both, and anything untagged (including places, which don't have tags) is under **No tag**.
+- **Search** matches names, paths, tags and session names.
+- **The year strip** at the top shades each day by how much was used — folder visits, files opened, and sessions saved or reopened — following the kind chip. Click a day to list only what was used that day; click it again, or the **×** beside the date, to see everything. Links keep no history, only when each was last opened.
+
+Double-click a row, or press Enter, to open it. Opening a saved place here counts exactly as opening it from the main grid (Last Opened and Opens update); opening anything else just opens it. Right-click for **Copy path or link** and, on a recent file, **Remove from Recent Files**.
+
+## Recently Deleted
 ## Recently Deleted
 
 Places you remove aren't deleted straight away. They go to **Recently Deleted**, which you open from **Options** beside **Hide List**. They don't appear in the grid, the bubbles or search while they're there.
@@ -260,6 +286,7 @@ QuickerPlaces keeps a few small plain-text files, all safe to open in a text edi
 - **A backup of the previous version:** `%AppData%\QuickerPlaces\QuickerPlaces\places.bak.json` — QuickerPlaces keeps the previous contents of `places.json` every time it saves, automatically, right next to it. You don't need to do anything to get this; it's just there as an extra safety net.
 - **Window layout** (size, position, whether the grid is collapsed, how it's sorted), the **global hotkey**, and the tray/startup switches: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change Settings.
 - **Project sessions:** `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside `places.json`, with its previous version as `sessions.bak.json` — written the instant you save, edit, reopen or delete a session. Copy it along with `places.json` to take your sessions to another machine.
+- **Recent Files settings and history:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json` — stays on this computer, is never exported, and exists only once you've turned Recent Files on.
 - **Folder Activity roots and recorded time:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json` — stays on this computer and is separate from a Places export.
 
 Last Opened and Opens are stored with each place in `places.json`, so they go wherever that file goes. The sort is in `settings.json`, which stays on this computer.

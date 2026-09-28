@@ -435,3 +435,18 @@ Added at the user's request, outside the roadmap's phase order: *"a new feature 
 ### Verification status — read this before calling it done
 
 On Linux: the app, the ActivityProbe and the tests build with zero warnings, XAML included, and all 668 tests pass (121 new: store, paths, resolver, launcher, both view models). **Nothing has been run on Windows**: `WindowsOpenPdfProbe` and the two windows are compiled but unexercised, and how each PDF viewer actually shows up (plan §4's table) is expected behaviour, not observed. The Windows checklist is the plan's §8; record each item here as passed, failed or untested.
+
+## Word and Excel, Recent Files, and the Library (2026-09-28, later)
+
+The user then asked for Recents to extend to recent PDF, Word and Excel files, and to share code with sessions, while keeping file tracking separate from saved sessions "just how the recent folders and current saved folders/links are now". They also wanted everything viewable together, split into folders, links, PDFs, Word and Excel, or grouped by tag. They were away and asked for the work to go ahead; their UI rework is in a branch that exists only on their machine, so the logic went into UI-free services and view models, and the new UI into new files. The [sessions plan](260928_PDF%20Project%20Sessions%20Plan.md), now titled *Project sessions, Recent Files and the Library*, has the design and decisions D1–D20.
+
+### What was built
+
+- **Shared document code** in `Services/Documents`: PDF, Word and Excel kinds by extension; path normalisation; the open-file resolver, which now also matches Word and Excel titles that leave the extension out; the scan probe; and a Recent Items reader that the scan and Recent Files share. Sessions now hold all three kinds.
+- **`JsonStoreLoader`** replaces the load classification that `ActivityStore` and `SessionStore` each repeated; the existing tests pass unchanged. `ActivityCalendar.BuildYear` also takes any per-day weight, so the Library reuses Recents' year strip. Sessions now keep every reopen for a year.
+- **Recent Files**: `RecentFilesStore` (`recent-files.json`, local, off by default, a year of opens) and `RecentFilesHost`, which reads Recent Items once a minute. By default it records only files under folders tracked in Recents, never anything from before it was turned on, and each open once.
+- **The Library**: `LibraryIndex` merges saved places, session files, Recents folders and Recent Files into one row per thing. `LibraryViewModel` and `LibraryWindow` add kind chips, All/Saved/Recent, grouping by type or tag, search, a year strip where a day lists what was used on it, opening, and Recent Files' settings. A **Library** button sits beside **Sessions** in the header.
+
+### Verification status — read this before calling it done
+
+On Linux, the app, the ActivityProbe and the tests build with zero warnings, XAML included, and all 745 tests pass (77 more than the first sessions build), in UTC+10 and America/New_York. **Nothing has been run on Windows.** Untested there: the probe's Word and Excel window detection, the Recent Items reader, the Recent Files timer, and the two new windows. Whether Word's and Excel's own Open dialogs add to Recent Items is also untested. The Windows checklist is the plan's §9.

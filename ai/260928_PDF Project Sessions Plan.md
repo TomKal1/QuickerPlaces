@@ -1,118 +1,148 @@
 ---
-title: QuickerPlaces — PDF project sessions
-status: implemented on branch ccr-8d834d76-kqbdun (2026-09-28); builds with 0 warnings and 668 tests pass on Linux; NOT yet run on Windows — the §8 checklist is open
+title: QuickerPlaces — Project sessions, Recent Files and the Library
+status: implemented on branch ccr-8d834d76-kqbdun (2026-09-28); builds with 0 warnings and 745 tests pass on Linux; NOT yet run on Windows — the §9 checklist is open
 created: 2026-09-28
+revised: 2026-09-28 — widened from PDF sessions to PDF, Word and Excel; Recent Files and the Library added at the user's request
 parent: ai/260901_Professional Improvements Plan.md
 ---
 
-# PDF project sessions
+# Project sessions, Recent Files and the Library
 
-## 1. The request
+The file keeps its first name, *PDF Project Sessions Plan*, so links to it still work; it now covers three features that share code.
 
-The user asked, on 2026-09-28: *"Could we add a new feature that saves open PDFs to a tagable project session, that can then be seen and opened later."*
+## 1. The requests
 
-So: find the PDFs open now, save them as a named session with tags, list the saved sessions (searchable and filterable by tag), and reopen a session's PDFs together.
+On 2026-09-28 the user asked for three things, in order:
+
+1. *"A new feature that saves open PDFs to a tagable project session, that can then be seen and opened later."*
+2. Whether Recents tracking could extend past folders to recent PDFs, Word and Excel files, sharing code with sessions, with a year view.
+3. *"I would want the file tracking and the save open files to a session tag to be separate, just how the recent folders and current saved folders/links are now. With options to view them all together, to split them by folder, links, PDFs, word, excel, or view by tag."*
+
+So there are three features, each separate:
+
+| Feature | Is to files what… | Store | Switch |
+|---|---|---|---|
+| **Project sessions**: save the files open now as a named, tagged session; reopen it later | saved places are to folders and links | `sessions.json` (roaming) | None: sessions are saved by hand |
+| **Recent Files**: record the PDF, Word and Excel files opened | Recents is to folders | `recent-files.json` (local) | Off until turned on |
+| **Library**: everything together, by kind or by tag, with a year strip | — (reads the four stores) | None | — |
+
+The user is reworking the UI in a separate branch that exists only on their machine. So the logic lives in UI-free services and view models, which that UI can bind to. The windows here are new files, and existing XAML changes are limited to two header buttons (§8).
 
 ## 2. Where it sits in the roadmap
 
-- **It lifts one non-goal, for this feature only.** Roadmap §2 excluded "Tags, categories, workspaces". The user's request is a tagged workspace of PDFs, so that line no longer applies to sessions. It still applies to places: places are not tagged, and sessions do not add categories to the main grid.
-- **It is not Phase 4.** Phase 4 (general file support) makes a file a *place*, with an alias, a row in the grid and usage counts. A session's PDFs are not places: they have no alias, never appear in the grid, and opening one never counts as opening a place (D10). Phase 4 is still next in §1.1 and is not changed by this work, except that `IShell.FileExists`, which Phase 4 planned to add, now exists.
-- **It stays within "no PDF rendering".** QuickerPlaces never reads a PDF. It stores paths and asks Windows to open them with the default application, exactly as it opens a folder.
-- **It is not Phase 9 and not the File Activity note.** Nothing watches in the background. The only observation is one scan, run when the user asks for it (D7), and it records nothing about time spent.
+- **It lifts one non-goal for these features only.** Roadmap §2 excluded "Tags, categories, workspaces". Sessions are tagged workspaces of files, and the Library groups by those tags. Places themselves stay untagged; in the Library they sit under "No tag".
+- **It extends Phase 9's consent model to files.** Recent Files is opt-in, local-only and stated in the UI, like Recents. By default it records only files under folders the user already tracks in Recents.
+- **It is not Phase 4.** A session's or Recent Files' document is not a *place*: it has no alias, never appears in the main grid, and opening one never counts as opening a place. A saved place opened from the Library does count, because it goes through `PlaceLauncher` (Phase 3 D23). Phase 4 is still next. `IShell.FileExists`, which Phase 4 planned, now exists.
+- **It stays within "no PDF rendering".** No document is ever opened or read by QuickerPlaces. Only paths, and the times Windows says they were opened, are kept.
 
-## 3. Storage
+## 3. Document kinds and shared code
 
-- `sessions.json` beside `places.json` in `%AppData%\QuickerPlaces\QuickerPlaces` (roaming): a session is portable user data, like a place (roadmap §3).
-- Its own schema version (1) and its own file, so `places.json`, its migrations, and places export/import are untouched. Sessions are not included in **Export Places**.
-- Written through `IPlacesStorage`/`FilePlacesStorage` (Phase 9 D32): temp file and replace, `sessions.bak.json`, `sessions.corrupt-*.json`.
-- Document: `{ schemaVersion, sessions: [{ id, name, tags[], files[], createdAt, updatedAt, lastOpenedAt? }] }`. Timestamps are UTC `DateTimeOffset` (roadmap §3).
+`Services/Documents/` holds what the three features share:
 
-## 4. Finding open PDFs
+| File | What it is |
+|---|---|
+| `DocumentKind.cs` | PDF (`.pdf`), Word (`.docx .docm .doc .dotx .rtf`), Excel (`.xlsx .xlsm .xlsb .xls .xltx`), decided by extension only |
+| `DocumentPaths.cs` | One spelling for a document path (as `RootPathMatcher` spells folders), plus the file name, stem and folder, without `Path.*` so tests run on Linux |
+| `OpenDocumentResolver.cs` | Which documents are open, from the clues in §4 (pure) |
+| `WindowsOpenDocumentProbe.cs` | Gathers those clues for the session scan (app-only) |
+| `WindowsRecentItems.cs` | Reads Windows' Recent Items. It is shared by the session scan and Recent Files, and caches resolved shortcuts (app-only) |
+
+`Services/JsonStoreLoader.cs` is the load classification that `activity.json`, `sessions.json` and `recent-files.json` all use: not present, unreadable, newer version, or damaged. It was pulled out of `ActivityStore`, whose tests pass unchanged. `ActivityCalendar.BuildYear` now also takes any per-day weight (`CalendarDay`), so the Library's year strip is the same code as Recents'.
+
+## 4. Finding open files (for sessions)
 
 No documented Windows API lists the documents another program has open. What an ordinary, unelevated program can see is combined, and the result goes to a review list — never saved unseen (D9).
 
 | Clue | What it gives | What it misses |
 |---|---|---|
-| **Window titles** (`EnumWindows`) mentioning `.pdf` | The active document's *file name* per window; some viewers show the full path | Background tabs; viewers that show the PDF's embedded title instead of its file name |
-| **Command lines** of those windows' programs (`NtQueryInformationProcess`, class 60) | The file a viewer was started with | Files opened later in a single-instance viewer; a started-with file that was since closed |
-| **Files in use** (Restart Manager, `RmGetList`) asked of every candidate path | Every PDF held open by a viewer that keeps its files open, including background tabs | Viewers that read a file and let go |
-| **Recent Items** (`FOLDERID_Recent` shortcuts, resolved with `IShellLink` without searching) | Full paths and when each was last opened; how a title's bare file name becomes a path | Programs that don't register recent documents |
+| **Window titles** (`EnumWindows`) mentioning a document, and Word's and Excel's windows by class (`OpusApp`, `XLMAIN`) | The active document's name per window; some viewers show the full path. Word and Excel may leave the extension out ("Report - Word"), and that is matched only for their own windows and only to a file of their kind | Background tabs; viewers that show a PDF's embedded title |
+| **Command lines** of those windows' programs | The file a program was started with | Files opened later in a single-instance program; a started-with file since closed |
+| **Files in use** (Restart Manager) asked of every candidate | Every document held open, including background tabs and other workbooks | Programs that read a file and let go |
+| **Recent Items** (`FOLDERID_Recent` shortcuts) | Full paths and when each was last opened; how a bare name becomes a path | Programs that don't register recent documents |
 
-Expected behaviour by viewer — **from how each is known to behave, not yet observed on the user's machine (§8)**:
+Expected by program — **from how each is known to behave, not yet observed on the user's machine (§9)**. Acrobat, Reader, Revu, Word and Excel hold their files open, so every document should be found. Edge, Chrome and SumatraPDF can show only the front tab, and only when its file is in Recent Items. A title that matches no known file is listed under the review list, for the user to add by hand.
 
-- *Adobe Acrobat / Reader, Bluebeam Revu:* hold their files open, so every tab should be found through Restart Manager, and the active one through its title as well.
-- *Microsoft Edge, Chrome, SumatraPDF:* only the active tab per window, through its title, and only when its file is in Recent Items or on the command line. Other tabs can't be seen; the user adds them with **Add PDFs…**.
-- A title whose PDF name matches no known path is listed under the list as "Also open, but not matched to a file", so the user knows to add it by hand.
+## 5. Recent Files
 
-Explorer's undocumented `AutomaticDestinations` jump-list storage is **not** read (roadmap §2). Recent Items is the documented folder the File Activity note already proposed.
+- **What it records.** For each PDF, Word or Excel file: the times it was opened, taken from the last-write time of its Recent Items shortcut. It does not record time spent, the file's contents, or which program opened it. It is labelled "opened" and never "worked on".
+- **When.** `RecentFilesHost` reads Recent Items once a minute while QuickerPlaces runs, and once when the Library opens. It resolves only changed shortcuts. It pauses with the tray's **Pause tracking**, flushes every five minutes and on exit, and watches nothing (no file-system watcher, no hooks).
+- **Consent.** Off by default. Turning it on stamps `ResumedAt`, and nothing opened before that — or while it was off — is ever recorded (D15). The scope defaults to files under folders tracked in Recents, including their equivalent paths. **Anywhere** is a deliberate choice. Kinds can be narrowed to any of the three.
+- **Recording once.** An observation counts only when it is later than that file's last recorded open, so reading the same shortcuts every minute adds nothing (D16). Two opens of one file between passes count once, because Recent Items keeps only the latest.
+- **Storage.** `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json`, machine-local like `activity.json`, never exported. Opens are kept 365 days, at most 500 per file. **Remove from Recent Files** forgets one file; **Delete Recent Files history…** forgets all of them and keeps the settings.
 
-## 5. What was built
+## 6. The Library
 
-UI-free, linked into the test project:
+`Services/Library/LibraryIndex.cs` merges the four stores into one row per thing (D18). The merge key is kind plus location, ignoring case and separators. A folder saved as a place and visited in Recents is one row, with its alias. A file in two sessions and in Recent Files is one row, with both sessions' tags. `ViewModels/LibraryViewModel.cs` then provides the following:
 
-| File | What it is |
-|---|---|
-| `Models/Sessions/ProjectSession.cs`, `SessionsDocument.cs` | The stored shape |
-| `Services/Sessions/SessionStore.cs` | Load (classified as places.json is), create, update, delete, Last opened, tags in use, tag parsing, retry |
-| `Services/Sessions/SessionPaths.cs` | One spelling for a PDF path, file name and folder; no `Path.*`, so it behaves the same on Linux |
-| `Services/Sessions/OpenPdfResolver.cs` | Turns the four clues into the review list (§4) |
-| `Services/Sessions/SessionLauncher.cs` | Reopens a session's PDFs, skipping and naming missing files; records Last opened |
-| `ViewModels/SessionsViewModel.cs` | The Sessions window: rows, search, tag chips, selection, open, delete |
-| `ViewModels/SessionEditorViewModel.cs` | The Save/Edit dialog: name, tags, tag suggestions, the ticked review list, save |
+- **Kind chips:** All, Folders, Links, PDFs, Word, Excel, each with its count under the other filters.
+- **Show:** All, Saved (places and session files) or Recent (Recents folders and Recent Files).
+- **Group by:** Type, or Tag, which makes one group per session tag. An item with two tags is in both groups, and untagged items come last under "No tag".
+- **Search:** name, path, tag or session name.
+- **The year strip** counts folder visits, files opened, and sessions saved and reopened, following the kind chip: Folders shows visits only, a document kind shows its opens plus sessions, and Links keep no history. Choosing a day lists only what was used that day; choosing it again clears it. Sessions now keep every reopen for a year (`OpenedAt`) for this.
+- **Opening:** a saved place goes through `PlaceLauncher` and refreshes the main grid. Anything else is checked for existence and handed to Windows, and counts as nothing.
+- **Recent Files' settings** sit in a panel at the bottom, because the Library is where Recent Files is seen.
 
-App-only:
+## 7. Decisions
 
-| File | What it is |
-|---|---|
-| `Services/Sessions/WindowsOpenPdfProbe.cs` | Gathers §4's clues off the UI thread, with a 10-second budget and a 1-second limit per network existence check |
-| `Views/SessionsWindow.xaml(.cs)` | **Project Sessions**: sessions on the left with search and tag chips; the selected session's PDFs on the right with **Open all**, **Open selected PDF**, **Edit…**, **Delete…**; **Save open PDFs…** in the header |
-| `Views/SessionEditorDialog.xaml(.cs)` | **Save Open PDFs** / **Edit Session**: name, tags, the review list with ticks, **Find open PDFs**, **Add PDFs…**, **Remove from list**, **Tick all** / **Untick all** |
-| `Views/MainWindow.xaml(.cs)`, `App.xaml.cs` | A **Sessions** button in the header beside **Recents**; the store is created at startup and retried once on exit |
+- **D1 — Sessions and Recent Files are their own stores, not places.** See §2.
+- **D2 — Sessions roam; Recent Files stays on the machine.** A session is saved work; Recent Files is usage tracking, like `activity.json`.
+- **D3 — All three smaller stores load alike, never asking**, through `JsonStoreLoader`. A damaged file is set aside and the store starts empty (Recent Files also starts *off*). An unreadable or newer file is left untouched and changes are refused.
+- **D4 — Document paths are drive or UNC paths with a recognised extension,** normalised as folders are and compared ignoring case.
+- **D5 — Session names are unique ignoring case**, 1–100 characters. **Tags** are comma- or semicolon-separated, at most 20 per session and 40 characters each, first spelling wins.
+- **D6 — A title's name is matched to a known path, never guessed.** When several paths share it, the order is: started with, in use, most recent. The longest whole-word name wins. A name without an extension counts only at the start of a Word or Excel window's title, and only for that kind.
+- **D7 — The session scan runs on request only.**
+- **D8 — A slow share can't freeze a window.** One second per existence check and ten seconds per scan; the Recent Files pass runs on a timer thread and skips a pass rather than queue it.
+- **D9 — Review before saving a session.** Files judged open start ticked; suggestions start unticked.
+- **D10 — Reopening a session, or opening a file from the Library, is not a place open.** Opening a saved place from the Library is.
+- **D11 — Missing files don't stop the rest.**
+- **D12 — Logs carry counts only.** No names, tags, titles or paths.
+- **D13 — Explorer's preview and indexing processes don't count as "in use".**
+- **D14 — Recent Files and sessions are separate** (the user's direction): Recent Files never adds to a session, and saving a session records nothing in Recent Files. They only meet in the Library.
+- **D15 — Nothing before consent.** Opens earlier than the last time Recent Files was turned on are ignored, although Recent Items still holds them.
+- **D16 — An open is recorded once.** Only an observation later than the file's last recorded open counts.
+- **D17 — Scope defaults to tracked folders.** It is the consent the user already gave Recents; **Anywhere** is opt-in.
+- **D18 — One row per thing in the Library,** merging all sources, rather than one row per source.
+- **D19 — Places stay untagged.** The tag view shows session tags; places appear under "No tag". Tagging places would be a separate decision (§10).
+- **D20 — New UI in new files.** The two new windows copy the small styles they need rather than editing `Theme.xaml` or `ActivityWindow.xaml`, to keep the user's local UI branch mergeable.
 
-`IShell` gained `FileExists`.
+## 8. Files touched outside the new ones
 
-## 6. Decisions
+`App.xaml.cs` (stores and hosts), `Views/MainWindow.xaml(.cs)` (**Library** and **Sessions** header buttons), `ViewModels/MainViewModel.cs` (`NotePlaceOpened`), `ViewModels/ActivityCalendar.cs` (the `CalendarDay` overload), `Services/Activity/ActivityStore.cs` (uses `JsonStoreLoader`), `Services/IShell.cs`, `Services/WindowsShell.cs`, and the two `.csproj` files (links).
 
-- **D1 — Sessions are their own store, not places.** See §2. Keeps places.json's schema, export, and the "one launch gateway" rule intact.
-- **D2 — Roaming, beside places.json.** Sessions are user data that should follow the user, unlike activity.json's machine-local tracking.
-- **D3 — Load like activity.json, never ask.** A damaged file is quarantined and the list starts empty with a notice in the window; an unreadable or newer file is left untouched and every change is refused for the session. The startup prompt stays reserved for places.json.
-- **D4 — PDF paths are drive or UNC paths ending in `.pdf`**, normalized as `RootPathMatcher` normalizes folders, compared ignoring case, each kept once per session.
-- **D5 — Names are unique ignoring case**, like aliases, 1–100 characters. **Tags** are free text, comma or semicolon separated, up to 20 per session and 40 characters each, kept once ignoring case (first spelling wins); a leading `#` is dropped.
-- **D6 — A title's file name is matched to a path, never guessed.** When several known paths share the name, the one the same program was started with wins, then one in use, then the most recently opened. The longest matching name wins within one title ("Set - A-101.pdf" over "A-101.pdf"), and a name must stand as a whole word.
-- **D7 — Scan on request only.** The dialog scans when it opens for a new session and when **Find open PDFs** is pressed. Nothing polls.
-- **D8 — A slow share can't freeze the window.** The scan runs on a worker; each existence check has one second, after which that server is skipped with a warning; the whole scan stops after ten seconds with what it has.
-- **D9 — Review before save.** Files judged open start ticked; command-line-only and Recent Items suggestions (last 14 days, at most 30) start unticked; files added by hand start ticked. Only ticked files are saved.
-- **D10 — Reopening is not a place open.** `SessionLauncher`, not `PlaceLauncher`, so Phase 3's usage counts are untouched. A session's own **Last opened** is recorded when at least one file opened, and the list is ordered by the later of Last opened and last change.
-- **D11 — Missing files don't stop the rest.** Each is checked, missing ones are skipped and named, and one Windows refuses is reported without stopping the others.
-- **D12 — Logs carry counts only.** No session name, tag, window title or path reaches the diagnostic log (Phase 3 D26).
-- **D13 — Explorer's preview and indexing processes don't count as "in use".** `explorer`, `prevhost`, the search indexer, Defender and sync clients hold a PDF only to show, index or scan it.
+## 9. Manual checklist (Windows) — open
 
-## 7. Tests
+Nothing below has been done. Back up `%AppData%\QuickerPlaces` and `%LocalAppData%\QuickerPlaces` first if you want clean files.
 
-121 new tests; the suite is 668. `SessionStoreTests` (validation, tags, update, delete, ordering, write failure and retry, damaged/unreadable/newer/hand-edited files, a real file with Unicode), `SessionPathsTests`, `OpenPdfResolverTests` (titles of five viewers, whole-word and longest-name matching, same-name choice, paths in titles and command lines including `file:` URLs, in-use background tabs, unmatched titles, the recent cap), `SessionLauncherTests`, `SessionsViewModelTests`, `SessionEditorViewModelTests`.
+**Sessions**
+1. **Acrobat with three tabs, Word with two documents, and Excel with a workbook.** **Sessions → Save open files…** should list all six ticked. Save with two tags.
+2. **Word with extensions hidden in Explorer** (title "Report - Word"): the document should still be found.
+3. **Edge with a PDF** opened from Explorer: found if it's in Recent Items. A second Edge PDF tab is expected not to be found; check it's named under the list and **Add files…** it.
+4. **Close everything, then Open all**: every file opens, and the session moves to the top.
+5. **Move one file, then Open all**: the rest open, and the missing one is named.
+6. **Explorer preview pane** on a PDF, without opening it: it should not be listed as open.
 
-Not covered by automated tests: `WindowsOpenPdfProbe` (it calls Windows) and the two windows. They compile, XAML included, with zero warnings, but have **not been run**.
+**Recent Files**
 
-## 8. Manual checklist (Windows) — open
+7. **Library → Recent Files → turn it on** with the default scope and no tracked folders: the status says nothing will be recorded. Add a tracked folder in Recents, open a PDF, a Word file and an Excel file under it, and reopen the Library: all three are listed as recent, and today on the year strip counts three files opened.
+8. **Open a file outside the tracked folders**: it's not recorded. Switch to **Anywhere**, open it again: it's recorded.
+9. **Untick Word**, open a Word file: it's not recorded. **Pause tracking** from the tray: nothing is recorded until resumed.
+10. **Remove from Recent Files** on one row, then **Delete Recent Files history…**: both work, and sessions and places are untouched.
+11. Does Word or Excel's **own File → Open** add to Recent Items (and so to Recent Files)? Record what you see.
 
-Nothing below has been done. Back up `%AppData%\QuickerPlaces\QuickerPlaces` first if you want to keep a clean `sessions.json`; the feature never touches `places.json`.
+**Library**
 
-1. **Acrobat or Reader, several tabs.** Open three PDFs as tabs. **Sessions → Save open PDFs…** should list all three ticked ("Open in …" for the front one, "In use by an open program" for the others). Name it, add two tags, **Save**. It appears first in the list with its tags and "3 PDFs".
-2. **Edge (or Chrome) with a PDF**, opened by double-clicking it in Explorer. It should be found ticked if it is in Recent Items. A second Edge tab with another PDF is expected **not** to be found: check the line under the list and **Add PDFs…** it.
-3. **Bluebeam Revu**, if installed: as step 1.
-4. **Close everything, reopen the session** with **Open all** (and with Enter, and a double-click on the card). All files open in their default viewer; the card shows "opened …" and moves to the top.
-5. **Rename or move one of the PDFs**, then **Open all**: the rest open, and the missing one is named in red.
-6. **Tags:** make a second session sharing one tag. The chips show counts; clicking one filters; **All tags** clears. Search finds by session name, tag, and PDF name.
-7. **Edit…**: rename, change tags, untick a PDF, **Find open PDFs** to add what's open now, **Save**. **Delete…** asks first, and the PDFs themselves are untouched.
-8. **A PDF on a network share** (and, if possible, with the share offline): the scan should finish within about ten seconds with a warning rather than hang.
-9. **Explorer preview pane:** select a PDF in Explorer with the preview pane on, without opening it. It should *not* be listed as open (D13).
-10. **Keyboard only:** Tab/arrows through the Sessions window and the dialog; Space ticks rows; Delete removes rows from the review list; Esc clears the search, then closes.
+12. The kind chips, **Saved/Recent**, **Group by Tag** (a file in two tagged sessions appears under both tags), and search.
+13. Click today on the year strip: only what was used today is listed; click it again to clear.
+14. Open a saved place from the Library: the main grid's **Last Opened** and **Opens** update.
+15. **Keyboard only** through both new windows.
 
-Record each as passed, failed or untested in `BUILD_SUMMARY.md`.
+Record each item as passed, failed or untested in `BUILD_SUMMARY.md`.
 
-## 9. Open questions
+## 10. Open questions
 
-1. Should a session also hold non-PDF files (drawings, Word, Excel)? The store and launcher would take any file with a small change; detection by title and Restart Manager is not PDF-specific. Left out because the request said PDFs.
-2. Should **Save open PDFs** also be reachable without opening the Sessions window (a shortcut, or the tray menu)?
-3. Should reopening a session offer to close what is open first, or to open only the files not already open? Today it opens them all; a viewer that already has one open usually just brings it forward.
-4. Should sessions be exportable, like places?
+1. Should places be taggable, so the Library's tag view covers them too (D19)?
+2. Should the Library remember its filters and grouping between openings?
+3. Should the year strip's day selection also be offered in Recents, for folders?
+4. Should Recent Files record time spent (as Recents does for folders)? It would need per-program adapters (the File Activity note), and nothing here attempts it.
+5. Should reopening a session offer to close what is open first?
+6. Should sessions or the Library be exportable?
