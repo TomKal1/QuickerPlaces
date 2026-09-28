@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly SettingsService _settingsService;
     private readonly ActivityStore _activityStore;
     private readonly ActivityTrackingHost _activityHost;
+    private readonly ThemeManager _themeManager;
     private TrayIcon? _trayIcon;
     private bool _exitRequested;
     private GlobalHotkey? _globalHotkey;
@@ -26,7 +27,7 @@ public partial class MainWindow : Window
     private Point _bubbleDragStartPoint;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
-        ActivityStore activityStore, ActivityTrackingHost activityHost)
+        ActivityStore activityStore, ActivityTrackingHost activityHost, ThemeManager themeManager)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -34,6 +35,7 @@ public partial class MainWindow : Window
         _settingsService = settingsService;
         _activityStore = activityStore;
         _activityHost = activityHost;
+        _themeManager = themeManager;
         RestoreWindowState(settings);
         UpdateActivityIndicator();
     }

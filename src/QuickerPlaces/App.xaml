@@ -1,31 +1,22 @@
 <Application x:Class="QuickerPlaces.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             ThemeMode="Dark">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--
         No StartupUri: App.xaml.cs constructs MainWindow itself so it can
-        inject MainViewModel/AppSettings via constructor. ShutdownMode is
-        left at its WPF default (OnLastWindowClose) — the main window stays
-        open while owned dialogs, including Activity, are shown, and closing
-        it exits the app unless the opted-in tray setting intercepts the
-        close and hides the main window.
+        inject its dependencies. ShutdownMode is WPF's default
+        (OnLastWindowClose).
 
-        ThemeMode="Dark" is WPF's built-in Fluent theming (added in .NET 9,
-        no package needed) — without it, the window's title bar is drawn by
-        Windows using its own default chrome, which on a system with
-        "show accent color on title bars" turned on can render as a bright
-        accent color that clashes with everything below it (this is what
-        produced a red title bar over an otherwise dark/violet app). With
-        it, Windows draws a native dark title bar via DWM to match. It does
-        not affect anything client-side — every control type this template
-        styles in Theme.xaml is found in Application.Resources before WPF
-        ever falls back to Fluent's own defaults, so this only changes the
-        title bar, not the rest of the UI.
+        ThemeMode is not set here any more: ThemeManager sets it to Dark or
+        Light together with the palette (UI refresh U4). The palette merged
+        first is only the starting point; ThemeManager swaps it before any
+        window opens. Styles.xaml merges Icons.xaml itself so its
+        StaticResource references resolve while it loads.
     -->
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Resources/Theme.xaml" />
+                <ResourceDictionary Source="Resources/Palette.Dark.xaml" />
+                <ResourceDictionary Source="Resources/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
