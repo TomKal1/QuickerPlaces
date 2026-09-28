@@ -195,6 +195,16 @@
                         <TextBlock Text="Recents" Margin="6,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
+                <!-- Project sessions (ai/260928_PDF Project Sessions Plan.md): saved, tagged sets of open PDFs. -->
+                <Button x:Name="SessionsButton" Click="SessionsButton_Click" Margin="0,0,8,0"
+                        ToolTip="Save the PDFs you have open as a tagged session, or reopen one"
+                        AutomationProperties.Name="Sessions">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource Font.Icons}" FontSize="15"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="Sessions" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Button Content="Add Folder" Command="{Binding AddFolderCommand}" Margin="0,0,8,0" ToolTip="Add Folder (Ctrl+N)" />
                 <Button Content="Add URL" Command="{Binding AddUrlCommand}" Style="{StaticResource Button.Primary}" ToolTip="Add URL (Ctrl+U)" />
             </StackPanel>

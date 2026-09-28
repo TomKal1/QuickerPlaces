@@ -4,6 +4,7 @@ using System.Windows.Input;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
 
@@ -73,7 +74,9 @@ public partial class App : Application
         var activityStore = ActivityTrackingHost.CreateStore();
         var activityHost = new ActivityTrackingHost(activityStore);
 
-        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost);
+        var sessionStore = SessionStore.CreateDefault();
+
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))
@@ -102,6 +105,8 @@ public partial class App : Application
                 }
             }
 
+            // A session change the Sessions window reported as unsaved gets one more try; a failure is logged there.
+            sessionStore.RetrySave();
             activityHost.Dispose();
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
