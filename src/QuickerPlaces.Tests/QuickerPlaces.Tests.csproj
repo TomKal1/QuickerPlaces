@@ -120,4 +120,13 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      UI refresh U1: PaletteFileTests reads the app's palette XAML as plain
+      XML, so both files are copied next to the test assembly.
+    -->
+    <None Include="..\QuickerPlaces\Resources\Palette.Dark.xaml" Link="Palettes\Palette.Dark.xaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\QuickerPlaces\Resources\Palette.Light.xaml" Link="Palettes\Palette.Light.xaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

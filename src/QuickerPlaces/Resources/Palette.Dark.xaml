@@ -1,0 +1,48 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Dark theme colours (the dash). Keys follow the QuickerPlaces Design
+        System, version 2: its Bg-Base is Bg.Base here. Palette.Light.xaml
+        defines exactly the same keys, and PaletteFileTests enforces that and
+        the contrast floors. Refer to these with DynamicResource only, so a
+        theme switch repaints open windows (UI refresh U2). The Highlight
+        entries are the Hull green defaults; ThemeManager overrides them at
+        the top of Application.Resources (U3).
+    -->
+    <SolidColorBrush x:Key="Bg.Base" Color="#FF121514" />
+    <SolidColorBrush x:Key="Bg.Panel" Color="#FF171B1A" />
+    <SolidColorBrush x:Key="Bg.Raised" Color="#FF1F2422" />
+    <SolidColorBrush x:Key="Bg.Sunken" Color="#FF0E1110" />
+    <SolidColorBrush x:Key="Bg.RowHover" Color="#FF1B201F" />
+    <SolidColorBrush x:Key="Border.Default" Color="#FF2A302E" />
+    <SolidColorBrush x:Key="Border.Strong" Color="#FF3D4542" />
+    <SolidColorBrush x:Key="Text.Primary" Color="#FFEBE9E3" />
+    <SolidColorBrush x:Key="Text.Secondary" Color="#FFA7ADAA" />
+    <SolidColorBrush x:Key="Text.Tertiary" Color="#FF7F8683" />
+    <SolidColorBrush x:Key="Trim.Band" Color="#FF080A09" />
+    <SolidColorBrush x:Key="Trim.Line" Color="#FFAEB4B1" />
+    <SolidColorBrush x:Key="Brand.Green" Color="#FF1F5C4D" />
+    <SolidColorBrush x:Key="On.Brand" Color="#FFF2F1EC" />
+    <SolidColorBrush x:Key="Signal" Color="#FFF0902F" />
+    <SolidColorBrush x:Key="Danger" Color="#FFEC6A5E" />
+    <SolidColorBrush x:Key="Info" Color="#FF9CC0E6" />
+    <SolidColorBrush x:Key="Leather" Color="#FFC28A5C" />
+    <SolidColorBrush x:Key="Leather.Deep" Color="#FF7A4C2B" />
+    <SolidColorBrush x:Key="On.Leather" Color="#FF26170D" />
+    <SolidColorBrush x:Key="On.Leather.Badge" Color="#FFF6E7D6" />
+    <SolidColorBrush x:Key="Heat.0" Color="#FF1C211F" />
+    <SolidColorBrush x:Key="Heat.1" Color="#FF3A2E24" />
+    <SolidColorBrush x:Key="Heat.2" Color="#FF6A4930" />
+    <SolidColorBrush x:Key="Heat.3" Color="#FFA06A40" />
+    <SolidColorBrush x:Key="Heat.4" Color="#FFD9A068" />
+    <SolidColorBrush x:Key="Heat.Untracked" Color="#FF191D1C" />
+    <SolidColorBrush x:Key="Preset.Green" Color="#FF2A7563" />
+    <SolidColorBrush x:Key="Preset.Blue" Color="#FF36679A" />
+    <SolidColorBrush x:Key="Preset.Red" Color="#FFB1372F" />
+    <SolidColorBrush x:Key="Preset.Cognac" Color="#FF8F5A33" />
+    <SolidColorBrush x:Key="Highlight" Color="#FF2A7563" />
+    <SolidColorBrush x:Key="Highlight.Hover" Color="#FF32846E" />
+    <SolidColorBrush x:Key="Highlight.Text" Color="#FF7CC7AD" />
+    <SolidColorBrush x:Key="Highlight.Soft" Color="#247CC7AD" />
+    <SolidColorBrush x:Key="On.Highlight" Color="#FFFFFFFF" />
+</ResourceDictionary>
