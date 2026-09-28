@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Input;
 using QuickerPlaces.Models;
+using QuickerPlaces.Services;
 
 namespace QuickerPlaces.Views;
 
@@ -32,6 +33,10 @@ public partial class SettingsDialog : Window
         InitializeComponent();
 
         Owner = owner;
+        // SizeToContent respects MaxHeight: on a short screen the window
+        // stops at the work area and the sections scroll instead of pushing
+        // Save off the bottom.
+        MaxHeight = SystemParameters.WorkArea.Height;
         _tryApply = tryApply;
         _preview = preview;
         _hotkeyText = HotkeyGesture.IsDisabled(currentHotkey) ? Disabled : currentHotkey!.Trim();
@@ -70,8 +75,20 @@ public partial class SettingsDialog : Window
 
     private void Appearance_Changed(object sender, RoutedEventArgs e)
     {
-        if (_ready)
+        if (!_ready)
+            return;
+
+        try
+        {
             _preview(SelectedTheme(), SelectedHighlight());
+        }
+        catch (Exception ex)
+        {
+            // A preview that fails leaves the current look and the dialog
+            // open; Save applies the choice again and reports any failure.
+            // No message text: it could carry a path.
+            DiagnosticLog.Warn($"Could not preview the appearance choice ({ex.GetType().Name}, 0x{ex.HResult:X8}).");
+        }
     }
 
     private System.Windows.Controls.RadioButton ThemeButton(AppTheme theme) => theme switch
