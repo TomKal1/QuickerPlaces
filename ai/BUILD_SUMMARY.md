@@ -419,3 +419,19 @@ The performance gate, the probe's lock and Explorer-restart checks, and the Dept
 ## Status snapshot — 2026-09-27
 
 Phases 1, 2, 3 and 9 are on `main` (Phase 9 through the `claude/phase-9-folder-activity` pull request). Everything builds with 0 warnings and all 547 tests pass (`dotnet build QuickerPlaces.sln`, `dotnet test QuickerPlaces.sln` from `src\`). Next, per the roadmap's §1.1: write the Phase 4 detailed plan (general file support), then build it. Phase 8 must still check Phase 9's COM interop in a single-file build.
+
+## PDF project sessions (2026-09-28)
+
+Added at the user's request, outside the roadmap's phase order: *"a new feature that saves open PDFs to a tagable project session, that can then be seen and opened later."* The design, its decisions (D1–D13) and its limits are in [`260928_PDF Project Sessions Plan.md`](260928_PDF%20Project%20Sessions%20Plan.md). The roadmap's "no tags or workspaces" non-goal was amended for this feature only; places stay untagged, and Phase 4 is unchanged and still next.
+
+### What was built
+
+- **Sessions** in the main header opens **Project Sessions**: saved sessions, most recently used first, with a search box (name, tag or PDF name) and tag chips with counts; the selected session's PDFs, with **Open all**, **Open selected PDF**, **Edit…** and **Delete…**.
+- **Save open PDFs…** scans for open PDFs and shows a review list: files judged open ticked, recent and command-line suggestions unticked, **Add PDFs…** for anything missed. Only ticked files are saved.
+- Detection combines window titles, viewer command lines, Restart Manager's files-in-use answer, and Windows' Recent Items (plan §4). No background watching: one scan, on request, on a worker thread with a time budget.
+- `sessions.json` beside `places.json` (roaming), with its own schema version, written at once through the existing `IPlacesStorage` seam; damaged, unreadable and newer files are handled as `activity.json`'s are.
+- Reopening goes through a new `SessionLauncher`, not `PlaceLauncher`, so place usage is untouched. `IShell` gained `FileExists`.
+
+### Verification status — read this before calling it done
+
+On Linux: the app, the ActivityProbe and the tests build with zero warnings, XAML included, and all 668 tests pass (121 new: store, paths, resolver, launcher, both view models). **Nothing has been run on Windows**: `WindowsOpenPdfProbe` and the two windows are compiled but unexercised, and how each PDF viewer actually shows up (plan §4's table) is expected behaviour, not observed. The Windows checklist is the plan's §8; record each item here as passed, failed or untested.

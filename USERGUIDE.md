@@ -6,7 +6,7 @@ QuickerPlaces is a small always-on-top-of-your-workflow window for storing folde
 
 When QuickerPlaces opens you'll see, top to bottom:
 
-- A header with the app name, **Recents**, **Add Folder**, and **Add URL**. Recents keeps the activity icon and shows a dot while folder tracking is on. The **Options** menu beside **Hide List** holds **Settings**, **Recently Deleted**, **Places File**, **Import Places**, and **Export Places**.
+- A header with the app name, **Recents**, **Sessions**, **Add Folder**, and **Add URL**. Recents keeps the activity icon and shows a dot while folder tracking is on. The **Options** menu beside **Hide List** holds **Settings**, **Recently Deleted**, **Places File**, **Import Places**, and **Export Places**.
 - A row of **favourite bubbles** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
 - The **All Places** header with a count, a **search box**, the hamburger **Options** menu, and a **Hide List** / **Show List** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
@@ -110,6 +110,26 @@ Activity is stored only on this computer in `%LocalAppData%\QuickerPlaces\Quicke
 ### Keeping tracking on in the background
 
 In **Settings**, **Keep running in the tray when I close the window** makes closing the main window hide it while QuickerPlaces continues running. The tray icon's menu has **Open QuickerPlaces**, **Pause tracking** or **Resume tracking**, and **Exit**. Pausing stops sampling until you resume. The global shortcut or starting QuickerPlaces again also reopens the hidden window. **Start with Windows in the tray** starts it at sign-in; turning this off removes its per-user startup entry. Both switches are off by default. You can turn either off in Settings at any time.
+
+## Project Sessions
+
+A **session** is a named, tagged set of PDFs you had open together — the drawings and specs for one job, say — saved so you can see it later and open them all again in one go.
+
+**Saving what's open.** Open the PDFs you're working on, then click **Sessions** in the header and **Save open PDFs…**. QuickerPlaces looks for the PDFs open right now and lists them for you to check: the ones it believes are open are ticked, and PDFs you opened recently are listed below them, unticked, in case it missed one. Give the session a name, add tags if you like (separate them with commas — *Tower B, markups, RFI 12*; tags you've used before are one click away under the box), tick exactly the PDFs you want, and click **Save**. Nothing is saved until you do, and only ticked PDFs are saved.
+
+- **Add PDFs…** picks files by hand. **Find open PDFs** looks again, keeping your ticks. **Remove from list** (or Delete) drops the selected rows from the list — the files themselves are never touched. Space ticks or unticks the selected rows.
+- **What QuickerPlaces can see.** Windows has no list of the documents other programs have open, so QuickerPlaces pieces it together from window titles, the files a viewer was started with, the files programs are holding open, and Windows' own list of recent files. Acrobat, Reader and Bluebeam Revu keep their PDFs open, so every tab should be found. A web browser or SumatraPDF shows only the front tab in its title, so other tabs can't be seen — add those with **Add PDFs…**. If a window shows a PDF name that couldn't be matched to a file, the line under the list names it so you know to add it. A viewer that shows a PDF's own title instead of its file name can't be matched at all. Always glance down the list before saving.
+
+**Finding and reopening a session.** The **Project Sessions** window lists your sessions, most recently used first, each with its tags, how many PDFs it has, and when it was saved and last opened. Type in the search box to find a session by its name, a tag, or the name of a PDF in it; click a tag chip to show only sessions with that tag (**All tags** shows everything again). Select a session to see its PDFs on the right, then:
+
+- **Open all** (or Enter, or double-click the session) opens every PDF in it with your usual PDF viewer. A PDF that has since been moved, renamed or deleted is skipped and named in red; the rest still open.
+- **Open selected PDF** (or double-click a PDF, or Enter on it) opens just that one.
+- **Edit…** renames the session, changes its tags, or adds and removes PDFs (**Find open PDFs** adds what's open now).
+- **Delete…** deletes the session after asking. Only the session goes; its PDFs stay where they are.
+
+Opening a session doesn't count as opening a place: Last Opened and Opens in the main grid are unaffected, and a session's PDFs never appear there.
+
+Sessions are saved in `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside your places, the moment you save, edit or delete one. They aren't part of **Export Places**. If a save fails, the Sessions window says so in red; the change is kept and tried again with the next change and when QuickerPlaces closes.
 
 ## Recently Deleted
 
@@ -239,6 +259,7 @@ QuickerPlaces keeps a few small plain-text files, all safe to open in a text edi
 - **Your places:** `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written the instant anything changes. It holds Recently Deleted too.
 - **A backup of the previous version:** `%AppData%\QuickerPlaces\QuickerPlaces\places.bak.json` — QuickerPlaces keeps the previous contents of `places.json` every time it saves, automatically, right next to it. You don't need to do anything to get this; it's just there as an extra safety net.
 - **Window layout** (size, position, whether the grid is collapsed, how it's sorted), the **global hotkey**, and the tray/startup switches: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change Settings.
+- **Project sessions:** `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside `places.json`, with its previous version as `sessions.bak.json` — written the instant you save, edit, reopen or delete a session. Copy it along with `places.json` to take your sessions to another machine.
 - **Folder Activity roots and recorded time:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json` — stays on this computer and is separate from a Places export.
 
 Last Opened and Opens are stored with each place in `places.json`, so they go wherever that file goes. The sort is in `settings.json`, which stays on this computer.
