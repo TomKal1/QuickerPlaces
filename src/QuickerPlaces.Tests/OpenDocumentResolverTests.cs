@@ -354,6 +354,21 @@ public sealed class OpenDocumentResolverTests
     }
 
     [Fact]
+    public void AHeldFileOnAMappedDrive_AndItsShareSpellingInRecentItems_IsListedOnce_WithWhenItWasOpened()
+    {
+        var evidence = new OpenDocumentEvidence(Array.Empty<ViewerWindow>(), new[] { Recent(ShareA101, 5) })
+        {
+            HeldFiles = new[] { new HeldFile(DriveA101, "Bluebeam Revu") },
+            MappedDrives = Drives,
+        };
+
+        var candidate = Assert.Single(OpenDocumentResolver.Resolve(evidence, Array.Empty<string>()).Candidates);
+        Assert.Equal(DriveA101, candidate.Path);
+        Assert.True(candidate.IsLikelyOpen);
+        Assert.Equal(Now.AddMinutes(-5), candidate.LastOpenedAt);
+    }
+
+    [Fact]
     public void AFileSpelledWithAShareInRecentItemsAndInUse_AndAMappedDriveWhenHeld_IsListedOnce()
     {
         var evidence = new OpenDocumentEvidence(Array.Empty<ViewerWindow>(), new[] { Recent(ShareA101, 5) })

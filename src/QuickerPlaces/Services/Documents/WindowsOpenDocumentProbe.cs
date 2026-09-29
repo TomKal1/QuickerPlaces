@@ -99,7 +99,7 @@ public sealed class WindowsOpenDocumentProbe
             held = read.Files;
             drives = read.MappedDrives;
             if (!read.IsComplete)
-                warnings.Add("Listing the files open in PDF, Word and Excel programs took too long, so some may be missing.");
+                warnings.Add("Not every file open in PDF, Word and Excel programs could be listed, so some may be missing.");
         }
         catch (Exception ex)
         {
@@ -108,8 +108,6 @@ public sealed class WindowsOpenDocumentProbe
             drives = new Dictionary<string, string>();
             warnings.Add("The files open in PDF, Word and Excel programs couldn't be listed, so some may be missing.");
         }
-
-        var heldPaths = new HashSet<string>(held.Select(h => h.Path), StringComparer.OrdinalIgnoreCase);
 
         IReadOnlyList<RecentDocument> recents;
         try
@@ -124,8 +122,9 @@ public sealed class WindowsOpenDocumentProbe
         }
 
         var evidence = new OpenDocumentEvidence(windows, recents) { HeldFiles = held, MappedDrives = drives };
+        var heldPaths = new HashSet<string>(held.Select(h => OpenDocumentResolver.Spell(h.Path, evidence) ?? h.Path), StringComparer.OrdinalIgnoreCase);
         var inUse = new List<string>();
-        var slowServers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var slowVolumes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var existing = new List<string>();
         var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var timedOut = false;
@@ -142,8 +141,8 @@ public sealed class WindowsOpenDocumentProbe
                 break;
             }
 
-            var server = ServerOf(path);
-            if (server is not null && slowServers.Contains(server))
+            var volume = SlowKeyOf(path, drives);
+            if (slowVolumes.Contains(volume))
                 continue;
 
             switch (ExistsWithin(path, ExistenceTimeout))
@@ -155,8 +154,7 @@ public sealed class WindowsOpenDocumentProbe
                     missing.Add(path);
                     break;
                 default:
-                    if (server is not null)
-                        slowServers.Add(server);
+                    slowVolumes.Add(volume);
                     break;
             }
         }
@@ -178,11 +176,17 @@ public sealed class WindowsOpenDocumentProbe
         catch (Exception ex)
         {
             DiagnosticLog.Warn($"Checking which documents are in use failed ({ex.GetType().Name}).");
-            warnings.Add("Files open in the background couldn't be checked, so only the front document of each window was found.");
+            warnings.Add(held.Count > 0
+                ? "Some files open in the background couldn't be checked."
+                : "Files open in the background couldn't be checked, so only the front document of each window was found.");
         }
 
-        if (slowServers.Count > 0)
-            warnings.Add($"{(slowServers.Count == 1 ? "A network share was" : "Some network shares were")} slow to answer, so {(slowServers.Count == 1 ? "its" : "their")} files weren't checked.");
+        // A key ending in ':' is a local drive: its files are skipped too, but it isn't called a network share.
+        var slowShares = slowVolumes.Count(v => !v.EndsWith(':'));
+        if (slowShares > 0)
+            warnings.Add($"{(slowShares == 1 ? "A network share was" : "Some network shares were")} slow to answer, so {(slowShares == 1 ? "its" : "their")} files weren't checked.");
+        else if (slowVolumes.Count > 0)
+            warnings.Add("A drive was slow to answer, so its files weren't checked.");
         if (timedOut)
             warnings.Add("The scan took too long and stopped early. Add any missing files by hand.");
 
@@ -371,13 +375,26 @@ public sealed class WindowsOpenDocumentProbe
         return check.Wait(timeout) ? check.Result : null;
     }
 
-    /// <summary>"server" for "\\server\share\x.pdf"; null for a drive path.</summary>
-    private static string? ServerOf(string path)
+    /// <summary>
+    /// What a slow answer is blamed on, so the volume's other files are skipped:
+    /// the server for a UNC path or a mapped drive (candidates are spelled with
+    /// mapped drive letters, which hide the server), else the drive ("C:").
+    /// </summary>
+    private static string SlowKeyOf(string path, IReadOnlyDictionary<string, string> drives)
     {
+        var share = path;
         if (!path.StartsWith(@"\\", StringComparison.Ordinal))
-            return null;
-        var end = path.IndexOf('\\', 2);
-        return end < 0 ? path[2..] : path[2..end];
+        {
+            if (path.Length < 2 || path[1] != ':')
+                return path; // Not a path we know how to group.
+
+            var drive = path[..2];
+            if (!drives.TryGetValue(drive, out share!))
+                return drive;
+        }
+
+        var end = share.IndexOf('\\', 2);
+        return end < 0 ? share[2..] : share[2..end];
     }
 
     /// <summary>Word or Excel when <paramref name="hwnd"/> is that program's main window, by its window class, which doesn't change with language or title.</summary>

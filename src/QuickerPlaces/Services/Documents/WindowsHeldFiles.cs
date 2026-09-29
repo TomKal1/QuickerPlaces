@@ -98,7 +98,11 @@ public static class WindowsHeldFiles
 
         var targets = SelectTargets(programs);
         if (targets.Count == 0)
-            return new HeldFilesRead(Array.Empty<HeldFile>(), IsComplete: true, DrivesWithin(drivesTask, clock, timeout));
+        {
+            // Nothing is held, so the drives are only for spelling the recent files consistently: don't hold the scan up for them.
+            var cap = timeout < TimeSpan.FromSeconds(1) ? timeout : TimeSpan.FromSeconds(1);
+            return new HeldFilesRead(Array.Empty<HeldFile>(), IsComplete: true, DrivesWithin(drivesTask, clock, cap));
+        }
 
         var handles = ListFileHandles(targets);
         var found = new ConcurrentQueue<(string FinalPath, string AppName)>();
