@@ -12,6 +12,7 @@ using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
+using QuickerPlaces.Views.Panels;
 
 namespace QuickerPlaces.Views;
 
@@ -34,6 +35,7 @@ public partial class MainWindow : Window
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
+    private readonly Action _focusSearch;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
         ActivityStore activityStore, ActivityTrackingHost activityHost, SessionStore sessionStore,
@@ -54,6 +56,10 @@ public partial class MainWindow : Window
         _themeManager = themeManager;
         RestoreWindowState(settings);
         UpdateActivityIndicator();
+
+        var places = new PlacesPanel { CollapsesWithWindow = true };
+        MainContent.Content = places;
+        _focusSearch = places.FocusSearch;
     }
 
     private void ActivityButton_Click(object sender, RoutedEventArgs e)
@@ -76,13 +82,6 @@ public partial class MainWindow : Window
         var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
             new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
         LibraryWindow.Show(this, library, _recentFilesHost, _activityHost, viewModel.NotePlaceOpened);
-    }
-
-    private void OptionsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (OptionsButton.ContextMenu is not { } menu) return;
-        menu.PlacementTarget = OptionsButton;
-        menu.IsOpen = true;
     }
 
     public void UpdateActivityIndicator()
@@ -282,23 +281,11 @@ public partial class MainWindow : Window
             }
         }
 
-        SearchBox.Focus();
-        SearchBox.SelectAll();
+        _focusSearch();
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        // The remembered sort is already applied to the view (MainViewModel's
-        // constructor); this shows its arrow. Done once the grid is loaded, so
-        // nothing in its own start-up can clear the arrow afterwards. A
-        // remembered sort with no column to show it (Favourite, whose column
-        // became the star beside the alias) would be a sort nobody can see
-        // or undo, so it goes back to stored order instead.
-        if (DataContext is MainViewModel { CurrentSort: { } remembered } viewModel && !HasColumnFor(remembered.Key))
-            viewModel.ClearSort();
-
-        UpdateSortArrows();
-
         // Surfaced here (rather than from OnSourceInitialized, where the
         // error is found) so a loaded, on-screen window exists for
         // MessageForm to center on. A problem loading places.json never
@@ -373,115 +360,8 @@ public partial class MainWindow : Window
             viewModel.PersistToSettings();
     }
 
-    // -----------------------------------------------------------------
-    // Search box + keyboard shortcuts. Window-wide shortcuts are
-    // KeyBindings in MainWindow.xaml; these handlers cover the ones that
-    // depend on focus (the search box, the grid's selected row).
-    // -----------------------------------------------------------------
-
     /// <summary>Ctrl+F: jump to the search box, selecting any existing query so typing replaces it.</summary>
-    private void Find_Executed(object sender, ExecutedRoutedEventArgs e)
-    {
-        SearchBox.Focus();
-        SearchBox.SelectAll();
-    }
-
-    /// <summary>
-    /// Makes the search box a launcher: Enter opens the top result, Down
-    /// moves into the grid to pick a different one, and Esc clears the
-    /// search (or, if it's already empty, hands focus to the grid).
-    /// </summary>
-    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (DataContext is not MainViewModel viewModel)
-            return;
-
-        switch (e.Key)
-        {
-            case Key.Escape:
-                if (viewModel.IsSearching)
-                    viewModel.SearchText = string.Empty;
-                else
-                    FocusGridRow(PlacesGrid.SelectedIndex);
-                e.Handled = true;
-                break;
-
-            case Key.Enter:
-                if (PlacesGrid.Items.Count > 0 && PlacesGrid.Items[0] is PlaceViewModel top)
-                    viewModel.OpenCommand.Execute(top);
-                e.Handled = true;
-                break;
-
-            case Key.Down:
-                FocusGridRow(0);
-                e.Handled = true;
-                break;
-        }
-    }
-
-    /// <summary>Row shortcuts, acting on the selected row: Enter opens, F2 renames, Ctrl+E edits the path/URL, Ctrl+D toggles favourite, Ctrl+C copies the path/URL, Delete removes.</summary>
-    private void PlacesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (PlacesGrid.SelectedItem is not PlaceViewModel place || DataContext is not MainViewModel viewModel)
-            return;
-
-        var ctrl = Keyboard.Modifiers == ModifierKeys.Control;
-        var none = Keyboard.Modifiers == ModifierKeys.None;
-
-        var command = e.Key switch
-        {
-            Key.Enter when none => viewModel.OpenCommand,
-            Key.F2 when none => viewModel.RenameAliasCommand,
-            Key.E when ctrl => viewModel.EditResourceCommand,
-            Key.D when ctrl => viewModel.ToggleFavouriteCommand,
-            // Replaces DataGrid's own Ctrl+C, which copies every cell of the row.
-            Key.C when ctrl => viewModel.CopyResourceCommand,
-            Key.Delete when none => viewModel.RemoveCommand,
-            _ => null
-        };
-
-        if (command is null)
-            return;
-
-        // Handled first: DataGrid's own Enter handling would otherwise
-        // also move the selection down a row.
-        e.Handled = true;
-        var index = PlacesGrid.SelectedIndex;
-        command.Execute(place);
-
-        // Remove no longer opens a confirmation, so nothing hands the focus
-        // back: the focused row has just gone, and the next Delete or arrow
-        // key would go nowhere. Select and focus the row that took its place
-        // (the one before, if it was the last).
-        if (ReferenceEquals(command, viewModel.RemoveCommand) && !PlacesGrid.Items.Contains(place))
-        {
-            if (PlacesGrid.Items.Count > 0)
-                FocusGridRow(index);
-            else
-                PlacesGrid.Focus();
-        }
-    }
-
-    /// <summary>Selects and keyboard-focuses the grid row at <paramref name="index"/> (clamped; first row if nothing was selected).</summary>
-    private void FocusGridRow(int index)
-    {
-        if (PlacesGrid.Items.Count == 0)
-            return;
-
-        index = System.Math.Clamp(index, 0, PlacesGrid.Items.Count - 1);
-        var item = PlacesGrid.Items[index];
-        PlacesGrid.SelectedItem = item;
-        PlacesGrid.ScrollIntoView(item);
-
-        // Focusing the DataGrid itself only focuses the grid, not a row, so
-        // arrow keys wouldn't move from the selection. Focus the row's
-        // container once it has been generated.
-        PlacesGrid.UpdateLayout();
-        if (PlacesGrid.ItemContainerGenerator.ContainerFromIndex(index) is DataGridRow row)
-            row.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
-        else
-            PlacesGrid.Focus();
-    }
+    private void Find_Executed(object sender, ExecutedRoutedEventArgs e) => _focusSearch();
 
     // -----------------------------------------------------------------
     // Status bar pause (D19). The bar stays up while the pointer is over
@@ -509,75 +389,6 @@ public partial class MainWindow : Window
             viewModel.PauseStatusTimer();
         else
             viewModel.ResumeStatusTimer();
-    }
-
-    // -----------------------------------------------------------------
-    // Sorting (Phase 3 D29). The DataGrid's own sorting is replaced, not
-    // extended: it would set SortDescriptions, which can't express "never
-    // opened is oldest" or the alias tie-break, and each column's first
-    // direction is PlaceSort's to choose. Each column's SortMemberPath is its PlaceSortKey
-    // name, and nothing else reads it.
-    // -----------------------------------------------------------------
-
-    private void PlacesGrid_Sorting(object sender, DataGridSortingEventArgs e)
-    {
-        e.Handled = true;
-
-        if (DataContext is not MainViewModel viewModel ||
-            !Enum.TryParse<PlaceSortKey>(e.Column.SortMemberPath, out var key))
-            return;
-
-        viewModel.SortBy(key);
-        UpdateSortArrows();
-    }
-
-    private bool HasColumnFor(PlaceSortKey key)
-    {
-        foreach (var column in PlacesGrid.Columns)
-        {
-            if (Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var columnKey) && columnKey == key)
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>Shows the current sort's arrow on its column, and none on the others.</summary>
-    private void UpdateSortArrows()
-    {
-        var sort = (DataContext as MainViewModel)?.CurrentSort;
-
-        foreach (var column in PlacesGrid.Columns)
-        {
-            column.SortDirection = sort is { } active && Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var key) && key == active.Key
-                ? active.Direction
-                : null;
-        }
-    }
-
-    /// <summary>Double-click on a grid row = Open (SI §6.3), the same action as the row's top context-menu item.</summary>
-    private void Row_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        // A quick double-click on the row's favourite star is two toggles,
-        // not an open: the row raises MouseDoubleClick even though the star
-        // button handled both clicks.
-        if (IsInsideButton(e.OriginalSource as DependencyObject))
-            return;
-
-        if (sender is DataGridRow { Item: PlaceViewModel place } && DataContext is MainViewModel viewModel)
-            viewModel.OpenCommand.Execute(place);
-    }
-
-    private static bool IsInsideButton(DependencyObject? element)
-    {
-        for (var current = element; current is not null and not DataGridRow;
-             current = current is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
-        {
-            if (current is System.Windows.Controls.Primitives.ButtonBase)
-                return true;
-        }
-
-        return false;
     }
 
     // -----------------------------------------------------------------
