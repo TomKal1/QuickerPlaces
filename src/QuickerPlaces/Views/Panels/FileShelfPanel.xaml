@@ -1,0 +1,190 @@
+<UserControl x:Class="QuickerPlaces.Views.Panels.FileShelfPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        The File shelf panel (configurable canvas plan D4, M2): the Library's
+        filters and grouped list, for the period chosen on the year strip.
+        DataContext is the shared LibraryViewModel. The list is virtualized,
+        also while grouped, and the view model keeps the selected row by the
+        item's identity across refreshes. The code-behind only passes clicks
+        and keys in and copies to the clipboard.
+    -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <CollectionViewSource x:Key="GroupedRows" Source="{Binding Rows}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="GroupName" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Filters: kind chips, saved or recent, grouping, search. -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <ItemsControl ItemsSource="{Binding KindFilters}" AutomationProperties.Name="Show kind">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource Button.KindChip}" Content="{Binding Label}" Click="KindChip_Click"
+                                    AutomationProperties.Name="{Binding Label}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Text="SHOW" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" />
+                    <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Show">
+                        <Border Style="{StaticResource Border.SegmentGroup}">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="All" GroupName="Source" IsChecked="{Binding IsSourceAll}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" />
+                                <RadioButton Content="Saved" GroupName="Source" IsChecked="{Binding IsSourceSaved}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0"
+                                             ToolTip="Saved places, and files in saved sessions" />
+                                <RadioButton Content="Recent" GroupName="Source" IsChecked="{Binding IsSourceRecent}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
+                                             ToolTip="Folders from Recents, and files from Recent Files" />
+                            </StackPanel>
+                        </Border>
+                    </GroupBox>
+                    <TextBlock Text="GROUP BY" Style="{StaticResource TextBlock.Caps}" Margin="24,0,10,0" />
+                    <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Group by">
+                        <Border Style="{StaticResource Border.SegmentGroup}">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="Type" GroupName="Grouping" IsChecked="{Binding IsGroupedByType}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" />
+                                <RadioButton Content="Tag" GroupName="Grouping" IsChecked="{Binding IsGroupedByTag}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
+                                             ToolTip="One group per session tag; untagged items last" />
+                            </StackPanel>
+                        </Border>
+                    </GroupBox>
+                    <TextBlock Text="TAG" Style="{StaticResource TextBlock.Caps}" Margin="24,0,10,0" />
+                    <ComboBox ItemsSource="{Binding TagChoices}" SelectedItem="{Binding TagChoice, Mode=TwoWay}" MinWidth="130"
+                              VerticalAlignment="Center" AutomationProperties.Name="Only items in sessions with this tag"
+                              ToolTip="Only files in sessions with this tag" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Search: the main window's search box. -->
+            <Border Grid.Column="1" Width="260" Height="34" VerticalAlignment="Top" CornerRadius="6" BorderThickness="1"
+                    Padding="10,0,5,0" Background="{DynamicResource Bg.Sunken}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
+                        <Style.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Search}" Stroke="{DynamicResource Text.Tertiary}" />
+                    <TextBox x:Name="SearchBox" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource TextBox.Bare}"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Search the Library" ToolTip="Search by name, path, tag or session"
+                             PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                    <TextBlock Grid.Column="1" Text="Search by name, path, tag or session" IsHitTestVisible="False"
+                               Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <DataGrid x:Name="RowsGrid" ItemsSource="{Binding Source={StaticResource GroupedRows}}"
+                      SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                      CanUserSortColumns="False" SelectionMode="Single"
+                      AutomationProperties.Name="Library items" KeyboardNavigation.TabNavigation="Once"
+                      MouseDoubleClick="RowsGrid_MouseDoubleClick" PreviewKeyDown="RowsGrid_PreviewKeyDown"
+                      ContextMenuOpening="RowsGrid_ContextMenuOpening">
+                <DataGrid.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource Bg.Raised}" Padding="12,7" Margin="0,6,0,0"
+                                        BorderBrush="{DynamicResource Border.Default}" BorderThickness="0,0,0,1">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding ItemCount, StringFormat='  ·  {0}'}" Foreground="{DynamicResource Text.Secondary}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </DataGrid.GroupStyle>
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Open" FontWeight="Bold" Click="OpenMenu_Click" />
+                        <MenuItem Header="Copy path or link" Click="CopyMenu_Click" />
+                        <Separator />
+                        <MenuItem x:Name="ForgetMenuItem" Header="Remove from Recent Files" Click="ForgetMenu_Click" />
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="NAME" Width="2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Style="{StaticResource Icon.LibraryKind}" />
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Location}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <DataGridTextColumn Header="WHERE FROM" Binding="{Binding SourceText}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <DataGridTextColumn Header="TAGS" Binding="{Binding TagsText}" Width="*" ElementStyle="{StaticResource Cell.Text}" />
+                    <DataGridTextColumn Header="FOLDER" Binding="{Binding Folder}" Width="2*" ElementStyle="{StaticResource Cell.Path}" />
+                    <DataGridTextColumn Header="LAST USED" Binding="{Binding LastUsedText}" Width="140" ElementStyle="{StaticResource Cell.Secondary}" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <TextBlock Text="{Binding EmptyText}" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Margin="16" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource Text.Secondary}"
+                       Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+        </Grid>
+
+        <!-- What the period can't list (D5), what the last action did, and what went wrong with it. -->
+        <StackPanel Grid.Row="2" Margin="0,8,0,0">
+            <TextBlock Text="{Binding PeriodNotesText}" Foreground="{DynamicResource Text.Secondary}" FontSize="12" TextWrapping="Wrap"
+                       Style="{StaticResource CollapsedWhenEmpty}" />
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}" TextWrapping="Wrap"
+                       Style="{StaticResource CollapsedWhenEmpty}" />
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Style="{StaticResource CollapsedWhenEmpty}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

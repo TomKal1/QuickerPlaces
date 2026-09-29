@@ -1,0 +1,122 @@
+<UserControl x:Class="QuickerPlaces.Views.Panels.YearActivityPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        The Year activity panel (configurable canvas plan D4, D5, M2): the
+        year strip of recorded activity, a Day / Week / Month choice for what
+        a click selects, the chosen period as a chip that clears it, and a
+        line for each source the strip can't fully count. DataContext is the
+        shared LibraryViewModel; the File shelf panel reads the same one, so
+        choosing a period here narrows the shelf. The code-behind only passes
+        clicks in.
+    -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource Bg.Panel}" BorderBrush="{DynamicResource Border.Default}"
+            BorderThickness="1" CornerRadius="8" Padding="8">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <DockPanel Grid.Row="0" Margin="0,0,0,5">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Border Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28" Padding="12,0,3,0" Margin="0,0,10,0"
+                            Visibility="{Binding HasPeriod, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding PeriodText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource Button.IconOnlyCompact}" Width="22" Height="22" Margin="6,0,0,0"
+                                    ToolTip="Show everything again" AutomationProperties.Name="Clear the period"
+                                    Click="ClearPeriod_Click">
+                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Close}" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="A click chooses" Margin="0,0,10,0"
+                              VerticalAlignment="Center">
+                        <Border Style="{StaticResource Border.SegmentGroup}">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Content="Day" GroupName="Unit" IsChecked="{Binding IsUnitDay}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5"
+                                             ToolTip="A click on the strip chooses that day" />
+                                <RadioButton Content="Week" GroupName="Unit" IsChecked="{Binding IsUnitWeek}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0"
+                                             ToolTip="A click on the strip chooses that day's week" />
+                                <RadioButton Content="Month" GroupName="Unit" IsChecked="{Binding IsUnitMonth}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
+                                             ToolTip="A click on the strip chooses that day's month" />
+                            </StackPanel>
+                        </Border>
+                    </GroupBox>
+                    <Button Style="{StaticResource Button.IconOnlyCompact}"
+                            ToolTip="Previous year" AutomationProperties.Name="Previous year" Click="PreviousYear_Click">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronLeft}" />
+                    </Button>
+                    <TextBlock Text="{Binding CalendarYearLabel}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0" />
+                    <Button Style="{StaticResource Button.IconOnlyCompact}"
+                            ToolTip="Next year" AutomationProperties.Name="Next year" Click="NextYear_Click">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronRight}" />
+                    </Button>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="YEAR ACTIVITY" Style="{StaticResource TextBlock.Caps}" Margin="0,0,12,0" />
+                    <TextBlock Text="{Binding CalendarCaption}" Foreground="{DynamicResource Text.Secondary}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </DockPanel>
+            <DockPanel Grid.Row="1" HorizontalAlignment="Center">
+                <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding CalendarWeekdayLabels}" Margin="0,19,7,0" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" Height="14" FontSize="9" Foreground="{DynamicResource Text.Secondary}"
+                                       VerticalAlignment="Center" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ScrollViewer Height="140" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <Grid Width="{Binding CalendarStripWidth}" Height="117" VerticalAlignment="Top">
+                        <ItemsControl ItemsSource="{Binding CalendarWeeks}" Margin="0,19,0,0" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <ItemsControl ItemsSource="{Binding Days}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource Button.CalendarDay}" ToolTip="{Binding Label}"
+                                                        AutomationProperties.Name="{Binding Label}" Click="CalendarDay_Click" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ItemsControl ItemsSource="{Binding CalendarMonthMarkers}" IsHitTestVisible="False" Focusable="False"
+                                      Width="{Binding CalendarStripWidth}" Height="117">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Canvas Width="{Binding DataContext.CalendarStripWidth, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            Height="117">
+                                        <Polyline Points="{Binding Points}" Stroke="{DynamicResource Border.Strong}" StrokeThickness="1" />
+                                        <TextBlock Text="{Binding Label}" Canvas.Left="{Binding LabelX}" FontSize="10"
+                                                   Foreground="{DynamicResource Text.Secondary}" />
+                                    </Canvas>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </ScrollViewer>
+            </DockPanel>
+            <!-- D5: what the strip can't count, never shown as zero. -->
+            <TextBlock Grid.Row="2" Text="{Binding CoverageNotesText}" Style="{StaticResource CollapsedWhenEmpty}"
+                       Foreground="{DynamicResource Text.Secondary}" FontSize="12" TextWrapping="Wrap" Margin="4,2,4,0" />
+        </Grid>
+    </Border>
+</UserControl>

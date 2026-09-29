@@ -74,8 +74,8 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel viewModel) return;
         var shell = new WindowsShell();
         var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
-            new PlaceLauncher(_placesService, shell), shell);
-        LibraryWindow.Show(this, library, _recentFilesHost, viewModel.NotePlaceOpened);
+            new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+        LibraryWindow.Show(this, library, _recentFilesHost, _activityHost, viewModel.NotePlaceOpened);
     }
 
     private void OptionsButton_Click(object sender, RoutedEventArgs e)

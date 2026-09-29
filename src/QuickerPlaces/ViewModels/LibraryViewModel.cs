@@ -153,6 +153,7 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedKind));
         NotifySource();
         OnPropertyChanged(nameof(Tag));
+        OnPropertyChanged(nameof(TagChoice));
         NotifyPeriod();
         Refresh();
     }
@@ -225,9 +226,18 @@ public sealed class LibraryViewModel : ObservableObject
         {
             if (string.IsNullOrWhiteSpace(value) || value == AnyTag)
                 value = null;
-            if (SetProperty(ref _tag, value))
-                QueryEdited();
+            if (!SetProperty(ref _tag, value))
+                return;
+            OnPropertyChanged(nameof(TagChoice));
+            QueryEdited();
         }
+    }
+
+    /// <summary>The tag picker's item: the tag, or <see cref="AnyTag"/>.</summary>
+    public string TagChoice
+    {
+        get => _tag ?? AnyTag;
+        set => Tag = value;
     }
 
     /// <summary>What the tag picker shows for no tag.</summary>
@@ -628,12 +638,11 @@ public sealed class LibraryViewModel : ObservableObject
             KindFilters.Add(new LibraryKindFilter(kind, $"{kind.PluralLabel()} ({passing.Count(i => i.Kind == kind)})", selected == kind));
 
         var shown = passing.Where(i => selected is null || i.Kind == selected).ToList();
-        var keep = _selectedKey;
-        Rows.Clear();
+        var rows = new List<LibraryRowViewModel>();
         if (_grouping == LibraryGrouping.Type)
         {
             foreach (var item in shown.OrderBy(i => i.Kind))
-                Rows.Add(new LibraryRowViewModel(item, item.Kind.PluralLabel(), (int)item.Kind, _time.LocalTimeZone, _culture));
+                rows.Add(new LibraryRowViewModel(item, item.Kind.PluralLabel(), (int)item.Kind, _time.LocalTimeZone, _culture));
         }
         else
         {
@@ -642,16 +651,25 @@ public sealed class LibraryViewModel : ObservableObject
             for (var index = 0; index < tags.Count; index++)
             {
                 foreach (var item in shown.Where(i => i.Tags.Contains(tags[index], StringComparer.OrdinalIgnoreCase)))
-                    Rows.Add(new LibraryRowViewModel(item, tags[index], index, _time.LocalTimeZone, _culture));
+                    rows.Add(new LibraryRowViewModel(item, tags[index], index, _time.LocalTimeZone, _culture));
             }
 
             foreach (var item in shown.Where(i => i.Tags.Count == 0))
-                Rows.Add(new LibraryRowViewModel(item, "No tag", tags.Count, _time.LocalTimeZone, _culture));
+                rows.Add(new LibraryRowViewModel(item, "No tag", tags.Count, _time.LocalTimeZone, _culture));
         }
 
-        // The same item keeps the selection, wherever the refresh put it; the key survives a row that is gone for now.
-        SelectedRow = keep is null ? null : Rows.FirstOrDefault(r => ResourceIdentity.Comparer.Equals(r.Item.Key, keep));
-        _selectedKey = keep;
+        // A refresh that changes nothing shown leaves the rows alone, so the list keeps its scroll position and selection.
+        if (rows.Count != Rows.Count || !rows.Zip(Rows).All(pair => pair.First.Looks(pair.Second)))
+        {
+            var keep = _selectedKey;
+            Rows.Clear();
+            foreach (var row in rows)
+                Rows.Add(row);
+
+            // The same item keeps the selection, wherever the refresh put it; the key survives a row that is gone for now.
+            SelectedRow = keep is null ? null : Rows.FirstOrDefault(r => ResourceIdentity.Comparer.Equals(r.Item.Key, keep));
+            _selectedKey = keep;
+        }
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyText));
@@ -791,6 +809,12 @@ public sealed class LibraryRowViewModel
     public string LastUsedText => Item.LastUsedAt is { } at
         ? TimeZoneInfo.ConvertTime(at, _zone).DateTime.ToString("g", _culture)
         : "";
+
+    /// <summary>True when <paramref name="other"/> is the same item, shown the same way in the same group.</summary>
+    public bool Looks(LibraryRowViewModel other)
+        => ResourceIdentity.Comparer.Equals(Item.Key, other.Item.Key) && GroupName == other.GroupName && Name == other.Name &&
+           SourceText == other.SourceText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
+           ReferenceEquals(Item.Place, other.Item.Place);
 
     /// <summary>True for a file Recent Files recorded, which Remove from Recent Files can forget.</summary>
     public bool CanForget => Item.IsRecent && Item.Kind.ToDocumentKind() is not null;

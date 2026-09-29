@@ -249,6 +249,27 @@ public sealed class LibraryPeriodQueryTests
     }
 
     [Fact]
+    public void ARefreshThatChangesNothingShown_KeepsTheSameRows()
+    {
+        Seed();
+        var vm = NewViewModel();
+        var before = vm.Rows.ToList();
+        var resets = 0;
+        vm.Rows.CollectionChanged += (_, _) => resets++;
+
+        vm.Reload();
+        vm.Grouping = LibraryGrouping.Type;
+
+        Assert.Equal(0, resets);
+        Assert.Equal(before, vm.Rows);
+
+        _recentFiles.Record(new[] { new RecentDocument(Excel, _time.UtcNow.AddMinutes(30)) }, _ => true);
+        vm.Reload();
+        Assert.NotEqual(0, resets);
+        Assert.Equal("Opened 2 times", vm.Rows.Single(r => r.Name == "Budget.xlsx").SourceText);
+    }
+
+    [Fact]
     public void AResultOvertakenByANewerQuery_IsDropped()
     {
         Seed();
