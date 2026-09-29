@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using QuickerPlaces.Services;
 
 namespace QuickerPlaces.Services.Documents;
 
@@ -42,8 +43,9 @@ namespace QuickerPlaces.Services.Documents;
 /// share can too. So the handles are walked on a background thread that a
 /// watchdog watches (H4): a handle that takes longer than
 /// <see cref="HandleTimeout"/> is abandoned with its thread, remembered in
-/// <see cref="StuckHandles"/> so no later scan asks about it again, and the
-/// walk carries on from the next handle on a fresh thread. The whole read
+/// <see cref="StuckHandles"/> so no later scan asks about it (unless the
+/// abandoned thread comes back, showing it was only slow, and forgets it), and
+/// the walk carries on from the next handle on a fresh thread. The whole read
 /// also has the caller's time limit; what was found so far is returned when
 /// it runs out.
 ///
@@ -55,24 +57,30 @@ public static class WindowsHeldFiles
     /// Programs never read, even when a window of theirs is given or a
     /// sibling of a given program: Explorer and the shell helpers hold files
     /// only to show them, and browsers don't keep a PDF open and run dozens
-    /// of processes full of pipes.
+    /// of processes full of pipes. Kept in step with
+    /// WindowsOpenDocumentProbe.IgnoredHolders, which names the same helpers
+    /// for Restart Manager.
     /// </summary>
     private static readonly HashSet<string> SkippedPrograms = new(StringComparer.OrdinalIgnoreCase)
     {
-        "explorer", "prevhost", "dllhost", "SearchHost", "SearchProtocolHost", "OneDrive", "Dropbox",
+        "explorer", "prevhost", "dllhost", "SearchHost", "SearchProtocolHost", "SearchIndexer", "SearchFilterHost",
+        "MsMpEng", "MpDefenderCoreService", "OneDrive", "Dropbox",
         "msedge", "msedgewebview2", "chrome", "firefox", "brave", "opera", "iexplore",
     };
 
     /// <summary>
     /// Handles that stalled a read before, so are skipped from then on: a stuck
-    /// pipe then costs one thread once, not one every scan. Keyed by the
-    /// kernel object as well as the process and handle value, as a handle value
-    /// is reused: a later file opened under the same value is another object.
+    /// pipe then costs one thread once, not one every scan. An entry is removed
+    /// if its worker ever returns (the handle was only slow), which also covers
+    /// a handle value that is later reused for another file after the stuck
+    /// one closed. (The kernel object address that would tell them apart is
+    /// zero for callers without SeDebugPrivilege.)
     /// </summary>
-    private static readonly ConcurrentDictionary<(uint ProcessId, nint Handle, nint Object), byte> StuckHandles = new();
+    private static readonly ConcurrentDictionary<(uint ProcessId, nint Handle), byte> StuckHandles = new();
 
     private static readonly TimeSpan HandleTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(25);
+    private static readonly TimeSpan MinimumDriveWait = TimeSpan.FromMilliseconds(250);
     private const int MaxAbandonedWorkers = 3;
 
     /// <summary>
@@ -99,8 +107,9 @@ public static class WindowsHeldFiles
         IReadOnlyDictionary<string, string> drives;
         try
         {
+            // A minimum wait, so the drive spelling of a path doesn't depend on how long the walk took.
             var remaining = timeout - clock.Elapsed;
-            drives = drivesTask.Wait(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero)
+            drives = drivesTask.Wait(remaining > MinimumDriveWait ? remaining : MinimumDriveWait)
                 ? drivesTask.Result
                 : new Dictionary<string, string>();
         }
@@ -115,7 +124,7 @@ public static class WindowsHeldFiles
 
     private readonly record struct Target(string AppName, int Order);
 
-    private readonly record struct HeldHandle(uint ProcessId, nint Handle, nint Object);
+    private readonly record struct HeldHandle(uint ProcessId, nint Handle);
 
     /// <summary>
     /// The given programs in the order given, then their same-named siblings,
@@ -202,8 +211,8 @@ public static class WindowsHeldFiles
         // OrderBy is stable, so the handle order within a process is kept.
         return entries
             .Where(e => e.ObjectTypeIndex == fileType && targets.ContainsKey((uint)e.UniqueProcessId))
-            .Select(e => new HeldHandle((uint)e.UniqueProcessId, e.HandleValue, e.Object))
-            .Where(h => !StuckHandles.ContainsKey((h.ProcessId, h.Handle, h.Object)))
+            .Select(e => new HeldHandle((uint)e.UniqueProcessId, e.HandleValue))
+            .Where(h => !StuckHandles.ContainsKey((h.ProcessId, h.Handle)))
             .OrderBy(h => targets[h.ProcessId].Order)
             .ToArray();
     }
@@ -236,8 +245,11 @@ public static class WindowsHeldFiles
 
                 if (progress.Done)
                 {
-                    if (progress.Failure is not null)
+                    if (progress.Failure is { } failure)
+                    {
+                        DiagnosticLog.Warn($"Listing held documents stopped ({failure.GetType().Name}).");
                         return false;
+                    }
 
                     next = handles.Length;
                     break;
@@ -250,11 +262,13 @@ public static class WindowsHeldFiles
                 }
 
                 // Current is read before StepStarted: the walk writes them the other way round.
+                // Below zero the thread hasn't taken its first step yet, so there is no handle to blame.
                 var current = progress.Current;
-                if (Stopwatch.GetElapsedTime(progress.StepStarted) > HandleTimeout)
+                if (current >= 0 && Stopwatch.GetElapsedTime(progress.StepStarted) > HandleTimeout)
                 {
+                    // Recorded before cancelling: the worker removes it again if it comes back and finds itself cancelled.
+                    StuckHandles.TryAdd((handles[current].ProcessId, handles[current].Handle), 0);
                     progress.Cancelled = true;
-                    StuckHandles.TryAdd((handles[current].ProcessId, handles[current].Handle, handles[current].Object), 0);
                     next = current + 1;
                     if (++abandoned >= MaxAbandonedWorkers)
                         return false;
@@ -288,23 +302,14 @@ public static class WindowsHeldFiles
                 progress.StepStarted = Stopwatch.GetTimestamp();
                 progress.Current = i;
 
-                var (processId, handle, _) = handles[i];
-                if (!processes.TryGetValue(processId, out var process))
-                    processes[processId] = process = OpenProcess(ProcessDupHandle, false, processId);
-                if (process == IntPtr.Zero)
-                    continue; // Elevated, or gone.
+                Ask(handles[i], self, processes, targets, found);
 
-                if (!DuplicateHandle(process, handle, self, out var copy, 0, false, DuplicateSameAccess))
-                    continue;
-
-                try
+                if (progress.Cancelled)
                 {
-                    if (GetFileType(copy) == FileTypeDisk && FinalPath(copy) is { } path)
-                        found.Enqueue((path, targets[processId].AppName));
-                }
-                finally
-                {
-                    CloseHandle(copy);
+                    // The watchdog gave up on this handle, but it came back: it was only slow
+                    // (a big PDF on a slow share, say), so later scans should ask about it again.
+                    StuckHandles.TryRemove((handles[i].ProcessId, handles[i].Handle), out _);
+                    return;
                 }
             }
         }
@@ -324,6 +329,29 @@ public static class WindowsHeldFiles
         }
     }
 
+    /// <summary>Copies one handle into this process and, if it is a disk file, queues its path.</summary>
+    private static void Ask(HeldHandle held, IntPtr self, Dictionary<uint, IntPtr> processes, Dictionary<uint, Target> targets,
+        ConcurrentQueue<(string FinalPath, string AppName)> found)
+    {
+        if (!processes.TryGetValue(held.ProcessId, out var process))
+            processes[held.ProcessId] = process = OpenProcess(ProcessDupHandle, false, held.ProcessId);
+        if (process == IntPtr.Zero)
+            return; // Elevated, or gone.
+
+        if (!DuplicateHandle(process, held.Handle, self, out var copy, 0, false, DuplicateSameAccess))
+            return;
+
+        try
+        {
+            if (GetFileType(copy) == FileTypeDisk && FinalPath(copy) is { } path)
+                found.Enqueue((path, targets[held.ProcessId].AppName));
+        }
+        finally
+        {
+            CloseHandle(copy);
+        }
+    }
+
     /// <summary>What one walk thread reports to the watchdog, and the watchdog to it.</summary>
     private sealed class WalkProgress
     {
@@ -332,13 +360,12 @@ public static class WindowsHeldFiles
         public WalkProgress(int start)
         {
             Start = start;
-            Current = start;
         }
 
         public int Start { get; }
 
-        /// <summary>The index of the handle being asked about.</summary>
-        public volatile int Current;
+        /// <summary>The index of the handle being asked about; -1 until the thread takes its first step.</summary>
+        public volatile int Current = -1;
 
         /// <summary>When that began (a Stopwatch timestamp). A long can't be volatile, so it is read and written through Volatile.</summary>
         public long StepStarted
