@@ -146,6 +146,17 @@
                       ContextMenuOpening="RowsGrid_ContextMenuOpening">
                 <DataGrid.GroupStyle>
                     <GroupStyle>
+                        <!--
+                            The DataGrid's own rows panel inside each group. The
+                            default, a plain StackPanel, leaves every column at
+                            its 20px minimum (no text shows) and stops grouped
+                            rows virtualizing.
+                        -->
+                        <GroupStyle.Panel>
+                            <ItemsPanelTemplate>
+                                <DataGridRowsPresenter />
+                            </ItemsPanelTemplate>
+                        </GroupStyle.Panel>
                         <GroupStyle.HeaderTemplate>
                             <DataTemplate>
                                 <Border Background="{DynamicResource Bg.Raised}" Padding="12,7" Margin="0,6,0,0"
