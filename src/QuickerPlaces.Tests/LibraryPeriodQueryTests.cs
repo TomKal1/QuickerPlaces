@@ -107,6 +107,53 @@ public sealed class LibraryPeriodQueryTests
     }
 
     [Fact]
+    public void ChangingTheUnit_ChoosesTheWeekOrMonthOfTheDayClicked()
+    {
+        Seed();
+        var vm = NewViewModel();
+        var changes = 0;
+        vm.QueryChanged += () => changes++;
+        vm.SelectCalendarDate(new DateOnly(2026, 9, 29));
+
+        vm.SelectionUnit = CalendarSelectionUnit.Week;
+        Assert.Equal((new DateOnly(2026, 9, 28), new DateOnly(2026, 10, 4)), vm.Period);
+
+        // The week straddles two months: the month is the clicked day's, not the week's first day's.
+        vm.SelectionUnit = CalendarSelectionUnit.Month;
+        Assert.Equal((new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30)), vm.Period);
+
+        // And back down to the day itself, not the 1st.
+        vm.SelectionUnit = CalendarSelectionUnit.Day;
+        Assert.Equal((new DateOnly(2026, 9, 29), new DateOnly(2026, 9, 29)), vm.Period);
+        Assert.Equal(4, changes);
+    }
+
+    [Fact]
+    public void ChangingTheUnit_WithAPeriodFromASavedQuery_UsesItsFirstDay()
+    {
+        Seed();
+        var vm = NewViewModel();
+        vm.SelectCalendarDate(new DateOnly(2026, 8, 12));
+        vm.SetDateRule(DateRule.Between(new DateOnly(2026, 9, 22), new DateOnly(2026, 9, 22)));
+
+        vm.SelectionUnit = CalendarSelectionUnit.Month;
+
+        Assert.Equal((new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30)), vm.Period);
+    }
+
+    [Fact]
+    public void ChangingTheUnit_LeavesAllTimeAndRelativePeriodsAlone()
+    {
+        var vm = NewViewModel();
+        vm.SelectionUnit = CalendarSelectionUnit.Week;
+        Assert.False(vm.HasPeriod);
+
+        vm.SetDateRule(DateRule.ThisMonth());
+        vm.SelectionUnit = CalendarSelectionUnit.Day;
+        Assert.Equal(DateRuleKind.ThisMonth, vm.CurrentQuery.Date.Kind);
+    }
+
+    [Fact]
     public void ChoosingAPeriod_ChangesTheRows_NotTheHeat()
     {
         Seed();

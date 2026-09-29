@@ -82,6 +82,7 @@ public sealed class LibraryViewModel : ObservableObject
     private string? _tag;
     private DateRule _date = DateRule.All();
     private CalendarSelectionUnit _selectionUnit;
+    private DateOnly? _clickedDate;
     private int _calendarYear;
     private string? _selectedKey;
     private LibraryRowViewModel? _selectedRow;
@@ -278,7 +279,13 @@ public sealed class LibraryViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether a click on the year strip chooses a day, its week or its month.</summary>
+    /// <summary>
+    /// Whether a click on the year strip chooses a day, its week or its
+    /// month. Changing it while a period is chosen chooses the day, week or
+    /// month around the day last clicked (or the period's first day, for one
+    /// that came from a saved query), so Day, then Week, then Day again comes
+    /// back to the same day. All time, This week and This month stay as they are.
+    /// </summary>
     public CalendarSelectionUnit SelectionUnit
     {
         get => _selectionUnit;
@@ -289,6 +296,12 @@ public sealed class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(IsUnitDay));
             OnPropertyChanged(nameof(IsUnitWeek));
             OnPropertyChanged(nameof(IsUnitMonth));
+
+            if (_date.Kind != DateRuleKind.Range || Period is not { } period)
+                return;
+            var anchor = _clickedDate is { } clicked && clicked >= period.From && clicked <= period.To ? clicked : period.From;
+            var (from, to) = PeriodAround(anchor);
+            SetDateRule(DateRule.Between(from, to));
         }
     }
 
@@ -304,15 +317,18 @@ public sealed class LibraryViewModel : ObservableObject
     /// </summary>
     public void SelectCalendarDate(DateOnly date)
     {
-        var (from, to) = _selectionUnit switch
-        {
-            CalendarSelectionUnit.Week => WeekOf(date),
-            CalendarSelectionUnit.Month => (new DateOnly(date.Year, date.Month, 1), new DateOnly(date.Year, date.Month, 1).AddMonths(1).AddDays(-1)),
-            _ => (date, date),
-        };
-
+        var (from, to) = PeriodAround(date);
+        _clickedDate = date;
         SetDateRule(Period == (from, to) && _date.Kind == DateRuleKind.Range ? DateRule.All() : DateRule.Between(from, to));
     }
+
+    /// <summary>The day, week or month (<see cref="SelectionUnit"/>) holding <paramref name="date"/>.</summary>
+    private (DateOnly From, DateOnly To) PeriodAround(DateOnly date) => _selectionUnit switch
+    {
+        CalendarSelectionUnit.Week => WeekOf(date),
+        CalendarSelectionUnit.Month => (new DateOnly(date.Year, date.Month, 1), new DateOnly(date.Year, date.Month, 1).AddMonths(1).AddDays(-1)),
+        _ => (date, date),
+    };
 
     /// <summary>Sets the date rule: This week and This month stay relative, and move with the clock (D3).</summary>
     public void SetDateRule(DateRule rule)
