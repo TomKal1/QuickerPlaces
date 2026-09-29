@@ -13,10 +13,19 @@
         WorkspaceViewModel.Panels, which scrolls when stacked panels are
         taller than the window. DataContext is the WorkspaceViewModel.
         Hide (Ctrl+H) collapses the canvas and keeps the toolbar, as list
-        mode keeps the list's search box.
+        mode keeps the list's search box. The layout picker groups Built-in
+        and My layouts and says which are modified, which starts, and which
+        carry filters; the Layout menu beside it saves, renames, duplicates
+        and deletes them and chooses the startup layout (M5).
     -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <CollectionViewSource x:Key="GroupedLayouts" Source="{Binding Layouts}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
     </UserControl.Resources>
 
     <Grid>
@@ -40,9 +49,39 @@
 
             <StackPanel x:Name="LayoutTools" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="LAYOUT" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" VerticalAlignment="Center" />
-                <ComboBox x:Name="LayoutPicker" ItemsSource="{Binding Layouts}" SelectedItem="{Binding SelectedLayout, Mode=TwoWay}"
-                          DisplayMemberPath="Name" MinWidth="170" VerticalAlignment="Center"
-                          AutomationProperties.Name="Layout" ToolTip="The layout shown. More arrive with Collections and Saved searches." />
+                <ComboBox x:Name="LayoutPicker" ItemsSource="{Binding Source={StaticResource GroupedLayouts}}"
+                          SelectedItem="{Binding SelectedLayout, Mode=TwoWay}"
+                          MinWidth="190" MaxWidth="320" VerticalAlignment="Center"
+                          AutomationProperties.Name="Layout" ToolTip="The layout shown: a built-in one, or one of yours">
+                    <ComboBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource TextBlock.Caps}" Margin="8,8,8,4" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ComboBox.GroupStyle>
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <!-- The name, then "Modified · Starts here · Filters" in the secondary colour. -->
+                            <DockPanel AutomationProperties.Name="{Binding Name}" AutomationProperties.HelpText="{Binding Notes}">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Notes}" Margin="10,0,0,0" FontSize="12"
+                                           Foreground="{DynamicResource Text.Secondary}" VerticalAlignment="Center"
+                                           Style="{StaticResource CollapsedWhenEmpty}" />
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button x:Name="LayoutMenuButton" Style="{StaticResource Button.IconOnly}" Margin="6,0,0,0" Click="LayoutMenu_Click"
+                        ToolTip="Save, rename, duplicate or delete layouts, and choose the one QuickerPlaces starts with"
+                        AutomationProperties.Name="Layout actions">
+                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronDown}" />
+                    <Button.ContextMenu>
+                        <ContextMenu x:Name="LayoutMenu" Placement="Bottom" />
+                    </Button.ContextMenu>
+                </Button>
             </StackPanel>
 
             <Border x:Name="SearchArea" Grid.Column="1" Margin="16,0,8,0" MaxWidth="520" MinWidth="240" HorizontalAlignment="Stretch"
@@ -188,6 +227,11 @@
                                 ToolTip="Show the layout as it was saved. Undo brings this arrangement back." />
                         <Button Style="{StaticResource Button.Compact}" Margin="8,0,0,0" Click="Revert_Click" Content="Revert"
                                 ToolTip="Put back the arrangement you had when you pressed Arrange" />
+                        <Button Style="{StaticResource Button.Compact}" Margin="8,0,0,0" Click="SaveAsNew_Click" Content="Save as new…"
+                                ToolTip="Keep this arrangement as a layout of your own, and leave Arrange mode" />
+                        <Button Style="{StaticResource Button.Compact}" Margin="8,0,0,0" Click="SaveChanges_Click" Content="Save changes"
+                                ToolTip="Make this arrangement the layout's own, and leave Arrange mode"
+                                Visibility="{Binding IsUserLayout, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <Button x:Name="DoneButton" Style="{StaticResource Button.Primary}" Height="28" Margin="8,0,0,0"
                                 Click="Done_Click" Content="Done" ToolTip="Keep this arrangement" />
                     </WrapPanel>
@@ -211,6 +255,9 @@
                 <DockPanel>
                     <Button DockPanel.Dock="Right" Content="Retry" Click="RetryLayouts_Click" Style="{StaticResource Button.Compact}" Margin="12,0,0,0"
                             Visibility="{Binding CanRetry, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Button DockPanel.Dock="Right" Content="Restore layouts" Click="RestoreBackup_Click" Style="{StaticResource Button.Compact}" Margin="12,0,0,0"
+                            ToolTip="Put every layout back as it was last saved, from the copy kept beside the damaged file"
+                            Visibility="{Binding CanRestoreBackup, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Warning}" Stroke="{DynamicResource Signal}" Margin="0,0,12,0" />
                     <TextBlock Text="{Binding LayoutMessage}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>

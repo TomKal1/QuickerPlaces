@@ -583,6 +583,95 @@ public partial class WorkspaceView : UserControl
 
     private void Restore_Click(object sender, RoutedEventArgs e) => _workspace?.RestoreSaved();
 
+    // -----------------------------------------------------------------
+    // My layouts (M5)
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// The Layout menu, made when it opens so it names the layout shown:
+    /// save, rename, duplicate, delete, restore, and the startup layout.
+    /// </summary>
+    private void LayoutMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is not { } workspace)
+            return;
+
+        var name = workspace.ActiveLayoutName;
+        LayoutMenu.Items.Clear();
+        LayoutMenu.Items.Add(LayoutMenuItem($"Save changes to “{name}”", workspace.IsUserLayout, SaveChanges,
+            workspace.IsUserLayout ? "Make what is shown this layout's own" : "Built-in layouts stay as they are: save as a new layout instead"));
+        LayoutMenu.Items.Add(LayoutMenuItem("Save as a new layout…", true, SaveAsNew, "Keep what is shown as a layout of your own"));
+        LayoutMenu.Items.Add(new Separator());
+        LayoutMenu.Items.Add(LayoutMenuItem("Rename…", workspace.IsUserLayout, Rename, null));
+        LayoutMenu.Items.Add(LayoutMenuItem("Duplicate", true, () => workspace.Duplicate(), $"Copy “{name}” into My layouts"));
+        LayoutMenu.Items.Add(LayoutMenuItem($"Delete “{name}”", workspace.IsUserLayout, DeleteLayout,
+            "Your places, sessions and files aren't touched. Undo brings it back."));
+        LayoutMenu.Items.Add(new Separator());
+        LayoutMenu.Items.Add(LayoutMenuItem(workspace.RestoreLabel, workspace.IsModified, () => workspace.RestoreSaved(),
+            "Show the layout as it was saved. Undo brings this arrangement back."));
+        LayoutMenu.Items.Add(new Separator());
+
+        var startup = new MenuItem { Header = "Start QuickerPlaces with" };
+        foreach (var option in workspace.StartupOptions)
+        {
+            var id = option.PresetId;
+            var item = new MenuItem { Header = option.Name, IsCheckable = true, IsChecked = option.IsChosen };
+            item.Click += (_, _) => workspace.SetStartup(id);
+            startup.Items.Add(item);
+        }
+
+        LayoutMenu.Items.Add(startup);
+        LayoutMenu.PlacementTarget = LayoutMenuButton;
+        LayoutMenu.IsOpen = true;
+    }
+
+    private static MenuItem LayoutMenuItem(string header, bool enabled, Action action, string? toolTip)
+    {
+        var item = new MenuItem { Header = header, IsEnabled = enabled, ToolTip = toolTip };
+        ToolTipService.SetShowOnDisabled(item, true);
+        item.Click += (_, _) => action();
+        return item;
+    }
+
+    private void SaveAsNew_Click(object sender, RoutedEventArgs e) => SaveAsNew();
+
+    private void SaveChanges_Click(object sender, RoutedEventArgs e) => SaveChanges();
+
+    private void SaveAsNew()
+    {
+        if (_workspace is { } workspace && Window.GetWindow(this) is { } owner &&
+            SaveLayoutDialog.Show(owner, workspace.NewSaveAs(), workspace.SaveAsNew))
+            FocusLayoutPicker();
+    }
+
+    private void SaveChanges()
+    {
+        _workspace?.SaveChanges();
+        FocusLayoutPicker();
+    }
+
+    private void Rename()
+    {
+        if (_workspace is { } workspace && Window.GetWindow(this) is { } owner)
+            SaveLayoutDialog.Show(owner, workspace.NewRename(), workspace.Rename);
+    }
+
+    /// <summary>Deletes the layout shown, without asking: Undo, where the focus goes, brings it back.</summary>
+    private void DeleteLayout()
+    {
+        _workspace?.Delete();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+        {
+            if (StatusUndoButton.IsVisible)
+                StatusUndoButton.Focus();
+        });
+    }
+
+    /// <summary>After Save as new or Save changes, which leave Arrange mode, the keyboard goes back to the picker.</summary>
+    private void FocusLayoutPicker() => Dispatcher.BeginInvoke(DispatcherPriority.Input, () => LayoutPicker.Focus());
+
+    private void RestoreBackup_Click(object sender, RoutedEventArgs e) => _workspace?.RestoreBackup();
+
     private void Undo_Click(object sender, RoutedEventArgs e) => _workspace?.Undo();
 
     /// <summary>Ctrl+Z in Arrange mode undoes the last step, unless a text box has the focus: there it undoes typing.</summary>

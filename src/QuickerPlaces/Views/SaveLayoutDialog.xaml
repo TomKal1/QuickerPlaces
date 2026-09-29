@@ -1,0 +1,60 @@
+<Window x:Class="QuickerPlaces.Views.SaveLayoutDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Title}"
+        Width="540" SizeToContent="Height" ResizeMode="NoResize"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
+    <!--
+        Save as a new layout, or Rename (configurable canvas plan D2, D3, M5).
+        DataContext is a SaveLayoutViewModel. Filters are left out unless
+        ticked, and said in words; when they hold this week or this month,
+        the dialog asks whether to keep it moving with the calendar. A
+        refused name keeps the dialog open with the reason under the box.
+    -->
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
+
+    <StackPanel Margin="24,20,24,20">
+        <TextBlock Text="{Binding Title}" Style="{StaticResource TextBlock.SectionTitle}" Margin="0,0,0,14" />
+
+        <TextBlock Text="NAME" Style="{StaticResource TextBlock.Caps}" Margin="0,0,0,6" />
+        <TextBox x:Name="NameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MaxLength="80"
+                 AutomationProperties.Name="Layout name" />
+        <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,6,0,0"
+                   Style="{StaticResource CollapsedWhenEmpty}" />
+
+        <StackPanel Margin="0,18,0,0">
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsRename}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
+            <CheckBox IsChecked="{Binding IncludeFilters}" IsEnabled="{Binding CanIncludeFilters}" FontWeight="SemiBold"
+                      Content="Include the current filters" AutomationProperties.Name="Include the current filters" />
+            <TextBlock Text="{Binding FiltersSummary}" TextWrapping="Wrap" Margin="28,4,0,0" Foreground="{DynamicResource Highlight.Text}" />
+            <TextBlock Style="{StaticResource TextBlock.Hint}" TextWrapping="Wrap" Margin="28,6,0,0"
+                       Text="Without them, the layout shows everything each time you switch to it. Selected rows and scroll positions are never saved." />
+
+            <StackPanel Margin="28,12,0,0" Visibility="{Binding ShowsDateChoice, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <TextBlock Text="KEEP THE DATES AS" Style="{StaticResource TextBlock.Caps}" Margin="0,0,0,6" />
+                <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Keep the dates as">
+                    <StackPanel>
+                        <RadioButton GroupName="Dates" IsChecked="{Binding KeepRelative}" Content="{Binding RelativeDatesText}" Margin="0,0,0,6" />
+                        <RadioButton GroupName="Dates" IsChecked="{Binding KeepFixed}" Content="{Binding FixedDatesText}" />
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+            <Button Content="Cancel" IsCancel="True" MinWidth="84" Margin="0,0,8,0" />
+            <Button Content="{Binding SaveButtonText}" Style="{StaticResource Button.Primary}" MinWidth="110"
+                    IsDefault="True" Click="Save_Click" />
+        </StackPanel>
+    </StackPanel>
+</Window>
