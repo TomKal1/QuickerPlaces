@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — configurable canvas and saved layouts
-status: in progress; M0–M4 implemented on ccr-6156d37a-mo223d (see BUILD_SUMMARY.md)
+status: in progress; M0–M5 implemented on ccr-6156d37a-mo223d (see BUILD_SUMMARY.md)
 created: 2026-09-29
 branch: codex/configurable-canvas-plan
 baseline: main at 6ba577d22cd38ac28424233b6e238f4a81fa4d81
@@ -239,7 +239,7 @@ Manual Windows acceptance, using test stores:
 - [x] M2 shared query and reusable existing panels implemented (engine, periods, coverage, panels; not yet run on Windows).
 - [x] M3 real-data Activity Atlas integrated behind `--workspace` (shell, Saved places panel, shared search, Save as session; not yet run on Windows).
 - [x] M4 arrangement and responsive layout implemented (Arrange mode, drag and keyboard, Undo, reflow, month view; not yet run on Windows, so accessibility is not yet verified).
-- [ ] M5 personal preset UX and restart behavior verified.
+- [x] M5 personal preset UX and restart behavior implemented (picker, Layout menu, Save dialog with filters and relative dates, Delete with Undo, startup, backup restore; restart behaviour tested without WPF; not yet run on Windows). First delivery increment complete.
 - [ ] M6 Collections, Saved searches and all built-in presets complete.
 - [ ] M7 default workspace, regression checks and documentation complete.
 

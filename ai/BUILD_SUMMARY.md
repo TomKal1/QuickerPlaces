@@ -714,6 +714,42 @@ On Linux (.NET SDK 10.0.112): 1051 tests pass (1003 before; new: Files First, re
 - 100/150/200% DPI and moving the window between monitors of different DPI; dark and light themes; the toolbar at 960 wide with large text: nothing is cut off.
 - Recents with Group by folder level on a long period: scrolls smoothly, and Add as place acts on the right row.
 
+## Configurable canvas: M5 (2026-09-29)
+
+Milestone M5 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): the user's own layouts. This completes the plan's first delivery increment. Still behind `--workspace`; try it with `--workspace --data-root <test folder>`.
+
+### What was built
+
+- **The layout picker** groups **Built-in** (Activity Atlas, Files First) and **My layouts**, and says beside each name *Modified* (its arrangement differs from how it was saved), *Starts here* and *Filters*.
+- **The Layout menu** (the arrow beside the picker) names the layout shown: **Save changes to "…"** (own layouts only; a built-in says to save it as new), **Save as a new layout…**, **Rename…**, **Duplicate**, **Delete "…"**, **Restore built-in/saved layout**, and **Start QuickerPlaces with** ▸ *The layout I used last* or any layout. Arrange mode's bar also has **Save as new…** and, for own layouts, **Save changes**; both leave Arrange mode.
+- **The Save layout dialog** (`SaveLayoutDialog`, `SaveLayoutViewModel`): a name (suggested: "My Activity Atlas", or "Mine copy"; checked for length and for clashes within My layouts, with the reason under the box), and **Include the current filters**, off by default, with the filters in words ("Search "tower" · PDFs · Used 20–26 Sep 2026"). When the chosen period is exactly this week or this month it asks: *This week, whichever week it is* (the default) or *Always 20–26 Sep 2026*. Rename uses the same dialog, name only.
+- **Behaviour** (`WorkspaceViewModel`, over M1's layout service): Save as new shows the new layout, and its filters if kept; Save changes on a layout saved with filters keeps the filters shown now; Duplicate copies the layout as saved into My layouts and stays where it is; Delete shows Activity Atlas with its own filters, resets startup if it was the startup layout, and offers Undo (focus goes to it), which brings back the layout, its arrangement and its filters. Each action says what it did on the status line.
+- **Recovery.** A failed write keeps the change in memory with Retry (as before). A damaged layouts file with a readable backup now shows **Restore layouts** beside the warning; nothing is restored unasked.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Where layouts are managed | A menu on the layout shown, not a separate Manage layouts dialog | Every operation the plan lists is there in one click; switching to a layout first is how to act on another. A dialog can come later if people keep many layouts |
+| Delete | No confirmation; Undo instead, with the focus on it | D2 asks for Undo; deleting a layout never touches places, sessions or files |
+| Duplicate | Copies the layout as saved (not its unsaved changes) and doesn't switch to it | As M1's service defined it; "Save as new" is the way to keep what is shown |
+| Suggested name | "My Activity Atlas" from a built-in; "Mine copy" from one's own | A name to accept or overwrite, never one already used |
+| This week in the dialog | Offered only when the period is exactly the current week or month, and kept relative unless the user picks the fixed days | A week picked on the calendar is stored as its days; this asks which was meant (D3) |
+| Modified | Means the arrangement differs from the layout as saved; a changed search does not count | D2's indicator is about the arrangement; searches change constantly |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 1068 tests pass (1051 before; new: `SaveLayoutViewModelTests`, and in `WorkspaceViewModelTests` the M5 exit check — two personal layouts, switched between, a working change recovered after switching away and back, and a restart into the chosen startup layout with the built-ins untouched — plus Save changes, Rename, filters kept or not, This week staying relative a week later, Duplicate, Delete with Undo, startup choices and a failed save). The Release build of the app has 0 warnings and 0 errors, XAML included. **Not done:** running the app. On Windows, with `--workspace --data-root <test folder>`, check:
+
+- Save as a new layout from Activity Atlas without filters, then with a search and a week ticked in: the picker's groups and notes; switching between them brings each one's filters or none.
+- Pick this week on the calendar, Save as new with filters: the dialog offers *This week, whichever week it is*. Change the PC's date a week on (or wait) and restart: the layout shows the new week.
+- A name already used, a blank name and an 81-character one: the reason shows under the box and the dialog stays open.
+- Rename, Duplicate, Delete and Undo from the Layout menu; the focus lands on Undo after Delete.
+- Start QuickerPlaces with ▸ a layout; restart; then ▸ The layout I used last.
+- Save changes from the Arrange bar on an own layout; Save as new from it on a built-in.
+- Make `workspace-layouts.json` read-only: a save shows the warning with Retry; make it writable, Retry. Corrupt the file (with a `workspace-layouts.bak.json` beside it): the warning offers Restore layouts.
+- Keyboard: the picker's groups with the arrow keys, the Layout menu with Alt+Down or Enter, the dialog's radio buttons.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.
