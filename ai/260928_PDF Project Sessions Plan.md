@@ -57,10 +57,11 @@ No documented Windows API lists the documents another program has open. What an 
 |---|---|---|
 | **Window titles** (`EnumWindows`) mentioning a document, and Word's and Excel's windows by class (`OpusApp`, `XLMAIN`) | The active document's name per window; some viewers show the full path. Word and Excel may leave the extension out ("Report - Word"), and that is matched only for their own windows and only to a file of their kind | Background tabs; viewers that show a PDF's embedded title |
 | **Command lines** of those windows' programs | The file a program was started with | Files opened later in a single-instance program; a started-with file since closed |
-| **Files in use** (Restart Manager) asked of every candidate | Every document held open, including background tabs and other workbooks | Programs that read a file and let go |
+| **Files held open** (`NtQuerySystemInformation` handle list, `GetFinalPathNameByHandle`) by those windows' programs — `260928_Held Files Detection Plan.md` | Every document Revu, Acrobat, Word or Excel holds, with its full path and mapped drive letter, including background tabs and files not in Recent Items | Programs that read a file and let go; an elevated program; Studio Session copies and program folders, left out on purpose |
+| **Files in use** (Restart Manager) asked of every other candidate | Every document held open, including background tabs and other workbooks | Programs that read a file and let go |
 | **Recent Items** (`FOLDERID_Recent` shortcuts) | Full paths and when each was last opened; how a bare name becomes a path | Programs that don't register recent documents |
 
-Expected by program — **from how each is known to behave, not yet observed on the user's machine (§9)**. Acrobat, Reader, Revu, Word and Excel hold their files open, so every document should be found. Edge, Chrome and SumatraPDF can show only the front tab, and only when its file is in Recent Items. A title that matches no known file is listed under the review list, for the user to add by hand.
+Expected by program. Revu, Acrobat, Reader, Word and Excel hold their files open, so every document is found with its path from the held-files pass, whether or not it is in Recent Items. **Revu was checked with the developer probe on 2026-09-28:** several local PDFs open as tabs were all listed with full paths, in about 125 ms, without elevation. Mapped drives, DFS and Studio Sessions are not yet observed (§9). Acrobat, Word and Excel are expected to behave the same but are unchecked. Every clue's path is spelled with the user's mapped drive letter, so a file found by several clues is listed once. Edge, Chrome and SumatraPDF can show only the front tab, and only when its file is in Recent Items. A title that matches no known file is listed under the review list, for the user to add by hand.
 
 ## 5. Recent Files
 
@@ -135,6 +136,13 @@ Nothing below has been done. Back up `%AppData%\QuickerPlaces` and `%LocalAppDat
 13. Click today on the year strip: only what was used today is listed; click it again to clear.
 14. Open a saved place from the Library: the main grid's **Last Opened** and **Opens** update.
 15. **Keyboard only** through both new windows.
+
+**Held files** (`260928_Held Files Detection Plan.md`)
+
+16. **Revu with three tabs, opened from Revu's own File → Open** (not from Explorer), one on a mapped drive: **Save open files…** lists all three ticked, "Open in Revu" (or Revu's program description), and the network one with its drive letter. *Local tabs passed in the developer probe on 2026-09-28; the dialog and the mapped drive are untested.*
+17. **Revu with a Studio Session document open**: it is not listed.
+18. **Revu closed, nothing else open**: the scan finishes with no warning and lists only recent suggestions.
+19. **A PDF on a DFS path** (`net use` shows `\\company\dfs\…`): it is listed once, not twice.
 
 Record each item as passed, failed or untested in `BUILD_SUMMARY.md`.
 
