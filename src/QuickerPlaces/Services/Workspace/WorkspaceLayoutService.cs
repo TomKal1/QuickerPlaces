@@ -62,6 +62,9 @@ public sealed class WorkspaceLayoutService
 
     public bool ActiveIsBuiltIn => BuiltInLayouts.IsBuiltInId(ActivePresetId);
 
+    /// <summary>True when the active layout is a user layout saved with filters, which Save changes replaces with the current query (D3).</summary>
+    public bool ActiveHasFilters => FindPreset(ActivePresetId)?.Filters is not null;
+
     public string ActiveName => NameOf(ActivePresetId);
 
     /// <summary>The panels shown, in order, hidden ones included. Copies: change them through this service.</summary>
@@ -362,6 +365,14 @@ public sealed class WorkspaceLayoutService
     /// Arrange mode began.
     /// </summary>
     public ValidationResult SaveAsNew(string? name, bool includeFilters, out string? newId, out PersistenceResult persistence)
+        => SaveAsNew(name, includeFilters ? Query : null, out newId, out persistence);
+
+    /// <summary>
+    /// Save as new with the filters to keep, or none (M5): the Save dialog
+    /// may keep a chosen week as "this week". The new layout then shows
+    /// exactly what it saved.
+    /// </summary>
+    public ValidationResult SaveAsNew(string? name, WorkspaceQuery? filters, out string? newId, out PersistenceResult persistence)
     {
         newId = null;
         persistence = PersistenceResult.Ok();
@@ -378,15 +389,29 @@ public sealed class WorkspaceLayoutService
             Id = NewPresetId(),
             Name = cleanName,
             Panels = shown,
-            Filters = includeFilters ? Query.Clone() : null,
+            Filters = filters?.Clone(),
         };
         _document.Presets.Add(preset);
         ActivePresetId = preset.Id;
         _panels = Clone(shown);
+        if (filters is not null)
+            Query = filters.Clone();
 
         newId = preset.Id;
         persistence = Persist();
         return ValidationResult.Ok();
+    }
+
+    /// <summary>
+    /// The name Save as new suggests: "My Activity Atlas" from a built-in,
+    /// "Mine copy" from a user layout (M5). Always unused.
+    /// </summary>
+    public string SuggestedNewName()
+    {
+        var baseName = ActiveIsBuiltIn ? $"My {ActiveName}" : ActiveName;
+        return _document.Presets.Any(p => string.Equals(p.Name, baseName, StringComparison.OrdinalIgnoreCase))
+            ? WorkspaceValidation.UniqueName(baseName, _document.Presets)
+            : baseName;
     }
 
     /// <summary>Renames a user layout. Ids stay, so nothing that refers to it changes (D2).</summary>
@@ -672,4 +697,16 @@ public sealed record LayoutEntry(
     bool IsActive,
     bool IsModified,
     bool IsStartup,
-    bool HasFilters);
+    bool HasFilters)
+{
+    /// <summary>The picker's heading for this row: "Built-in" or "My layouts" (M5).</summary>
+    public string Group => IsBuiltIn ? "Built-in" : "My layouts";
+
+    /// <summary>"Modified · Starts here · Filters": what the picker says beside the name, or "".</summary>
+    public string Notes => string.Join(" · ", new[]
+    {
+        IsModified ? "Modified" : null,
+        IsStartup ? "Starts here" : null,
+        HasFilters ? "Filters" : null,
+    }.Where(n => n is not null));
+}

@@ -41,7 +41,8 @@ public sealed class WorkspaceViewModelTests
     {
         var library = new LibraryViewModel(_places, _sessions, new ActivityStore(new FakePlacesStorage(), _time),
             new RecentFilesStore(new FakePlacesStorage(), _time), new PlaceLauncher(_places, _shell), _shell, _time, CultureInfo.InvariantCulture);
-        return new WorkspaceViewModel(new WorkspaceLayoutService(new WorkspaceStore(_layoutStorage, null, _time)), library);
+        return new WorkspaceViewModel(new WorkspaceLayoutService(new WorkspaceStore(_layoutStorage, null, _time)), library, _time,
+            CultureInfo.InvariantCulture);
     }
 
     [Fact]
@@ -404,5 +405,228 @@ public sealed class WorkspaceViewModelTests
         Assert.True(workspace.SetSpan("shelf", PanelSpans.Half));
 
         Assert.Equal("File shelf is now half wide; shown full width until the window is wider.", workspace.Status);
+    }
+
+    // ---------------------------------------------------------------
+    // My layouts (M5)
+    // ---------------------------------------------------------------
+
+    private static LayoutEntry Entry(WorkspaceViewModel workspace, string name) => workspace.Layouts.Single(l => l.Name == name);
+
+    private static void SaveAs(WorkspaceViewModel workspace, string name, bool includeFilters = false)
+    {
+        var dialog = workspace.NewSaveAs();
+        dialog.Name = name;
+        dialog.IncludeFilters = includeFilters;
+        Assert.True(workspace.SaveAsNew(dialog), dialog.ErrorMessage);
+    }
+
+    [Fact]
+    public void TwoPersonalLayouts_SwitchAndSurviveARestart_WithoutTouchingTheBuiltIns()
+    {
+        // The M5 exit check: two layouts of one's own, switched between, working
+        // changes recovered, and a restart into the chosen one.
+        var workspace = NewWorkspace();
+        workspace.HidePanel("sessions");
+        SaveAs(workspace, "Just files");
+        workspace.SelectedLayout = Entry(workspace, "Activity Atlas");
+        Assert.True(workspace.IsModified);   // the hide made before saving is still Atlas's working change
+        workspace.RestoreSaved();
+        workspace.BeginArrange();
+        workspace.MoveEarlier("sessions");
+        SaveAs(workspace, "Sessions first");
+
+        Assert.Equal(new[] { "Activity Atlas", "Files First", "Just files", "Sessions first" }, workspace.Layouts.Select(l => l.Name));
+        Assert.Equal(new[] { "Built-in", "Built-in", "My layouts", "My layouts" }, workspace.Layouts.Select(l => l.Group));
+        Assert.Equal(new[] { "activity", "sessions", "shelf" }, Types(workspace));
+
+        // A working change to a personal layout is recovered after switching away and back.
+        workspace.SelectedLayout = Entry(workspace, "Just files");
+        Assert.Equal(new[] { "activity", "shelf" }, Types(workspace));
+        workspace.SetSpan("shelf", PanelSpans.Full);  // refused: not arranging
+        workspace.BeginArrange();
+        workspace.SetSpan("shelf", PanelSpans.Full);
+        workspace.Done();
+        workspace.SelectedLayout = Entry(workspace, "Sessions first");
+        workspace.SelectedLayout = Entry(workspace, "Just files");
+        Assert.Equal(PanelSpans.Full, workspace.Panels.Single(p => p.Type == "shelf").StoredSpan);
+        Assert.Equal("Modified", Entry(workspace, "Just files").Notes);
+
+        workspace.SetStartup(Entry(workspace, "Sessions first").Id);
+        workspace.SelectedLayout = Entry(workspace, "Files First");
+
+        var restarted = NewWorkspace();
+        Assert.Equal("Sessions first", restarted.ActiveLayoutName);
+        Assert.Equal(new[] { "activity", "sessions", "shelf" }, Types(restarted));
+        Assert.Equal("Starts here", Entry(restarted, "Sessions first").Notes);
+        Assert.Equal(new[] { "activity", "shelf", "sessions" },
+            BuiltInLayouts.ActivityAtlas.CreatePanels().Select(p => p.Type));
+    }
+
+    [Fact]
+    public void SaveAsNew_SuggestsAName_AndRefusesOneInUse_InTheDialog()
+    {
+        var workspace = NewWorkspace();
+        var dialog = workspace.NewSaveAs();
+        Assert.Equal("My Activity Atlas", dialog.Name);
+        Assert.True(workspace.SaveAsNew(dialog));
+
+        var again = workspace.NewSaveAs();
+        Assert.Equal("My Activity Atlas copy", again.Name);
+        again.Name = "my activity atlas";
+        Assert.False(workspace.SaveAsNew(again));
+        Assert.NotNull(again.ErrorMessage);
+        again.Name = "Another";
+        Assert.Null(again.ErrorMessage);
+    }
+
+    [Fact]
+    public void SaveChangesAndRename_AreForOnesOwnLayouts()
+    {
+        var workspace = NewWorkspace();
+        Assert.False(workspace.IsUserLayout);
+        workspace.SaveChanges();
+        Assert.Equal("Built-in layouts can't be changed. Save it as a new layout instead.", workspace.Status);
+
+        SaveAs(workspace, "Mine");
+        Assert.True(workspace.IsUserLayout);
+        workspace.HidePanel("sessions");
+        Assert.True(workspace.IsModified);
+        workspace.SaveChanges();
+        Assert.False(workspace.IsModified);
+        Assert.Equal("Saved changes to “Mine”.", workspace.Status);
+
+        var rename = workspace.NewRename();
+        Assert.Equal("Mine", rename.Name);
+        Assert.False(rename.CanIncludeFilters);
+        rename.Name = "  Drawings  ";
+        Assert.True(workspace.Rename(rename));
+        Assert.Equal("Drawings", workspace.ActiveLayoutName);
+        Assert.Equal("Drawings", NewWorkspace().ActiveLayoutName);
+    }
+
+    [Fact]
+    public void FiltersAreSavedOnlyWhenTicked_AndThenComeBackWithTheLayout()
+    {
+        var workspace = NewWorkspace();
+        workspace.SearchText = "acme";
+        SaveAs(workspace, "Plain");
+        SaveAs(workspace, "Acme", includeFilters: true);
+
+        workspace.SelectedLayout = Entry(workspace, "Plain");
+        Assert.Equal("", workspace.SearchText);
+        workspace.SelectedLayout = Entry(workspace, "Acme");
+        Assert.Equal("acme", workspace.SearchText);
+        Assert.Equal("Filters", Entry(workspace, "Acme").Notes);
+
+        workspace.SearchText = "tower";
+        workspace.SaveChanges();
+        Assert.Equal("Saved changes to “Acme”, with the filters shown now.", workspace.Status);
+        workspace.SelectedLayout = Entry(workspace, "Plain");
+        workspace.SelectedLayout = Entry(workspace, "Acme");
+        Assert.Equal("tower", workspace.SearchText);
+    }
+
+    [Fact]
+    public void ThisWeekPickedOnTheCalendar_CanBeSavedToStayThisWeek()
+    {
+        var workspace = NewWorkspace();
+        workspace.Library.SelectionUnit = CalendarSelectionUnit.Week;
+        workspace.Library.SelectCalendarDate(new DateOnly(2026, 9, 23));
+
+        var dialog = workspace.NewSaveAs();
+        dialog.Name = "This week";
+        dialog.IncludeFilters = true;
+        Assert.True(dialog.ShowsDateChoice);
+        Assert.Equal("This week, whichever week it is", dialog.RelativeDatesText);
+        Assert.Equal("Always 20–26 Sep 2026", dialog.FixedDatesText);
+        Assert.True(dialog.KeepRelative);
+        Assert.True(workspace.SaveAsNew(dialog));
+
+        // A week later the layout shows that week, not the one it was saved in.
+        _time.UtcNow = _time.UtcNow.AddDays(7);
+        var later = NewWorkspace();
+        Assert.Equal((new DateOnly(2026, 9, 27), new DateOnly(2026, 10, 3)), later.Library.Period);
+    }
+
+    [Fact]
+    public void Duplicate_MakesACopyInMyLayouts_AndKeepsTheLayoutShown()
+    {
+        var workspace = NewWorkspace();
+
+        workspace.Duplicate();
+        workspace.Duplicate();
+
+        Assert.Equal("Activity Atlas", workspace.ActiveLayoutName);
+        Assert.Equal(new[] { "Activity Atlas copy", "Activity Atlas copy 2" },
+            workspace.Layouts.Where(l => !l.IsBuiltIn).Select(l => l.Name));
+        Assert.Equal("Made “Activity Atlas copy 2” in My layouts.", workspace.Status);
+    }
+
+    [Fact]
+    public void DeletingTheShownLayout_ShowsActivityAtlas_AndUndoBringsItBackWithItsFilters()
+    {
+        var workspace = NewWorkspace();
+        workspace.SearchText = "acme";
+        SaveAs(workspace, "Acme", includeFilters: true);
+        workspace.SetStartup(Entry(workspace, "Acme").Id);
+
+        workspace.Delete();
+
+        Assert.Equal("Activity Atlas", workspace.ActiveLayoutName);
+        Assert.Equal("", workspace.SearchText);
+        Assert.Equal("Deleted “Acme”. Undo brings it back.", workspace.Status);
+        Assert.True(workspace.StartupOptions[0].IsChosen);
+        Assert.Equal("Activity Atlas", NewWorkspace().ActiveLayoutName);
+
+        workspace.Undo();
+
+        Assert.Equal("Acme", workspace.ActiveLayoutName);
+        Assert.Equal("acme", workspace.SearchText);
+        Assert.Equal("Acme", NewWorkspace().ActiveLayoutName);
+    }
+
+    [Fact]
+    public void BuiltInsCannotBeRenamedOrDeleted()
+    {
+        var workspace = NewWorkspace();
+
+        workspace.Delete();
+
+        Assert.Equal("Built-in layouts can't be deleted.", workspace.Status);
+        Assert.Equal(2, workspace.Layouts.Count);
+    }
+
+    [Fact]
+    public void TheStartupChoice_ListsTheLastLayoutThenEveryLayout()
+    {
+        var workspace = NewWorkspace();
+
+        Assert.Equal(new[] { "The layout I used last", "Activity Atlas", "Files First" }, workspace.StartupOptions.Select(o => o.Name));
+        Assert.True(workspace.StartupOptions[0].IsChosen);
+
+        workspace.SetStartup(BuiltInLayouts.FilesFirstId);
+        Assert.Equal("QuickerPlaces will start with “Files First”.", workspace.Status);
+        Assert.True(workspace.StartupOptions.Single(o => o.PresetId == BuiltInLayouts.FilesFirstId).IsChosen);
+        Assert.Equal("Files First", NewWorkspace().ActiveLayoutName);
+
+        workspace.SetStartup(null);
+        Assert.Equal("Activity Atlas", NewWorkspace().ActiveLayoutName);
+    }
+
+    [Fact]
+    public void AFailedSave_KeepsTheLayoutInMemory_WithRetry()
+    {
+        var workspace = NewWorkspace();
+        _layoutStorage.FailEveryWrite = true;
+
+        SaveAs(workspace, "Mine");
+
+        Assert.Equal("Mine", workspace.ActiveLayoutName);
+        Assert.True(workspace.CanRetry);
+        _layoutStorage.FailEveryWrite = false;
+        workspace.RetrySave();
+        Assert.Null(workspace.LayoutMessage);
+        Assert.Equal("Mine", NewWorkspace().ActiveLayoutName);
     }
 }
