@@ -477,7 +477,7 @@ The user asked for a look that is simple, clean and easy to understand the first
 | Task 19 | The guide also says OK (not Save), the field labels **Folder path** and **Link**, **Track a folder**, sentence-case buttons, and a rewritten calendar paragraph (`c54108c`, `2349dc5`) | Found while checking the guide against the app |
 | Task 12: Settings in the Options menu; only Add link primary | The header reads Recents, Add folder, Add link, Settings. Settings left the Options menu, and Recents, Add folder and Add link are all `Button.Primary`; the Recents dot's ring is `Highlight` (`4a29e79`) | The user's choice after trying it |
 | Styles.xaml: a `Brand.Green` monogram, a `Signal` sort arrow and underline | The QP badge fills with `Highlight` (text `On.Highlight`); the sort arrow and underline are `Highlight.Text` (`4a29e79`) | The user wanted them to follow the highlight colour. The app icon stays Brand green |
-| Styles.xaml: the silver rub strip (a 7px `Trim.Band` with a 1px `Trim.Line`) | A racing stripe: a 4px `Trim.Stripe` band (near-black in Light, silver in Dark) over a 4px `Highlight` band. `Trim.Band` became `Trim.Stripe` in both palettes (`4a29e79`) | The user's design. The Design System does not have it yet |
+| Styles.xaml: the silver rub strip (a 7px `Trim.Band` with a 1px `Trim.Line`) | A racing stripe: a 4px `Trim.Stripe` band (near-black in Light, silver in Dark) over a 4px `Highlight` band. `Trim.Band` became `Trim.Stripe` in both palettes (`4a29e79`) | The user's design. The Design System records it as `Trim-Stripe` (version 9) |
 
 ### Verification status — read this before merging
 
@@ -494,4 +494,4 @@ The user asked for a look that is simple, clean and easy to understand the first
 
 ## Status snapshot — 2026-09-28
 
-Phases 1, 2, 3 and 9 are on `main`. The UI refresh is on `claude/ui-refresh`, pushed with a pull request open: it builds with 0 warnings, all 643 tests pass, and the user reported it working on Windows. Next: merge it. The Design System artifact still needs the header buttons, badge, sort arrow and racing stripe from `4a29e79`. Then, per the roadmap's §1.1, write the Phase 4 detailed plan (general file support). Phase 8 must still check Phase 9's COM interop in a single-file build.
+Phases 1, 2, 3 and 9 are on `main`. The UI refresh is on `claude/ui-refresh`, pushed with a pull request open: it builds with 0 warnings, all 643 tests pass, and the user reported it working on Windows. Next: merge it. The Design System (version 9) records the header buttons, badge, sort arrow and racing stripe from `4a29e79`. Then, per the roadmap's §1.1, write the Phase 4 detailed plan (general file support). Phase 8 must still check Phase 9's COM interop in a single-file build.

@@ -93,4 +93,4 @@ If the walk finds a fault, fix it on this branch before merging.
 
 ## Next
 
-Update the Design System for `4a29e79` (header buttons, badge, sort arrow, racing stripe and the `Trim.Stripe` token). After the merge: Phase 4, general file support (roadmap §1.1). Write its detailed plan against `main` as it is then.
+The Design System records `4a29e79` (version 9: header buttons, badge, sort arrow, racing stripe and the `Trim-Stripe` token). After the merge: Phase 4, general file support (roadmap §1.1). Write its detailed plan against `main` as it is then.
