@@ -266,7 +266,9 @@ public static class WindowsHeldFiles
                 var current = progress.Current;
                 if (current >= 0 && Stopwatch.GetElapsedTime(progress.StepStarted) > HandleTimeout)
                 {
-                    // Recorded before cancelling: the worker removes it again if it comes back and finds itself cancelled.
+                    // Written in this order: the worker, seeing Cancelled, removes the entry StuckIndex names
+                    // again if it comes back, so the entry and the index must both be there by then.
+                    progress.StuckIndex = current;
                     StuckHandles.TryAdd((handles[current].ProcessId, handles[current].Handle), 0);
                     progress.Cancelled = true;
                     next = current + 1;
@@ -297,7 +299,10 @@ public static class WindowsHeldFiles
             for (var i = progress.Start; i < handles.Length; i++)
             {
                 if (progress.Cancelled)
+                {
+                    ForgetIfSlow(handles, progress);
                     return;
+                }
 
                 progress.StepStarted = Stopwatch.GetTimestamp();
                 progress.Current = i;
@@ -306,9 +311,7 @@ public static class WindowsHeldFiles
 
                 if (progress.Cancelled)
                 {
-                    // The watchdog gave up on this handle, but it came back: it was only slow
-                    // (a big PDF on a slow share, say), so later scans should ask about it again.
-                    StuckHandles.TryRemove((handles[i].ProcessId, handles[i].Handle), out _);
+                    ForgetIfSlow(handles, progress);
                     return;
                 }
             }
@@ -327,6 +330,20 @@ public static class WindowsHeldFiles
 
             progress.Done = true;
         }
+    }
+
+    /// <summary>
+    /// Called by a walk thread that finds it was cancelled. If the watchdog had
+    /// marked a handle stuck, this thread coming back shows it was only slow (a
+    /// big PDF on a slow share, say), so later scans should ask about it again.
+    /// The marked handle is the one StuckIndex names, which is not always the
+    /// one this thread just finished: it may have moved on since.
+    /// </summary>
+    private static void ForgetIfSlow(HeldHandle[] handles, WalkProgress progress)
+    {
+        var stuck = progress.StuckIndex;
+        if (stuck >= 0)
+            StuckHandles.TryRemove((handles[stuck].ProcessId, handles[stuck].Handle), out _);
     }
 
     /// <summary>Copies one handle into this process and, if it is a disk file, queues its path.</summary>
@@ -373,6 +390,9 @@ public static class WindowsHeldFiles
             get => Volatile.Read(ref stepStarted);
             set => Volatile.Write(ref stepStarted, value);
         }
+
+        /// <summary>The index of the handle the watchdog marked stuck, or -1. Written before it is added to the stuck list and before Cancelled.</summary>
+        public volatile int StuckIndex = -1;
 
         /// <summary>Set by the watchdog: stop before the next handle.</summary>
         public volatile bool Cancelled;
