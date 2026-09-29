@@ -15,30 +15,31 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
-        <!-- A tag in the filter row: a pill, filled while it is the chosen filter. -->
+        <!-- A tag in the filter row: Recents' tracked-folder pill (ListBoxItem.Chip), filled while it is the chosen filter. -->
         <Style x:Key="Button.TagChip" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource Text.Secondary}" />
-            <Setter Property="Background" Value="{StaticResource Bg.Elevated}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Border.Strong}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
+            <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="11,0" />
             <Setter Property="Margin" Value="0,0,6,6" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12">
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14">
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource Accent}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource Accent.Hover}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -46,26 +47,28 @@
             </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                    <Setter Property="Background" Value="{StaticResource Accent.Soft}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
-                    <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
+                    <Setter Property="Background" Value="{DynamicResource Highlight.Soft}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                    <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
-        <!-- A session's tags, shown small beside it. -->
+        <!-- A session's tags, shown small beside it: plain leather, like the favourite cards. -->
         <DataTemplate x:Key="TagPill">
-            <Border Background="{StaticResource Accent.Soft}" CornerRadius="8" Padding="7,1" Margin="0,0,4,2">
-                <TextBlock Text="{Binding}" FontSize="11" Foreground="{StaticResource Text.Primary}" />
+            <Border Background="{DynamicResource Leather}" CornerRadius="4" Padding="7,1,7,2" Margin="0,0,4,3">
+                <TextBlock Text="{Binding}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource On.Leather}" />
             </Border>
         </DataTemplate>
 
-        <!-- One saved session in the list: a card, like the tracked folders in Recents. -->
+        <!-- One saved session in the list: a card, selected in the highlight's soft wash. -->
         <Style x:Key="SessionCard" TargetType="ListBoxItem">
-            <Setter Property="Background" Value="{StaticResource Bg.Elevated}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Border.Default}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+            <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Border.Default}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Padding" Value="12,9" />
             <Setter Property="Margin" Value="0,0,0,6" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -74,19 +77,16 @@
                     <ControlTemplate TargetType="ListBoxItem">
                         <Border x:Name="CardBorder" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
                             <ContentPresenter Margin="{TemplateBinding Padding}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="CardBorder" Property="Background" Value="{StaticResource Accent.Soft}" />
-                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{StaticResource Accent}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{StaticResource Accent.Hover}" />
+                                <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource Highlight.Soft}" />
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -106,7 +106,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="20">
+    <Grid Margin="20,18,20,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -120,18 +120,30 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <StackPanel Grid.Column="0">
-                <TextBlock Text="Project Sessions" FontSize="22" FontWeight="Bold" />
+                <TextBlock Text="Project Sessions" Style="{StaticResource TextBlock.WindowTitle}" />
                 <TextBlock Text="Save the PDF, Word and Excel files you have open as a tagged session, then reopen them together later."
-                           Foreground="{StaticResource Text.Secondary}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Status.Warning}"
+                           Foreground="{DynamicResource Text.Secondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
                            TextWrapping="Wrap" Margin="0,8,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
             </StackPanel>
-            <Button Grid.Column="1" x:Name="SaveOpenButton" Content="_Save open files…"
+            <Button Grid.Column="1" x:Name="SaveOpenButton"
                     Style="{StaticResource Button.Primary}" VerticalAlignment="Top" Margin="12,0,0,0"
                     IsEnabled="{Binding CanChange}"
                     ToolTip="Find the files open now, check the list, and save them as a session"
-                    Click="SaveOpen_Click" />
+                    AutomationProperties.Name="Save open files"
+                    Click="SaveOpen_Click">
+                <StackPanel Orientation="Horizontal">
+                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
+                    <!-- AccessText, not a TextBlock, so "_S" still gives Alt+S. -->
+                    <AccessText Text="_Save open files…" Margin="7,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+            <Control Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource TrimBand}" Margin="-20,14,-20,0" />
         </Grid>
 
         <Grid Grid.Row="1">
@@ -149,24 +161,44 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="0,0,0,8">
-                    <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             AutomationProperties.Name="Search sessions"
-                             ToolTip="Search by session name, tag or file name" PreviewKeyDown="SearchBox_PreviewKeyDown" />
-                    <TextBlock Text="Search sessions" IsHitTestVisible="False" Margin="9,0,0,0"
-                               VerticalAlignment="Center" Foreground="{StaticResource Text.Faint}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </Grid>
+                <!-- Search: the main window's search box. -->
+                <Border Grid.Row="0" Height="34" Margin="0,0,0,10" CornerRadius="6" BorderThickness="1"
+                        Padding="10,0,5,0" Background="{DynamicResource Bg.Sunken}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
+                            <Style.Triggers>
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Search}" Stroke="{DynamicResource Text.Tertiary}" />
+                        <TextBox x:Name="SearchBox" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource TextBox.Bare}"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search sessions"
+                                 ToolTip="Search by session name, tag or file name" PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                        <TextBlock Grid.Column="1" Text="Search by name, tag or file" IsHitTestVisible="False" Margin="8,0,0,0"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Border>
 
                 <ItemsControl Grid.Row="1" ItemsSource="{Binding TagFilters}" Margin="0,0,0,4"
                               AutomationProperties.Name="Filter by tag"
@@ -194,17 +226,17 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15"
                                                TextTrimming="CharacterEllipsis" />
                                     <ItemsControl ItemsSource="{Binding Tags}" ItemTemplate="{StaticResource TagPill}"
-                                                  Margin="0,4,0,0" Focusable="False"
+                                                  Margin="0,5,0,0" Focusable="False"
                                                   Visibility="{Binding HasTags, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                     </ItemsControl>
-                                    <TextBlock Text="{Binding DetailText}" FontSize="12" Margin="0,4,0,0"
-                                               Foreground="{StaticResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding DetailText}" FontSize="12.5" Margin="0,4,0,0"
+                                               Foreground="{DynamicResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -213,14 +245,14 @@
                     <TextBlock Text="{Binding ListPlaceholder}" IsHitTestVisible="False"
                                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,32,16,0"
                                TextWrapping="Wrap" TextAlignment="Center"
-                               Foreground="{StaticResource Text.Faint}" FontStyle="Italic"
+                               Foreground="{DynamicResource Text.Secondary}"
                                Style="{StaticResource CollapsedWhenEmpty}" />
                 </Grid>
             </Grid>
 
             <!-- Right: the selected session. -->
-            <Border Grid.Column="2" Background="{StaticResource Bg.Panel}" BorderBrush="{StaticResource Border.Default}"
-                    BorderThickness="1" CornerRadius="10" Padding="16">
+            <Border Grid.Column="2" Background="{DynamicResource Bg.Panel}" BorderBrush="{DynamicResource Border.Default}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
                 <Grid>
                     <Grid Visibility="{Binding HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Grid.RowDefinitions>
@@ -231,7 +263,7 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Text="{Binding SelectedRow.Name}" FontSize="18" FontWeight="Bold"
+                        <TextBlock Grid.Row="0" Text="{Binding SelectedRow.Name}" Style="{StaticResource TextBlock.SectionTitle}"
                                    TextTrimming="CharacterEllipsis" />
                         <ItemsControl Grid.Row="1" ItemsSource="{Binding SelectedRow.Tags}" ItemTemplate="{StaticResource TagPill}"
                                       Margin="0,6,0,0" Focusable="False"
@@ -240,28 +272,29 @@
                                 <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
-                        <TextBlock Grid.Row="2" Text="{Binding SelectedRow.DetailText}" Margin="0,6,0,10"
-                                   Foreground="{StaticResource Text.Secondary}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="2" Text="{Binding SelectedRow.DetailText}" Margin="0,6,0,12"
+                                   Foreground="{DynamicResource Text.Secondary}" TextWrapping="Wrap" />
 
                         <DataGrid Grid.Row="3" x:Name="FilesGrid" ItemsSource="{Binding SelectedFiles}"
                                   AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                                  CanUserDeleteRows="False" SelectionMode="Single" HeadersVisibility="Column"
-                                  GridLinesVisibility="Horizontal" AutomationProperties.Name="Files in this session"
+                                  CanUserDeleteRows="False" SelectionMode="Single"
+                                  AutomationProperties.Name="Files in this session"
                                   KeyboardNavigation.TabNavigation="Once"
                                   MouseDoubleClick="FilesGrid_MouseDoubleClick" PreviewKeyDown="FilesGrid_PreviewKeyDown">
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="File" SortMemberPath="FileName" Width="*">
+                                <DataGridTemplateColumn Header="FILE" SortMemberPath="FileName" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock Text="&#xE8A5;" Style="{StaticResource TextBlock.Glyph}" />
+                                                <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Document}" />
                                                 <TextBlock Text="{Binding FileName}" VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="1.3*" />
+                                <DataGridTextColumn Header="FOLDER" Binding="{Binding Folder}" Width="1.3*"
+                                                    ElementStyle="{StaticResource Cell.Path}" />
                             </DataGrid.Columns>
                         </DataGrid>
 
@@ -277,8 +310,8 @@
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Choose a session to see its files." Foreground="{StaticResource Text.Faint}"
-                               FontStyle="Italic" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Choose a session to see its files." Foreground="{DynamicResource Text.Secondary}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -296,9 +329,9 @@
 
         <!-- What the last action did, then what went wrong with it. -->
         <StackPanel Grid.Row="2" Margin="0,12,0,0">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource Status.Success}"
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}"
                        TextWrapping="Wrap" Style="{StaticResource CollapsedWhenEmpty}" />
-            <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource Status.Error}"
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}"
                        TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
         </StackPanel>
 

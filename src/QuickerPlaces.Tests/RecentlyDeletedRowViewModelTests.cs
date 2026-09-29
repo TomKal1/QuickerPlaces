@@ -34,11 +34,11 @@ public sealed class RecentlyDeletedRowViewModelTests
 
         Assert.Equal("Reports", folder.Alias);
         Assert.Equal("Folder", folder.TypeLabel);
-        Assert.Equal(PlaceViewModel.GlyphFor(PlaceType.Folder), folder.TypeGlyph);
+        Assert.Equal(PlaceType.Folder, folder.Type);
         Assert.Equal(TestPaths.Folder("Reports"), folder.Resource);
 
         Assert.Equal("URL", url.TypeLabel);
-        Assert.Equal(PlaceViewModel.GlyphFor(PlaceType.Url), url.TypeGlyph);
+        Assert.Equal(PlaceType.Url, url.Type);
         Assert.Equal("https://wiki.example.com", url.Resource);
     }
 

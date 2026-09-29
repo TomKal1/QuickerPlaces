@@ -47,8 +47,8 @@ public sealed class RecentlyDeletedRowViewModel
     /// <summary>"Folder" or "URL", as in the main grid.</summary>
     public string TypeLabel => Place.Type == PlaceType.Folder ? "Folder" : "URL";
 
-    /// <summary>The same type glyph the main grid shows beside the alias.</summary>
-    public string TypeGlyph => PlaceViewModel.GlyphFor(Place.Type);
+    /// <summary>Folder or Url: picks the row's icon.</summary>
+    public PlaceType Type => Place.Type;
 
     public string Resource => Place.Resource;
 

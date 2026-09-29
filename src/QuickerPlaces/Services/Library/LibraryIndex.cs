@@ -58,16 +58,6 @@ public static class LibraryKinds
         LibraryKind.Word => "Word",
         _ => "Excel",
     };
-
-    /// <summary>Segoe Fluent Icons / MDL2 code points: folder, globe, document, and two document variants.</summary>
-    public static string Glyph(this LibraryKind kind) => kind switch
-    {
-        LibraryKind.Folder => "",
-        LibraryKind.Link => "",
-        LibraryKind.Pdf => "",
-        LibraryKind.Word => "",
-        _ => "",
-    };
 }
 
 /// <summary>

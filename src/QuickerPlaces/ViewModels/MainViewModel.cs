@@ -85,7 +85,7 @@ public sealed class MainViewModel : ObservableObject
 
         // The sort remembered in settings.json (D30); anything it doesn't
         // recognise is the stored order.
-        _currentSort = PlaceSort.Parse(settings.PlacesSortKey, settings.PlacesSortDirection);
+        _currentSort = PlaceSort.ForPlacesGrid(PlaceSort.Parse(settings.PlacesSortKey, settings.PlacesSortDirection));
         ApplySort();
 
         // Commands must exist before RebuildFavourites() runs below — it
@@ -219,10 +219,10 @@ public sealed class MainViewModel : ObservableObject
 
     private int VisiblePlaceCount => PlacesView.Cast<object>().Count();
 
-    /// <summary>"All Places (12)", or "All Places (3 of 12)" while a search is narrowing the grid.</summary>
-    public string PlacesHeader => IsSearching
-        ? $"All Places ({VisiblePlaceCount} of {Places.Count})"
-        : $"All Places ({Places.Count})";
+    /// <summary>The count beside ALL PLACES: "12", or "3 of 12" while a search is narrowing the list.</summary>
+    public string PlaceCountText => IsSearching
+        ? $"{VisiblePlaceCount} of {Places.Count}"
+        : Places.Count.ToString(System.Globalization.CultureInfo.CurrentCulture);
 
     /// <summary>Shown over the grid when it has no rows to show, explaining why; null when the grid has rows.</summary>
     public string? EmptyGridMessage
@@ -233,8 +233,8 @@ public sealed class MainViewModel : ObservableObject
             // because everything was removed (plan 5.3 row 24).
             if (Places.Count == 0)
                 return _placesService.RecentlyDeleted.Count > 0
-                    ? "No places yet. Use Add Folder (Ctrl+N) or Add URL (Ctrl+U) to save your first one. Places you removed are in Recently Deleted."
-                    : "No places yet. Use Add Folder (Ctrl+N) or Add URL (Ctrl+U) to save your first one.";
+                    ? "No places yet. Use Add folder (Ctrl+N) or Add link (Ctrl+U) to save your first one. Places you removed are in Recently Deleted."
+                    : "No places yet. Use Add folder (Ctrl+N) or Add link (Ctrl+U) to save your first one.";
             if (VisiblePlaceCount == 0)
                 return $"No places match \"{SearchText.Trim()}\". Press Esc to clear the search.";
             return null;
@@ -603,7 +603,7 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             Clipboard.SetText(place.Resource);
-            ShowStatus($"Copied {(place.Type == PlaceType.Folder ? "the path" : "the URL")} of \"{place.Alias}\".");
+            ShowStatus($"Copied {(place.Type == PlaceType.Folder ? "the folder path" : "the link")} of \"{place.Alias}\".");
         }
         catch (ExternalException ex)
         {
@@ -737,7 +737,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void RaiseGridStatusChanged()
     {
-        OnPropertyChanged(nameof(PlacesHeader));
+        OnPropertyChanged(nameof(PlaceCountText));
         OnPropertyChanged(nameof(EmptyGridMessage));
     }
 
@@ -754,6 +754,9 @@ public sealed class MainViewModel : ObservableObject
             FavouritePlaces.Add(place);
 
         ExportCommand.RaiseCanExecuteChanged();
+
+        foreach (var favourite in FavouritePlaces)
+            favourite.Refresh();
     }
 
     /// <summary>

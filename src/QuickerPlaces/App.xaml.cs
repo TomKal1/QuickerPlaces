@@ -55,6 +55,12 @@ public partial class App : Application
 
         var settingsService = new SettingsService();
         var settings = settingsService.Load();
+
+        // Before the recovery prompt below, which is the first window that
+        // can open: every window uses the chosen theme from the start.
+        var themeManager = new ThemeManager(this);
+        themeManager.Apply(ThemePreference.ParseTheme(settings.Theme), ThemePreference.ParseHighlight(settings.Highlight));
+
         var placesService = new PlacesService();
 
         // Plan 5.4: resolve any startup recovery — a damaged store, one
@@ -67,6 +73,7 @@ public partial class App : Application
         if (!ResolveStoreRecovery(placesService))
         {
             DiagnosticLog.Info($"{AppInfo.Name} exiting from the startup recovery prompt without loading places.");
+            themeManager.Dispose();
             singleInstance.Dispose();
             Shutdown();
             return;
@@ -86,7 +93,7 @@ public partial class App : Application
         var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
 
         var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems,
-            placesService, recentFilesStore, recentFilesHost);
+            placesService, recentFilesStore, recentFilesHost, themeManager);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))
@@ -119,6 +126,7 @@ public partial class App : Application
             sessionStore.RetrySave();
             recentFilesHost.Dispose();
             activityHost.Dispose();
+            themeManager.Dispose();
             mainWindow.PersistWindowState(settings);
             settingsService.Save(settings);
             DiagnosticLog.Info($"{AppInfo.Name} exiting cleanly.");

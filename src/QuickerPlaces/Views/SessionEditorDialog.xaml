@@ -23,27 +23,28 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <!-- A tag another session uses: Recents' chip look (ListBoxItem.Chip), a size down. -->
         <Style x:Key="Button.TagSuggestion" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource Text.Secondary}" />
-            <Setter Property="Background" Value="{StaticResource Bg.Elevated}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Border.Strong}" />
-            <Setter Property="Padding" Value="9,2" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
+            <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="10,0" />
             <Setter Property="Margin" Value="0,0,6,6" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="11">
-                            <ContentPresenter Margin="{TemplateBinding Padding}" />
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="13">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource Accent}" />
-                                <Setter Property="Foreground" Value="{StaticResource Text.Primary}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource Accent.Hover}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -52,7 +53,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="20">
+    <Grid Margin="20,18,20,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -71,13 +72,13 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <Label Content="Session _name" Target="{Binding ElementName=NameBox}" Padding="0" Margin="0,0,0,6"
-                       FontWeight="SemiBold" Foreground="{StaticResource Text.Primary}" />
+                       FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource Text.Primary}" />
                 <TextBox x:Name="NameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
                          MaxLength="100" AutomationProperties.Name="Session name" />
             </StackPanel>
             <StackPanel Grid.Column="2">
                 <Label Content="_Tags (separate with commas)" Target="{Binding ElementName=TagsBox}" Padding="0" Margin="0,0,0,6"
-                       FontWeight="SemiBold" Foreground="{StaticResource Text.Primary}" />
+                       FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource Text.Primary}" />
                 <TextBox x:Name="TagsBox" Text="{Binding TagsText, UpdateSourceTrigger=PropertyChanged}"
                          AutomationProperties.Name="Tags" ToolTip="For example: Tower B, markups, RFI 12" />
             </StackPanel>
@@ -86,8 +87,8 @@
         <!-- Tags other sessions use, to add with a click. -->
         <DockPanel Grid.Row="1" Margin="0,0,0,8"
                    Visibility="{Binding HasTagSuggestions, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock DockPanel.Dock="Left" Text="Your tags:" Foreground="{StaticResource Text.Secondary}"
-                       Margin="0,3,8,0" VerticalAlignment="Top" />
+            <TextBlock DockPanel.Dock="Left" Text="YOUR TAGS" Style="{StaticResource TextBlock.Caps}"
+                       Margin="0,6,10,0" VerticalAlignment="Top" />
             <ItemsControl ItemsSource="{Binding TagSuggestions}" AutomationProperties.Name="Your tags">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
@@ -103,23 +104,23 @@
 
         <DockPanel Grid.Row="2" Margin="0,4,0,8">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button x:Name="ScanButton" Content="Find open files" Margin="0,0,8,0" Click="Scan_Click"
+                <Button x:Name="ScanButton" Content="Find open files" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="Scan_Click"
                         ToolTip="Look again for files open now; files already listed keep their ticks" />
-                <Button Content="_Add files…" Click="AddFiles_Click" ToolTip="Choose PDF, Word or Excel files to add by hand" />
+                <Button Content="_Add files…" Style="{StaticResource Button.Compact}" Click="AddFiles_Click" ToolTip="Choose PDF, Word or Excel files to add by hand" />
             </StackPanel>
-            <TextBlock Text="Files" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding IncludedText}" Foreground="{StaticResource Text.Secondary}"
+            <TextBlock Text="FILES" Style="{StaticResource TextBlock.Caps}" />
+            <TextBlock Text="{Binding IncludedText}" Foreground="{DynamicResource Text.Secondary}"
                        VerticalAlignment="Center" Margin="10,0,0,0" />
         </DockPanel>
 
         <Grid Grid.Row="3">
             <DataGrid x:Name="FilesGrid" ItemsSource="{Binding Files}" AutoGenerateColumns="False"
                       IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
-                      SelectionMode="Extended" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                      SelectionMode="Extended"
                       AutomationProperties.Name="Files to save" KeyboardNavigation.TabNavigation="Once"
                       PreviewKeyDown="FilesGrid_PreviewKeyDown">
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="Save" Width="52" SortMemberPath="IsIncluded">
+                    <DataGridTemplateColumn Header="SAVE" Width="60" SortMemberPath="IsIncluded">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <CheckBox IsChecked="{Binding IsIncluded, UpdateSourceTrigger=PropertyChanged}"
@@ -128,40 +129,43 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="File" SortMemberPath="FileName" Width="*">
+                    <DataGridTemplateColumn Header="FILE" SortMemberPath="FileName" Width="*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding FileName}" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Document}" />
+                                    <TextBlock Text="{Binding FileName}" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="1.3*" />
-                    <DataGridTextColumn Header="Why it's listed" Binding="{Binding Reason}" Width="180" />
+                    <DataGridTextColumn Header="FOLDER" Binding="{Binding Folder}" Width="1.3*" ElementStyle="{StaticResource Cell.Path}" />
+                    <DataGridTextColumn Header="WHY IT'S LISTED" Binding="{Binding Reason}" Width="190" ElementStyle="{StaticResource Cell.Secondary}" />
                 </DataGrid.Columns>
             </DataGrid>
 
             <TextBlock Text="Looking for open files…" IsHitTestVisible="False"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Foreground="{StaticResource Text.Secondary}" FontStyle="Italic"
+                       Foreground="{DynamicResource Text.Secondary}"
                        Visibility="{Binding IsScanning, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </Grid>
 
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Content="Tick all" Margin="0,0,8,0" Click="TickAll_Click" />
-                <Button Content="Untick all" Margin="0,0,8,0" Click="UntickAll_Click" />
-                <Button Content="_Remove from list" Click="Remove_Click"
+                <Button Content="Tick all" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="TickAll_Click" />
+                <Button Content="Untick all" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="UntickAll_Click" />
+                <Button Content="_Remove from list" Style="{StaticResource Button.Compact}" Click="Remove_Click"
                         ToolTip="Take the selected files out of this list (the files are not touched)" />
             </StackPanel>
-            <TextBlock Text="Space ticks the selected rows." Foreground="{StaticResource Text.Faint}"
+            <TextBlock Text="Space ticks the selected rows." Style="{StaticResource TextBlock.Hint}"
                        VerticalAlignment="Center" />
         </DockPanel>
 
         <StackPanel Grid.Row="5" Margin="0,10,0,0">
-            <TextBlock Text="{Binding ScanSummary}" Foreground="{StaticResource Text.Secondary}"
+            <TextBlock Text="{Binding ScanSummary}" Foreground="{DynamicResource Text.Secondary}"
                        TextWrapping="Wrap" Style="{StaticResource CollapsedWhenEmpty}" />
-            <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource Status.Error}"
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}"
                        TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
         </StackPanel>
 

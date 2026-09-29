@@ -7,7 +7,7 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Window.Resources>
-    <Grid Margin="16">
+    <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -15,23 +15,23 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,14">
-            <TextBlock Text="Folder tracking settings" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="Folder tracking settings" Style="{StaticResource TextBlock.SectionTitle}" />
             <TextBlock Text="{Binding SelectedRoot.Path}" FontFamily="{StaticResource Font.Mono}"
-                       Foreground="{StaticResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                       Foreground="{DynamicResource Text.Secondary}" TextWrapping="Wrap" Margin="0,4,0,0" />
             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                 <TextBlock Text="{Binding SelectedStatusText}" FontWeight="SemiBold" Margin="0,0,14,0" />
-                <TextBlock Text="{Binding TrackingStartedText}" Foreground="{StaticResource Text.Secondary}" />
+                <TextBlock Text="{Binding TrackingStartedText}" Foreground="{DynamicResource Text.Secondary}" />
             </StackPanel>
         </StackPanel>
 
         <StackPanel Grid.Row="1">
-            <TextBlock Text="Tracking rollup for new visits" FontWeight="SemiBold" Margin="0,0,0,5" />
+            <TextBlock Text="Tracking rollup for new visits" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,0,5" />
             <ComboBox ItemsSource="{Binding RollupOptions}" SelectedItem="{Binding SelectedRollupOption, Mode=TwoWay}"
                       DisplayMemberPath="Label" AutomationProperties.Name="Tracking rollup" Margin="0,0,0,8" />
             <TextBlock Text="First folder groups visits by the immediate child. The All subfolders option records each visited folder at its actual level. Chosen depth groups at a fixed level."
-                       TextWrapping="Wrap" Foreground="{StaticResource Text.Secondary}" Margin="0,0,0,5" />
+                       Style="{StaticResource TextBlock.Hint}" Margin="0,0,0,5" />
             <TextBlock Text="Changes affect new visits. Earlier rows keep the grouping used when they were recorded."
-                       TextWrapping="Wrap" Foreground="{StaticResource Text.Secondary}" Margin="0,0,0,14" />
+                       Style="{StaticResource TextBlock.Hint}" Margin="0,0,0,14" />
 
             <Grid Margin="0,0,0,14">
                 <Grid.ColumnDefinitions>
@@ -42,31 +42,31 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" IsEnabled="{Binding IsDepthRollup}">
-                    <TextBlock Text="Depth" Margin="0,0,0,5" />
+                    <TextBlock Text="Depth" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,0,5" />
                     <TextBox Text="{Binding DepthText, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.Name="Grouping depth" />
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                    <TextBlock Text="Visit threshold (seconds)" Margin="0,0,0,5" />
+                    <TextBlock Text="Visit threshold (seconds)" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,0,5" />
                     <TextBox Text="{Binding DwellSecondsText, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.Name="Visit threshold in seconds" />
                 </StackPanel>
                 <StackPanel Grid.Column="4">
-                    <TextBlock Text="Idle timeout (minutes)" Margin="0,0,0,5" />
+                    <TextBlock Text="Idle timeout (minutes)" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,0,5" />
                     <TextBox Text="{Binding IdleMinutesText, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.Name="Idle timeout in minutes" />
                 </StackPanel>
             </Grid>
 
-            <TextBlock Text="Equivalent paths" FontWeight="SemiBold" Margin="0,0,0,5" />
+            <TextBlock Text="Equivalent paths" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,0,5" />
             <TextBlock Text="Enter one alternate path to this folder per line, such as a network path for a mapped drive."
-                       TextWrapping="Wrap" Foreground="{StaticResource Text.Secondary}" Margin="0,0,0,6" />
+                       Style="{StaticResource TextBlock.Hint}" Margin="0,0,0,6" />
             <TextBox Text="{Binding EquivalentPrefixesText, UpdateSourceTrigger=PropertyChanged}"
-                     AcceptsReturn="True" TextWrapping="NoWrap" Height="76"
+                     AcceptsReturn="True" TextWrapping="NoWrap" Height="76" VerticalContentAlignment="Top"
                      VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource Font.Mono}"
                      AutomationProperties.Name="Equivalent paths" />
 
-            <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource Status.Error}"
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}"
                        TextWrapping="Wrap" Margin="0,10,0,0"
                        Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>

@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         mc:Ignorable="d"
-        Title="Import Places"
+        Title="Import places"
         Height="480" Width="560"
         MinHeight="320" MinWidth="440"
         WindowStartupLocation="CenterOwner"
@@ -30,8 +30,10 @@
                    FontSize="14" TextWrapping="Wrap" Margin="0,0,0,12" />
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button x:Name="SelectAllButton" Content="Select All" Margin="0,0,8,0" Click="SelectAllButton_Click" />
-            <Button x:Name="SelectNoneButton" Content="Select None" Click="SelectNoneButton_Click" />
+            <Button x:Name="SelectAllButton" Content="Select all" Style="{StaticResource Button.Compact}"
+                    Margin="0,0,8,0" Click="SelectAllButton_Click" />
+            <Button x:Name="SelectNoneButton" Content="Select none" Style="{StaticResource Button.Compact}"
+                    Click="SelectNoneButton_Click" />
         </StackPanel>
 
         <DataGrid x:Name="ItemsGrid" Grid.Row="2"
@@ -49,13 +51,22 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Alias" Binding="{Binding Alias}" Width="*" IsReadOnly="True" />
-                <DataGridTextColumn Header="Type" Binding="{Binding TypeLabel}" Width="70" IsReadOnly="True" />
-                <DataGridTextColumn Header="Path / URL" Binding="{Binding Resource}" Width="2*" IsReadOnly="True" />
+                <DataGridTemplateColumn Header="NAME" SortMemberPath="Alias" Width="*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path Style="{StaticResource Icon.RowPlaceType}" />
+                                <TextBlock Text="{Binding Alias}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="FOLDER OR LINK" Binding="{Binding Resource}" Width="2*" IsReadOnly="True"
+                                    ElementStyle="{StaticResource Cell.Path}" />
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{StaticResource Status.Error}"
+        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="{DynamicResource Danger}"
                    TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" />
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

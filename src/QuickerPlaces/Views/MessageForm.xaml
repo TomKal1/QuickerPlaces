@@ -13,8 +13,8 @@
     <!--
         The app's themed stand-in for MessageBox/TaskDialog — see
         README.md "Dialogs". Being a plain Window, it automatically picks
-        up the app-wide Window style (Bg.Glow background, Font.Sans,
-        Text.Primary) from Theme.xaml; only its own content below needs
+        up the implicit Window style (Bg.Base background, Font.Sans,
+        Text.Primary) from Styles.xaml; only its own content below needs
         laying out. Built via MessageForm.Show(...), not instantiated
         directly — see MessageForm.xaml.cs.
     -->
@@ -36,10 +36,11 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Border x:Name="IconBadge" Width="36" Height="36" CornerRadius="18"
-                    VerticalAlignment="Top" Margin="0,0,14,0">
-                <TextBlock x:Name="IconGlyph" FontWeight="Bold" FontSize="16"
-                           Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <!-- An outlined circle; the code-behind colours the ring and the character per icon. -->
+            <Border x:Name="IconBadge" Width="36" Height="36" CornerRadius="18" BorderThickness="2"
+                    Background="{DynamicResource Bg.Raised}" VerticalAlignment="Top" Margin="0,0,14,0">
+                <TextBlock x:Name="IconGlyph" FontWeight="ExtraBold" FontSize="16"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <TextBlock x:Name="MessageText" Grid.Column="1" TextWrapping="Wrap" FontSize="14"
                        VerticalAlignment="Center" />

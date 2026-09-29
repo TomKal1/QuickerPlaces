@@ -602,7 +602,8 @@ public sealed class LibraryRowViewModel
     public int GroupOrder { get; }
 
     public string Name => Item.Name;
-    public string Glyph => Item.Kind.Glyph();
+    /// <summary>Picks the row's icon: folder, globe, or a document for the three file kinds.</summary>
+    public LibraryKind Kind => Item.Kind;
     public string KindLabel => Item.Kind.Label();
     public string Location => Item.Location;
     public string Folder => Item.Folder;

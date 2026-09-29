@@ -31,8 +31,12 @@ public sealed class AppSettings
     ///
     /// 4: added MinimizeToTray and StartWithWindows (Phase 9 D25), both off
     /// when absent from an older file.
+    ///
+    /// 5: added Theme and Highlight (UI refresh U7). No migration needed: a
+    /// version-4 file lacks them, which reads as dark with Hull green, the
+    /// look closest to what that version showed.
     /// </summary>
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -77,4 +81,13 @@ public sealed class AppSettings
 
     /// <summary>Register a per-user Windows sign-in launch, starting in the tray.</summary>
     public bool StartWithWindows { get; set; }
+
+    /// <summary>
+    /// "dark", "light" or "system" (see <see cref="ThemePreference"/>). A
+    /// string, not an enum, for the same reason as <see cref="PlacesSortKey"/>.
+    /// </summary>
+    public string? Theme { get; set; } = "dark";
+
+    /// <summary>"green", "blue", "red", "cognac" or "windows" (see <see cref="ThemePreference"/>).</summary>
+    public string? Highlight { get; set; } = "green";
 }
