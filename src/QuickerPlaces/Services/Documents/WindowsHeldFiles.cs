@@ -63,8 +63,13 @@ public static class WindowsHeldFiles
         "msedge", "msedgewebview2", "chrome", "firefox", "brave", "opera", "iexplore",
     };
 
-    /// <summary>Handles that stalled a read before, so are skipped from then on: a stuck pipe then costs one thread once, not one every scan.</summary>
-    private static readonly ConcurrentDictionary<(uint ProcessId, nint Handle), byte> StuckHandles = new();
+    /// <summary>
+    /// Handles that stalled a read before, so are skipped from then on: a stuck
+    /// pipe then costs one thread once, not one every scan. Keyed by the
+    /// kernel object as well as the process and handle value, as a handle value
+    /// is reused: a later file opened under the same value is another object.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(uint ProcessId, nint Handle, nint Object), byte> StuckHandles = new();
 
     private static readonly TimeSpan HandleTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(25);
@@ -110,7 +115,7 @@ public static class WindowsHeldFiles
 
     private readonly record struct Target(string AppName, int Order);
 
-    private readonly record struct HeldHandle(uint ProcessId, nint Handle);
+    private readonly record struct HeldHandle(uint ProcessId, nint Handle, nint Object);
 
     /// <summary>
     /// The given programs in the order given, then their same-named siblings,
@@ -142,7 +147,9 @@ public static class WindowsHeldFiles
         }
 
         var ownId = (uint)Environment.ProcessId;
-        var ownSession = running.Where(p => p.Id == ownId).Select(p => p.Session).DefaultIfEmpty(-1).First();
+        int ownSession;
+        using (var current = Process.GetCurrentProcess())
+            ownSession = current.SessionId;
         bool Eligible((uint Id, string Name, int Session) p) =>
             p.Id != ownId && p.Session == ownSession && !SkippedPrograms.Contains(p.Name);
 
@@ -195,8 +202,8 @@ public static class WindowsHeldFiles
         // OrderBy is stable, so the handle order within a process is kept.
         return entries
             .Where(e => e.ObjectTypeIndex == fileType && targets.ContainsKey((uint)e.UniqueProcessId))
-            .Select(e => new HeldHandle((uint)e.UniqueProcessId, e.HandleValue))
-            .Where(h => !StuckHandles.ContainsKey((h.ProcessId, h.Handle)))
+            .Select(e => new HeldHandle((uint)e.UniqueProcessId, e.HandleValue, e.Object))
+            .Where(h => !StuckHandles.ContainsKey((h.ProcessId, h.Handle, h.Object)))
             .OrderBy(h => targets[h.ProcessId].Order)
             .ToArray();
     }
@@ -247,7 +254,7 @@ public static class WindowsHeldFiles
                 if (Stopwatch.GetElapsedTime(progress.StepStarted) > HandleTimeout)
                 {
                     progress.Cancelled = true;
-                    StuckHandles.TryAdd((handles[current].ProcessId, handles[current].Handle), 0);
+                    StuckHandles.TryAdd((handles[current].ProcessId, handles[current].Handle, handles[current].Object), 0);
                     next = current + 1;
                     if (++abandoned >= MaxAbandonedWorkers)
                         return false;
@@ -281,7 +288,7 @@ public static class WindowsHeldFiles
                 progress.StepStarted = Stopwatch.GetTimestamp();
                 progress.Current = i;
 
-                var (processId, handle) = handles[i];
+                var (processId, handle, _) = handles[i];
                 if (!processes.TryGetValue(processId, out var process))
                     processes[processId] = process = OpenProcess(ProcessDupHandle, false, processId);
                 if (process == IntPtr.Zero)
