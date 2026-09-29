@@ -662,6 +662,53 @@ On Linux (.NET SDK 10.0.112): 1003 tests pass (970 before; new: `StartupOptionsT
 - Hide panels (Ctrl+H) and typing to bring them back; window at 1000×650 and maximized; dark and light themes.
 - Closing writes the layout (`workspace-layouts.json` under the data root's Local folder).
 
+## Configurable canvas: M4 (2026-09-29)
+
+Milestone M4 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): Arrange mode and a canvas that fits the window. Still behind `--workspace`; try it as in M3 (`--workspace --data-root <test folder>`).
+
+Before M4, a loose end from M3: Recents' folder grid now stays virtualized while **Group by folder level** is on (`IsVirtualizingWhenGrouping`, as the Library's shelf got in M2), so a long period no longer builds every row at once.
+
+### What was built
+
+- **Reflow** (`PanelLayoutEngine`). Packing takes the canvas's width: a panel narrower than it can be read at (Year activity 360, File shelf 460, Sessions 300, Saved places 560, anything else 280 px) is shown at the next allowed span that is wide enough, or full width, and a row that such a panel leaves or joins is filled by stretching its last panel, so a narrow window stacks panels without holes. Stored spans and order never change and nothing is written. The engine also works out a drop (the panel the dragged one goes before, or none when it wouldn't move) and the span a dragged edge snaps to.
+- **Arrange mode** (`WorkspaceViewModel`). **Arrange** on the toolbar opens a bar: *Arranging Activity Atlas* with **Undo**, **Restore built-in layout** (or saved), **Revert** and **Done**. Each panel then shows a handle to drag it by, **Move earlier**/**Move later**, a width choice (a third, half, two thirds, full width), **Hide**, a dashed outline and an edge to drag for its width. Every edit changes the draft; Undo (and Ctrl+Z outside a text box) steps back one edit; Done writes once; Revert writes nothing. Add panel works in the draft too.
+- **Outside Arrange mode**, a panel's Hide and Add panel are single written steps with **Undo** beside the status line (the layout service's new `HideNow` and `AddPanelNow`). Undo leaves the search shown alone. Entering Arrange mode ends that offer.
+- **Dragging** (`WorkspaceView`, new `PanelFrame`). The handle shows a bar where the panel would go — above or below a full-width panel, beside any other — and nothing where it wouldn't move; the canvas scrolls when the pointer nears its top or bottom. The edge shows the nearest allowed width over the panel, named. A drop is one move, a released edge one width change, and **Esc** cancels either ("Cancelled. Nothing moved."). Nothing is written while dragging.
+- **Focus and announcements.** Frames are never taken off the canvas (a hidden panel's collapses), so moving or resizing keeps each panel's selection, scroll and focus; the arrows and width choice keep the focus through a move. After Hide the focus goes to Undo (or, arranging, Done); after Arrange to Done, after Done or Revert back to Arrange. The status line is a polite live region, raised on every change: "Moved Sessions before File shelf.", "File shelf is now half wide; shown full width until the window is wider."
+- **Fitting the window.** The canvas gets the window's height, or more when rows need it (shared rows at least 220 px, the year strip's row its own height), and then scrolls, so no panel is cut off at the bottom; shared rows still have a real height, so their lists stay virtualized. The toolbar's search box takes a row of its own when the picker, the box at its least width and the buttons don't fit on one line.
+- **Year activity's month view.** Where the panel is too narrow for the year strip, it shows one month at one and a half times the size, with month arrows in place of the year's; the header's controls go under its title and wrap. The month is the month of a period chosen in the year shown, so the outline carries over, and the arrows cross years but never pass this month (`LibraryViewModel.CalendarMonthWeeks`, `ShowCalendarMonth`). The Library window gets the same when narrow.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Hide and Add panel outside Arrange mode | Kept, as single steps with Undo | M3 offered them on the canvas; D1 asks Hide to offer Undo |
+| Undo offered before Arrange mode | Ends when Arrange begins | Undo in Arrange mode steps through the draft; reaching past it would change what Revert restores |
+| Closing the window while arranging | The draft is kept, as Done | The same as switching layout mid-arrange (D2); a close shouldn't lose visible work |
+| Minimum panel widths | Fixed per type in the engine, in device-independent pixels | Testable without WPF; DPI changes need nothing more, since WPF lays out in those pixels |
+| Reflow width | The scroll viewer's full width, not its viewport | A scroll bar appearing must not change the packing, or it could appear and vanish repeatedly |
+| Where a drop lands | Before or after the nearest panel: by height for a full-width panel, by width otherwise | Full-width panels stack, so above/below is what the pointer means there |
+| Resizing | Only by the right edge, snapped to 4, 6, 8 or 12 columns; the width choice is the keyboard's way | D1: snapping handles with labelled choices as the alternative |
+| Month view size | The strip's own cells at 1.5× | Same styles, heat and outlines as the year strip; days get bigger instead of smaller |
+| The main window's minimum width | Left at 960 | Its header needs it in list mode; reflow still matters for narrow spans, large text and panels beside each other |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 1049 tests pass (1003 before; new: reflow, drop and snap cases in `PanelLayoutEngineTests`, one-step Hide/Add with Undo in `WorkspaceLayoutServiceTests`, Arrange mode, Undo and reflow in `WorkspaceViewModelTests`, the month view in `LibraryPeriodQueryTests`), and the Release build of the app has 0 warnings and 0 errors, XAML included. A script checked that every `StaticResource` key the new and changed XAML uses is defined. **Not done:** running the app; nothing here has been seen on screen. On Windows, with `--workspace --data-root <test folder>`, check:
+
+- **Arrange**, then drag the File shelf's handle above the year strip: a bar shows where it goes, and nothing shows over its own place. Drop it; Undo; drag again and press Esc mid-drag.
+- Drag Sessions' right edge: the preview snaps to a third, half, two thirds and full width and names each; release on a new width; Esc cancels.
+- From the keyboard only: Tab to a panel's arrows and width choice, move a panel both ways, change a width, Ctrl+Z, then Done. The focus should stay on the control you used.
+- Revert after several edits puts back the start, and `workspace-layouts.json` isn't written while arranging (its time doesn't change until Done).
+- Hide a panel outside Arrange mode, then Undo; Hide, search, Undo: the search stays.
+- Restore built-in layout after changes, then Undo.
+- Narrator: each move, width change, Hide and Undo is read out.
+- Set Sessions and Saved places to a third: Saved places shows wider; the width choice's tooltip says why. Maximize and restore the window: panels reflow and the stored widths come back when there's room.
+- In a 1000×650 window, add Saved places: the canvas scrolls rather than cutting the lower panels off; the lists inside still scroll on their own.
+- Set Year activity to a third or half: the month view, its arrows, the chosen week still outlined; the header's controls under the title. The Library window made narrow does the same.
+- 100/150/200% DPI and moving the window between monitors of different DPI; dark and light themes; the toolbar at 960 wide with large text: nothing is cut off.
+- Recents with Group by folder level on a long period: scrolls smoothly, and Add as place acts on the right row.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.
