@@ -7,7 +7,7 @@ namespace QuickerPlaces.Views.Panels;
 /// <summary>
 /// The Year activity panel (configurable canvas plan M2): a thin view over
 /// the shared <see cref="LibraryViewModel"/> it gets as its DataContext.
-/// Hosted by the Library window now and by the workspace from M3.
+/// Hosted by the Library window and by the workspace (M3).
 /// </summary>
 public partial class YearActivityPanel : UserControl
 {

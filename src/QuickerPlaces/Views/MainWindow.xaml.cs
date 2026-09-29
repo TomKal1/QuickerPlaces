@@ -11,6 +11,7 @@ using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views.Panels;
 
@@ -36,11 +37,12 @@ public partial class MainWindow : Window
     private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
     private readonly Action _focusSearch;
+    private readonly WorkspaceView? _workspaceView;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
         ActivityStore activityStore, ActivityTrackingHost activityHost, SessionStore sessionStore,
         WindowsRecentItems recentItems, PlacesService placesService, RecentFilesStore recentFilesStore, RecentFilesHost recentFilesHost,
-        ThemeManager themeManager)
+        ThemeManager themeManager, WorkspaceLayoutService? workspaceLayout = null)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -57,10 +59,31 @@ public partial class MainWindow : Window
         RestoreWindowState(settings);
         UpdateActivityIndicator();
 
-        var places = new PlacesPanel { CollapsesWithWindow = true };
-        MainContent.Content = places;
-        _focusSearch = places.FocusSearch;
+        if (workspaceLayout is null)
+        {
+            var places = new PlacesPanel { CollapsesWithWindow = true };
+            MainContent.Content = places;
+            _focusSearch = places.FocusSearch;
+            return;
+        }
+
+        // The workspace (configurable canvas plan M3), with --workspace: one
+        // Library query shared by its panels, and the Library and Sessions
+        // windows' content in panels, so their buttons go.
+        var shell = new WindowsShell();
+        var library = new LibraryViewModel(placesService, sessionStore, activityStore, recentFilesStore,
+            new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+        _workspaceView = new WorkspaceView();
+        _workspaceView.Attach(new WorkspaceViewModel(workspaceLayout, library), viewModel, sessionStore,
+            new WindowsOpenDocumentProbe(recentItems), recentFilesHost, activityHost);
+        MainContent.Content = _workspaceView;
+        _focusSearch = _workspaceView.FocusSearch;
+        LibraryButton.Visibility = Visibility.Collapsed;
+        SessionsButton.Visibility = Visibility.Collapsed;
     }
+
+    /// <summary>At exit, before the tracking hosts go: writes the workspace's waiting changes and stops its refreshes.</summary>
+    public void CloseWorkspace() => _workspaceView?.Close();
 
     private void ActivityButton_Click(object sender, RoutedEventArgs e)
     {
@@ -70,6 +93,9 @@ public partial class MainWindow : Window
             (folder, owner) => viewModel.AddFolderFromActivity(folder, owner));
         window.ShowDialog();
         UpdateActivityIndicator();
+
+        // Tracked folders may have changed, and with them what the workspace lists.
+        _workspaceView?.RequestReload();
     }
 
     private void SessionsButton_Click(object sender, RoutedEventArgs e)

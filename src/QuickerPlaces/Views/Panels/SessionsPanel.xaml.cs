@@ -14,7 +14,7 @@ namespace QuickerPlaces.Views.Panels;
 /// view over <see cref="SessionsViewModel"/>, which decides what is shown and
 /// makes every store call. This code-behind only passes clicks in, asks
 /// before deleting, and shows <see cref="SessionEditorDialog"/>. Hosted by the
-/// Sessions window now and by the workspace from M3.
+/// Sessions window and by the workspace (M3).
 /// </summary>
 public partial class SessionsPanel : UserControl
 {
@@ -43,6 +43,44 @@ public partial class SessionsPanel : UserControl
             FocusSelectedSession();
         else
             SaveOpenButton.Focus();
+    }
+
+    /// <summary>Below this width the selected session goes under the list instead of beside it.</summary>
+    private const double StackBelow = 640;
+
+    private bool _stacked;
+
+    private void Body_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var stack = e.NewSize.Width < StackBelow;
+        if (stack == _stacked)
+            return;
+        _stacked = stack;
+
+        if (stack)
+        {
+            ListColumn.Width = new GridLength(1, GridUnitType.Star);
+            ListColumn.MinWidth = 0;
+            GapColumn.Width = new GridLength(0);
+            DetailsRow.Height = new GridLength(1, GridUnitType.Star);
+            Grid.SetColumnSpan(ListArea, 3);
+            Grid.SetRow(DetailsArea, 1);
+            Grid.SetColumn(DetailsArea, 0);
+            Grid.SetColumnSpan(DetailsArea, 3);
+            DetailsArea.Margin = new Thickness(0, 12, 0, 0);
+        }
+        else
+        {
+            ListColumn.Width = new GridLength(340);
+            ListColumn.MinWidth = 260;
+            GapColumn.Width = new GridLength(16);
+            DetailsRow.Height = new GridLength(0);
+            Grid.SetColumnSpan(ListArea, 1);
+            Grid.SetRow(DetailsArea, 0);
+            Grid.SetColumn(DetailsArea, 2);
+            Grid.SetColumnSpan(DetailsArea, 1);
+            DetailsArea.Margin = new Thickness(0);
+        }
     }
 
     private Window OwnerWindow => Window.GetWindow(this) ?? Application.Current.MainWindow;

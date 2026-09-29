@@ -44,43 +44,7 @@
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="820" />
                 </StackPanel>
             </Expander.Header>
-            <Border Background="{DynamicResource Bg.Panel}" BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
-                    CornerRadius="8" Padding="14,12" Margin="0,8,0,0" IsEnabled="{Binding RecentFilesAvailable}">
-                <StackPanel>
-                    <CheckBox Content="Record the PDF, Word and Excel files I open" IsChecked="{Binding RecentFilesEnabled}" FontWeight="SemiBold" />
-                    <TextBlock Style="{StaticResource TextBlock.Hint}" Margin="28,4,0,10"
-                               Text="Read once a minute from Windows' own Recent Items while QuickerPlaces is running, from the moment you turn this on. It records which file and when — never what's in it — and keeps a year on this computer only. Programs that don't tell Windows about the files they open won't show here." />
-                    <StackPanel Orientation="Horizontal" Margin="28,0,0,8">
-                        <TextBlock Text="Kinds" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,14,0" VerticalAlignment="Center" />
-                        <CheckBox Content="PDF" IsChecked="{Binding TrackPdf}" Margin="0,0,16,0" />
-                        <CheckBox Content="Word" IsChecked="{Binding TrackWord}" Margin="0,0,16,0" />
-                        <CheckBox Content="Excel" IsChecked="{Binding TrackExcel}" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="28,0,0,10">
-                        <TextBlock Text="Where" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,0,14,0" VerticalAlignment="Center" />
-                        <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Where">
-                            <Border Style="{StaticResource Border.SegmentGroup}">
-                                <StackPanel Orientation="Horizontal">
-                                    <RadioButton Content="Only under folders tracked in Recents" GroupName="Scope"
-                                                 Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5"
-                                                 IsChecked="{Binding TrackUnderTrackedFolders}" />
-                                    <RadioButton Content="Anywhere" GroupName="Scope"
-                                                 Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
-                                                 IsChecked="{Binding TrackEverywhere}" />
-                                </StackPanel>
-                            </Border>
-                        </GroupBox>
-                    </StackPanel>
-                    <Button HorizontalAlignment="Left" Margin="28,0,0,0" Style="{StaticResource Button.Compact}" Click="ClearRecentFiles_Click"
-                            ToolTip="Delete everything Recent Files has recorded. Your places, sessions and files are not touched."
-                            AutomationProperties.Name="Delete Recent Files history">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Trash}" />
-                            <TextBlock Text="Delete Recent Files history…" Margin="7,0,0,0" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Border>
+            <panels:RecentFilesSettings Margin="0,8,0,0" />
         </Expander>
 
         <TextBlock Grid.Row="4" Text="{Binding RecentFilesNotice}" Foreground="{DynamicResource Signal}" TextWrapping="Wrap"

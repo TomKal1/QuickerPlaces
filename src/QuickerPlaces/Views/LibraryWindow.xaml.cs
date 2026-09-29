@@ -13,10 +13,11 @@ namespace QuickerPlaces.Views;
 /// <summary>
 /// The Library (documents plan §6): the window around the Year activity and
 /// File shelf panels (configurable canvas plan M2), which share one
-/// <see cref="LibraryViewModel"/>. This code-behind asks before deleting
-/// Recent Files history, asks Recent Files to read Recent Items at once when
-/// it opens so what was just opened is listed, and keeps the list current
-/// while it is open through <see cref="LibraryRefresh"/>.
+/// <see cref="LibraryViewModel"/>, with Recent Files' settings
+/// (<see cref="RecentFilesSettings"/>) below. This code-behind asks Recent
+/// Files to read Recent Items at once when it opens so what was just opened
+/// is listed, and keeps the list current while it is open through
+/// <see cref="LibraryRefresh"/>.
 /// </summary>
 public partial class LibraryWindow : Window
 {
@@ -62,11 +63,5 @@ public partial class LibraryWindow : Window
         {
             viewModel.PlaceOpened -= placeOpened;
         }
-    }
-
-    private void ClearRecentFiles_Click(object sender, RoutedEventArgs e)
-    {
-        if (MessageForm.ShowDestructiveConfirm(_viewModel.ClearRecentFilesConfirmation, Title, "Delete history", this))
-            _viewModel.ClearRecentFiles();
     }
 }

@@ -44,7 +44,8 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <!-- Wraps in a narrow workspace panel rather than cutting off the tag picker. -->
+                <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
                     <TextBlock Text="SHOW" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" />
                     <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Show">
                         <Border Style="{StaticResource Border.SegmentGroup}">
@@ -76,11 +77,11 @@
                     <ComboBox ItemsSource="{Binding TagChoices}" SelectedItem="{Binding TagChoice, Mode=TwoWay}" MinWidth="130"
                               VerticalAlignment="Center" AutomationProperties.Name="Only items in sessions with this tag"
                               ToolTip="Only files in sessions with this tag" />
-                </StackPanel>
+                </WrapPanel>
             </StackPanel>
 
-            <!-- Search: the main window's search box. -->
-            <Border Grid.Column="1" Width="260" Height="34" VerticalAlignment="Top" CornerRadius="6" BorderThickness="1"
+            <!-- Search: the main window's search box. The workspace hides it: its own box is this search (ShowsSearch). -->
+            <Border x:Name="SearchArea" Grid.Column="1" Width="260" Height="34" VerticalAlignment="Top" CornerRadius="6" BorderThickness="1"
                     Padding="10,0,5,0" Background="{DynamicResource Bg.Sunken}">
                 <Border.Style>
                     <Style TargetType="Border">

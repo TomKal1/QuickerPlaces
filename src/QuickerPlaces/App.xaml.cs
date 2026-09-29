@@ -7,6 +7,7 @@ using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
 
@@ -101,8 +102,14 @@ public partial class App : Application
         var recentFilesStore = RecentFilesStore.CreateDefault();
         var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
 
+        // The workspace (configurable canvas plan M3) only with --workspace
+        // until M7 makes it the default; its layouts are read only then.
+        var workspaceLayout = options.Workspace ? new WorkspaceLayoutService(WorkspaceStore.CreateDefault()) : null;
+        if (workspaceLayout is not null)
+            DiagnosticLog.Info($"Showing the workspace ({workspaceLayout.ActiveName}).");
+
         var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems,
-            placesService, recentFilesStore, recentFilesHost, themeManager);
+            placesService, recentFilesStore, recentFilesHost, themeManager, workspaceLayout);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))
@@ -133,6 +140,8 @@ public partial class App : Application
 
             // A session change the Sessions window reported as unsaved gets one more try; a failure is logged there.
             sessionStore.RetrySave();
+            // The workspace's waiting layout write, while its refresh still has hosts to let go of.
+            mainWindow.CloseWorkspace();
             recentFilesHost.Dispose();
             activityHost.Dispose();
             themeManager.Dispose();
