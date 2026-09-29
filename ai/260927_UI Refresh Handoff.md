@@ -1,12 +1,12 @@
 ---
-status: current — built and tested; the section 8 walk on Windows is still to do
+status: current — built, tested and tried on Windows; the pull request is open
 branch: claude/ui-refresh
 date: 2026-09-28
 ---
 
 # UI refresh hand-off — the Windows walk
 
-Read [the UI refresh plan](260927_UI%20Refresh%20Detailed%20Plan.md) for the decisions (U1–U13) and the checklist. The look it builds is in the [QuickerPlaces Design System](https://claude.ai/artifact/MCDp4Ax8HWUgVUw3S39N2W), version 2, and on the [design canvas](https://claude.ai/artifact/46meR5TGTPBdtUDscAFGuS). `BUILD_SUMMARY.md` has what was built, every departure from the plan, and the known gaps. Nothing has been pushed; merging is the user's call.
+Read [the UI refresh plan](260927_UI%20Refresh%20Detailed%20Plan.md) for the decisions (U1–U13) and the checklist. The look it builds is in the [QuickerPlaces Design System](https://claude.ai/artifact/MCDp4Ax8HWUgVUw3S39N2W), version 2, and on the [design canvas](https://claude.ai/artifact/46meR5TGTPBdtUDscAFGuS). `BUILD_SUMMARY.md` has what was built, every departure from the plan, and the known gaps. The branch is pushed with a pull request open; merging is the user's call.
 
 ## What's done
 
@@ -32,7 +32,8 @@ Tasks 1–19 of the plan are committed on `claude/ui-refresh`, one commit per ta
 | 16 Name wording in messages | `f238b30`, `f05c4a6` |
 | 17 App icon | `3aaa784` |
 | 19 User guide | `c54108c`, `2349dc5` |
-| 20 Build summary, README and this hand-off | this commit |
+| 20 Build summary, README and this hand-off | `b5f4d90`, `a190a7f` |
+| After trying it: header buttons, Settings, badge, sort arrow, racing stripe | `4a29e79` |
 
 Departures from the plan found in review, in short (details in `BUILD_SUMMARY.md`):
 
@@ -48,7 +49,9 @@ Departures from the plan found in review, in short (details in `BUILD_SUMMARY.md
 
 On 2026-09-28: the solution builds with 0 warnings and 0 errors, and all 643 tests pass (547 before the refresh). The app launches to the main window with a clean log. Each window and dialog was also loaded in a WPF probe in Dark and in Light, with no binding or resource warnings. None of this is a look at the running app by a person.
 
-## What's not: the section 8 walk
+## The section 8 walk
+
+**2026-09-28: the user tried the refresh on Windows and reported everything working.** The items below were not ticked one by one; read them as a pass the user reported, not as each item confirmed. Item 2's trim band is now the racing stripe.
 
 Walk each item in Dark, then Light, then Match Windows (switch the Windows app theme while the app is open). What each must show is in the plan's section 8. Record each as passed, failed or not done in `BUILD_SUMMARY.md`.
 
@@ -78,7 +81,7 @@ If the walk finds a fault, fix it on this branch before merging.
 ## Known gaps
 
 - Plan section 12: the default stays dark with Hull green (to default to Match Windows, change the two defaults in `AppSettings` and the Task 2 test); no visits bars in the Recents table; square table corners; no letter-spacing on capitals; no free colour picker.
-- The type text ("Folder"/"URL") is shown nowhere now, so screen readers get no folder/link cue in the grid, Export, Import or Recently Deleted. Idea: say "Link" and use it as the type icon's `AutomationProperties.Name`.
+- The type text ("Folder"/"URL") is shown nowhere now, so screen readers get no folder/link cue in the grid, Export, Import or Recently Deleted. The user judged the icon enough. Idea, if it matters later: say "Link" and use it as the type icon's `AutomationProperties.Name`.
 - The app icon is soft at 16px; TASA Orbiter's Q has a detached tail bar.
 
 ## Constraints carried forward
@@ -90,4 +93,4 @@ If the walk finds a fault, fix it on this branch before merging.
 
 ## Next
 
-After the walk and the merge: Phase 4, general file support (roadmap §1.1). Write its detailed plan against `main` as it is then.
+Update the Design System for `4a29e79` (header buttons, badge, sort arrow, racing stripe and the `Trim.Stripe` token). After the merge: Phase 4, general file support (roadmap §1.1). Write its detailed plan against `main` as it is then.

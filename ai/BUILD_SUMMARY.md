@@ -422,7 +422,7 @@ Phases 1, 2, 3 and 9 are on `main` (Phase 9 through the `claude/phase-9-folder-a
 
 ## UI refresh — Saab 900 look (2026-09-27)
 
-The UI refresh is planned in [`ai/260927_UI Refresh Detailed Plan.md`](260927_UI%20Refresh%20Detailed%20Plan.md). Its decisions U1–U13 are in that plan's section 4 and are summarised below. It was implemented on 2026-09-27 and 2026-09-28 on `claude/ui-refresh`, one commit per task of the plan (`d1f81a7` to `2349dc5`), with review fixes in between. Nothing has been pushed. The mockups are on the [design canvas](https://claude.ai/artifact/46meR5TGTPBdtUDscAFGuS); the tokens, components and usage rules are in the [QuickerPlaces Design System](https://claude.ai/artifact/MCDp4Ax8HWUgVUw3S39N2W), version 2. Where to pick up is in [the UI refresh hand-off](260927_UI%20Refresh%20Handoff.md).
+The UI refresh is planned in [`ai/260927_UI Refresh Detailed Plan.md`](260927_UI%20Refresh%20Detailed%20Plan.md). Its decisions U1–U13 are in that plan's section 4 and are summarised below. It was implemented on 2026-09-27 and 2026-09-28 on `claude/ui-refresh`, one commit per task of the plan (`d1f81a7` to `2349dc5`), with review fixes in between, and the user's changes after trying it (`4a29e79`). The mockups are on the [design canvas](https://claude.ai/artifact/46meR5TGTPBdtUDscAFGuS); the tokens, components and usage rules are in the [QuickerPlaces Design System](https://claude.ai/artifact/MCDp4Ax8HWUgVUw3S39N2W), version 2. Where to pick up is in [the UI refresh hand-off](260927_UI%20Refresh%20Handoff.md).
 
 ### Why
 
@@ -475,20 +475,23 @@ The user asked for a look that is simple, clean and easy to understand the first
 | — | Export and Import's NAME column has `SortMemberPath="Alias"` (`f05c4a6`) | It became a template column in the restyle and lost the sort path its text column used to infer |
 | Task 16: the "Alias" messages | Also "pick a different alias", "URL can't be empty" and "complete URL" in `PlacesService`, with three more assertions updated (`f238b30`) | Same wording rule |
 | Task 19 | The guide also says OK (not Save), the field labels **Folder path** and **Link**, **Track a folder**, sentence-case buttons, and a rewritten calendar paragraph (`c54108c`, `2349dc5`) | Found while checking the guide against the app |
+| Task 12: Settings in the Options menu; only Add link primary | The header reads Recents, Add folder, Add link, Settings. Settings left the Options menu, and Recents, Add folder and Add link are all `Button.Primary`; the Recents dot's ring is `Highlight` (`4a29e79`) | The user's choice after trying it |
+| Styles.xaml: a `Brand.Green` monogram, a `Signal` sort arrow and underline | The QP badge fills with `Highlight` (text `On.Highlight`); the sort arrow and underline are `Highlight.Text` (`4a29e79`) | The user wanted them to follow the highlight colour. The app icon stays Brand green |
+| Styles.xaml: the silver rub strip (a 7px `Trim.Band` with a 1px `Trim.Line`) | A racing stripe: a 4px `Trim.Stripe` band (near-black in Light, silver in Dark) over a 4px `Highlight` band. `Trim.Band` became `Trim.Stripe` in both palettes (`4a29e79`) | The user's design. The Design System does not have it yet |
 
 ### Verification status — read this before merging
 
 **2026-09-28: the solution builds with 0 warnings and 0 errors, and all 643 tests pass** (547 before the refresh). The app launches to the main window with a clean log. Each window and dialog was also loaded in a WPF probe in Dark and in Light with no binding or resource warnings. The Design System update (plan Task 21) records the WPF differences and the colour changes above.
 
-**The plan's section 8 manual walk on Windows, in Dark, Light and Match Windows, has not been done.** Nothing in it is to be read as passed. The checklist, and what else to look at on the walk, is in [the hand-off](260927_UI%20Refresh%20Handoff.md).
+**2026-09-28: the user tried the refresh on Windows and reported everything working.** The results were not recorded item by item against the plan's section 8 checklist in [the hand-off](260927_UI%20Refresh%20Handoff.md); read that as a pass reported by the user, not as each item confirmed. The build and all 643 tests passed again after the header, sort-arrow and stripe changes (`4a29e79`).
 
 ### Known gaps
 
 - The warning and recovery "!" badge in Light is `Signal` on `Bg.Raised` at 4.29:1; it is treated as a graphic (3:1).
-- The type text ("Folder"/"URL") is no longer shown anywhere; the icon alone says folder or link, in the main grid, Export, Import and Recently Deleted. Screen readers get no folder/link cue. Follow-up idea: say "Link" and use it as `AutomationProperties.Name` on the type icons.
+- The type text ("Folder"/"URL") is no longer shown anywhere; the icon alone says folder or link, in the main grid, Export, Import and Recently Deleted. Screen readers get no folder/link cue. The user judged the icon enough. Follow-up idea, if it matters later: say "Link" and use it as `AutomationProperties.Name` on the type icons.
 - The app icon is soft at 16px (the plan accepted this). TASA Orbiter's Q has a detached tail bar.
 - Not built (plan section 12): visits bars in the Recents table, rounded table corners, letter-spaced capitals, a free colour picker. The default could become Match Windows if the user prefers.
 
 ## Status snapshot — 2026-09-28
 
-Phases 1, 2, 3 and 9 are on `main`. The UI refresh is built on `claude/ui-refresh`, not pushed: it builds with 0 warnings and all 643 tests pass. Next: walk the plan's section 8 on Windows in all three theme modes, fix what it finds, and merge. Then, per the roadmap's §1.1, write the Phase 4 detailed plan (general file support). Phase 8 must still check Phase 9's COM interop in a single-file build.
+Phases 1, 2, 3 and 9 are on `main`. The UI refresh is on `claude/ui-refresh`, pushed with a pull request open: it builds with 0 warnings, all 643 tests pass, and the user reported it working on Windows. Next: merge it. The Design System artifact still needs the header buttons, badge, sort arrow and racing stripe from `4a29e79`. Then, per the roadmap's §1.1, write the Phase 4 detailed plan (general file support). Phase 8 must still check Phase 9's COM interop in a single-file build.
