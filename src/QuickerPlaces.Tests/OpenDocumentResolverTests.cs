@@ -402,4 +402,15 @@ public sealed class OpenDocumentResolverTests
         var candidate = Assert.Single(OpenDocumentResolver.Resolve(evidence, new[] { A101 }).Candidates);
         Assert.Equal("Open in Bluebeam Revu", candidate.Reason);
     }
+
+    [Fact]
+    public void EmptyEvidence_ResolvesWithoutThrowing()
+    {
+        // A file in use is only listed when some clue names it, so the empty evidence lists nothing; it must not throw.
+        var scan = OpenDocumentResolver.Resolve(OpenDocumentEvidence.Empty, new[] { A101 });
+
+        Assert.Empty(scan.Candidates);
+        Assert.Empty(scan.UnmatchedTitles);
+        Assert.Empty(OpenDocumentEvidence.Empty.MappedDrives);
+    }
 }

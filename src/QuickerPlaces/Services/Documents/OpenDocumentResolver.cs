@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
 
@@ -460,10 +461,8 @@ public sealed record OpenDocumentEvidence(IReadOnlyList<ViewerWindow> Windows, I
     /// <summary>Documents the windows' programs hold open, with full paths, from WindowsHeldFiles. Every one counts as open (held-files plan H1).</summary>
     public IReadOnlyList<HeldFile> HeldFiles { get; init; } = Array.Empty<HeldFile>();
 
-    private static readonly IReadOnlyDictionary<string, string> NoDrives = new Dictionary<string, string>();
-
     /// <summary>Each mapped drive ("P:") and its share, so every clue's path is spelled with the drive letter, as held files are (held-files plan H3).</summary>
-    public IReadOnlyDictionary<string, string> MappedDrives { get; init; } = NoDrives;
+    public IReadOnlyDictionary<string, string> MappedDrives { get; init; } = ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <param name="Title">The window's title as Windows reports it.</param>
