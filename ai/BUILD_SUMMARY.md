@@ -428,7 +428,7 @@ Added at the user's request, outside the roadmap's phase order: *"a new feature 
 
 - **Sessions** in the main header opens **Project Sessions**: saved sessions, most recently used first, with a search box (name, tag or PDF name) and tag chips with counts; the selected session's PDFs, with **Open all**, **Open selected PDF**, **Edit…** and **Delete…**.
 - **Save open PDFs…** scans for open PDFs and shows a review list: files judged open ticked, recent and command-line suggestions unticked, **Add PDFs…** for anything missed. Only ticked files are saved.
-- Detection combines window titles, viewer command lines, Restart Manager's files-in-use answer, and Windows' Recent Items (plan §4). No background watching: one scan, on request, on a worker thread with a time budget.
+- Detection combines window titles, viewer command lines, the files the windows' programs hold open (added later: see *Held files* below), Restart Manager's files-in-use answer, and Windows' Recent Items (plan §4). No background watching: one scan, on request, on a worker thread with a time budget.
 - `sessions.json` beside `places.json` (roaming), with its own schema version, written at once through the existing `IPlacesStorage` seam; damaged, unreadable and newer files are handled as `activity.json`'s are.
 - Reopening goes through a new `SessionLauncher`, not `PlaceLauncher`, so place usage is untouched. `IShell` gained `FileExists`.
 
@@ -450,3 +450,17 @@ The user then asked for Recents to extend to recent PDF, Word and Excel files, a
 ### Verification status — read this before calling it done
 
 On Linux, the app, the ActivityProbe and the tests build with zero warnings, XAML included, and all 745 tests pass (77 more than the first sessions build), in UTC+10 and America/New_York. **Nothing has been run on Windows.** Untested there: the probe's Word and Excel window detection, the Recent Items reader, the Recent Files timer, and the two new windows. Whether Word's and Excel's own Open dialogs add to Recent Items is also untested. The Windows checklist is the plan's §9.
+
+## Held files (2026-09-28)
+
+Added because Recent Items misses tabs opened from Revu's own Open dialog. The design and decisions (H1–H4) are in [`260928_Held Files Detection Plan.md`](260928_Held%20Files%20Detection%20Plan.md); the commits are `650e4a2..HEAD`.
+
+### What was built
+
+- **`WindowsHeldFiles`** asks Windows which files the document windows' programs (and their same-named siblings) have open, from the system handle list, and names each one, expanding short 8.3 names. A stuck handle is abandoned on a watched thread and skipped on later scans, and the whole read has a 3 second budget inside the scan's 10.
+- **`HeldFilePaths`** turns those names into session paths: the mapped drive letter put back, other file types, `~$` owner files, Word and Excel templates, and program and per-user application folders (Revu's Studio cache) left out.
+- **`OpenDocumentResolver`** takes them as a new clue: every held file counts as open, title names match held paths first, and every clue is spelled with the mapped drive letter so one file is listed once. The review dialog is unchanged.
+
+### Verification status — read this before calling it done
+
+On Windows, the developer probe's Held files check found a helper process's test PDFs in 139 ms, and Revu with several local tabs in about 125 ms, without elevation. Everything builds with 0 warnings and all 781 tests pass. **Untested:** a mapped drive, a DFS path, a Studio Session document, the Save open files dialog end to end, 8.3 short names, and a document based on a network template. The user's personal PC has none of the network setups. The checks are the plan's §9, items 16–21.

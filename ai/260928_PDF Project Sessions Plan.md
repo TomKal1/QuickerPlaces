@@ -143,6 +143,8 @@ Nothing below has been done. Back up `%AppData%\QuickerPlaces` and `%LocalAppDat
 17. **Revu with a Studio Session document open**: it is not listed.
 18. **Revu closed, nothing else open**: the scan finishes with no warning and lists only recent suggestions.
 19. **A PDF on a DFS path** (`net use` shows `\\company\dfs\…`): it is listed once, not twice.
+20. **A document based on a network Word template**: the template isn't listed.
+21. **(Only on a machine whose user folder has a short name, such as a user name over 8 characters.) A PDF opened from a zip in File Explorer**: it is not listed.
 
 Record each item as passed, failed or untested in `BUILD_SUMMARY.md`.
 
