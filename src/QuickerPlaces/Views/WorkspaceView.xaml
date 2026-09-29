@@ -2,12 +2,16 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--
-        The workspace (configurable canvas plan M3), in the main window under
-        the favourites: the layout picker, the one search box, Add panel and
-        the Options menu on the toolbar; a line about the saved layouts when
-        something is wrong with them; and the panels of the active layout on
-        a twelve-column canvas that the code-behind builds from
-        WorkspaceViewModel.Panels. DataContext is the WorkspaceViewModel.
+        The workspace (configurable canvas plan M3, M4), in the main window
+        under the favourites: the layout picker, the one search box, Arrange,
+        Add panel and the Options menu on the toolbar (the search box takes
+        a row of its own when they don't fit beside it); Arrange mode's bar
+        with Undo, Restore, Revert and Done; a line about the saved layouts
+        when something is wrong with them; the last action, announced to
+        screen readers, with Undo; and the panels of the active layout on a
+        twelve-column canvas that the code-behind builds from
+        WorkspaceViewModel.Panels, which scrolls when stacked panels are
+        taller than the window. DataContext is the WorkspaceViewModel.
         Hide (Ctrl+H) collapses the canvas and keeps the toolbar, as list
         mode keeps the list's search box.
     -->
@@ -22,22 +26,26 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar: layout, search, Add panel, Options, Hide. -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
+        <!-- Toolbar: layout, search, Arrange, Add panel, Options, Hide. -->
+        <Grid x:Name="Toolbar" Grid.Row="0" Margin="0,0,0,10" SizeChanged="Toolbar_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel x:Name="LayoutTools" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="LAYOUT" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" VerticalAlignment="Center" />
                 <ComboBox x:Name="LayoutPicker" ItemsSource="{Binding Layouts}" SelectedItem="{Binding SelectedLayout, Mode=TwoWay}"
                           DisplayMemberPath="Name" MinWidth="170" VerticalAlignment="Center"
                           AutomationProperties.Name="Layout" ToolTip="The layout shown. More arrive with Collections and Saved searches." />
             </StackPanel>
 
-            <Border Grid.Column="1" Margin="16,0,8,0" MaxWidth="520" MinWidth="240" HorizontalAlignment="Stretch"
+            <Border x:Name="SearchArea" Grid.Column="1" Margin="16,0,8,0" MaxWidth="520" MinWidth="240" HorizontalAlignment="Stretch"
                     Height="34" CornerRadius="6" BorderThickness="1" Padding="10,0,5,0"
                     Background="{DynamicResource Bg.Sunken}">
                 <Border.Style>
@@ -97,7 +105,23 @@
                 </Grid>
             </Border>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel x:Name="PanelTools" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="ArrangeButton" Click="Arrange_Click" Margin="0,0,8,0" AutomationProperties.Name="Arrange panels"
+                        ToolTip="Move panels, change their widths, hide or add them. Done keeps the changes; Revert puts back how it was.">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsArranging}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Arrange}" />
+                        <TextBlock Text="Arrange" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Button x:Name="AddPanelButton" Click="AddPanel_Click" Margin="0,0,8,0"
                         IsEnabled="{Binding CanAddPanel}" AutomationProperties.Name="Add panel"
                         ToolTip="Show a panel this layout doesn't: Saved places, or one you hid">
@@ -135,8 +159,44 @@
             </StackPanel>
         </Grid>
 
-        <!-- What the last layout action did, and anything wrong with the saved layouts, with Retry. -->
+        <!--
+            Arrange mode's bar; anything wrong with the saved layouts, with
+            Retry; and what the last layout action did, with Undo.
+        -->
         <StackPanel Grid.Row="1">
+            <Border x:Name="ArrangeBar" Margin="0,0,0,10" Padding="14,8,10,8" CornerRadius="8" Focusable="False"
+                    Background="{DynamicResource Highlight.Soft}" BorderBrush="{DynamicResource Highlight.Text}" BorderThickness="1"
+                    AutomationProperties.Name="Arrange mode">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsArranging}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <DockPanel>
+                    <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource Button.Compact}" Margin="8,0,0,0" Click="Undo_Click"
+                                IsEnabled="{Binding CanUndo}" ToolTip="{Binding UndoText}" AutomationProperties.Name="{Binding UndoText}">
+                            <TextBlock Text="Undo" />
+                        </Button>
+                        <Button Style="{StaticResource Button.Compact}" Margin="8,0,0,0" Click="Restore_Click"
+                                IsEnabled="{Binding IsModified}" Content="{Binding RestoreLabel}"
+                                ToolTip="Show the layout as it was saved. Undo brings this arrangement back." />
+                        <Button Style="{StaticResource Button.Compact}" Margin="8,0,0,0" Click="Revert_Click" Content="Revert"
+                                ToolTip="Put back the arrangement you had when you pressed Arrange" />
+                        <Button x:Name="DoneButton" Style="{StaticResource Button.Primary}" Height="28" Margin="8,0,0,0"
+                                Click="Done_Click" Content="Done" ToolTip="Keep this arrangement" />
+                    </WrapPanel>
+                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Arrange}" Margin="0,0,10,0" />
+                    <TextBlock VerticalAlignment="Center" TextWrapping="Wrap">
+                        <Run Text="Arranging" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding ActiveLayoutName, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=". Drag a panel by its handle or its right edge, or use its arrows and width. Esc cancels a drag; Ctrl+Z undoes." Foreground="{DynamicResource Text.Secondary}" />
+                    </TextBlock>
+                </DockPanel>
+            </Border>
             <Border Margin="0,0,0,10" Padding="14,8,10,8" CornerRadius="8" Focusable="False"
                     Background="{DynamicResource Bg.Raised}" BorderBrush="{DynamicResource Signal}" BorderThickness="1">
                 <Border.Style>
@@ -155,13 +215,55 @@
                     <TextBlock Text="{Binding LayoutMessage}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
             </Border>
-            <TextBlock Text="{Binding Status}" Foreground="{DynamicResource Text.Secondary}" Margin="0,0,0,8"
-                       Style="{StaticResource CollapsedWhenEmpty}" />
+            <DockPanel Margin="0,0,0,8">
+                <Button x:Name="StatusUndoButton" DockPanel.Dock="Right" Margin="12,0,0,0"
+                        Click="Undo_Click" Content="Undo" ToolTip="{Binding UndoText}" AutomationProperties.Name="{Binding UndoText}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource Button.Compact}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding CanUndo}" Value="True" />
+                                        <Condition Binding="{Binding IsArranging}" Value="False" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <!-- A polite live region: the code-behind announces each new line (M4). -->
+                <TextBlock x:Name="StatusText" Text="{Binding Status}" Foreground="{DynamicResource Text.Secondary}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                           Style="{StaticResource CollapsedWhenEmpty}" />
+            </DockPanel>
         </StackPanel>
 
-        <!-- The panels, placed by the code-behind; margins of 6 between them, so the canvas bleeds 6 each side. -->
+        <!--
+            The panels, placed by the code-behind; margins of 6 between them, so
+            the canvas bleeds 6 each side. The canvas is given the viewport's
+            height, or more when stacked panels need it, and then scrolls.
+            The overlay shows where a dragged panel would go, or its new width.
+        -->
         <Grid x:Name="CanvasArea" Grid.Row="2">
-            <Grid x:Name="PanelCanvas" Margin="-6" />
+            <ScrollViewer x:Name="CanvasScroller" Margin="-6" Focusable="False"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          SizeChanged="CanvasScroller_SizeChanged">
+                <Grid x:Name="CanvasRoot">
+                    <Grid x:Name="PanelCanvas" />
+                    <Canvas x:Name="DragOverlay" IsHitTestVisible="False">
+                        <Rectangle x:Name="DropMarker" Fill="{DynamicResource Highlight.Text}" RadiusX="2" RadiusY="2" Visibility="Collapsed" />
+                        <Border x:Name="ResizePreview" BorderThickness="2" CornerRadius="9" Visibility="Collapsed"
+                                BorderBrush="{DynamicResource Highlight.Text}" Background="{DynamicResource Highlight.Soft}">
+                            <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="10,4" CornerRadius="6"
+                                    Background="{DynamicResource Bg.Raised}" BorderBrush="{DynamicResource Highlight.Text}" BorderThickness="1">
+                                <TextBlock x:Name="ResizePreviewText" FontWeight="SemiBold" />
+                            </Border>
+                        </Border>
+                    </Canvas>
+                </Grid>
+            </ScrollViewer>
             <TextBlock x:Name="EmptyCanvasText" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource Text.Tertiary}" Margin="16,48,16,0"
                        Text="No panels are shown. Use Add panel to put one back."

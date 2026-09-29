@@ -7,8 +7,10 @@
         a click selects, the chosen period as a chip that clears it, and a
         line for each source the strip can't fully count. DataContext is the
         shared LibraryViewModel; the File shelf panel reads the same one, so
-        choosing a period here narrows the shelf. The code-behind only passes
-        clicks in.
+        choosing a period here narrows the shelf. Where the whole year doesn't
+        fit (M4), the strip gives way to one month at a larger size, with
+        arrows for the months, and the header's controls go under its title
+        and wrap. The code-behind passes clicks in and picks the view.
     -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
@@ -22,8 +24,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <DockPanel Grid.Row="0" Margin="0,0,0,5">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <DockPanel x:Name="Header" Grid.Row="0" Margin="0,0,0,5">
+                <WrapPanel x:Name="HeaderControls" DockPanel.Dock="Right" Orientation="Horizontal">
                     <Border Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28" Padding="12,0,3,0" Margin="0,0,10,0"
                             Visibility="{Binding HasPeriod, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel Orientation="Horizontal">
@@ -51,23 +53,37 @@
                             </StackPanel>
                         </Border>
                     </GroupBox>
-                    <Button Style="{StaticResource Button.IconOnlyCompact}"
-                            ToolTip="Previous year" AutomationProperties.Name="Previous year" Click="PreviousYear_Click">
-                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronLeft}" />
-                    </Button>
-                    <TextBlock Text="{Binding CalendarYearLabel}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0" />
-                    <Button Style="{StaticResource Button.IconOnlyCompact}"
-                            ToolTip="Next year" AutomationProperties.Name="Next year" Click="NextYear_Click">
-                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronRight}" />
-                    </Button>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="YEAR ACTIVITY" Style="{StaticResource TextBlock.Caps}" Margin="0,0,12,0" />
+                    <StackPanel x:Name="YearNav" Orientation="Horizontal">
+                        <Button Style="{StaticResource Button.IconOnlyCompact}"
+                                ToolTip="Previous year" AutomationProperties.Name="Previous year" Click="PreviousYear_Click">
+                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronLeft}" />
+                        </Button>
+                        <TextBlock Text="{Binding CalendarYearLabel}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0" />
+                        <Button Style="{StaticResource Button.IconOnlyCompact}"
+                                ToolTip="Next year" AutomationProperties.Name="Next year" Click="NextYear_Click">
+                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronRight}" />
+                        </Button>
+                    </StackPanel>
+                    <StackPanel x:Name="MonthNav" Orientation="Horizontal" Visibility="Collapsed">
+                        <Button Style="{StaticResource Button.IconOnlyCompact}" IsEnabled="{Binding CanShowPreviousMonth}"
+                                ToolTip="Previous month" AutomationProperties.Name="Previous month" Click="PreviousMonth_Click">
+                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronLeft}" />
+                        </Button>
+                        <TextBlock Text="{Binding CalendarMonthLabel}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0"
+                                   MinWidth="110" TextAlignment="Center" />
+                        <Button Style="{StaticResource Button.IconOnlyCompact}" IsEnabled="{Binding CanShowNextMonth}"
+                                ToolTip="Next month" AutomationProperties.Name="Next month" Click="NextMonth_Click">
+                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronRight}" />
+                        </Button>
+                    </StackPanel>
+                </WrapPanel>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="YEAR ACTIVITY" Style="{StaticResource TextBlock.Caps}" Margin="0,0,12,0" />
                     <TextBlock Text="{Binding CalendarCaption}" Foreground="{DynamicResource Text.Secondary}" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                </StackPanel>
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding CalendarCaption}" />
+                </DockPanel>
             </DockPanel>
-            <DockPanel Grid.Row="1" HorizontalAlignment="Center">
+            <DockPanel x:Name="YearView" Grid.Row="1" HorizontalAlignment="Center">
                 <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding CalendarWeekdayLabels}" Margin="0,19,7,0" Focusable="False">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -113,6 +129,37 @@
                         </ItemsControl>
                     </Grid>
                 </ScrollViewer>
+            </DockPanel>
+            <!-- The month view: the same cells as the strip, one month, half as large again. -->
+            <DockPanel x:Name="MonthView" Grid.Row="1" HorizontalAlignment="Center" Margin="0,4,0,4" Visibility="Collapsed">
+                <DockPanel.LayoutTransform>
+                    <ScaleTransform ScaleX="1.5" ScaleY="1.5" />
+                </DockPanel.LayoutTransform>
+                <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding CalendarWeekdayLabels}" Margin="0,0,5,0" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" Height="14" FontSize="9" Foreground="{DynamicResource Text.Secondary}"
+                                       VerticalAlignment="Center" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding CalendarMonthWeeks}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding Days}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource Button.CalendarDay}" ToolTip="{Binding Label}"
+                                                AutomationProperties.Name="{Binding Label}" Click="CalendarDay_Click" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </DockPanel>
             <!-- D5: what the strip can't count, never shown as zero. -->
             <TextBlock Grid.Row="2" Text="{Binding CoverageNotesText}" Style="{StaticResource CollapsedWhenEmpty}"

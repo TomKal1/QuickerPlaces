@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -14,16 +15,25 @@ using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views.Panels;
 
 namespace QuickerPlaces.Views;
 
 /// <summary>
-/// The workspace's view (configurable canvas plan M3). Builds each panel
-/// once and places it on the twelve-column canvas where
-/// <see cref="WorkspaceViewModel.Panels"/> says, so a layout change moves
-/// panels without recreating them (their selection and scroll survive).
+/// The workspace's view (configurable canvas plan M3, M4). Builds each panel
+/// once, in a <see cref="PanelFrame"/>, and places it on the twelve-column
+/// canvas where <see cref="WorkspaceViewModel.Panels"/> says; frames stay on
+/// the canvas (a hidden panel's is collapsed), so moving, resizing or hiding
+/// a panel keeps its selection, scroll and keyboard focus.
+///
+/// Arrange mode's pointer work is here: dragging a panel's handle shows
+/// where it would go and drops it as one move, dragging its edge shows the
+/// width it snaps to and sets it once, and Esc cancels either. Nothing is
+/// written while dragging. The canvas's width goes to
+/// <see cref="WorkspaceViewModel.Reflow"/>, and its height grows past the
+/// window, with a scroll bar, when stacked panels need it.
 ///
 /// Also the glue the view model can't hold without WPF: the toolbar search
 /// box's keys, the menus, Recent Files read when the workspace opens and
@@ -37,7 +47,14 @@ public partial class WorkspaceView : UserControl
     /// <summary>The pause after the last query change before it is written (plan §4: debounce search and filter changes).</summary>
     private static readonly TimeSpan FlushDelay = TimeSpan.FromSeconds(2);
 
-    private readonly Dictionary<string, FrameworkElement> _frames = new();
+    /// <summary>A canvas row that shares the height is never shorter than this.</summary>
+    private const double MinRowHeight = 220;
+
+    /// <summary>How near the canvas's top or bottom edge a drag scrolls it, and by how much per move.</summary>
+    private const double AutoScrollMargin = 40;
+    private const double AutoScrollStep = 18;
+
+    private readonly Dictionary<string, PanelFrame> _frames = new();
     private readonly DispatcherTimer _flushTimer;
     private WorkspaceViewModel? _workspace;
     private MainViewModel? _places;
@@ -49,10 +66,19 @@ public partial class WorkspaceView : UserControl
     private SessionsPanel? _sessionsPanel;
     private bool _reloadQueued;
     private bool _loadedOnce;
+    private PanelFrame? _moveFrame;
+    private string? _dropTargetId;
+    private bool _dropAfter;
+    private PanelFrame? _resizeFrame;
+    private int _resizeSpan;
+    private Window? _escapeWindow;
 
     public WorkspaceView()
     {
         InitializeComponent();
+        for (var i = 0; i < PanelSpans.Columns; i++)
+            PanelCanvas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        PreviewKeyDown += WorkspaceView_PreviewKeyDown;
         _flushTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = FlushDelay };
         _flushTimer.Tick += (_, _) =>
         {
@@ -108,10 +134,17 @@ public partial class WorkspaceView : UserControl
         });
     }
 
-    /// <summary>At window close: writes a waiting query change and stops listening to the tracking hosts.</summary>
+    /// <summary>
+    /// At window close: keeps an arrangement in progress (as switching
+    /// layouts does), writes a waiting query change and stops listening to
+    /// the tracking hosts.
+    /// </summary>
     public void Close()
     {
         _flushTimer.Stop();
+        _moveFrame?.CancelDrag();
+        _resizeFrame?.CancelDrag();
+        _workspace?.Done();
         if (_workspace is { HasUnsavedChanges: true } workspace)
         {
             var persistence = workspace.FlushPending();
@@ -149,9 +182,32 @@ public partial class WorkspaceView : UserControl
 
     private void Workspace_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // Searching a hidden workspace would be pointless: bring it back, as list mode does.
-        if (e.PropertyName == nameof(WorkspaceViewModel.SearchText) && _workspace is { IsSearching: true } && _places is { IsGridExpanded: false } places)
-            places.IsGridExpanded = true;
+        switch (e.PropertyName)
+        {
+            // Searching a hidden workspace would be pointless: bring it back, as list mode does.
+            case nameof(WorkspaceViewModel.SearchText) when _workspace is { IsSearching: true } && _places is { IsGridExpanded: false } places:
+                places.IsGridExpanded = true;
+                break;
+
+            case nameof(WorkspaceViewModel.Status):
+                // After the binding has updated the text: then a screen reader reads the new line.
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, AnnounceStatus);
+                break;
+
+            case nameof(WorkspaceViewModel.IsArranging):
+                UpdateFrames();
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, FitToolbar);
+                break;
+        }
+    }
+
+    private void AnnounceStatus()
+    {
+        if (string.IsNullOrEmpty(StatusText.Text))
+            return;
+
+        var peer = UIElementAutomationPeer.FromElement(StatusText) ?? UIElementAutomationPeer.CreatePeerForElement(StatusText);
+        peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
 
     private void Places_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -174,79 +230,390 @@ public partial class WorkspaceView : UserControl
     /// <summary>
     /// Places every shown panel: twelve equal columns, one grid row per
     /// canvas row. A row holding only the year strip takes its own height;
-    /// any other row shares what is left. Panels are made once and moved.
+    /// any other row shares what is left, never below <see cref="MinRowHeight"/>.
+    /// Panels are made once; a hidden one's frame is collapsed, not removed.
     /// </summary>
     private void BuildCanvas()
     {
         if (_workspace is null)
             return;
 
-        foreach (var frame in _frames.Values)
-            PanelCanvas.Children.Remove(frame);
         PanelCanvas.RowDefinitions.Clear();
-        PanelCanvas.ColumnDefinitions.Clear();
-
-        for (var i = 0; i < PanelSpans.Columns; i++)
-            PanelCanvas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
         foreach (var row in _workspace.Panels.GroupBy(p => p.Row).OrderBy(g => g.Key))
         {
             var fitsContent = row.All(p => p.Type == PanelTypes.Activity);
             PanelCanvas.RowDefinitions.Add(fitsContent
                 ? new RowDefinition { Height = GridLength.Auto }
-                : new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 220 });
+                : new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = MinRowHeight });
         }
 
+        var shown = new HashSet<string>(StringComparer.Ordinal);
         foreach (var panel in _workspace.Panels)
         {
             if (!_frames.TryGetValue(panel.Id, out var frame))
             {
                 frame = CreateFrame(panel);
                 _frames[panel.Id] = frame;
+                PanelCanvas.Children.Add(frame);
             }
 
             Grid.SetRow(frame, panel.Row);
             Grid.SetColumn(frame, panel.Column);
             Grid.SetColumnSpan(frame, panel.Span);
-            PanelCanvas.Children.Add(frame);
+            frame.Visibility = Visibility.Visible;
+            shown.Add(panel.Id);
         }
 
+        foreach (var (id, frame) in _frames)
+        {
+            if (shown.Contains(id))
+                continue;
+
+            // Keeps whatever the panel holds for when it comes back.
+            frame.Visibility = Visibility.Collapsed;
+            Grid.SetRow(frame, 0);
+            Grid.SetColumn(frame, 0);
+            Grid.SetColumnSpan(frame, 1);
+        }
+
+        UpdateFrames();
         EmptyCanvasText.Visibility = _workspace.HasPanels ? Visibility.Collapsed : Visibility.Visible;
+        FitCanvasHeight();
     }
 
-    /// <summary>A panel with its title and Hide button above it.</summary>
-    private FrameworkElement CreateFrame(WorkspacePanelViewModel panel)
+    /// <summary>Each frame's title, arrows and width choice, and Arrange mode's controls on or off.</summary>
+    private void UpdateFrames()
     {
-        var hide = new Button
+        if (_workspace is null)
+            return;
+
+        foreach (var panel in _workspace.Panels)
         {
-            Style = (Style)FindResource("Button.IconOnlyCompact"),
-            Width = 24,
-            Height = 24,
-            ToolTip = $"Hide {panel.Title}. Add panel brings it back.",
-            Content = new Viewbox
-            {
-                Width = 10,
-                Height = 10,
-                Child = new System.Windows.Shapes.Path { Style = (Style)FindResource("Icon"), Data = (System.Windows.Media.Geometry)FindResource("Icon.Close") },
-            },
-        };
-        AutomationProperties.SetName(hide, $"Hide {panel.Title}");
-        var id = panel.Id;
-        hide.Click += (_, _) => _workspace?.HidePanel(id);
+            if (_frames.TryGetValue(panel.Id, out var frame))
+                frame.Update(panel, _workspace.IsArranging);
+        }
+    }
 
-        var title = new TextBlock { Text = panel.Title.ToUpperInvariant(), Style = (Style)FindResource("TextBlock.Caps"), VerticalAlignment = VerticalAlignment.Center };
-        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 6), LastChildFill = true };
-        DockPanel.SetDock(hide, Dock.Right);
-        header.Children.Add(hide);
-        header.Children.Add(title);
+    private PanelFrame CreateFrame(WorkspacePanelViewModel panel)
+    {
+        var frame = new PanelFrame(panel, CreateContent(panel));
+        frame.HideRequested += HidePanel;
+        frame.MoveEarlierRequested += f => _workspace?.MoveEarlier(f.PanelId);
+        frame.MoveLaterRequested += f => _workspace?.MoveLater(f.PanelId);
+        frame.SpanRequested += (f, span) => _workspace?.SetSpan(f.PanelId, span);
+        frame.MoveDragStarted += MoveDragStarted;
+        frame.MoveDragMoved += MoveDragMoved;
+        frame.MoveDragEnded += MoveDragEnded;
+        frame.ResizeDragStarted += ResizeDragStarted;
+        frame.ResizeDragMoved += ResizeDragMoved;
+        frame.ResizeDragEnded += ResizeDragEnded;
 
-        var content = CreateContent(panel);
-        var frame = new DockPanel { Margin = new Thickness(6) };
-        DockPanel.SetDock(header, Dock.Top);
-        frame.Children.Add(header);
-        frame.Children.Add(content);
-        AutomationProperties.SetName(frame, panel.Title);
+        // A row sized to the year strip changes height with it (a coverage line, the month view).
+        frame.SizeChanged += (_, _) => FitCanvasHeight();
         return frame;
+    }
+
+    /// <summary>Hides a panel. Its frame collapses, taking the focus with it, so the focus goes to Undo (or, arranging, to Done).</summary>
+    private void HidePanel(PanelFrame frame)
+    {
+        if (_workspace is null || !_workspace.HidePanel(frame.PanelId))
+            return;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+        {
+            if (_workspace.IsArranging)
+                DoneButton.Focus();
+            else if (StatusUndoButton.IsVisible)
+                StatusUndoButton.Focus();
+            else
+                ArrangeButton.Focus();
+        });
+    }
+
+    private void CanvasScroller_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // The scroll viewer's full width, not its viewport's: a scroll bar
+        // appearing must not reflow the panels, or it could come and go forever.
+        if (e.WidthChanged)
+            _workspace?.Reflow(CanvasScroller.ActualWidth);
+        FitCanvasHeight();
+    }
+
+    /// <summary>
+    /// The canvas's height: the window's, or more when the rows' least
+    /// heights add up to more, and the canvas then scrolls. Shared rows get
+    /// a real height to share, so the lists in them stay virtualized.
+    /// </summary>
+    private void FitCanvasHeight()
+    {
+        var needed = 0.0;
+        for (var row = 0; row < PanelCanvas.RowDefinitions.Count; row++)
+        {
+            var definition = PanelCanvas.RowDefinitions[row];
+            if (!definition.Height.IsAuto)
+            {
+                needed += definition.MinHeight;
+                continue;
+            }
+
+            needed += _frames.Values
+                .Where(f => f.Visibility == Visibility.Visible && Grid.GetRow(f) == row)
+                .Select(f => f.DesiredSize.Height)
+                .DefaultIfEmpty(0)
+                .Max();
+        }
+
+        var height = Math.Max(CanvasScroller.ActualHeight, needed);
+        if (double.IsNaN(PanelCanvas.Height) || Math.Abs(PanelCanvas.Height - height) >= 0.5)
+            PanelCanvas.Height = height;
+    }
+
+    /// <summary>The frames shown, with their places on the canvas.</summary>
+    private IEnumerable<(PanelFrame Frame, Rect Bounds)> ShownFrames()
+    {
+        foreach (var frame in _frames.Values)
+        {
+            if (frame.Visibility != Visibility.Visible || !frame.IsLoaded)
+                continue;
+            yield return (frame, frame.TransformToAncestor(PanelCanvas).TransformBounds(new Rect(frame.RenderSize)));
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Arrange mode: dragging (D1)
+    // -----------------------------------------------------------------
+
+    private void MoveDragStarted(PanelFrame frame)
+    {
+        _moveFrame = frame;
+        _dropTargetId = null;
+        frame.Opacity = 0.55;
+        WatchEscape();
+    }
+
+    /// <summary>
+    /// Shows where the dragged panel would go: before or after the panel
+    /// nearest the pointer — above or below a full-width one, left or right
+    /// of any other. Nothing is shown where it would not move.
+    /// </summary>
+    private void MoveDragMoved(PanelFrame frame)
+    {
+        if (_workspace is null || _moveFrame != frame)
+            return;
+
+        ScrollNearEdge();
+        var pointer = Mouse.GetPosition(PanelCanvas);
+        var nearest = ShownFrames().OrderBy(f => Distance(f.Bounds, pointer)).FirstOrDefault();
+        if (nearest.Frame is null)
+        {
+            HideDropMarker();
+            return;
+        }
+
+        var bounds = nearest.Bounds;
+        var fullWidth = nearest.Frame.Panel.Span == PanelSpans.Columns;
+        var after = fullWidth ? pointer.Y > bounds.Top + bounds.Height / 2 : pointer.X > bounds.Left + bounds.Width / 2;
+        if (PanelLayoutEngine.Drop(_workspace.Panels.Select(p => p.Placement).ToList(), frame.PanelId, nearest.Frame.PanelId, after) is null)
+        {
+            HideDropMarker();
+            return;
+        }
+
+        _dropTargetId = nearest.Frame.PanelId;
+        _dropAfter = after;
+
+        // In the gap between panels: each frame's margin is half of it.
+        var inset = PanelLayoutEngine.Gap / 2;
+        if (fullWidth)
+        {
+            DropMarker.Width = Math.Max(0, bounds.Width - PanelLayoutEngine.Gap);
+            DropMarker.Height = 4;
+            Canvas.SetLeft(DropMarker, bounds.Left + inset);
+            Canvas.SetTop(DropMarker, (after ? bounds.Bottom - inset : bounds.Top + inset) - 2);
+        }
+        else
+        {
+            DropMarker.Width = 4;
+            DropMarker.Height = Math.Max(0, bounds.Height - PanelLayoutEngine.Gap);
+            Canvas.SetLeft(DropMarker, (after ? bounds.Right - inset : bounds.Left + inset) - 2);
+            Canvas.SetTop(DropMarker, bounds.Top + inset);
+        }
+
+        DropMarker.Visibility = Visibility.Visible;
+    }
+
+    private void MoveDragEnded(PanelFrame frame, bool cancelled)
+    {
+        var target = _dropTargetId;
+        frame.Opacity = 1;
+        HideDropMarker();
+        _moveFrame = null;
+        _dropTargetId = null;
+        StopWatchingEscape();
+
+        if (cancelled)
+            _workspace?.DragCancelled();
+        else if (target is not null)
+            _workspace?.Drop(frame.PanelId, target, _dropAfter);
+    }
+
+    private void HideDropMarker()
+    {
+        _dropTargetId = null;
+        DropMarker.Visibility = Visibility.Collapsed;
+    }
+
+    private void ResizeDragStarted(PanelFrame frame)
+    {
+        _resizeFrame = frame;
+        _resizeSpan = frame.Panel.StoredSpan;
+        WatchEscape();
+        ResizeDragMoved(frame);
+    }
+
+    /// <summary>Shows the allowed width nearest the pointer, over the panel, named.</summary>
+    private void ResizeDragMoved(PanelFrame frame)
+    {
+        if (_resizeFrame != frame || PanelCanvas.ActualWidth <= 0)
+            return;
+
+        var bounds = frame.TransformToAncestor(PanelCanvas).TransformBounds(new Rect(frame.RenderSize));
+        var pointer = Mouse.GetPosition(PanelCanvas);
+        _resizeSpan = PanelLayoutEngine.SpanForWidth(Math.Max(0, pointer.X - bounds.Left), PanelCanvas.ActualWidth);
+
+        // A width that no longer fits beside the panels before it moves to the
+        // next row when kept; the preview stays on this one, up to its end.
+        var width = Math.Min(_resizeSpan * PanelCanvas.ActualWidth / PanelSpans.Columns, PanelCanvas.ActualWidth - bounds.Left);
+        var inset = PanelLayoutEngine.Gap / 2;
+        ResizePreview.Width = Math.Max(0, width - PanelLayoutEngine.Gap);
+        ResizePreview.Height = Math.Max(0, bounds.Height - PanelLayoutEngine.Gap);
+        Canvas.SetLeft(ResizePreview, bounds.Left + inset);
+        Canvas.SetTop(ResizePreview, bounds.Top + inset);
+        var name = PanelSpans.DisplayName(_resizeSpan);
+        ResizePreviewText.Text = char.ToUpperInvariant(name[0]) + name[1..];
+        ResizePreview.Visibility = Visibility.Visible;
+    }
+
+    private void ResizeDragEnded(PanelFrame frame, bool cancelled)
+    {
+        ResizePreview.Visibility = Visibility.Collapsed;
+        _resizeFrame = null;
+        StopWatchingEscape();
+
+        if (cancelled)
+            _workspace?.DragCancelled();
+        else if (_resizeSpan != frame.Panel.StoredSpan)
+            _workspace?.SetSpan(frame.PanelId, _resizeSpan);
+    }
+
+    /// <summary>Esc cancels a drag wherever the keyboard focus is: the handle being dragged never has it.</summary>
+    private void WatchEscape()
+    {
+        if (_escapeWindow is not null || Window.GetWindow(this) is not { } window)
+            return;
+        _escapeWindow = window;
+        window.PreviewKeyDown += Window_PreviewKeyDownWhileDragging;
+    }
+
+    private void StopWatchingEscape()
+    {
+        if (_moveFrame is not null || _resizeFrame is not null || _escapeWindow is null)
+            return;
+        _escapeWindow.PreviewKeyDown -= Window_PreviewKeyDownWhileDragging;
+        _escapeWindow = null;
+    }
+
+    private void Window_PreviewKeyDownWhileDragging(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+            return;
+
+        _moveFrame?.CancelDrag();
+        _resizeFrame?.CancelDrag();
+        e.Handled = true;
+    }
+
+    /// <summary>Scrolls the canvas while a panel is dragged near its top or bottom, so any place can be reached.</summary>
+    private void ScrollNearEdge()
+    {
+        var y = Mouse.GetPosition(CanvasScroller).Y;
+        if (y < AutoScrollMargin)
+            CanvasScroller.ScrollToVerticalOffset(CanvasScroller.VerticalOffset - AutoScrollStep);
+        else if (y > CanvasScroller.ActualHeight - AutoScrollMargin)
+            CanvasScroller.ScrollToVerticalOffset(CanvasScroller.VerticalOffset + AutoScrollStep);
+    }
+
+    private static double Distance(Rect bounds, Point point)
+    {
+        var dx = Math.Max(Math.Max(bounds.Left - point.X, 0), point.X - bounds.Right);
+        var dy = Math.Max(Math.Max(bounds.Top - point.Y, 0), point.Y - bounds.Bottom);
+        return Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    // -----------------------------------------------------------------
+    // Arrange mode: the toolbar and bar
+    // -----------------------------------------------------------------
+
+    private void Arrange_Click(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is null)
+            return;
+
+        if (_places is { IsGridExpanded: false } places)
+            places.IsGridExpanded = true;
+        _workspace.BeginArrange();
+
+        // The Arrange button is gone now: the keyboard goes to the bar's Done.
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => DoneButton.Focus());
+    }
+
+    private void Done_Click(object sender, RoutedEventArgs e)
+    {
+        _workspace?.Done();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => ArrangeButton.Focus());
+    }
+
+    private void Revert_Click(object sender, RoutedEventArgs e)
+    {
+        _workspace?.Revert();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => ArrangeButton.Focus());
+    }
+
+    private void Restore_Click(object sender, RoutedEventArgs e) => _workspace?.RestoreSaved();
+
+    private void Undo_Click(object sender, RoutedEventArgs e) => _workspace?.Undo();
+
+    /// <summary>Ctrl+Z in Arrange mode undoes the last step, unless a text box has the focus: there it undoes typing.</summary>
+    private void WorkspaceView_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control && _workspace is { IsArranging: true } workspace &&
+            Keyboard.FocusedElement is not TextBox)
+        {
+            workspace.Undo();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// The search box moves to a row of its own when the layout picker, the
+    /// box at its least width and the buttons don't fit on one line — with
+    /// large text, or a narrow window — so no button is pushed off the edge.
+    /// </summary>
+    private void Toolbar_SizeChanged(object sender, SizeChangedEventArgs e) => FitToolbar();
+
+    private void FitToolbar()
+    {
+        var margins = SearchArea.Margin.Left + SearchArea.Margin.Right;
+        var needed = LayoutTools.DesiredSize.Width + SearchArea.MinWidth + margins + PanelTools.DesiredSize.Width;
+        var ownRow = Toolbar.ActualWidth > 0 && Toolbar.ActualWidth < needed;
+        if (ownRow == (Grid.GetRow(SearchArea) == 1))
+            return;
+
+        Grid.SetRow(SearchArea, ownRow ? 1 : 0);
+        Grid.SetColumn(SearchArea, ownRow ? 0 : 1);
+        Grid.SetColumnSpan(SearchArea, ownRow ? 3 : 1);
+        SearchArea.Margin = ownRow ? new Thickness(0, 10, 0, 0) : new Thickness(16, 0, 8, 0);
+        SearchArea.MaxWidth = ownRow ? double.PositiveInfinity : 520;
     }
 
     private FrameworkElement CreateContent(WorkspacePanelViewModel panel)

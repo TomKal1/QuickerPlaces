@@ -285,6 +285,9 @@ public sealed class WorkspaceViewModel : ObservableObject
         RebuildPanels();
     }
 
+    /// <summary>A drag ended with Esc: nothing moved or changed width, and the line says so.</summary>
+    public void DragCancelled() => Status = "Cancelled. Nothing moved.";
+
     /// <summary>Undoes the last arrangement step: a draft edit in Arrange mode, or a Hide, Add panel or Restore outside it.</summary>
     public void Undo()
     {
