@@ -99,9 +99,7 @@ public sealed class SessionStore
     /// <summary>Builds the store over sessions.json beside places.json, in roaming application data.</summary>
     public static SessionStore CreateDefault()
     {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            AppInfo.Publisher, AppInfo.Name);
-        return new SessionStore(new FilePlacesStorage(folder, "sessions.json"), TimeProvider.System);
+        return new SessionStore(new FilePlacesStorage(AppDataFolders.Roaming, "sessions.json"), TimeProvider.System);
     }
 
     /// <summary>What happened when sessions.json was loaded (the same classification as places.json, Phase 1 D6).</summary>

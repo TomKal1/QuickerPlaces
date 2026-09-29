@@ -27,7 +27,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Before anything reads or writes a file, the log included: with
+        // --data-root every store lives under that folder instead.
+        var options = StartupOptions.Parse(e.Args);
+        AppDataFolders.UseRoot(options.DataRoot);
+
         DiagnosticLog.Info($"{AppInfo.Name} starting.");
+        if (AppDataFolders.Root is { } dataRoot)
+            DiagnosticLog.Info($"Using the data folder given on the command line: {dataRoot}");
+        foreach (var problem in options.Problems)
+            DiagnosticLog.Warn($"Command line: {problem}");
 
         // Plan 5.6: the single-instance gate runs before any service is
         // constructed — before SettingsService, before PlacesService.
@@ -36,7 +45,7 @@ public partial class App : Application
         // anything PlacesService or SettingsService do themselves, only
         // by this method never reaching their constructors when this
         // isn't the first instance.
-        var singleInstance = SingleInstance.TryStart();
+        var singleInstance = SingleInstance.TryStart(AppDataFolders.InstanceScope(AppDataFolders.Root));
         if (singleInstance is null)
         {
             // TryStart has already signalled the running instance and
@@ -133,8 +142,7 @@ public partial class App : Application
             singleInstance.Dispose();
         };
 
-        if (settings.StartWithWindows && Array.Exists(e.Args,
-                arg => string.Equals(arg, "--tray", StringComparison.OrdinalIgnoreCase)))
+        if (settings.StartWithWindows && options.Tray)
         {
             var firstLoad = true;
             mainWindow.Loaded += (_, _) =>

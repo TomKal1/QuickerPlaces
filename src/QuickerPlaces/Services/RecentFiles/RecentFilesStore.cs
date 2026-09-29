@@ -111,9 +111,7 @@ public sealed class RecentFilesStore
     /// <summary>recent-files.json in %LocalAppData%, beside activity.json: machine-local, like folder tracking.</summary>
     public static RecentFilesStore CreateDefault()
     {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            AppInfo.Publisher, AppInfo.Name);
-        return new RecentFilesStore(new FilePlacesStorage(folder, "recent-files.json"), TimeProvider.System);
+        return new RecentFilesStore(new FilePlacesStorage(AppDataFolders.Local, "recent-files.json"), TimeProvider.System);
     }
 
     public StoreLoadOutcome LoadOutcome { get; }

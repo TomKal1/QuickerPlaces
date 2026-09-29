@@ -105,12 +105,7 @@ public sealed class WorkspaceStore
     }
 
     /// <summary>Builds the store over workspace-layouts.json in %LocalAppData%, beside settings.json.</summary>
-    public static WorkspaceStore CreateDefault()
-    {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            AppInfo.Publisher, AppInfo.Name);
-        return CreateIn(folder, TimeProvider.System);
-    }
+    public static WorkspaceStore CreateDefault() => CreateIn(AppDataFolders.Local, TimeProvider.System);
 
     /// <summary>Builds the store over workspace-layouts.json in <paramref name="folder"/>, with its backup file.</summary>
     public static WorkspaceStore CreateIn(string folder, TimeProvider timeProvider)

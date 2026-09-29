@@ -12,6 +12,16 @@ public static class StartupRegistration
     public static bool TryApply(bool enabled, out string? error)
     {
         error = null;
+
+        // A copy on test data (--data-root) never touches the Run entry: its
+        // settings are not the everyday copy's, and reconciling them would
+        // remove or repoint the real one.
+        if (AppDataFolders.Root is not null)
+        {
+            DiagnosticLog.Info("Windows startup left unchanged: running on a separate data folder.");
+            return true;
+        }
+
         try
         {
             if (enabled)
