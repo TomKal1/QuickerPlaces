@@ -18,15 +18,17 @@ public partial class MainWindow : Window
     private readonly SettingsService _settingsService;
     private readonly ActivityStore _activityStore;
     private readonly ActivityTrackingHost _activityHost;
+    private readonly ThemeManager _themeManager;
     private TrayIcon? _trayIcon;
     private bool _exitRequested;
+    private bool _closed;
     private GlobalHotkey? _globalHotkey;
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
     private Point _bubbleDragStartPoint;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
-        ActivityStore activityStore, ActivityTrackingHost activityHost)
+        ActivityStore activityStore, ActivityTrackingHost activityHost, ThemeManager themeManager)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -34,6 +36,7 @@ public partial class MainWindow : Window
         _settingsService = settingsService;
         _activityStore = activityStore;
         _activityHost = activityHost;
+        _themeManager = themeManager;
         RestoreWindowState(settings);
         UpdateActivityIndicator();
     }
@@ -135,34 +138,59 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        OptionsButton.ContextMenu.IsOpen = false;
         // Paused while the dialog is open: otherwise pressing the current
         // hotkey in the capture box would fire it instead of recording it.
         ApplyGlobalHotkey(null);
 
         var saved = SettingsDialog.Show(this, _settings.GlobalHotkey,
-            _settings.MinimizeToTray, _settings.StartWithWindows, ApplySettingsChoice);
+            _settings.MinimizeToTray, _settings.StartWithWindows,
+            ThemePreference.ParseTheme(_settings.Theme), ThemePreference.ParseHighlight(_settings.Highlight),
+            _themeManager.Apply, ApplySettingsChoice);
         if (saved is null)
         {
-            // Cancelled: put back what was there. If that fails again, it
-            // was already failing before (and reported at startup).
+            // The app is exiting (tray Exit, session end) and closed this
+            // window under the dialog: nothing to put back, and registering
+            // a hotkey or swapping the palette now would throw.
+            if (_closed || Dispatcher.HasShutdownStarted)
+                return;
+
+            // Cancelled (Cancel, Esc or the title bar's close button): put
+            // back what was there, including any previewed appearance. If
+            // the hotkey fails again, it was already failing before (and
+            // reported at startup).
             ApplyGlobalHotkey(_settings.GlobalHotkey);
-            return;
+            _themeManager.Apply(ThemePreference.ParseTheme(_settings.Theme), ThemePreference.ParseHighlight(_settings.Highlight));
         }
     }
 
     private string? ApplySettingsChoice(SettingsChoice choice)
     {
+        // Appearance first (already previewed, so usually a no-op): if it
+        // fails, nothing else has changed yet.
+        try
+        {
+            _themeManager.Apply(choice.Theme, choice.Highlight);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Warn($"Could not apply the appearance choice ({ex.GetType().Name}, 0x{ex.HResult:X8}).");
+            return "Couldn't change the appearance. Try a different theme or highlight colour.";
+        }
+
         var error = ApplyGlobalHotkey(choice.Hotkey);
         if (error is not null) return error;
         if (!StartupRegistration.TryApply(choice.StartWithWindows, out error))
         {
-            ApplyGlobalHotkey(_settings.GlobalHotkey);
+            // The dialog is still open, so leave the hotkey unregistered;
+            // Cancel or a successful Save registers the right one.
+            ApplyGlobalHotkey(null);
             return error;
         }
         _settings.GlobalHotkey = choice.Hotkey;
         _settings.MinimizeToTray = choice.MinimizeToTray;
         _settings.StartWithWindows = choice.StartWithWindows;
+        _settings.Theme = ThemePreference.Format(choice.Theme);
+        _settings.Highlight = ThemePreference.Format(choice.Highlight);
         PersistWindowState(_settings);
         _settingsService.Save(_settings);
         _trayIcon?.Refresh(_settings);
@@ -183,6 +211,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _closed = true;
         _globalHotkey?.Dispose();
         _globalHotkey = null;
         _trayIcon?.Dispose();
@@ -252,7 +281,7 @@ public partial class MainWindow : Window
         {
             MessageForm.Show(
                 $"The shortcut for bringing QuickerPlaces to the front isn't active.\n\n{_globalHotkeyError}\n\n" +
-                "To choose a different one, or turn it off, open Options next to Hide List and choose Settings.",
+                "To choose a different one, or turn it off, open Options next to Hide list and choose Settings.",
                 AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         }
     }

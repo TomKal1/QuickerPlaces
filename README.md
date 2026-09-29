@@ -1,17 +1,17 @@
 # QuickerPlaces
 
-A lightweight Windows desktop utility for storing and quickly opening remembered "places" — folder paths and URLs — under a memorable alias. Part of the **QuickerLinks** project: a better path launcher than Quick Links.
+A lightweight Windows desktop utility for storing and quickly opening remembered "places" — folders and links — under a memorable name. Part of the **QuickerLinks** project: a better path launcher than Quick Links.
 
-> **Status:** early build. The features (search, hotkey, undo, copy, settings and the rest) have had a hands-on pass on Windows. Phase 1 of the [roadmap](ai/260901_Professional%20Improvements%20Plan.md) (persistence reliability and recovery: failed saves are reported with a Retry banner, a damaged or unreadable store is handled safely, and only one instance runs at a time) is merged in, and so is Phase 2 (a seven-day Recently Deleted: Remove no longer asks, and removed places can be restored for a week). Both were checked by hand on Windows, apart from their failure paths, which were accepted as untested. So is Phase 3 (Last Opened and Opens columns, a remembered sort, and a clickable favourite star), which has been used on Windows. So is Phase 9: opt-in tracking of the folders you open in File Explorer, under **Recents**, with Week, Month and Day views, a year strip, and optional tray and sign-in coverage. It has been used on Windows; some of its live checks were judged not needed and are recorded as not done. Everything builds with no warnings and all 547 automated tests pass. Next is Phase 4, general file support. See `ai/BUILD_SUMMARY.md` for the checklists, and the roadmap's §1.1 for the order of work.
+> **Status:** early build. The features (search, hotkey, undo, copy, settings and the rest) have had a hands-on pass on Windows. Phase 1 of the [roadmap](ai/260901_Professional%20Improvements%20Plan.md) (persistence reliability and recovery: failed saves are reported with a Retry banner, a damaged or unreadable store is handled safely, and only one instance runs at a time) is merged in, and so is Phase 2 (a seven-day Recently Deleted: Remove no longer asks, and removed places can be restored for a week). Both were checked by hand on Windows, apart from their failure paths, which were accepted as untested. So is Phase 3 (Last Opened and Opens columns, a remembered sort, and a clickable favourite star), which has been used on Windows. So is Phase 9: opt-in tracking of the folders you open in File Explorer, under **Recents**, with Week, Month and Day views, a year strip, and optional tray and sign-in coverage. It has been used on Windows; some of its live checks were judged not needed and are recorded as not done. So is a UI refresh (the Saab 900 look: Dark, Light and Match Windows themes, a choice of highlight colour, new fonts, icons and app icon), which has been tried on Windows; see [its hand-off](ai/260927_UI%20Refresh%20Handoff.md). Everything builds with no warnings and all 643 automated tests pass. Next is Phase 4, general file support. See `ai/BUILD_SUMMARY.md` for the checklists, and the roadmap's §1.1 for the order of work.
 
 ## What it does
 
-- Save a folder path or a URL under a unique **alias**, with validation that blocks duplicate aliases and duplicate paths/URLs before they're saved.
-- Browse everything in a sortable grid — right-click a row for **Open**, **Copy Path/URL**, **Rename Alias**, **Edit Path/URL**, **Toggle Favourite**, or **Remove**; double-click to open. Removed something by mistake? **Undo** (or Ctrl+Z) puts it back, and **Recently Deleted** keeps it for seven days.
-- **Search** the grid as you type, by alias or path/URL. Press Enter to open the top result, so the search box doubles as a quick launcher.
-- Press **Ctrl+Alt+Space** from any app to bring QuickerPlaces to the front with the search box ready, type a few letters, and press Enter to open. Launching it again does the same thing rather than opening a second copy. Change the shortcut in **Settings** (the gear icon).
+- Save a folder or a link under a unique **name**, with validation that blocks duplicate names and duplicate folders or links before they're saved.
+- Browse everything in a sortable grid — right-click a row for **Open**, **Copy folder or link**, **Rename**, **Edit folder or link**, **Toggle favourite**, or **Remove**; double-click to open. Removed something by mistake? **Undo** (or Ctrl+Z) puts it back, and **Recently Deleted** keeps it for seven days.
+- **Search** the grid as you type, by name, folder or link. Press Enter to open the top result, so the search box doubles as a quick launcher.
+- Press **Ctrl+Alt+Space** from any app to bring QuickerPlaces to the front with the search box ready, type a few letters, and press Enter to open. Launching it again does the same thing rather than opening a second copy. Change the shortcut in **Settings**.
 - Drive everything from the keyboard: Ctrl+F search, Ctrl+N / Ctrl+U add, Ctrl+1–9 open a favourite, plus Enter / F2 / Ctrl+E / Ctrl+D / Delete on the selected row. The full list is in [`USERGUIDE.md`](USERGUIDE.md#keyboard-shortcuts).
-- Pin your most-used places as one-click **favourite bubbles** above the grid, drag-and-drop to reorder them, and collapse the grid entirely when you just want the bubbles.
+- Pin your most-used places as one-click **favourite cards** above the grid, drag-and-drop to reorder them, and collapse the grid entirely when you just want the cards.
 - Everything is written to disk immediately as you work — no save button. If a save ever fails, the change stays on screen and a banner says so, with a Retry that rewrites it; QuickerPlaces never claims a change is stored when it isn't.
 - **Export** any subset of your places to a JSON file to share or back up, and **import** from one — anything that would collide with what you already have is filtered out automatically, before you're ever asked to pick.
 
@@ -42,10 +42,18 @@ The tests (`src/QuickerPlaces.Tests`) cover the service layer and the UI-free vi
 ### Where your data lives
 
 - Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit. The previous version is kept alongside it as `places.bak.json` on every save.
-- Window layout (size/position, whether the grid is collapsed) and the global hotkey: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`.
-- Diagnostic log (save failures, load/recovery outcomes — never place aliases or paths): `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log`.
+- Window layout (size/position, whether the grid is collapsed), the global hotkey, and the theme and highlight colour: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`.
+- Diagnostic log (save failures, load/recovery outcomes — never place names or paths): `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log`.
 
-All plain text and safe to inspect, back up, or hand-edit if you know what you're doing. The folder icon in the app's header opens the places folder in File Explorer.
+All plain text and safe to inspect, back up, or hand-edit if you know what you're doing. **Places file** in the **Options** menu opens the places folder in File Explorer.
+
+## Theming
+
+- Colours live in `src/QuickerPlaces/Resources/Palette.Dark.xaml` and `Palette.Light.xaml`. Both define the same keys, which `PaletteFileTests` checks along with the contrast floors.
+- Control styles and fonts are in `Resources/Styles.xaml`; stroke icons are `Geometry` resources in `Resources/Icons.xaml`.
+- `Services/ThemeManager.cs` swaps the palette, sets WPF's `ThemeMode` for the title bar and menus, and writes the highlight brushes, which `Services/Theming/HighlightPalette.cs` computes (and tests cover).
+- Always refer to a colour with `DynamicResource`, so it follows a theme change while the app runs.
+- The source of truth for the look is the [QuickerPlaces Design System](https://claude.ai/artifact/MCDp4Ax8HWUgVUw3S39N2W). Change it there first, then in the palettes.
 
 ## Repository layout
 

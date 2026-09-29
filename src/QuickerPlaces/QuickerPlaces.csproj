@@ -37,6 +37,15 @@
 
   <ItemGroup>
     <Resource Include="Resources\AppIcon.ico" />
+
+    <!--
+      UI refresh U9: static instances of TASA Orbiter (WPF ignores variable
+      weight axes) and IBM Plex Mono, both under the SIL Open Font Licence
+      (OFL-*.txt beside them). Styles.xaml reaches them with
+      pack://application:,,,/Resources/Fonts/#TASA Orbiter.
+    -->
+    <Resource Include="Resources\Fonts\*.ttf" />
+    <None Include="Resources\Fonts\OFL-*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -29,16 +29,36 @@ public sealed class PlaceViewModelTests
         Assert.Equal(new DateTime(2026, 9, 25, 7, 15, 0).ToString("g", us), PlaceViewModel.FormatLastOpened(Opened, TestZones.PlusTen, us));
     }
 
-    /// <summary>The grid's star: filled for a favourite, an outline otherwise, with a tooltip saying what a click will do.</summary>
+    /// <summary>The grid's star tooltip says what a click will do (the star itself is drawn by the view).</summary>
     [Theory]
-    [InlineData(true, "", "Remove from favourites (Ctrl+D)")]
-    [InlineData(false, "", "Add to favourites (Ctrl+D)")]
-    public void FavouriteStar_ShowsTheStateAndWhatAClickDoes(bool isFavourite, string glyph, string toolTip)
+    [InlineData(true, "Remove from favourites (Ctrl+D)")]
+    [InlineData(false, "Add to favourites (Ctrl+D)")]
+    public void FavouriteStar_ToolTipSaysWhatAClickDoes(bool isFavourite, string toolTip)
     {
         var place = new PlaceViewModel(new QuickerPlaces.Models.Place { Alias = "Docs", Resource = "https://docs.example.com", IsFavourite = isFavourite });
 
-        Assert.Equal(glyph, place.FavouriteGlyph);
         Assert.Equal(toolTip, place.FavouriteToolTip);
+    }
+
+    /// <summary>A favourite card shows its Ctrl+number; only the first nine have one.</summary>
+    [Theory]
+    [InlineData(true, 0, "1")]
+    [InlineData(true, 8, "9")]
+    [InlineData(true, 9, null)]
+    [InlineData(false, null, null)]
+    public void FavouriteShortcut_IsTheCtrlNumber(bool isFavourite, int? order, string? expected)
+    {
+        var place = new PlaceViewModel(new QuickerPlaces.Models.Place { Alias = "Docs", Resource = @"C:\Docs", IsFavourite = isFavourite, FavouriteOrder = order });
+
+        Assert.Equal(expected, place.FavouriteShortcut);
+    }
+
+    [Fact]
+    public void ToolTipText_IsTheDestination()
+    {
+        var place = new PlaceViewModel(new QuickerPlaces.Models.Place { Alias = "Docs", Resource = @"C:\Docs" });
+
+        Assert.Equal(@"C:\Docs", place.ToolTipText);
     }
 
     [Fact]

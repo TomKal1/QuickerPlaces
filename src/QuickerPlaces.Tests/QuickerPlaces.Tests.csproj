@@ -28,6 +28,9 @@
   <ItemGroup>
     <Compile Include="..\QuickerPlaces\AppInfo.cs" Link="Linked\AppInfo.cs" />
     <Compile Include="..\QuickerPlaces\Models\AppSettings.cs" Link="Linked\Models\AppSettings.cs" />
+    <Compile Include="..\QuickerPlaces\Models\ThemePreference.cs" Link="Linked\Models\ThemePreference.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Theming\ThemeColor.cs" Link="Linked\Services\Theming\ThemeColor.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Theming\HighlightPalette.cs" Link="Linked\Services\Theming\HighlightPalette.cs" />
     <Compile Include="..\QuickerPlaces\Models\HotkeyGesture.cs" Link="Linked\Models\HotkeyGesture.cs" />
     <Compile Include="..\QuickerPlaces\Models\PersistenceResult.cs" Link="Linked\Models\PersistenceResult.cs" />
     <Compile Include="..\QuickerPlaces\Models\Place.cs" Link="Linked\Models\Place.cs" />
@@ -115,6 +118,15 @@
     <None Update="Fixtures\places.v3.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      UI refresh U1: PaletteFileTests reads the app's palette XAML as plain
+      XML, so both files are copied next to the test assembly.
+    -->
+    <None Include="..\QuickerPlaces\Resources\Palette.Dark.xaml" Link="Palettes\Palette.Dark.xaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\QuickerPlaces\Resources\Palette.Light.xaml" Link="Palettes\Palette.Light.xaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

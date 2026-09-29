@@ -131,7 +131,7 @@ public partial class PlaceFormDialog : Window
                 break;
 
             case PlaceFormMode.AddUrl:
-                ResourceLabel.Text = "URL";
+                ResourceLabel.Text = "Link";
                 BrowseButton.Visibility = Visibility.Collapsed;
                 break;
 
@@ -142,7 +142,7 @@ public partial class PlaceFormDialog : Window
 
             case PlaceFormMode.EditResource:
                 AliasPanel.Visibility = Visibility.Collapsed;
-                ResourceLabel.Text = _type == PlaceType.Folder ? "Folder path" : "URL";
+                ResourceLabel.Text = _type == PlaceType.Folder ? "Folder path" : "Link";
                 BrowseButton.Visibility = _type == PlaceType.Folder ? Visibility.Visible : Visibility.Collapsed;
                 ResourceTextBox.Text = _editingPlace!.Resource;
                 break;
@@ -151,7 +151,7 @@ public partial class PlaceFormDialog : Window
                 ExplanationText.Text = _conflict!.Explanation;
                 ExplanationText.Visibility = Visibility.Visible;
                 AliasTextBox.Text = _editingPlace!.Alias;
-                ResourceLabel.Text = _type == PlaceType.Folder ? "Folder path" : "URL";
+                ResourceLabel.Text = _type == PlaceType.Folder ? "Folder path" : "Link";
                 BrowseButton.Visibility = _type == PlaceType.Folder ? Visibility.Visible : Visibility.Collapsed;
                 ResourceTextBox.Text = _editingPlace.Resource;
                 OkButton.Content = "Restore";
@@ -290,11 +290,11 @@ public partial class PlaceFormDialog : Window
 
     private static string TitleFor(PlaceFormMode mode, PlaceType type) => mode switch
     {
-        PlaceFormMode.AddFolder => "Add Folder",
-        PlaceFormMode.AddUrl => "Add URL",
-        PlaceFormMode.RenameAlias => "Rename Alias",
-        PlaceFormMode.EditResource => type == PlaceType.Folder ? "Edit Folder Path" : "Edit URL",
-        PlaceFormMode.Restore => "Restore Place",
+        PlaceFormMode.AddFolder => "Add folder",
+        PlaceFormMode.AddUrl => "Add link",
+        PlaceFormMode.RenameAlias => "Rename",
+        PlaceFormMode.EditResource => type == PlaceType.Folder ? "Edit folder path" : "Edit link",
+        PlaceFormMode.Restore => "Restore place",
         _ => "Place"
     };
 }

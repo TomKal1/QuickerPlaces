@@ -147,7 +147,7 @@ public sealed class PlacesService
     public ValidationResult ValidateAlias(string? alias, Place? excluding = null)
     {
         if (string.IsNullOrWhiteSpace(alias))
-            return ValidationResult.Fail("Alias can't be empty.");
+            return ValidationResult.Fail("Name can't be empty.");
 
         var trimmed = alias.Trim();
         var collides = Active.Any(p =>
@@ -155,7 +155,7 @@ public sealed class PlacesService
             string.Equals(p.Alias, trimmed, StringComparison.OrdinalIgnoreCase));
 
         return collides
-            ? ValidationResult.Fail($"\"{trimmed}\" is already in use — pick a different alias.")
+            ? ValidationResult.Fail($"\"{trimmed}\" is already in use — pick a different name.")
             : ValidationResult.Ok();
     }
 
@@ -169,7 +169,7 @@ public sealed class PlacesService
     public ValidationResult ValidateResource(string? resource, PlaceType type, Place? excluding = null)
     {
         if (string.IsNullOrWhiteSpace(resource))
-            return ValidationResult.Fail(type == PlaceType.Folder ? "Folder path can't be empty." : "URL can't be empty.");
+            return ValidationResult.Fail(type == PlaceType.Folder ? "Folder path can't be empty." : "Link can't be empty.");
 
         var trimmed = resource.Trim();
 
@@ -186,7 +186,7 @@ public sealed class PlacesService
             string.Equals(p.Resource, trimmed, StringComparison.OrdinalIgnoreCase));
 
         return collides
-            ? ValidationResult.Fail("That path/URL is already stored under another alias.")
+            ? ValidationResult.Fail("That folder or link is already stored under another name.")
             : ValidationResult.Ok();
     }
 
@@ -222,7 +222,7 @@ public sealed class PlacesService
     private static ValidationResult ValidateUrlFormat(string url)
         => Uri.TryCreate(url, UriKind.Absolute, out _)
             ? ValidationResult.Ok()
-            : ValidationResult.Fail("That doesn't look like a valid, complete URL (e.g. https://example.com).");
+            : ValidationResult.Fail("That doesn't look like a valid, complete link (e.g. https://example.com).");
 
     // ---------------------------------------------------------------
     // Mutations — each one validates, mutates the in-memory list, then
@@ -469,10 +469,10 @@ public sealed class PlacesService
             return notRestorable;
 
         if (!ValidateAlias(place.Alias).Success)
-            return ValidationResult.Fail($"Can't restore \"{place.Alias}\": that alias is now used by another place.");
+            return ValidationResult.Fail($"Can't restore \"{place.Alias}\": that name is now used by another place.");
 
         if (!ValidateResource(place.Resource, place.Type).Success)
-            return ValidationResult.Fail($"Can't restore \"{place.Alias}\": its path/URL is now stored under another alias.");
+            return ValidationResult.Fail($"Can't restore \"{place.Alias}\": its folder or link is now stored under another name.");
 
         Undelete(place);
         persistence = Persist();
@@ -1394,17 +1394,17 @@ public sealed record RestoreConflict(Place Place, Place? AliasHeldBy, Place? Res
     {
         get
         {
-            var destination = Place.Type == PlaceType.Folder ? "folder path" : "URL";
+            var destination = Place.Type == PlaceType.Folder ? "folder path" : "link";
             var start = $"\"{Place.Alias}\" can't be restored as it was: ";
 
             if (AliasHeldBy is not null && ReferenceEquals(AliasHeldBy, ResourceHeldBy))
-                return start + $"another place, \"{AliasHeldBy.Alias}\", now has its alias and its {destination}. Change them below, then restore.";
+                return start + $"another place, \"{AliasHeldBy.Alias}\", now has its name and its {destination}. Change them below, then restore.";
 
             if (AliasHeldBy is not null && ResourceHeldBy is not null)
                 return start + $"another place is now called \"{AliasHeldBy.Alias}\", and \"{ResourceHeldBy.Alias}\" now uses its {destination}. Change them below, then restore.";
 
             if (AliasHeldBy is not null)
-                return start + $"another place is now called \"{AliasHeldBy.Alias}\". Change the alias below, then restore.";
+                return start + $"another place is now called \"{AliasHeldBy.Alias}\". Change the name below, then restore.";
 
             return start + $"\"{ResourceHeldBy?.Alias}\" now uses its {destination}. Change the {destination} below, then restore.";
         }

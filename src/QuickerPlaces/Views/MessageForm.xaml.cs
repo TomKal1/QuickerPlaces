@@ -10,10 +10,10 @@ namespace QuickerPlaces.Views;
 /// native TaskDialog — every dialog the app shows should go through
 /// MessageForm.Show(...) instead of either of those. See README.md
 /// "Dialogs" for why: MessageBox/TaskDialog render with the OS's own
-/// default light chrome and system font, breaking the dark/violet theme
+/// default light chrome and system font, breaking the app's theme
 /// the same way the unstyled title bar and ComboBox popup did earlier.
 /// Being a plain Window, MessageForm inherits the app-wide Window style
-/// (background, font) from Theme.xaml for free, and builds its buttons
+/// (background, font) from Styles.xaml for free, and builds its buttons
 /// from the same Button/Button.Primary styles as the rest of the app.
 ///
 /// This does mean the ViewModel layer calls into a View type directly
@@ -50,7 +50,9 @@ public partial class MessageForm : Window
         else
         {
             IconGlyph.Text = GlyphFor(icon);
-            IconBadge.Background = BrushFor(icon);
+            var brush = BrushFor(icon);
+            IconBadge.BorderBrush = brush;
+            IconGlyph.Foreground = brush;
         }
     }
 
@@ -174,17 +176,17 @@ public partial class MessageForm : Window
     {
         MessageFormIcon.Info => "i",
         MessageFormIcon.Warning => "!",
-        MessageFormIcon.Error => "X",
+        MessageFormIcon.Error => "×",
         MessageFormIcon.Question => "?",
         _ => string.Empty
     };
 
     private Brush BrushFor(MessageFormIcon icon) => icon switch
     {
-        MessageFormIcon.Info => (Brush)FindResource("Status.Info"),
-        MessageFormIcon.Warning => (Brush)FindResource("Status.Warning"),
-        MessageFormIcon.Error => (Brush)FindResource("Status.Error"),
-        MessageFormIcon.Question => (Brush)FindResource("Accent"),
+        MessageFormIcon.Info => (Brush)FindResource("Info"),
+        MessageFormIcon.Warning => (Brush)FindResource("Signal"),
+        MessageFormIcon.Error => (Brush)FindResource("Danger"),
+        MessageFormIcon.Question => (Brush)FindResource("Highlight.Text"),
         _ => Brushes.Transparent
     };
 }

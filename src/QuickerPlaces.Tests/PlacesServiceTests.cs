@@ -343,9 +343,9 @@ public sealed class PlacesServiceTests : IDisposable
         var resourceResult = service.TryRestore(removedWiki, out _);
 
         Assert.False(aliasResult.Success);
-        Assert.Contains("alias", aliasResult.ErrorMessage);
+        Assert.Contains("now used by another place", aliasResult.ErrorMessage);
         Assert.False(resourceResult.Success);
-        Assert.Contains("path/URL", resourceResult.ErrorMessage);
+        Assert.Contains("folder or link", resourceResult.ErrorMessage);
         Assert.Equal(new[] { "docs", "New Wiki" }, service.Places.Select(p => p.Alias));
         Assert.Equal(new[] { wiki, docs }, service.RecentlyDeleted);
         Assert.Equal(new[] { "Wiki", "Docs" }, NewService().RecentlyDeleted.Select(p => p.Alias));

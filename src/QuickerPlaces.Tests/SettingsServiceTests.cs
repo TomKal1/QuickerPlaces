@@ -85,7 +85,7 @@ public sealed class SettingsServiceTests : IDisposable
 
         var loaded = NewService().Load();
 
-        Assert.Equal(4, AppSettings.CurrentSchemaVersion);
+        Assert.Equal(5, AppSettings.CurrentSchemaVersion);
         Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
         Assert.Equal("LastOpened", loaded.PlacesSortKey);
         Assert.Equal("descending", loaded.PlacesSortDirection);
@@ -155,5 +155,42 @@ public sealed class SettingsServiceTests : IDisposable
         NewService().Save(new AppSettings { GlobalHotkey = hotkey });
 
         Assert.Equal(hotkey, NewService().Load().GlobalHotkey);
+    }
+
+    [Fact]
+    public void Version_4_settings_load_with_the_default_theme_and_highlight()
+    {
+        File.WriteAllText(_temp.File("settings.json"),
+            """{ "schemaVersion": 4, "globalHotkey": "Ctrl+Shift+Q", "minimizeToTray": true }""");
+
+        var loaded = NewService().Load();
+
+        Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
+        Assert.True(loaded.MinimizeToTray);
+        Assert.Equal("dark", loaded.Theme);
+        Assert.Equal("green", loaded.Highlight);
+    }
+
+    [Fact]
+    public void Theme_and_highlight_round_trip()
+    {
+        NewService().Save(new AppSettings { Theme = "system", Highlight = "cognac" });
+        var loaded = NewService().Load();
+
+        Assert.Equal("system", loaded.Theme);
+        Assert.Equal("cognac", loaded.Highlight);
+    }
+
+    [Fact]
+    public void An_unrecognised_theme_costs_only_the_theme()
+    {
+        File.WriteAllText(_temp.File("settings.json"),
+            """{ "schemaVersion": 5, "globalHotkey": "Ctrl+Shift+Q", "theme": "neon", "highlight": "teal" }""");
+
+        var loaded = NewService().Load();
+
+        Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
+        Assert.Equal(AppTheme.Dark, ThemePreference.ParseTheme(loaded.Theme));
+        Assert.Equal(HighlightPreset.Green, ThemePreference.ParseHighlight(loaded.Highlight));
     }
 }

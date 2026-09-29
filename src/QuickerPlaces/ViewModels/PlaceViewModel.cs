@@ -30,32 +30,27 @@ public sealed class PlaceViewModel : ObservableObject
 
     public PlaceType Type => Model.Type;
 
-    /// <summary>"Folder" or "URL" — for the DataGrid's Type column.</summary>
+    /// <summary>"Folder" or "URL" — for the export and import lists and the Type sort.</summary>
     public string TypeLabel => Model.Type.Label();
-
-    /// <summary>
-    /// Icon-font glyph for this place's Type, rendered with the theme's
-    /// Font.Icons family: a folder for Folder, a globe for URL. A fixed
-    /// glyph per type rather than a real favicon / shell icon, since
-    /// fetching favicons would mean contacting every saved URL, which
-    /// QuickerPlaces deliberately never does (SI §3).
-    /// </summary>
-    public string TypeGlyph => GlyphFor(Model.Type);
 
     public string Resource => Model.Resource;
 
-    /// <summary>Hover text for a favourite bubble: the destination, since the bubble itself only shows the alias.</summary>
-    public string ToolTipText => $"{TypeLabel}: {Model.Resource}";
-
-    /// <summary>Segoe Fluent Icons / Segoe MDL2 Assets code points (shared by both fonts).</summary>
-    public static string GlyphFor(PlaceType type) => type == PlaceType.Folder ? "\uE8B7" : "\uE774";
+    /// <summary>Hover text for a favourite card: its folder or link, since the card only shows the name.</summary>
+    public string ToolTipText => Model.Resource;
 
     public bool IsFavourite => Model.IsFavourite;
 
     public int? FavouriteOrder => Model.FavouriteOrder;
 
-    /// <summary>The grid's clickable star: Segoe FavoriteStarFill for a favourite, the FavoriteStar outline otherwise.</summary>
-    public string FavouriteGlyph => Model.IsFavourite ? "" : "";
+    /// <summary>
+    /// The number on a favourite card: its Ctrl+number shortcut ("1" to "9"),
+    /// or null past the ninth or for a non-favourite. FavouriteOrder is
+    /// contiguous from 0 (PlacesService.RenumberFavourites), and Refresh()
+    /// raises this along with everything else.
+    /// </summary>
+    public string? FavouriteShortcut => Model.IsFavourite && Model.FavouriteOrder is >= 0 and < 9
+        ? (Model.FavouriteOrder.Value + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+        : null;
 
     /// <summary>The star's hover text: what clicking it will do, with the keyboard equivalent.</summary>
     public string FavouriteToolTip => Model.IsFavourite ? "Remove from favourites (Ctrl+D)" : "Add to favourites (Ctrl+D)";

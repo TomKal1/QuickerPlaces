@@ -25,6 +25,9 @@ public sealed class SelectablePlaceViewModel : ObservableObject
 
     public string TypeLabel => Place.Type == PlaceType.Folder ? "Folder" : "URL";
 
+    /// <summary>Folder or Url: picks the row's icon.</summary>
+    public PlaceType Type => Place.Type;
+
     public string Resource => Place.Resource;
 
     public bool IsSelected
