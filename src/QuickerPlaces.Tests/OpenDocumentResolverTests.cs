@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using QuickerPlaces.Services.Documents;
 using Xunit;
@@ -328,5 +329,77 @@ public sealed class OpenDocumentResolverTests
         };
 
         Assert.Equal(new[] { Spec, A102, A101 }, OpenDocumentResolver.CandidatePaths(evidence));
+    }
+
+    private static readonly Dictionary<string, string> Drives = new() { ["P:"] = @"\\files\projects" };
+
+    private const string ShareA101 = @"\\files\projects\A-101.pdf";
+    private const string DriveA101 = @"P:\A-101.pdf";
+
+    [Fact]
+    public void AFileSpelledWithAShareInACommandLine_AndAMappedDriveWhenHeld_IsListedOnce()
+    {
+        var revu = new ViewerWindow("Bluebeam Revu x64 - [A-101.pdf]", "Bluebeam Revu",
+            @"""C:\Program Files\Bluebeam Software\Bluebeam Revu\21\Revu\Revu.exe"" """ + ShareA101 + @"""");
+        var evidence = new OpenDocumentEvidence(new[] { revu }, Array.Empty<RecentDocument>())
+        {
+            HeldFiles = new[] { new HeldFile(DriveA101, "Bluebeam Revu") },
+            MappedDrives = Drives,
+        };
+
+        var candidate = Assert.Single(OpenDocumentResolver.Resolve(evidence, Array.Empty<string>()).Candidates);
+        Assert.Equal(DriveA101, candidate.Path);
+        Assert.True(candidate.IsLikelyOpen);
+        Assert.Equal("Open in Bluebeam Revu", candidate.Reason);
+    }
+
+    [Fact]
+    public void AFileSpelledWithAShareInRecentItemsAndInUse_AndAMappedDriveWhenHeld_IsListedOnce()
+    {
+        var evidence = new OpenDocumentEvidence(Array.Empty<ViewerWindow>(), new[] { Recent(ShareA101, 5) })
+        {
+            HeldFiles = new[] { new HeldFile(DriveA101, "Bluebeam Revu") },
+            MappedDrives = Drives,
+        };
+
+        var candidate = Assert.Single(OpenDocumentResolver.Resolve(evidence, new[] { ShareA101 }).Candidates);
+        Assert.Equal(DriveA101, candidate.Path);
+        Assert.True(candidate.IsLikelyOpen);
+        Assert.Equal("Open in Bluebeam Revu", candidate.Reason);
+        Assert.Equal(Now.AddMinutes(-5), candidate.LastOpenedAt);
+    }
+
+    [Fact]
+    public void AFileHeldByTwoPrograms_IsListedOnce_UnderTheFirst()
+    {
+        var scan = ResolveHeld(Array.Empty<ViewerWindow>(), Array.Empty<RecentDocument>(),
+            new HeldFile(A101, "Bluebeam Revu"), new HeldFile(A101, "Adobe Acrobat"));
+
+        var candidate = Assert.Single(scan.Candidates);
+        Assert.Equal("Open in Bluebeam Revu", candidate.Reason);
+    }
+
+    [Fact]
+    public void AWordTitleWithoutExtension_PrefersTheHeldDocumentOverANewerRecentOne()
+    {
+        const string held = @"C:\Jobs\Report.docx";
+        const string other = @"C:\Old\Report.docx";
+        var scan = ResolveHeld(new[] { new ViewerWindow("Report - Word", "Microsoft Word", null, DocumentKind.Word) },
+            new[] { Recent(other, 1) }, new HeldFile(held, "Microsoft Word"));
+
+        Assert.Equal(new[] { held }, OpenPaths(scan));
+        Assert.Equal(new[] { other }, SuggestedPaths(scan));
+    }
+
+    [Fact]
+    public void AFileBothHeldAndInUse_GivesTheProgramAsTheReason()
+    {
+        var evidence = new OpenDocumentEvidence(Array.Empty<ViewerWindow>(), Array.Empty<RecentDocument>())
+        {
+            HeldFiles = new[] { new HeldFile(A101, "Bluebeam Revu") },
+        };
+
+        var candidate = Assert.Single(OpenDocumentResolver.Resolve(evidence, new[] { A101 }).Candidates);
+        Assert.Equal("Open in Bluebeam Revu", candidate.Reason);
     }
 }

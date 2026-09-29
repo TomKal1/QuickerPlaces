@@ -52,16 +52,25 @@ public static class OpenDocumentResolver
     public static IReadOnlyList<string> CandidatePaths(OpenDocumentEvidence evidence)
     {
         var paths = new List<string>();
-        paths.AddRange(evidence.HeldFiles.Select(h => DocumentPaths.Normalize(h.Path)).OfType<string>());
+        paths.AddRange(HeldPaths(evidence).Select(h => h.Path));
         foreach (var window in evidence.Windows)
         {
-            paths.AddRange(PathsInTitle(window.Title));
-            paths.AddRange(PathsInCommandLine(window.CommandLine));
+            paths.AddRange(TitlePaths(window, evidence));
+            paths.AddRange(CommandLinePaths(window, evidence));
         }
 
-        paths.AddRange(evidence.RecentDocuments.Select(r => DocumentPaths.Normalize(r.Path)).OfType<string>());
+        paths.AddRange(evidence.RecentDocuments.Select(r => Spell(r.Path, evidence)).OfType<string>());
         return Distinct(paths);
     }
+
+    /// <summary>
+    /// The one spelling of a document path the resolver uses for every clue:
+    /// normalized, and under a mapped drive's letter where it lies on that
+    /// drive's share, as held files are spelled. Null when it isn't a document
+    /// path. The probe spells the paths it asks about the same way.
+    /// </summary>
+    public static string? Spell(string? path, OpenDocumentEvidence evidence)
+        => DocumentPaths.Normalize(path) is { } p ? DocumentPaths.Normalize(HeldFilePaths.ToMappedDrive(p, evidence.MappedDrives)) ?? p : null;
 
     /// <summary>
     /// Resolves the evidence into the review list: files judged open first,
@@ -70,17 +79,14 @@ public static class OpenDocumentResolver
     /// </summary>
     public static OpenDocumentScan Resolve(OpenDocumentEvidence evidence, IEnumerable<string> inUse)
     {
-        var held = evidence.HeldFiles
-            .Select(h => (Path: DocumentPaths.Normalize(h.Path), h.AppName))
-            .Where(h => h.Path is not null)
-            .ToList();
+        var held = HeldPaths(evidence);
 
         // A held file is in use by definition, so a title's name prefers it too (D6).
         var inUseSet = new HashSet<string>(
-            inUse.Select(p => DocumentPaths.Normalize(p) ?? p).Concat(held.Select(h => h.Path!)),
+            inUse.Select(p => Spell(p, evidence) ?? p).Concat(held.Select(h => h.Path)),
             StringComparer.OrdinalIgnoreCase);
         var recents = evidence.RecentDocuments
-            .Select(r => (Path: DocumentPaths.Normalize(r.Path), r.LastOpenedAt))
+            .Select(r => (Path: Spell(r.Path, evidence), r.LastOpenedAt))
             .Where(r => r.Path is not null)
             .GroupBy(r => r.Path!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Max(r => r.LastOpenedAt), StringComparer.OrdinalIgnoreCase);
@@ -100,10 +106,10 @@ public static class OpenDocumentResolver
 
         foreach (var window in evidence.Windows)
         {
-            var commandLinePaths = PathsInCommandLine(window.CommandLine);
+            var commandLinePaths = CommandLinePaths(window, evidence);
             var matchedInTitle = false;
 
-            var titlePaths = PathsInTitle(window.Title);
+            var titlePaths = TitlePaths(window, evidence);
             foreach (var path in titlePaths)
             {
                 MarkOpen(path, $"Open in {window.AppName}");
@@ -146,7 +152,7 @@ public static class OpenDocumentResolver
 
         // Background tabs and other documents the programs hold, after each window's front document.
         foreach (var (path, appName) in held)
-            MarkOpen(path!, $"Open in {appName}");
+            MarkOpen(path, $"Open in {appName}");
 
         foreach (var path in known.Where(inUseSet.Contains))
             MarkOpen(path, "In use by an open program");
@@ -156,7 +162,7 @@ public static class OpenDocumentResolver
         var suggested = new HashSet<string>(openPaths, StringComparer.OrdinalIgnoreCase);
         foreach (var window in evidence.Windows)
         {
-            foreach (var path in PathsInCommandLine(window.CommandLine))
+            foreach (var path in CommandLinePaths(window, evidence))
             {
                 if (suggested.Add(path))
                     suggestions.Add(new DocumentCandidate(path, false, $"{window.AppName} was started with it", recents.TryGetValue(path, out var at) ? at : null));
@@ -173,6 +179,19 @@ public static class OpenDocumentResolver
 
         return new OpenDocumentScan(open.Concat(suggestions).ToList(), unmatched.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
+
+    private static List<(string Path, string AppName)> HeldPaths(OpenDocumentEvidence evidence)
+        => evidence.HeldFiles
+            .Select(h => (Path: Spell(h.Path, evidence), h.AppName))
+            .Where(h => h.Path is not null)
+            .Select(h => (h.Path!, h.AppName))
+            .ToList();
+
+    private static IReadOnlyList<string> TitlePaths(ViewerWindow window, OpenDocumentEvidence evidence)
+        => Distinct(PathsInTitle(window.Title).Select(p => Spell(p, evidence)).OfType<string>());
+
+    private static IReadOnlyList<string> CommandLinePaths(ViewerWindow window, OpenDocumentEvidence evidence)
+        => Distinct(PathsInCommandLine(window.CommandLine).Select(p => Spell(p, evidence)).OfType<string>());
 
     /// <summary>Full drive or UNC paths to documents written out in a window title, as some viewers do.</summary>
     public static IReadOnlyList<string> PathsInTitle(string? title)
@@ -440,6 +459,11 @@ public sealed record OpenDocumentEvidence(IReadOnlyList<ViewerWindow> Windows, I
 
     /// <summary>Documents the windows' programs hold open, with full paths, from WindowsHeldFiles. Every one counts as open (held-files plan H1).</summary>
     public IReadOnlyList<HeldFile> HeldFiles { get; init; } = Array.Empty<HeldFile>();
+
+    private static readonly IReadOnlyDictionary<string, string> NoDrives = new Dictionary<string, string>();
+
+    /// <summary>Each mapped drive ("P:") and its share, so every clue's path is spelled with the drive letter, as held files are (held-files plan H3).</summary>
+    public IReadOnlyDictionary<string, string> MappedDrives { get; init; } = NoDrives;
 }
 
 /// <param name="Title">The window's title as Windows reports it.</param>
