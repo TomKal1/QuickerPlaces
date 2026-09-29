@@ -6,7 +6,7 @@ using QuickerPlaces.Models.Workspace;
 namespace QuickerPlaces.Services.Workspace;
 
 /// <summary>
-/// The three built-in layouts (configurable canvas plan M1, D2). Code, not
+/// The built-in layouts (configurable canvas plan M1, D2). Code, not
 /// data: they cannot be overwritten or deleted, and each carries a
 /// <see cref="BuiltInLayout.Version"/> so a later change to a factory
 /// definition does not overwrite an arrangement the user already
@@ -14,11 +14,12 @@ namespace QuickerPlaces.Services.Workspace;
 ///
 /// A built-in is offered only when every panel it needs has a working panel
 /// (<see cref="PanelTypes.Available"/>): until Collections and Saved searches
-/// land in M6, that is Activity Atlas alone. UI-free.
+/// land in M6, that is Activity Atlas and Files First. UI-free.
 /// </summary>
 public static class BuiltInLayouts
 {
     public const string ActivityAtlasId = "builtin.activity-atlas";
+    public const string FilesFirstId = "builtin.files-first";
     public const string ProjectCanvasId = "builtin.project-canvas";
     public const string PersonalDeskId = "builtin.personal-desk";
 
@@ -33,6 +34,18 @@ public static class BuiltInLayouts
         (PanelTypes.Activity, PanelSpans.Full),
         (PanelTypes.Shelf, PanelSpans.TwoThirds),
         (PanelTypes.Sessions, PanelSpans.Third),
+    });
+
+    /// <summary>
+    /// For people who look for files rather than days: the shelf leads, with
+    /// the activity calendar beside it in a third, where it shows a month at
+    /// a time (still with its activity shading), and Sessions below.
+    /// </summary>
+    public static readonly BuiltInLayout FilesFirst = new(FilesFirstId, "Files First", 1, new[]
+    {
+        (PanelTypes.Shelf, PanelSpans.TwoThirds),
+        (PanelTypes.Activity, PanelSpans.Third),
+        (PanelTypes.Sessions, PanelSpans.Full),
     });
 
     public static readonly BuiltInLayout ProjectCanvas = new(ProjectCanvasId, "Project Canvas", 1, new[]
@@ -51,7 +64,7 @@ public static class BuiltInLayouts
     });
 
     /// <summary>Every built-in, in picker order, offered or not.</summary>
-    public static readonly IReadOnlyList<BuiltInLayout> All = new[] { ActivityAtlas, ProjectCanvas, PersonalDesk };
+    public static readonly IReadOnlyList<BuiltInLayout> All = new[] { ActivityAtlas, FilesFirst, ProjectCanvas, PersonalDesk };
 
     /// <summary>The built-ins the picker lists today.</summary>
     public static IReadOnlyList<BuiltInLayout> Offered => All.Where(b => b.IsOffered).ToList();

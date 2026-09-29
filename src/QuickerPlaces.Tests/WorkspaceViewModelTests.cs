@@ -59,7 +59,34 @@ public sealed class WorkspaceViewModelTests
 
     [Fact]
     public void OnlyTheBuiltInsWithWorkingPanels_AreOffered()
-        => Assert.Equal(new[] { "Activity Atlas" }, NewWorkspace().Layouts.Select(l => l.Name));
+        => Assert.Equal(new[] { "Activity Atlas", "Files First" }, NewWorkspace().Layouts.Select(l => l.Name));
+
+    [Fact]
+    public void FilesFirst_PutsTheShelfFirst_WithTheCalendarBesideIt_AndStartsWithoutFilters()
+    {
+        var workspace = NewWorkspace();
+        workspace.SearchText = "acme";
+
+        workspace.SelectedLayout = workspace.Layouts.Single(l => l.Id == BuiltInLayouts.FilesFirstId);
+
+        Assert.Equal("Files First", workspace.ActiveLayoutName);
+        Assert.Equal(new[] { (PanelTypes.Shelf, 0, 0, 8), (PanelTypes.Activity, 0, 8, 4), (PanelTypes.Sessions, 1, 0, 12) },
+            workspace.Panels.Select(p => (p.Type, p.Row, p.Column, p.Span)));
+        // Filters never follow you from one layout to another (D3).
+        Assert.Equal("", workspace.SearchText);
+    }
+
+    [Fact]
+    public void FilesFirst_KeepsTheCalendarBesideTheShelf_AtTheSmallestWindow()
+    {
+        var workspace = NewWorkspace();
+        workspace.SelectedLayout = workspace.Layouts.Single(l => l.Id == BuiltInLayouts.FilesFirstId);
+
+        // About what the canvas gets in the main window at its least width, 960.
+        workspace.Reflow(930);
+
+        Assert.Equal(new[] { (0, 8), (0, 4), (1, 12) }, workspace.Panels.Select(p => (p.Row, p.Span)));
+    }
 
     [Fact]
     public void TheSearchBox_IsTheLibrarySearch()

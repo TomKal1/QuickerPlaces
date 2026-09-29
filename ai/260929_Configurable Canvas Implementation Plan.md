@@ -138,6 +138,7 @@ Collection resources need their own stable reference IDs plus kind and normalize
 
 - Implement models, built-in registry, working-versus-saved state, validation and store recovery.
 - Define Activity Atlas (activity 12; shelf 8; sessions 4), Project Canvas (collections 12; shelf 8; activity 4), Personal Desk (shelf 8; searches 4; activity 8; sessions 4).
+- Added during M4, at the user's request: Files First (shelf 8; activity 4, shown as the month view; sessions 12), so the year strip is not the only starting layout. Time filtering stays with the activity calendar.
 - Keep presets requiring panels not yet implemented out of the user-facing picker until M6; do not ship dead placeholders as completed features.
 - Implement all preset operations and startup fallback in UI-free services with storage-failure tests.
 

@@ -58,8 +58,8 @@ public sealed class WorkspaceLayoutServiceTests
     {
         var service = NewService(NewStorage());
 
-        // Collections and Saved searches come in M6; until then only Activity Atlas has every panel it needs.
-        Assert.Equal(new[] { BuiltInLayouts.ActivityAtlasId }, service.BuiltInEntries.Select(e => e.Id));
+        // Collections and Saved searches come in M6; until then Activity Atlas and Files First are the ones with every panel they need.
+        Assert.Equal(new[] { BuiltInLayouts.ActivityAtlasId, BuiltInLayouts.FilesFirstId }, service.BuiltInEntries.Select(e => e.Id));
         Assert.False(BuiltInLayouts.ProjectCanvas.IsOffered);
         Assert.False(BuiltInLayouts.PersonalDesk.IsOffered);
         Assert.False(service.Activate(BuiltInLayouts.PersonalDeskId).Saved);
@@ -72,6 +72,7 @@ public sealed class WorkspaceLayoutServiceTests
         static (string, int)[] Panels(BuiltInLayout layout) => layout.CreatePanels().Select(p => (p.Type, p.Span)).ToArray();
 
         Assert.Equal(new[] { ("activity", 12), ("shelf", 8), ("sessions", 4) }, Panels(BuiltInLayouts.ActivityAtlas));
+        Assert.Equal(new[] { ("shelf", 8), ("activity", 4), ("sessions", 12) }, Panels(BuiltInLayouts.FilesFirst));
         Assert.Equal(new[] { ("collections", 12), ("shelf", 8), ("activity", 4) }, Panels(BuiltInLayouts.ProjectCanvas));
         Assert.Equal(new[] { ("shelf", 8), ("searches", 4), ("activity", 8), ("sessions", 4) }, Panels(BuiltInLayouts.PersonalDesk));
     }
@@ -84,7 +85,7 @@ public sealed class WorkspaceLayoutServiceTests
         Assert.False(service.SaveChanges(out _).Success);
         Assert.False(service.Rename(BuiltInLayouts.ActivityAtlasId, "Mine", out _).Success);
         Assert.False(service.Delete(BuiltInLayouts.ActivityAtlasId, out _).Success);
-        Assert.Equal("Activity Atlas", service.BuiltInEntries.Single().Name);
+        Assert.Equal("Activity Atlas", service.BuiltInEntries[0].Name);
     }
 
     // ---------------------------------------------------------------

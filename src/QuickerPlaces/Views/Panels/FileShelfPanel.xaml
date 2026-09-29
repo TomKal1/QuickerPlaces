@@ -33,6 +33,24 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
+                <!--
+                    The chosen period, which clears it: shown when no Year activity
+                    panel is (ShowsPeriod), so the shelf is never narrowed by a
+                    period nobody can see (D4).
+                -->
+                <Border x:Name="PeriodArea" Visibility="Collapsed" HorizontalAlignment="Left">
+                    <Border Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28" Padding="12,0,3,0" Margin="0,0,0,8"
+                            Visibility="{Binding HasPeriod, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding PeriodText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource Button.IconOnlyCompact}" Width="22" Height="22" Margin="6,0,0,0"
+                                    ToolTip="Show everything again" AutomationProperties.Name="Clear the period"
+                                    Click="ClearPeriod_Click">
+                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Close}" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Border>
                 <ItemsControl ItemsSource="{Binding KindFilters}" AutomationProperties.Name="Show kind">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>

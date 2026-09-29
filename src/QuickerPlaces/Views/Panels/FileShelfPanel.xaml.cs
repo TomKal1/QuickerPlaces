@@ -34,6 +34,18 @@ public partial class FileShelfPanel : UserControl
         set => SearchArea.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// Shows the chosen period, with a button that clears it: the workspace
+    /// turns this on while no Year activity panel is shown (D4).
+    /// </summary>
+    public bool ShowsPeriod
+    {
+        get => PeriodArea.Visibility == Visibility.Visible;
+        set => PeriodArea.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ClearPeriod_Click(object sender, RoutedEventArgs e) => ViewModel?.ClearPeriod();
+
     /// <summary>Shows Save as session, which raises <see cref="SaveAsSessionRequested"/>: the workspace saves the listed files (M3).</summary>
     public bool ShowsSaveAsSession
     {

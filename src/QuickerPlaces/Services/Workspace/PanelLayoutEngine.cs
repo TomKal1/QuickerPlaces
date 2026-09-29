@@ -92,7 +92,7 @@ public static class PanelLayoutEngine
     /// </summary>
     public static double MinimumWidth(string type) => type switch
     {
-        PanelTypes.Activity => 360,
+        PanelTypes.Activity => 280,
         PanelTypes.Shelf => 460,
         PanelTypes.Sessions => 300,
         PanelTypes.Places => 560,

@@ -277,6 +277,8 @@ public partial class WorkspaceView : UserControl
         }
 
         UpdateFrames();
+        if (_shelf is not null)
+            _shelf.ShowsPeriod = _workspace.Panels.All(p => p.Type != PanelTypes.Activity);
         EmptyCanvasText.Visibility = _workspace.HasPanels ? Visibility.Collapsed : Visibility.Visible;
         FitCanvasHeight();
     }
@@ -621,7 +623,16 @@ public partial class WorkspaceView : UserControl
         switch (panel.Type)
         {
             case PanelTypes.Activity:
-                return new YearActivityPanel { DataContext = _workspace!.Library };
+                // In a row it shares (Files First), a short window could cut the
+                // month view off: it scrolls instead. In its own row it takes the
+                // height it needs, and never shows a scroll bar.
+                return new ScrollViewer
+                {
+                    Content = new YearActivityPanel { DataContext = _workspace!.Library },
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    Focusable = false,
+                };
 
             case PanelTypes.Shelf:
                 _shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false, ShowsSaveAsSession = true };
