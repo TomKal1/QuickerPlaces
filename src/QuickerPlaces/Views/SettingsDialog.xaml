@@ -78,7 +78,7 @@
                 </GroupBox>
 
                 <TextBlock Text="Highlight colour" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,20,0,2" />
-                <TextBlock Text="Colours the main button, selected rows and switches." Style="{StaticResource TextBlock.Hint}" />
+                <TextBlock Text="Colours the main buttons, the QP badge, selected rows, switches and the sort arrow." Style="{StaticResource TextBlock.Hint}" />
                 <GroupBox Style="{StaticResource GroupBox.Unstyled}" Margin="0,12,0,0" AutomationProperties.Name="Highlight colour">
                     <StackPanel Orientation="Horizontal">
                         <RadioButton x:Name="HighlightGreen" GroupName="Highlight" Style="{StaticResource RadioButton.Swatch}"

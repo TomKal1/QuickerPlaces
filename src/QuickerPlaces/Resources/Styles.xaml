@@ -169,7 +169,7 @@
         <Setter Property="Padding" Value="0" />
     </Style>
 
-    <!-- The one main action per screen, in the user's highlight colour, with a chrome top edge. -->
+    <!-- Main actions (each dialog's save button, the main window's header buttons), in the user's highlight colour, with a chrome top edge. -->
     <Style x:Key="Button.Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Background" Value="{DynamicResource Highlight}" />
         <Setter Property="Foreground" Value="{DynamicResource On.Highlight}" />
@@ -276,21 +276,30 @@
         <Setter Property="Width" Value="40" />
         <Setter Property="Height" Value="40" />
         <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="Background" Value="{DynamicResource Brand.Green}" />
+        <Setter Property="Background" Value="{DynamicResource Highlight}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Trim.Line}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
-    <!-- The silver rub strip under each window's header: 7 px band, 1 px pinstripe. -->
+    <!--
+        The racing stripe under each window's header: a Trim.Stripe band
+        (black in Light, silver in Dark) with a Highlight band of the same
+        width straight below it.
+    -->
     <Style x:Key="TrimBand" TargetType="Control">
-        <Setter Property="Height" Value="7" />
+        <Setter Property="Height" Value="8" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="IsTabStop" Value="False" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Control">
-                    <Border Background="{DynamicResource Trim.Band}">
-                        <Rectangle Height="1" Fill="{DynamicResource Trim.Line}" VerticalAlignment="Center" />
-                    </Border>
+                    <Grid SnapsToDevicePixels="True" UseLayoutRounding="True">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Rectangle Grid.Row="0" Fill="{DynamicResource Trim.Stripe}" />
+                        <Rectangle Grid.Row="1" Fill="{DynamicResource Highlight}" />
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -685,9 +694,10 @@
     </Style>
     <!--
         Headers in capitals (typed that way in each view, U11). A sorted
-        column shows its label in Text.Primary, a Signal arrow and a 2 px
-        Signal underline. PART_LeftHeaderGripper / PART_RightHeaderGripper
-        are the names DataGridColumnHeader needs for column resizing.
+        column shows its label in Text.Primary, with a Highlight.Text arrow
+        and 2 px underline so both follow the chosen highlight colour.
+        PART_LeftHeaderGripper / PART_RightHeaderGripper are the names
+        DataGridColumnHeader needs for column resizing.
     -->
     <Style TargetType="DataGridColumnHeader">
         <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
@@ -710,12 +720,12 @@
                                         HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                         VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
                                 <ContentPresenter VerticalAlignment="Center" />
-                                <Path x:Name="SortIcon" Style="{StaticResource Icon}" Stroke="{DynamicResource Signal}"
+                                <Path x:Name="SortIcon" Style="{StaticResource Icon}" Stroke="{DynamicResource Highlight.Text}"
                                       Margin="6,0,0,0" Visibility="Collapsed" />
                             </StackPanel>
                         </Border>
                         <Border x:Name="SortBar" Height="2" VerticalAlignment="Bottom"
-                                Background="{DynamicResource Signal}" Visibility="Collapsed" />
+                                Background="{DynamicResource Highlight.Text}" Visibility="Collapsed" />
                         <Thumb x:Name="PART_LeftHeaderGripper" HorizontalAlignment="Left" Style="{StaticResource DataGridColumnHeader.Gripper}" />
                         <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right" Style="{StaticResource DataGridColumnHeader.Gripper}" />
                     </Grid>

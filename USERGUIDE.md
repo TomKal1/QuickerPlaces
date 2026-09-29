@@ -6,7 +6,7 @@ QuickerPlaces is a small always-on-top-of-your-workflow window for storing folde
 
 When QuickerPlaces opens you'll see, top to bottom:
 
-- A header with the app name, **Recents**, **Add folder**, and **Add link**. Recents keeps the activity icon and shows a dot while folder tracking is on. The **Options** menu beside **Hide list** holds **Settings**, **Recently Deleted**, **Places file**, **Import places**, and **Export places**.
+- A header with the app name, **Recents**, **Add folder**, **Add link**, and **Settings**. Recents keeps the activity icon and shows a dot while folder tracking is on. The **Options** menu beside **Hide list** holds **Recently Deleted**, **Places file**, **Import places**, and **Export places**.
 - A row of **favourite cards** — your pinned places, one click away. Empty at first, with a hint telling you how to add one.
 - The **All Places** header with a count, a **search box**, the hamburger **Options** menu, and a **Hide list** / **Show list** button that collapses or restores everything below it.
 - The **All Places** grid — every place you've saved, one row each, each with a folder or globe icon showing its type.
@@ -138,7 +138,7 @@ While QuickerPlaces is running, press **Ctrl+Alt+Space** in any app. QuickerPlac
 
 Starting QuickerPlaces again while it's already running does the same thing. You only ever get one copy, which also keeps two copies from overwriting each other's saved places.
 
-**Changing the shortcut:** choose **Settings** from **Options** beside **Hide list**. Click the shortcut box and press the keys you want, for example Ctrl+Alt+Q. It needs at least one of Ctrl, Alt or Win, plus one other key. **Reset to default** goes back to Ctrl+Alt+Space, and **Turn off** (or Backspace in the box) disables it. Click **Save** and the new shortcut works straight away. If another app already uses that combination, Settings tells you and stays open so you can pick another.
+**Changing the shortcut:** click **Settings** in the header. Click the shortcut box and press the keys you want, for example Ctrl+Alt+Q. It needs at least one of Ctrl, Alt or Win, plus one other key. **Reset to default** goes back to Ctrl+Alt+Space, and **Turn off** (or Backspace in the box) disables it. Click **Save** and the new shortcut works straight away. If another app already uses that combination, Settings tells you and stays open so you can pick another.
 
 If the saved shortcut can't be used when QuickerPlaces starts (another app has taken it since), you'll get a message saying so, and everything else works normally. Pick a new one in Settings.
 
@@ -146,10 +146,10 @@ The shortcut is stored as `"globalHotkey"` in `%LocalAppData%\QuickerPlaces\Quic
 
 ## Appearance
 
-Open **Options** › **Settings**. Under **Appearance**:
+Click **Settings** in the header. Under **Appearance**:
 
 - **Theme:** **Light**, **Dark**, or **Match Windows**, which follows the light or dark setting in Windows and changes when you change it there.
-- **Highlight colour:** the colour of the main button, selected rows and switches. Choose **Hull green** (the default), **Steel blue**, **Tail red**, **Cognac**, or **Windows accent**, which follows your Windows accent colour. QuickerPlaces adjusts an accent that would be hard to read.
+- **Highlight colour:** the colour of the Recents, Add folder and Add link buttons, the main button in each dialog, the QP badge in the header, selected rows, switches, and the arrow and underline on the sorted column. Choose **Hull green** (the default), **Steel blue**, **Tail red**, **Cognac**, or **Windows accent**, which follows your Windows accent colour. QuickerPlaces adjusts an accent that would be hard to read.
 
 Your choice shows straight away; **Cancel** puts back what you had, and **Save** keeps it.
 

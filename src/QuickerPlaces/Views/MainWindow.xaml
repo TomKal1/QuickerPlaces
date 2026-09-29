@@ -137,7 +137,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Border Style="{StaticResource Border.Monogram}">
-                <TextBlock Text="{Binding Monogram}" FontSize="16" FontWeight="ExtraBold" Foreground="{DynamicResource On.Brand}"
+                <TextBlock Text="{Binding Monogram}" FontSize="16" FontWeight="ExtraBold" Foreground="{DynamicResource On.Highlight}"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center" ClipToBounds="True">
@@ -146,35 +146,42 @@
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button x:Name="ActivityButton" Click="ActivityButton_Click" Margin="0,0,8,0">
+                <Button x:Name="ActivityButton" Click="ActivityButton_Click" Style="{StaticResource Button.Primary}" Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal">
                         <Grid Width="16" Height="16">
                             <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Clock}" />
                             <Ellipse x:Name="ActivityDot" Width="7" Height="7" Margin="0,-2,-3,0"
-                                     Fill="{DynamicResource Signal}" Stroke="{DynamicResource Bg.Raised}" StrokeThickness="2"
+                                     Fill="{DynamicResource Signal}" Stroke="{DynamicResource Highlight}" StrokeThickness="2"
                                      HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed" />
                         </Grid>
                         <TextBlock Text="Recents" Margin="7,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding AddFolderCommand}" Margin="0,0,8,0" ToolTip="Add folder (Ctrl+N)"
+                <Button Command="{Binding AddFolderCommand}" Style="{StaticResource Button.Primary}" Margin="0,0,8,0" ToolTip="Add folder (Ctrl+N)"
                         AutomationProperties.Name="Add folder">
                     <StackPanel Orientation="Horizontal">
                         <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
                         <TextBlock Text="Add folder" Margin="7,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding AddUrlCommand}" Style="{StaticResource Button.Primary}" ToolTip="Add link (Ctrl+U)"
+                <Button Command="{Binding AddUrlCommand}" Style="{StaticResource Button.Primary}" Margin="0,0,8,0" ToolTip="Add link (Ctrl+U)"
                         AutomationProperties.Name="Add link">
                     <StackPanel Orientation="Horizontal">
                         <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
                         <TextBlock Text="Add link" Margin="7,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
+                <Button Click="SettingsButton_Click" ToolTip="Settings"
+                        AutomationProperties.Name="Settings">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Settings}" />
+                        <TextBlock Text="Settings" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Grid>
 
-        <!-- The silver rub strip, bleeding past the window padding. -->
+        <!-- The racing stripe, bleeding past the window padding. -->
         <Control Grid.Row="2" Style="{StaticResource TrimBand}" Margin="-20,16,-20,14" />
 
         <!--
@@ -317,11 +324,6 @@
                     <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Menu}" />
                     <Button.ContextMenu>
                         <ContextMenu Placement="Bottom">
-                            <MenuItem Header="Settings" Click="SettingsButton_Click">
-                                <MenuItem.Icon>
-                                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Settings}" />
-                                </MenuItem.Icon>
-                            </MenuItem>
                             <MenuItem Header="Recently Deleted" ToolTip="Places you removed in the last 7 days"
                                       Command="{Binding PlacementTarget.DataContext.ShowRecentlyDeletedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Icon>

@@ -138,7 +138,6 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        OptionsButton.ContextMenu.IsOpen = false;
         // Paused while the dialog is open: otherwise pressing the current
         // hotkey in the capture box would fire it instead of recording it.
         ApplyGlobalHotkey(null);

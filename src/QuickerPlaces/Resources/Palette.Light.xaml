@@ -14,7 +14,7 @@
     <SolidColorBrush x:Key="Text.Primary" Color="#FF161A19" />
     <SolidColorBrush x:Key="Text.Secondary" Color="#FF515956" />
     <SolidColorBrush x:Key="Text.Tertiary" Color="#FF646C69" />
-    <SolidColorBrush x:Key="Trim.Band" Color="#FF262B29" />
+    <SolidColorBrush x:Key="Trim.Stripe" Color="#FF161A19" />
     <SolidColorBrush x:Key="Trim.Line" Color="#FFC6CBC8" />
     <SolidColorBrush x:Key="Brand.Green" Color="#FF1F5C4D" />
     <SolidColorBrush x:Key="On.Brand" Color="#FFF2F1EC" />
