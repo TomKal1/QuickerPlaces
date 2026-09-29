@@ -6,6 +6,7 @@ Working documents for QuickerPlaces: the original brief, the specification built
 
 | Document | What it is | Status |
 |---|---|---|
+| [`260929_Configurable Canvas Implementation Plan.md`](260929_Configurable%20Canvas%20Implementation%20Plan.md) | Native WPF workspace with the year activity blocks, rearrangeable panels, three built-in layouts and user-saved presets; shared filtering, Collections/Saved searches, persistence, migration and verification | Planned on `codex/configurable-canvas-plan`, based on main at `6ba577d`; application implementation has not started |
 | [`260831_Raw brief for SI.txt`](260831_Raw%20brief%20for%20SI.txt) | The original request, verbatim, before any specification work | Historical — do not edit |
 | [`260831_Initial SI brief.md`](260831_Initial%20SI%20brief.md) | System Instructions: the requirements handoff the first build was written against | Historical — superseded by the plans below where they conflict |
 | [`BUILD_SUMMARY.md`](BUILD_SUMMARY.md) | How the build came together: the decisions made resolving the SI against the template, bugs found and fixed, the feature work, Phase 1, how the two were merged, Phases 2 and 3 with their manual checklists, and the UI refresh | Living — append as work lands |
