@@ -373,7 +373,10 @@
                               Checked="GroupByLevel_Changed" Unchecked="GroupByLevel_Changed"
                               ToolTip="Group recorded folders by depth below the tracked root. This only changes the display."
                               AutomationProperties.Name="Group activity by folder level" />
+                    <!-- Virtualized also while grouped by level, as the Library's shelf is: WPF otherwise builds every row. -->
                     <DataGrid x:Name="ActivityGrid" Grid.Row="4" ItemsSource="{Binding PeriodRows}"
+                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
                               AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                               SelectionMode="Single" Sorting="ActivityGrid_Sorting" RowHeight="38"
                               ColumnHeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
