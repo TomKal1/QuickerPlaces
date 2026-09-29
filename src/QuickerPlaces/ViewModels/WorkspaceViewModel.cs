@@ -185,6 +185,8 @@ public sealed class WorkspaceViewModel : ObservableObject
 
     private void OnLibraryQueryChanged()
     {
+        // The last layout action's line is old news once the user is searching.
+        Status = null;
         _layout.SetQuery(Library.CurrentQuery);
         if (_layout.HasUnsavedChanges)
             QueryPending?.Invoke();

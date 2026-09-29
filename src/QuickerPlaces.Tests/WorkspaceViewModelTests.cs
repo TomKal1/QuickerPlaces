@@ -108,6 +108,8 @@ public sealed class WorkspaceViewModelTests
         Assert.Empty(workspace.AddablePanels);
         Assert.False(workspace.CanAddPanel);
         Assert.Equal("Added Saved places.", workspace.Status);
+        workspace.SearchText = "jobs";
+        Assert.Null(workspace.Status);
 
         Assert.Equal(new[] { "activity", "shelf", "sessions", "places" }, NewWorkspace().Panels.Select(p => p.Type));
     }

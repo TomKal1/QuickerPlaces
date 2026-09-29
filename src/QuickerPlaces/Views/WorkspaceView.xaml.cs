@@ -46,6 +46,7 @@ public partial class WorkspaceView : UserControl
     private RecentFilesHost? _recentFilesHost;
     private LibraryRefresh? _refresh;
     private FileShelfPanel? _shelf;
+    private SessionsPanel? _sessionsPanel;
     private bool _reloadQueued;
     private bool _loadedOnce;
 
@@ -256,14 +257,15 @@ public partial class WorkspaceView : UserControl
                 return new YearActivityPanel { DataContext = _workspace!.Library };
 
             case PanelTypes.Shelf:
-                _shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false };
+                _shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false, ShowsSaveAsSession = true };
+                _shelf.SaveAsSessionRequested += SaveShelfAsSession;
                 return _shelf;
 
             case PanelTypes.Sessions:
-                var sessions = new SessionsPanel();
-                sessions.Attach(_sessions!, new WindowsShell(), _probe!);
-                sessions.SessionsChanged += RequestReload;
-                return sessions;
+                _sessionsPanel = new SessionsPanel();
+                _sessionsPanel.Attach(_sessions!, new WindowsShell(), _probe!);
+                _sessionsPanel.SessionsChanged += RequestReload;
+                return _sessionsPanel;
 
             case PanelTypes.Places:
                 return new PlacesPanel { DataContext = _places, CollapsesWithWindow = false };
@@ -287,6 +289,31 @@ public partial class WorkspaceView : UserControl
                 placeholder.SetResourceReference(Border.BorderBrushProperty, "Border.Default");
                 return placeholder;
         }
+    }
+
+    /// <summary>
+    /// The shelf's Save as session (M3): its PDF, Word and Excel files, each
+    /// once, reviewed in the usual Save Session dialog before anything is
+    /// saved. The Sessions panel then shows the new session selected.
+    /// </summary>
+    private void SaveShelfAsSession()
+    {
+        if (_workspace is null || _sessions is null || _probe is null || Window.GetWindow(this) is not { } owner)
+            return;
+
+        var fileSet = _workspace.ListedFileSet();
+        if (fileSet.IsEmpty)
+        {
+            MessageForm.Show(SessionFileSet.NothingToSave, AppInfo.Name, owner: owner);
+            return;
+        }
+
+        var editor = SessionEditorViewModel.ForFileSet(_sessions, fileSet);
+        if (!SessionEditorDialog.Show(owner, editor, _probe))
+            return;
+
+        _sessionsPanel?.NoteSaved(editor.SavedId!, editor.SavePersistenceMessage);
+        RequestReload();
     }
 
     // -----------------------------------------------------------------

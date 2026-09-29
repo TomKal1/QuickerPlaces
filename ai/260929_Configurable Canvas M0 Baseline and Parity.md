@@ -18,7 +18,7 @@ Milestone M0 of [the configurable canvas plan](260929_Configurable%20Canvas%20Im
 | `dotnet build src/QuickerPlaces/QuickerPlaces.csproj -c Release` | **Not run at M0.** Since M2 it runs on Linux with `-p:EnableWindowsTargeting=true` (XAML included): 0 warnings, 0 errors. Running the app still needs Windows |
 | Main compared with the plan's §2 inventory | No drift: every file the plan names exists with the responsibility it describes |
 
-Development checks of the workspace UI must use isolated stores (plan M0). Every store already takes its storage or path through a constructor (`PlacesService`, `SessionStore`, `RecentFilesStore`, `SettingsService`, `ActivityTrackingHost.CreateStore`), so M1's `WorkspaceStore` follows the same pattern; an app-wide data-root switch for manual runs is added with the shell in M3, where it is first needed.
+Development checks of the workspace UI must use isolated stores (plan M0). Every store already takes its storage or path through a constructor (`PlacesService`, `SessionStore`, `RecentFilesStore`, `SettingsService`, `ActivityTrackingHost.CreateStore`), so M1's `WorkspaceStore` follows the same pattern. M3 added the app-wide switch for manual runs: `--data-root <folder>` keeps every store, settings.json and the log under that folder, with its own single-instance gate and without touching the Windows startup entry. `--workspace` shows the workspace.
 
 ## 2. Parity checklist
 
@@ -33,7 +33,7 @@ Everything below is reachable today. Tick each item when the workspace offers it
 - [ ] Row context menu: Open, Copy, Rename, Edit, Favourite, Remove.
 - [ ] Add folder (Ctrl+N) and Add link (Ctrl+U) through `PlaceFormDialog`.
 - [ ] Remove with Undo (Ctrl+Z, and the status bar's Undo button); status dismiss.
-- [ ] Hide/show the list (Ctrl+H) — compact launcher mode. Decide in M3 whether it maps to a panel or stays a window mode.
+- [ ] Hide/show the list (Ctrl+H) — compact launcher mode. Decided in M3: it stays a window mode; in the workspace it hides the panels and keeps the header, favourites and toolbar.
 - [ ] Options menu: Recently Deleted…, Show data folder, Import…, Export… (Export disabled with no places).
 - [ ] Unsaved-changes banner: Retry, Show data folder, Show log.
 - [ ] Settings dialog: theme, highlight, global hotkey (reset/turn off), keep running in tray, start with Windows.

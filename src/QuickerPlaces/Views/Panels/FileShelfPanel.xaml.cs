@@ -34,6 +34,18 @@ public partial class FileShelfPanel : UserControl
         set => SearchArea.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>Shows Save as session, which raises <see cref="SaveAsSessionRequested"/>: the workspace saves the listed files (M3).</summary>
+    public bool ShowsSaveAsSession
+    {
+        get => SaveAsSessionButton.Visibility == Visibility.Visible;
+        set => SaveAsSessionButton.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Raised by Save as session; the host has the sessions store and the review dialog.</summary>
+    public event Action? SaveAsSessionRequested;
+
+    private void SaveAsSession_Click(object sender, RoutedEventArgs e) => SaveAsSessionRequested?.Invoke();
+
     /// <summary>Selects the first row, or keeps the selected one, and focuses the list: Down from a search box.</summary>
     public void FocusList()
     {

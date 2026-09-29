@@ -80,44 +80,58 @@
                 </WrapPanel>
             </StackPanel>
 
-            <!-- Search: the main window's search box. The workspace hides it: its own box is this search (ShowsSearch). -->
-            <Border x:Name="SearchArea" Grid.Column="1" Width="260" Height="34" VerticalAlignment="Top" CornerRadius="6" BorderThickness="1"
-                    Padding="10,0,5,0" Background="{DynamicResource Bg.Sunken}">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
-                        <Style.Triggers>
-                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Search}" Stroke="{DynamicResource Text.Tertiary}" />
-                    <TextBox x:Name="SearchBox" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource TextBox.Bare}"
-                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             AutomationProperties.Name="Search the Library" ToolTip="Search by name, path, tag or session"
-                             PreviewKeyDown="SearchBox_PreviewKeyDown" />
-                    <TextBlock Grid.Column="1" Text="Search by name, path, tag or session" IsHitTestVisible="False"
-                               Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </Grid>
-            </Border>
+            <!--
+                Right: Save as session (workspace only, ShowsSaveAsSession),
+                and the search box, which the workspace hides: its own box is
+                this search (ShowsSearch).
+            -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button x:Name="SaveAsSessionButton" Margin="12,0,0,0" Visibility="Collapsed"
+                        Click="SaveAsSession_Click" AutomationProperties.Name="Save listed files as a session"
+                        ToolTip="Review the PDF, Word and Excel files listed here, and save them as a session">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Sessions}" />
+                        <TextBlock Text="Save as session…" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Border x:Name="SearchArea" Margin="12,0,0,0" Width="260" Height="34" VerticalAlignment="Top" CornerRadius="6" BorderThickness="1"
+                        Padding="10,0,5,0" Background="{DynamicResource Bg.Sunken}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
+                            <Style.Triggers>
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Search}" Stroke="{DynamicResource Text.Tertiary}" />
+                        <TextBox x:Name="SearchBox" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource TextBox.Bare}"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search the Library" ToolTip="Search by name, path, tag or session"
+                                 PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                        <TextBlock Grid.Column="1" Text="Search by name, path, tag or session" IsHitTestVisible="False"
+                                   Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Border>
+            </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1">

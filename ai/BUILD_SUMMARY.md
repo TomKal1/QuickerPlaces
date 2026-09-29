@@ -617,6 +617,51 @@ Milestone M2 of [the configurable canvas plan](260929_Configurable%20Canvas%20Im
 
 On Linux (.NET SDK 10.0.112): 970 tests pass (937 before M2; new: `LibraryQueryEngineTests`, `LibraryPeriodQueryTests`, and a changed Library strip test). The WPF app now builds on Linux too, with `-p:EnableWindowsTargeting=true`: Release, 0 warnings, 0 errors, XAML included. A script checked that every `StaticResource` key the changed windows and panels use is defined. **Not done:** running the app. On Windows, check: the Library and Sessions windows look and behave as before (Sessions' **Save open files…** now sits above the list); Day/Week/Month selection and the period chip; the Tag picker; coverage lines with Recents off and with a search; the list keeping its scroll position and selection while Recent Files records; Recents' strip unchanged.
 
+## Configurable canvas: M3 (2026-09-29)
+
+Milestone M3 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): Activity Atlas in the main window, behind a development switch. Without the switch the app opens exactly as before.
+
+### Trying it
+
+Start `QuickerPlaces.exe --workspace`. To keep your real data out of it, add `--data-root <folder>`: places, sessions, settings, tracking, layouts and the log then live under `<folder>\Roaming` and `<folder>\Local`. That copy has its own single-instance gate, so it runs beside your everyday copy, and it never changes the Windows startup entry. With `dotnet run`: `dotnet run --project src/QuickerPlaces -- --workspace --data-root C:\qp-test`.
+
+### What was built
+
+- **Startup switches.** `StartupOptions` parses `--tray`, `--workspace` and `--data-root`; `AppDataFolders` is now the one place every store, settings.json and the log get their folder.
+- **`WorkspaceViewModel`** (UI-free). Connects `WorkspaceLayoutService` to the shared `LibraryViewModel`: the layout's remembered query is applied at start and on a switch; the user's query changes go back to the service and are written after a 2-second pause and at close. Lists the shown panels, offers the built-ins that have working panels, and commits Add panel and Hide at once (Arrange mode is M4). A failed layout write shows a line with Retry.
+- **`PanelLayoutEngine`** (UI-free). Packs visible panels in order on twelve columns; a panel that doesn't fit starts the next row. M4 adds narrow-window reflow here.
+- **`PlacesPanel`.** The places list — count, search, Options, table, sorting, row shortcuts, context menu — moved out of `MainWindow`. List mode hosts it as before; the workspace shows it as the Saved places panel.
+- **`WorkspaceView`.** Toolbar: layout picker, one search box over the Library (Enter opens the top result, Down enters the shelf, Esc clears; Ctrl+F, the global hotkey and a second launch focus it), Add panel, Options (Recent Files…, Recently Deleted, Places file, Import, Export) and Hide panels. Canvas: each panel made once under a title with Hide, then moved when the layout changes, so selection and scroll survive. The year strip's row takes its own height; other rows share the rest.
+- **Refresh.** The Library reads again when places change (new `MainViewModel.PlacesChanged`), when a session is saved, edited or deleted, and after Recents closes; Recent Files is read when the workspace opens; `LibraryRefresh` keeps it current and is released at close, before the tracking hosts.
+- **Save as session.** The shelf's **Save as session…** takes its listed PDF, Word and Excel files (`SessionFileSet`: each once, folders and links counted and left out) into the usual review dialog (`SessionEditorViewModel.ForFileSet`), all ticked and without scanning; **Find open files** still works there. The Sessions panel then shows the new session selected.
+- **Shared pieces.** Recent Files' settings are a `RecentFilesSettings` control, used by the Library window and the new Recent Files dialog. The Sessions panel stacks the selected session under the list below 640 px wide. The shelf's filter row wraps.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Hide list (Ctrl+H) in the workspace (parity checklist) | Stays a window mode: it hides the panels and keeps the header, favourites and toolbar, as list mode keeps the list's header; a search brings the panels back | It is the compact launcher: favourites and the search box without the rest |
+| Search boxes | The toolbar box is the Library's search; the shelf hides its own there. Saved places and Sessions keep their local boxes | One query (D4); the other two search different things |
+| Add panel and Hide before Arrange mode | Each is one Arrange step, finished at once | Add panel is M3's; Hide is needed to take a panel away again. Undo, moving and resizing are M4 |
+| Saved places' width when added | Full width (was a third) | Its four-column table can't be read narrower, and M3 has no resize |
+| Library and Sessions buttons in workspace mode | Hidden | Their content is on the canvas; a second Library view would run a second query |
+| Save as session with no documents listed | A message saying why, nothing opened | An empty review would only lead to a refused save |
+| `--data-root` and Windows startup | Left alone | The test copy's settings would remove or repoint the real Run entry |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 1003 tests pass (970 before; new: `StartupOptionsTests`, `PanelLayoutEngineTests`, `SessionFileSetTests`, `WorkspaceViewModelTests`), and the Release build of the app has 0 warnings and 0 errors, XAML included. A script checked that every `StaticResource` key the new and changed XAML uses is defined. **Not done:** running the app. On Windows, check, with `--workspace --data-root <test folder>`:
+
+- The list mode without `--workspace` looks and behaves as before (the places list moved into a control): search keys, sorting and its arrow, row shortcuts, context menu, Hide list with the header staying, Options.
+- Activity Atlas: year strip across the top, shelf and Sessions below; choose a day, week or month and the shelf narrows; the period survives a restart.
+- The toolbar search: Enter opens the top shelf row, Down enters the shelf, Esc clears; Ctrl+F and the global hotkey focus it.
+- Add panel ▸ Saved places appears full width under the others; Hide on any panel, and Add panel bringing it back; an empty canvas.
+- Save as session… from a chosen week: the review lists the week's documents ticked, Save, and the Sessions panel shows it.
+- Opening a place from the favourites, the Saved places panel or the shelf updates the shelf's Last used; Recents' window, closed, updates the strip.
+- Recent Files… dialog; Recently Deleted, Import and Export from Options.
+- Hide panels (Ctrl+H) and typing to bring them back; window at 1000×650 and maximized; dark and light themes.
+- Closing writes the layout (`workspace-layouts.json` under the data root's Local folder).
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.

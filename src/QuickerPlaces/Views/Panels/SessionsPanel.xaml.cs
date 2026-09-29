@@ -36,6 +36,9 @@ public partial class SessionsPanel : UserControl
         DataContext = _viewModel;
     }
 
+    /// <summary>Shows a session saved elsewhere (the File shelf's Save as session), selected, with how its write went.</summary>
+    public void NoteSaved(string sessionId, string? persistenceMessage) => _viewModel?.NoteSaved(sessionId, persistenceMessage);
+
     /// <summary>Start where the work is: the list when there are sessions, Save open files when there are none.</summary>
     public void FocusStart()
     {
