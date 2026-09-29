@@ -104,10 +104,13 @@ public static class PanelTypes
         _ => "Unavailable panel",
     };
 
-    /// <summary>The span a newly added panel of this type starts with.</summary>
+    /// <summary>
+    /// The span a newly added panel of this type starts with. Saved places is
+    /// a four-column table, legible only at full width.
+    /// </summary>
     public static int DefaultSpan(string type) => type switch
     {
-        Activity => PanelSpans.Full,
+        Activity or Places => PanelSpans.Full,
         Shelf => PanelSpans.TwoThirds,
         _ => PanelSpans.Third,
     };
