@@ -25,6 +25,11 @@ namespace QuickerPlaces.Services.Documents;
 ///   this file", asked of the candidates found here. Acrobat, Revu, Word and
 ///   Excel hold their documents open and answer for every one; browsers and
 ///   SumatraPDF read a file and let go, and never do.
+/// - <b>Files held open.</b> The documents the windows' programs hold,
+///   with full paths, from their file handles (held-files plan). Revu,
+///   Acrobat, Word and Excel hold every open document, so this finds
+///   background tabs and files that aren't in Recent Items, and gives a
+///   title's bare name its path.
 ///
 /// A title gives a file name, not a path, so it is matched to a path from
 /// the other clues and Windows' Recent Items, which also supply the
@@ -41,12 +46,13 @@ public static class OpenDocumentResolver
 
     /// <summary>
     /// Every document path the evidence names, before asking which are in
-    /// use: full paths in titles, paths on command lines, and recent
-    /// documents. Each once, in that order.
+    /// use: files programs hold open, full paths in titles, paths on command
+    /// lines, and recent documents. Each once, in that order.
     /// </summary>
     public static IReadOnlyList<string> CandidatePaths(OpenDocumentEvidence evidence)
     {
         var paths = new List<string>();
+        paths.AddRange(evidence.HeldFiles.Select(h => DocumentPaths.Normalize(h.Path)).OfType<string>());
         foreach (var window in evidence.Windows)
         {
             paths.AddRange(PathsInTitle(window.Title));
@@ -64,7 +70,15 @@ public static class OpenDocumentResolver
     /// </summary>
     public static OpenDocumentScan Resolve(OpenDocumentEvidence evidence, IEnumerable<string> inUse)
     {
-        var inUseSet = new HashSet<string>(inUse.Select(p => DocumentPaths.Normalize(p) ?? p), StringComparer.OrdinalIgnoreCase);
+        var held = evidence.HeldFiles
+            .Select(h => (Path: DocumentPaths.Normalize(h.Path), h.AppName))
+            .Where(h => h.Path is not null)
+            .ToList();
+
+        // A held file is in use by definition, so a title's name prefers it too (D6).
+        var inUseSet = new HashSet<string>(
+            inUse.Select(p => DocumentPaths.Normalize(p) ?? p).Concat(held.Select(h => h.Path!)),
+            StringComparer.OrdinalIgnoreCase);
         var recents = evidence.RecentDocuments
             .Select(r => (Path: DocumentPaths.Normalize(r.Path), r.LastOpenedAt))
             .Where(r => r.Path is not null)
@@ -129,6 +143,10 @@ public static class OpenDocumentResolver
             if (!matchedInTitle && GuessNameInTitle(window.Title, window.OfficeKind) is { } guess)
                 unmatched.Add($"{guess} ({window.AppName})");
         }
+
+        // Background tabs and other documents the programs hold, after each window's front document.
+        foreach (var (path, appName) in held)
+            MarkOpen(path!, $"Open in {appName}");
 
         foreach (var path in known.Where(inUseSet.Contains))
             MarkOpen(path, "In use by an open program");
@@ -419,6 +437,9 @@ public static class OpenDocumentResolver
 public sealed record OpenDocumentEvidence(IReadOnlyList<ViewerWindow> Windows, IReadOnlyList<RecentDocument> RecentDocuments)
 {
     public static OpenDocumentEvidence Empty { get; } = new(Array.Empty<ViewerWindow>(), Array.Empty<RecentDocument>());
+
+    /// <summary>Documents the windows' programs hold open, with full paths, from WindowsHeldFiles. Every one counts as open (held-files plan H1).</summary>
+    public IReadOnlyList<HeldFile> HeldFiles { get; init; } = Array.Empty<HeldFile>();
 }
 
 /// <param name="Title">The window's title as Windows reports it.</param>

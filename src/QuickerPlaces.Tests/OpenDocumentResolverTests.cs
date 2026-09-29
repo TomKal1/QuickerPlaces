@@ -26,6 +26,9 @@ public sealed class OpenDocumentResolverTests
     private static OpenDocumentScan Resolve(ViewerWindow[] windows, RecentDocument[] recents, params string[] inUse)
         => OpenDocumentResolver.Resolve(new OpenDocumentEvidence(windows, recents), inUse);
 
+    private static OpenDocumentScan ResolveHeld(ViewerWindow[] windows, RecentDocument[] recents, params HeldFile[] held)
+        => OpenDocumentResolver.Resolve(new OpenDocumentEvidence(windows, recents) { HeldFiles = held }, Array.Empty<string>());
+
     private static string[] OpenPaths(OpenDocumentScan scan) => scan.Candidates.Where(c => c.IsLikelyOpen).Select(c => c.Path).ToArray();
 
     private static string[] SuggestedPaths(OpenDocumentScan scan) => scan.Candidates.Where(c => !c.IsLikelyOpen).Select(c => c.Path).ToArray();
@@ -272,4 +275,58 @@ public sealed class OpenDocumentResolverTests
     [InlineData("Minutes v2.docx - Word", "Minutes v2.docx")]
     public void GuessNameInTitle_TakesOfficeNamesWithExtensions(string title, string expected)
         => Assert.Equal(expected, OpenDocumentResolver.GuessNameInTitle(title));
+
+    [Fact]
+    public void AHeldFile_IsOpen_WithoutATitleOrARecentItem()
+    {
+        var scan = ResolveHeld(Array.Empty<ViewerWindow>(), Array.Empty<RecentDocument>(), new HeldFile(Spec, "Bluebeam Revu"));
+
+        var candidate = Assert.Single(scan.Candidates);
+        Assert.Equal(Spec, candidate.Path);
+        Assert.True(candidate.IsLikelyOpen);
+        Assert.Equal("Open in Bluebeam Revu", candidate.Reason);
+        Assert.Null(candidate.LastOpenedAt);
+    }
+
+    [Fact]
+    public void EveryHeldTab_IsOpen_AndTheTitlesNameMatchesAHeldPath_WithoutRecentItems()
+    {
+        var scan = ResolveHeld(new[] { Window("Bluebeam Revu x64 - [A-102.pdf]", "Bluebeam Revu") }, Array.Empty<RecentDocument>(),
+            new HeldFile(A101, "Bluebeam Revu"), new HeldFile(A102, "Bluebeam Revu"));
+
+        Assert.Equal(new[] { A102, A101 }, OpenPaths(scan));
+        Assert.Empty(SuggestedPaths(scan));
+        Assert.Empty(scan.UnmatchedTitles);
+    }
+
+    [Fact]
+    public void AHeldFile_WinsOverAMoreRecentFileWithTheSameName()
+    {
+        var scan = ResolveHeld(new[] { Window("Bluebeam Revu x64 - [A-101.pdf]", "Bluebeam Revu") }, new[] { Recent(OldA101, 5) },
+            new HeldFile(A101, "Bluebeam Revu"));
+
+        Assert.Equal(new[] { A101 }, OpenPaths(scan));
+        Assert.Equal(new[] { OldA101 }, SuggestedPaths(scan));
+    }
+
+    [Fact]
+    public void AHeldFileAlsoInRecentItems_IsListedOnce_WithWhenItWasOpened()
+    {
+        var scan = ResolveHeld(Array.Empty<ViewerWindow>(), new[] { Recent(A101, 5) }, new HeldFile(A101, "Bluebeam Revu"));
+
+        var candidate = Assert.Single(scan.Candidates);
+        Assert.True(candidate.IsLikelyOpen);
+        Assert.Equal(Now.AddMinutes(-5), candidate.LastOpenedAt);
+    }
+
+    [Fact]
+    public void CandidatePaths_ListHeldFilesFirst()
+    {
+        var evidence = new OpenDocumentEvidence(new[] { Window(@"C:\Jobs\Tower B\A-102.pdf - Viewer", "Viewer") }, new[] { Recent(A101, 5) })
+        {
+            HeldFiles = new[] { new HeldFile(Spec, "Bluebeam Revu") },
+        };
+
+        Assert.Equal(new[] { Spec, A102, A101 }, OpenDocumentResolver.CandidatePaths(evidence));
+    }
 }
