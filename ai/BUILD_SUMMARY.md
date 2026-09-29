@@ -561,6 +561,34 @@ On Windows: the app and the tests build with 0 warnings and 0 errors, and all 87
 - With Recent Files expanded, the Library's table has little height left at the default 780 px window height; this was so before the restyle too.
 - The Library's **Type** column stays, because PDF, Word and Excel share the document icon.
 
+## Configurable canvas: M0 and M1 (2026-09-29)
+
+The first two milestones of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md), on `ccr-6156d37a-mo223d`. No window changes yet: the app still opens the current main window.
+
+### What was built
+
+- **M0.** [`260929_Configurable Canvas M0 Baseline and Parity.md`](260929_Configurable%20Canvas%20M0%20Baseline%20and%20Parity.md): the baseline test result and a checklist of every command, shortcut and lifecycle behaviour the workspace must keep before M7 replaces the main window.
+- **Models** (`Models/Workspace/`). `PanelInstance` (id, type, span, hidden, view choices), `WorkspaceQuery` with a typed `DateRule`, `LayoutPreset`, `WorkingArrangement` and `WorkspaceDocument` with `StartupChoice`. Panel types, date rules and the startup mode are strings, and every class keeps unknown JSON properties, so a file from a newer build round-trips instead of failing (D6).
+- **`BuiltInLayouts`.** Activity Atlas, Project Canvas and Personal Desk with the plan's spans, each versioned. Only Activity Atlas is offered until Collections and Saved searches exist (M6).
+- **`WorkspaceValidation`.** Layout names (trimmed, 1–80 characters, unique ignoring case within My layouts), "… copy" names, and load-time repair that lists what it changed.
+- **`WorkspaceStore`.** `workspace-layouts.json` in `%LocalAppData%`, over `FilePlacesStorage`. An unreadable file or one from a newer version is left untouched and read-only, with the built-ins still usable; a damaged one is quarantined and, if `workspace-layouts.bak.json` can be read, the backup is offered rather than restored unasked.
+- **`WorkspaceLayoutService`.** Definition, working arrangement and Arrange draft kept apart; Arrange edits (move before, move earlier/later over visible panels, span, hide, add) change only the draft; Done writes once, Revert writes nothing; Save changes, Save as new (optionally with filters), Rename, Duplicate, Delete with fallback, startup choice, Restore saved/built-in layout, Undo; query changes wait for a debounced `FlushPending`.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Save as new while arranging | The draft goes to the new layout; the source layout keeps the arrangement it had when Arrange began | The edits were made to become the new layout; the source should not also silently change |
+| Save changes on a layout saved with filters | Its filters are replaced by the current query; a layout saved without filters stays without | Save changes saves what is shown, and never adds filters the user didn't ask to include (D3) |
+| Which query a layout shows | Its saved filters, or the defaults, when switched to; the query remembered in its working record only when resumed at startup | Filters must not leak between layouts (D3) |
+| Undo scope | A draft edit in Arrange mode, or the last Delete or Restore; any other lasting change ends the offer; a debounced query write does not | Undo should never reverse something the user didn't just do |
+| Switching layout mid-Arrange | Keeps the draft, as Done would | "Changing presets first preserves the current working arrangement" (D2) |
+| Unavailable built-ins in a file | Kept (with any working arrangement) but not offered; startup falls back to Activity Atlas | A later build can offer them again without losing the user's changes |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): the test project builds with 0 warnings and all 937 tests pass (877 before, 60 new in `WorkspaceLayoutServiceTests`, `WorkspaceStoreTests` and `WorkspaceQueryTests`). **Not done:** the Windows app build — the new files use no WPF types and the test project compiles them, but the Release build of `QuickerPlaces.csproj` has not been run.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.

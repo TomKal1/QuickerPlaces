@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — configurable canvas and saved layouts
-status: planned; no application implementation in this branch yet
+status: in progress; M0 and M1 implemented on ccr-6156d37a-mo223d (see BUILD_SUMMARY.md)
 created: 2026-09-29
 branch: codex/configurable-canvas-plan
 baseline: main at 6ba577d22cd38ac28424233b6e238f4a81fa4d81
@@ -233,8 +233,8 @@ Manual Windows acceptance, using test stores:
 
 ## 7. Completion and handoff
 
-- [ ] M0 baseline and parity inventory recorded.
-- [ ] M1 reliable preset domain/store implemented.
+- [x] M0 baseline and parity inventory recorded ([M0 document](260929_Configurable%20Canvas%20M0%20Baseline%20and%20Parity.md); Windows Release build still to run).
+- [x] M1 reliable preset domain/store implemented (UI-free; 60 tests).
 - [ ] M2 shared query and reusable existing panels implemented.
 - [ ] M3 real-data Activity Atlas integrated.
 - [ ] M4 arrangement and accessibility verified.

@@ -113,6 +113,20 @@
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\ActivityViewModel.cs" Link="Linked\ViewModels\ActivityViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\ActivityCalendar.cs" Link="Linked\ViewModels\ActivityCalendar.cs" />
+    <!--
+      Configurable canvas (ai/260929_Configurable Canvas Implementation
+      Plan.md M1): the layout models, the built-in layouts, validation, the
+      layout store and the layout service. The WPF shell that shows them is
+      app-only.
+    -->
+    <Compile Include="..\QuickerPlaces\Models\Workspace\PanelInstance.cs" Link="Linked\Models\Workspace\PanelInstance.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Workspace\WorkspaceQuery.cs" Link="Linked\Models\Workspace\WorkspaceQuery.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Workspace\LayoutPreset.cs" Link="Linked\Models\Workspace\LayoutPreset.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Workspace\WorkspaceDocument.cs" Link="Linked\Models\Workspace\WorkspaceDocument.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\BuiltInLayouts.cs" Link="Linked\Services\Workspace\BuiltInLayouts.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceValidation.cs" Link="Linked\Services\Workspace\WorkspaceValidation.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceStore.cs" Link="Linked\Services\Workspace\WorkspaceStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceLayoutService.cs" Link="Linked\Services\Workspace\WorkspaceLayoutService.cs" />
   </ItemGroup>
 
   <ItemGroup>

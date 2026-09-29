@@ -1,0 +1,90 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using QuickerPlaces.Models.Workspace;
+
+namespace QuickerPlaces.Services.Workspace;
+
+/// <summary>
+/// The three built-in layouts (configurable canvas plan M1, D2). Code, not
+/// data: they cannot be overwritten or deleted, and each carries a
+/// <see cref="BuiltInLayout.Version"/> so a later change to a factory
+/// definition does not overwrite an arrangement the user already
+/// personalised from an older one.
+///
+/// A built-in is offered only when every panel it needs has a working panel
+/// (<see cref="PanelTypes.Available"/>): until Collections and Saved searches
+/// land in M6, that is Activity Atlas alone. UI-free.
+/// </summary>
+public static class BuiltInLayouts
+{
+    public const string ActivityAtlasId = "builtin.activity-atlas";
+    public const string ProjectCanvasId = "builtin.project-canvas";
+    public const string PersonalDeskId = "builtin.personal-desk";
+
+    /// <summary>The prefix every built-in id has, and no user layout's id may.</summary>
+    public const string IdPrefix = "builtin.";
+
+    /// <summary>What the workspace falls back to when nothing else is usable (plan D2).</summary>
+    public const string DefaultId = ActivityAtlasId;
+
+    public static readonly BuiltInLayout ActivityAtlas = new(ActivityAtlasId, "Activity Atlas", 1, new[]
+    {
+        (PanelTypes.Activity, PanelSpans.Full),
+        (PanelTypes.Shelf, PanelSpans.TwoThirds),
+        (PanelTypes.Sessions, PanelSpans.Third),
+    });
+
+    public static readonly BuiltInLayout ProjectCanvas = new(ProjectCanvasId, "Project Canvas", 1, new[]
+    {
+        (PanelTypes.Collections, PanelSpans.Full),
+        (PanelTypes.Shelf, PanelSpans.TwoThirds),
+        (PanelTypes.Activity, PanelSpans.Third),
+    });
+
+    public static readonly BuiltInLayout PersonalDesk = new(PersonalDeskId, "Personal Desk", 1, new[]
+    {
+        (PanelTypes.Shelf, PanelSpans.TwoThirds),
+        (PanelTypes.Searches, PanelSpans.Third),
+        (PanelTypes.Activity, PanelSpans.TwoThirds),
+        (PanelTypes.Sessions, PanelSpans.Third),
+    });
+
+    /// <summary>Every built-in, in picker order, offered or not.</summary>
+    public static readonly IReadOnlyList<BuiltInLayout> All = new[] { ActivityAtlas, ProjectCanvas, PersonalDesk };
+
+    /// <summary>The built-ins the picker lists today.</summary>
+    public static IReadOnlyList<BuiltInLayout> Offered => All.Where(b => b.IsOffered).ToList();
+
+    public static bool IsBuiltInId(string? id) => id is not null && id.StartsWith(IdPrefix, StringComparison.Ordinal);
+
+    public static BuiltInLayout? Find(string? id) => All.FirstOrDefault(b => b.Id == id);
+}
+
+/// <summary>One built-in layout's factory definition.</summary>
+public sealed class BuiltInLayout
+{
+    private readonly (string Type, int Span)[] _panels;
+
+    public BuiltInLayout(string id, string name, int version, (string Type, int Span)[] panels)
+    {
+        Id = id;
+        Name = name;
+        Version = version;
+        _panels = panels;
+    }
+
+    public string Id { get; }
+
+    public string Name { get; }
+
+    /// <summary>Raised whenever the factory definition changes.</summary>
+    public int Version { get; }
+
+    /// <summary>True when every panel this layout needs is available in this build.</summary>
+    public bool IsOffered => _panels.All(p => PanelTypes.IsAvailable(p.Type));
+
+    /// <summary>A fresh copy of the factory panels. Panel ids are the panel types: one of each.</summary>
+    public List<PanelInstance> CreatePanels()
+        => _panels.Select(p => new PanelInstance { Id = p.Type, Type = p.Type, Span = p.Span }).ToList();
+}
