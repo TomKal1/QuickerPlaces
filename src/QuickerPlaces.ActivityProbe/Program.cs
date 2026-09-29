@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.Documents;
 
 namespace QuickerPlaces.ActivityProbe;
 
@@ -41,7 +42,7 @@ internal static class Program
             string? pendingChoice = null;
             while (true)
             {
-                Console.WriteLine("\n1 Live view   2 Stress (20,000 passes)   3 Host/lock run   Q Quit");
+                Console.WriteLine("\n1 Live view   2 Stress (20,000 passes)   3 Host/lock run   4 Held files   Q Quit");
                 var choice = pendingChoice ?? (args.Length > 0 ? args[0] : Console.ReadLine());
                 pendingChoice = null;
                 args = Array.Empty<string>();
@@ -50,9 +51,10 @@ internal static class Program
                     case "1": case "live": pendingChoice = Live(); break;
                     case "2": case "stress": Stress(); break;
                     case "3": case "host": Host(storeDirectory, hostRoot, hostDepth); break;
+                    case "4": case "held": HeldFiles(); break;
                     case "q": case "quit": return 0;
                     case "": break; // An Enter typed after a live-view shortcut.
-                    default: Console.WriteLine("Choose 1, 2, 3 or Q."); break;
+                    default: Console.WriteLine("Choose 1, 2, 3, 4 or Q."); break;
                 }
             }
         }
@@ -135,6 +137,47 @@ internal static class Program
                 }
                 Thread.Sleep(100);
             }
+        }
+    }
+
+    private static void HeldFiles()
+    {
+        Console.Write("Process name (for example Revu, Acrobat, WINWORD, EXCEL): ");
+        var name = Console.ReadLine()?.Trim();
+        if (string.IsNullOrEmpty(name))
+            return;
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            name = name[..^4];
+
+        var processes = Process.GetProcessesByName(name);
+        if (processes.Length == 0)
+        {
+            Console.WriteLine($"No process named {name} is running.");
+            return;
+        }
+
+        var programs = new List<(uint ProcessId, string AppName)>();
+        foreach (var process in processes)
+        {
+            programs.Add(((uint)process.Id, name));
+            process.Dispose();
+        }
+
+        Console.WriteLine("Paths appear on screen only.");
+        var clock = Stopwatch.StartNew();
+        try
+        {
+            var read = WindowsHeldFiles.Read(programs, TimeSpan.FromSeconds(3));
+            Console.WriteLine($"{read.Files.Count} document(s) held by {name} in {clock.ElapsedMilliseconds} ms" +
+                              (read.IsComplete ? ":" : " (stopped at the time limit):"));
+            foreach (var file in read.Files)
+                Console.WriteLine("  " + file.Path);
+            Log($"Held files: {read.Files.Count} document(s), {programs.Count} process(es), {clock.ElapsedMilliseconds} ms, complete={read.IsComplete}.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Listing held files failed: {ex.GetType().Name}: {ex.Message}");
+            Log($"Held files failed: {ex.GetType().Name}.");
         }
     }
 

@@ -15,6 +15,10 @@
     <Compile Include="../QuickerPlaces/Models/StoreLoadOutcome.cs" Link="Linked/Models/StoreLoadOutcome.cs" />
     <Compile Include="../QuickerPlaces/Services/Activity/*.cs" Link="Linked/Services/Activity/%(Filename)%(Extension)" />
     <Compile Include="../QuickerPlaces/Services/DiagnosticLog.cs" Link="Linked/Services/DiagnosticLog.cs" />
+    <Compile Include="../QuickerPlaces/Services/Documents/DocumentKind.cs" Link="Linked/Services/Documents/DocumentKind.cs" />
+    <Compile Include="../QuickerPlaces/Services/Documents/DocumentPaths.cs" Link="Linked/Services/Documents/DocumentPaths.cs" />
+    <Compile Include="../QuickerPlaces/Services/Documents/HeldFilePaths.cs" Link="Linked/Services/Documents/HeldFilePaths.cs" />
+    <Compile Include="../QuickerPlaces/Services/Documents/WindowsHeldFiles.cs" Link="Linked/Services/Documents/WindowsHeldFiles.cs" />
     <Compile Include="../QuickerPlaces/Services/FilePlacesStorage.cs" Link="Linked/Services/FilePlacesStorage.cs" />
     <Compile Include="../QuickerPlaces/Services/IPlacesStorage.cs" Link="Linked/Services/IPlacesStorage.cs" />
     <Compile Include="../QuickerPlaces/Services/JsonStoreLoader.cs" Link="Linked/Services/JsonStoreLoader.cs" />
