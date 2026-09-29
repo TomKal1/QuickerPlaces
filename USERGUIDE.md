@@ -151,8 +151,13 @@ The **Library** (in the header) shows everything QuickerPlaces knows about in on
 - **Kind chips** — All, Folders, Links, PDFs, Word, Excel — show one kind, with how many of each there are.
 - **Show All, Saved or Recent** — Saved is your places and session files; Recent is Recents' folders and Recent Files.
 - **Group by Type or Tag** — by tag, each session tag gets its own group, a file with two tags appears under both, and anything untagged (including places, which don't have tags) is under **No tag**.
+- **Tag** narrows to files in sessions with one tag; **Any tag** shows everything again.
 - **Search** matches names, paths, tags and session names.
-- **The year strip** at the top shades each day by how much was used — folder visits, files opened, and sessions saved or reopened — following the kind chip. Click a day to list only what was used that day; click it again, or the **×** beside the date, to see everything. Links keep no history, only when each was last opened.
+- **The year strip** at the top shades each day by the activity QuickerPlaces recorded — folder visits, files opened, and sessions saved or reopened — for the kind, Show, Tag and Search choices below it. It is a count of those records, not of files used: reopening a session counts once, not once per file. Choose **Day**, **Week** or **Month** beside the year, then click a day to list only what was used that day, week or month; click the same period again, or the **×** beside it, to see everything. Choosing a period changes the list, not the shading. Links keep no history, only when each was last opened.
+- **What the strip can't count** is said under it rather than shown as an empty day. Recents remembers which folders you visited for 62 days (and how many visits per day for a year), so while you search or show only Saved, older days show as outlined squares whose tooltip says the folder visits for that filter are no longer known. If Recents tracks no folders, or Recent Files is off or was off for a while, a line says so.
+- **An empty list says why:** the period is still to come, nothing was being recorded yet, or nothing was recorded then. A line under the list says what a period can't include — a saved place shows in a period only if that's when you last opened it, and folders visited more than 62 days ago can't be listed.
+
+The Library keeps itself up to date while it's open: new Recent Files opens and Recents activity appear within about half a minute, without losing your place in the list.
 
 Double-click a row, or press Enter, to open it. Opening a saved place here counts exactly as opening it from the main grid (Last Opened and Opens update); opening anything else just opens it. Right-click for **Copy path or link** and, on a recent file, **Remove from Recent Files**.
 

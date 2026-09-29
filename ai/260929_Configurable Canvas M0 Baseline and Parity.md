@@ -15,7 +15,7 @@ Milestone M0 of [the configurable canvas plan](260929_Configurable%20Canvas%20Im
 | Check | Result |
 |---|---|
 | `dotnet test src/QuickerPlaces.Tests/QuickerPlaces.Tests.csproj` (Linux cloud session, .NET SDK 10.0.112) | 877 passed, 0 failed, 0 skipped |
-| `dotnet build src/QuickerPlaces/QuickerPlaces.csproj -c Release` | **Not run.** The app targets `net10.0-windows` with WPF, which needs Windows. Run it on Windows before M3 lands |
+| `dotnet build src/QuickerPlaces/QuickerPlaces.csproj -c Release` | **Not run at M0.** Since M2 it runs on Linux with `-p:EnableWindowsTargeting=true` (XAML included): 0 warnings, 0 errors. Running the app still needs Windows |
 | Main compared with the plan's §2 inventory | No drift: every file the plan names exists with the responsibility it describes |
 
 Development checks of the workspace UI must use isolated stores (plan M0). Every store already takes its storage or path through a constructor (`PlacesService`, `SessionStore`, `RecentFilesStore`, `SettingsService`, `ActivityTrackingHost.CreateStore`), so M1's `WorkspaceStore` follows the same pattern; an app-wide data-root switch for manual runs is added with the shell in M3, where it is first needed.
@@ -38,7 +38,7 @@ Everything below is reachable today. Tick each item when the workspace offers it
 - [ ] Unsaved-changes banner: Retry, Show data folder, Show log.
 - [ ] Settings dialog: theme, highlight, global hotkey (reset/turn off), keep running in tray, start with Windows.
 - [ ] Recents button with the tracking indicator (count of tracked folders); opens `ActivityWindow`.
-- [ ] Library button (`LibraryWindow`) and Sessions button (`SessionsWindow`).
+- [ ] Library button (`LibraryWindow`) and Sessions button (`SessionsWindow`). Since M2 both windows host the workspace panels (`YearActivityPanel`, `FileShelfPanel`, `SessionsPanel`).
 
 ### Recents (`Views/ActivityWindow.xaml`)
 

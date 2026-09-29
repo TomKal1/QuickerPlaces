@@ -589,6 +589,34 @@ The first two milestones of [the configurable canvas plan](260929_Configurable%2
 
 On Linux (.NET SDK 10.0.112): the test project builds with 0 warnings and all 937 tests pass (877 before, 60 new in `WorkspaceLayoutServiceTests`, `WorkspaceStoreTests` and `WorkspaceQueryTests`). **Not done:** the Windows app build — the new files use no WPF types and the test project compiles them, but the Release build of `QuickerPlaces.csproj` has not been run.
 
+## Configurable canvas: M2 (2026-09-29)
+
+Milestone M2 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): one explicit query over the Library's sources for any period, with truthful coverage, and the Library and Sessions content as reusable panels. The main window is unchanged; the Library and Sessions windows now host the panels.
+
+### What was built
+
+- **`ResourceIdentity`** (`Services/Library/`). The Library's rules for "the same folder, link or document", moved out of `LibraryIndex` so the index, the shelf's selection and M6's collections share them. `LibraryItem.Key` exposes it.
+- **Store history reads.** `ActivityStore.QueryFolderDays` (kept per-day folder detail) and `DetailKeptFrom`; `RecentFilesStore.QueryHistory` (every kept open per file). `RecentFilesHost.Recorded` fires after a pass records opens.
+- **`LibrarySnapshot` and `LibraryQueryEngine`.** The four sources copied on the UI thread, then queried off it: items used in an inclusive period, recorded activity per day for the non-date filters over everything kept, a coverage line per source (Available, Partial, Unavailable, NotApplicable) and notes on what a period can't list.
+- **`LibraryViewModel`** on the engine. `CurrentQuery`/`ApplyQuery`/`QueryChanged` make it the workspace's one query (D4); Day/Week/Month selection, relative This week/This month, a Session tag filter, reasons for an empty list, coverage notes. Queries go through `IBackgroundWork` (inline in tests, `DispatcherBackgroundWork` in the app) and a result overtaken by a newer query is dropped. The selected row is kept by resource identity, and a refresh that changes nothing shown leaves the rows alone.
+- **Panels** (`Views/Panels/`). `YearActivityPanel` and `FileShelfPanel` share one `LibraryViewModel`; `SessionsPanel` carries everything the Sessions window did and raises `SessionsChanged`. `LibraryRefresh` reloads an open Library at most every 30 seconds on Recent Files or Recents activity, and unsubscribes on close. `LibraryWindow` and `SessionsWindow` are now thin wrappers.
+- **Shared styles.** The year strip's day cell and focus ring (identical copies in Recents and the Library), the kind chip, the row kind icon and `CollapsedWhenEmpty` live in `Styles.xaml`.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Which evidence a filter can narrow (D5) | File opens and session events always; folder visits only from Recents' kept 62-day folder detail. With a search or Saved, older days are marked unknown (shown as untracked squares with a reason), never as unfiltered totals | Day totals outlive the detail that says which folder was visited |
+| A session under a kind or tag filter | Its saves and reopens count when it holds a file passing the kind and search, and (for a tag) carries the tag itself; never under Recent | A PDF session's save said nothing about Excel, yet showed under Excel before |
+| Folder detail older than the kept window but not yet pruned | Ignored everywhere | What is listed shouldn't depend on when pruning last ran |
+| Where the shared styles live | `Styles.xaml`, not a new dictionary | Its `StaticResource` and `BasedOn` references (Icon.Row, Icons) already resolve there; a sibling dictionary can't rely on them |
+| Save open files in the Sessions window | Moved from beside the title into the panel's top row | The panel must carry its own main action into the workspace |
+| Live refresh cadence | At most one reload per 30 s while a Library view is open | Recents wakes every few seconds; recorded data changes far less often |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 970 tests pass (937 before M2; new: `LibraryQueryEngineTests`, `LibraryPeriodQueryTests`, and a changed Library strip test). The WPF app now builds on Linux too, with `-p:EnableWindowsTargeting=true`: Release, 0 warnings, 0 errors, XAML included. A script checked that every `StaticResource` key the changed windows and panels use is defined. **Not done:** running the app. On Windows, check: the Library and Sessions windows look and behave as before (Sessions' **Save open files…** now sits above the list); Day/Week/Month selection and the period chip; the Tag picker; coverage lines with Recents off and with a search; the list keeping its scroll position and selection while Recent Files records; Recents' strip unchanged.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.
