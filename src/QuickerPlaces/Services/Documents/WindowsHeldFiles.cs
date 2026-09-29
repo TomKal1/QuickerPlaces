@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace QuickerPlaces.Services.Documents;
 
@@ -17,153 +18,342 @@ namespace QuickerPlaces.Services.Documents;
 /// Acrobat has open and every document Word or Excel has open, with its
 /// full path, whether or not it is in Recent Items.
 ///
+/// - Targets are the given programs first, then every other process with the
+///   same executable name (Revu and Acrobat split their work over several),
+///   in this user's session only. Explorer and browsers are never targets
+///   (<see cref="SkippedPrograms"/>).
 /// - NtQuerySystemInformation(SystemExtendedHandleInformation) lists every
-///   handle in the system; only the target programs' file handles are
-///   kept. The "File" object type's number differs between Windows
-///   versions, so it is read from a handle this process opens on its own
-///   executable, in the same list.
+///   handle in the system; only the targets' file handles are kept. The
+///   "File" object type's number differs between Windows versions, so it is
+///   read from a handle this process opens on its own executable, in the
+///   same list.
 /// - Each is copied into this process (DuplicateHandle), kept only if it is
-///   a disk file (GetFileType, so a pipe is never asked for its name, which
-///   can hang), and named by GetFinalPathNameByHandle.
+///   a disk file (GetFileType), and named by GetFinalPathNameByHandle with
+///   FILE_NAME_OPENED, which needs no round trip to a file server, unlike
+///   FILE_NAME_NORMALIZED, so a slow share can't stall it.
 /// - <see cref="HeldFilePaths"/> turns the names into session paths.
 ///
 /// This is how Process Explorer and handle.exe list open files. It needs
 /// no elevation for the user's own programs; an elevated program's files
-/// are skipped. It runs on its own background thread with a time limit
-/// (H4): if a handle stalls, what was found so far is returned and the
-/// thread is left to finish on its own.
+/// are skipped.
+///
+/// A few handles can block whatever asks about them: GetFileType itself
+/// stalls on a synchronous pipe with a pending read, and a name from a dead
+/// share can too. So the handles are walked on a background thread that a
+/// watchdog watches (H4): a handle that takes longer than
+/// <see cref="HandleTimeout"/> is abandoned with its thread, remembered in
+/// <see cref="StuckHandles"/> so no later scan asks about it again, and the
+/// walk carries on from the next handle on a fresh thread. The whole read
+/// also has the caller's time limit; what was found so far is returned when
+/// it runs out.
 ///
 /// App-only: it calls Windows, so it is not linked into the test project.
 /// </summary>
 public static class WindowsHeldFiles
 {
     /// <summary>
+    /// Programs never read, even when a window of theirs is given or a
+    /// sibling of a given program: Explorer and the shell helpers hold files
+    /// only to show them, and browsers don't keep a PDF open and run dozens
+    /// of processes full of pipes.
+    /// </summary>
+    private static readonly HashSet<string> SkippedPrograms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "explorer", "prevhost", "dllhost", "SearchHost", "SearchProtocolHost", "OneDrive", "Dropbox",
+        "msedge", "msedgewebview2", "chrome", "firefox", "brave", "opera", "iexplore",
+    };
+
+    /// <summary>Handles that stalled a read before, so are skipped from then on: a stuck pipe then costs one thread once, not one every scan.</summary>
+    private static readonly ConcurrentDictionary<(uint ProcessId, nint Handle), byte> StuckHandles = new();
+
+    private static readonly TimeSpan HandleTimeout = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(25);
+    private const int MaxAbandonedWorkers = 3;
+
+    /// <summary>
     /// The documents held by <paramref name="programs"/> and by every other
-    /// process with the same executable name, as Revu and Acrobat split
-    /// their work over several. Throws if the handle list can't be read.
+    /// process with the same executable name. Throws only if the handle list
+    /// can't be read; a stalled or failed walk returns what was found, with
+    /// <see cref="HeldFilesRead.IsComplete"/> false.
     /// </summary>
     public static HeldFilesRead Read(IReadOnlyList<(uint ProcessId, string AppName)> programs, TimeSpan timeout)
     {
-        var targets = WithSameNamedProcesses(programs);
+        var clock = Stopwatch.StartNew();
+
+        // Mapped drives are asked for in parallel: WNetGetConnection can be slow for a disconnected drive.
+        var drivesTask = Task.Run(MappedDrives);
+
+        var targets = SelectTargets(programs);
         if (targets.Count == 0)
             return new HeldFilesRead(Array.Empty<HeldFile>(), IsComplete: true);
 
+        var handles = ListFileHandles(targets);
         var found = new ConcurrentQueue<(string FinalPath, string AppName)>();
-        Exception? failure = null;
-        var worker = new Thread(() =>
+        var isComplete = WalkAll(handles, targets, found, clock, timeout);
+
+        IReadOnlyDictionary<string, string> drives;
+        try
         {
-            try
-            {
-                Collect(targets, found);
-            }
-            catch (Exception ex)
-            {
-                failure = ex;
-            }
-        })
+            var remaining = timeout - clock.Elapsed;
+            drives = drivesTask.Wait(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero)
+                ? drivesTask.Result
+                : new Dictionary<string, string>();
+        }
+        catch (Exception)
         {
-            IsBackground = true,
-            Name = "QuickerPlaces held files",
-        };
-        worker.Start();
-
-        var finished = worker.Join(timeout);
-        if (finished && failure is not null)
-            throw new InvalidOperationException("Listing held files failed.", failure);
-
-        var files = HeldFilePaths.Resolve(found.ToArray(), MappedDrives(), ExcludedFolders());
-        return new HeldFilesRead(files, finished);
-    }
-
-    private static Dictionary<uint, string> WithSameNamedProcesses(IReadOnlyList<(uint ProcessId, string AppName)> programs)
-    {
-        var targets = new Dictionary<uint, string>();
-        foreach (var (processId, appName) in programs)
-        {
-            targets.TryAdd(processId, appName);
-
-            string name;
-            try
-            {
-                using var process = Process.GetProcessById((int)processId);
-                name = process.ProcessName;
-            }
-            catch (Exception)
-            {
-                // Gone already: it holds nothing.
-                continue;
-            }
-
-            foreach (var sibling in Process.GetProcessesByName(name))
-            {
-                targets.TryAdd((uint)sibling.Id, appName);
-                sibling.Dispose();
-            }
+            // An unmapped \\server\share path is still usable.
+            drives = new Dictionary<string, string>();
         }
 
-        targets.Remove((uint)Environment.ProcessId);
+        return new HeldFilesRead(HeldFilePaths.Resolve(found.ToArray(), drives, ExcludedFolders()), isComplete);
+    }
+
+    private readonly record struct Target(string AppName, int Order);
+
+    private readonly record struct HeldHandle(uint ProcessId, nint Handle);
+
+    /// <summary>
+    /// The given programs in the order given, then their same-named siblings,
+    /// each with its program's name and its place in that order. Left out:
+    /// this process, other sessions' processes, and <see cref="SkippedPrograms"/>.
+    /// </summary>
+    private static Dictionary<uint, Target> SelectTargets(IReadOnlyList<(uint ProcessId, string AppName)> programs)
+    {
+        var running = new List<(uint Id, string Name, int Session)>();
+        var all = Process.GetProcesses();
+        try
+        {
+            foreach (var process in all)
+            {
+                try
+                {
+                    running.Add(((uint)process.Id, process.ProcessName, process.SessionId));
+                }
+                catch (Exception)
+                {
+                    // Gone already: it holds nothing.
+                }
+            }
+        }
+        finally
+        {
+            foreach (var process in all)
+                process.Dispose();
+        }
+
+        var ownId = (uint)Environment.ProcessId;
+        var ownSession = running.Where(p => p.Id == ownId).Select(p => p.Session).DefaultIfEmpty(-1).First();
+        bool Eligible((uint Id, string Name, int Session) p) =>
+            p.Id != ownId && p.Session == ownSession && !SkippedPrograms.Contains(p.Name);
+
+        var targets = new Dictionary<uint, Target>();
+        var order = 0;
+        foreach (var (processId, appName) in programs)
+        {
+            if (running.FirstOrDefault(p => p.Id == processId) is { Name: not null } given && Eligible(given))
+                targets.TryAdd(processId, new Target(appName, order++));
+        }
+
+        foreach (var (processId, appName) in programs)
+        {
+            if (running.FirstOrDefault(p => p.Id == processId) is not { Name: not null } given || !Eligible(given))
+                continue;
+
+            foreach (var sibling in running.Where(p => string.Equals(p.Name, given.Name, StringComparison.OrdinalIgnoreCase) && Eligible(p)))
+                targets.TryAdd(sibling.Id, new Target(appName, order++));
+        }
+
         return targets;
     }
 
-    private static void Collect(Dictionary<uint, string> targets, ConcurrentQueue<(string FinalPath, string AppName)> found)
-    {
-        var (handles, fileType) = SnapshotWithFileType();
-        var self = GetCurrentProcess();
-
-        var byProcess = handles
-            .Where(h => h.ObjectTypeIndex == fileType && targets.ContainsKey((uint)h.UniqueProcessId))
-            .GroupBy(h => (uint)h.UniqueProcessId);
-
-        foreach (var group in byProcess)
-        {
-            var process = OpenProcess(ProcessDupHandle, false, group.Key);
-            if (process == IntPtr.Zero)
-                continue; // Elevated, or gone.
-
-            try
-            {
-                foreach (var entry in group)
-                {
-                    if (!DuplicateHandle(process, entry.HandleValue, self, out var copy, 0, false, DuplicateSameAccess))
-                        continue;
-
-                    try
-                    {
-                        if (GetFileType(copy) == FileTypeDisk && FinalPath(copy) is { } path)
-                            found.Enqueue((path, targets[group.Key]));
-                    }
-                    finally
-                    {
-                        CloseHandle(copy);
-                    }
-                }
-            }
-            finally
-            {
-                CloseHandle(process);
-            }
-        }
-    }
-
-    /// <summary>Every handle in the system, and the object type number of a file handle, read from one this process holds on its own executable.</summary>
-    private static (SystemHandleEntry[] Handles, ushort FileType) SnapshotWithFileType()
+    /// <summary>
+    /// The targets' file handles, not yet asked about, in target order and
+    /// within a process in handle-list order, without the known stuck ones.
+    /// </summary>
+    private static HeldHandle[] ListFileHandles(Dictionary<uint, Target> targets)
     {
         var executable = Environment.ProcessPath ?? throw new InvalidOperationException("This process has no executable path.");
         using var own = File.OpenHandle(executable, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
-        var handles = SystemHandles();
         var ownId = (nuint)Environment.ProcessId;
+        var entries = SystemHandles(id => id == ownId || targets.ContainsKey((uint)id));
+
         var ownHandle = own.DangerousGetHandle();
-        foreach (var entry in handles)
+        ushort? fileType = null;
+        foreach (var entry in entries)
         {
             if (entry.UniqueProcessId == ownId && entry.HandleValue == ownHandle)
-                return (handles, entry.ObjectTypeIndex);
+            {
+                fileType = entry.ObjectTypeIndex;
+                break;
+            }
         }
 
-        throw new InvalidOperationException("The file object type could not be found.");
+        if (fileType is null)
+            throw new InvalidOperationException("The file object type could not be found.");
+
+        // OrderBy is stable, so the handle order within a process is kept.
+        return entries
+            .Where(e => e.ObjectTypeIndex == fileType && targets.ContainsKey((uint)e.UniqueProcessId))
+            .Select(e => new HeldHandle((uint)e.UniqueProcessId, e.HandleValue))
+            .Where(h => !StuckHandles.ContainsKey((h.ProcessId, h.Handle)))
+            .OrderBy(h => targets[h.ProcessId].Order)
+            .ToArray();
     }
 
-    private static SystemHandleEntry[] SystemHandles()
+    /// <summary>
+    /// Asks about every handle on a watched background thread. False when the
+    /// time limit ran out, a walk failed, or too many threads were abandoned.
+    /// </summary>
+    private static bool WalkAll(HeldHandle[] handles, Dictionary<uint, Target> targets,
+        ConcurrentQueue<(string FinalPath, string AppName)> found, Stopwatch clock, TimeSpan timeout)
+    {
+        var next = 0;
+        var abandoned = 0;
+        while (next < handles.Length)
+        {
+            if (clock.Elapsed >= timeout)
+                return false;
+
+            var progress = new WalkProgress(next);
+            var worker = new Thread(() => Walk(handles, progress, targets, found))
+            {
+                IsBackground = true,
+                Name = "QuickerPlaces held files",
+            };
+            worker.Start();
+
+            while (true)
+            {
+                Thread.Sleep(PollInterval);
+
+                if (progress.Done)
+                {
+                    if (progress.Failure is not null)
+                        return false;
+
+                    next = handles.Length;
+                    break;
+                }
+
+                if (clock.Elapsed >= timeout)
+                {
+                    progress.Cancelled = true;
+                    return false;
+                }
+
+                // Current is read before StepStarted: the walk writes them the other way round.
+                var current = progress.Current;
+                if (Stopwatch.GetElapsedTime(progress.StepStarted) > HandleTimeout)
+                {
+                    progress.Cancelled = true;
+                    StuckHandles.TryAdd((handles[current].ProcessId, handles[current].Handle), 0);
+                    next = current + 1;
+                    if (++abandoned >= MaxAbandonedWorkers)
+                        return false;
+
+                    break;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Asks about handles[progress.Current...] one at a time, publishing which
+    /// it is on and when it began so the watchdog can tell when one stalls.
+    /// Checks for cancellation before each, so a thread that un-sticks after
+    /// being abandoned stops instead of carrying on.
+    /// </summary>
+    private static void Walk(HeldHandle[] handles, WalkProgress progress, Dictionary<uint, Target> targets,
+        ConcurrentQueue<(string FinalPath, string AppName)> found)
+    {
+        var self = GetCurrentProcess();
+        var processes = new Dictionary<uint, IntPtr>();
+        try
+        {
+            for (var i = progress.Start; i < handles.Length; i++)
+            {
+                if (progress.Cancelled)
+                    return;
+
+                progress.StepStarted = Stopwatch.GetTimestamp();
+                progress.Current = i;
+
+                var (processId, handle) = handles[i];
+                if (!processes.TryGetValue(processId, out var process))
+                    processes[processId] = process = OpenProcess(ProcessDupHandle, false, processId);
+                if (process == IntPtr.Zero)
+                    continue; // Elevated, or gone.
+
+                if (!DuplicateHandle(process, handle, self, out var copy, 0, false, DuplicateSameAccess))
+                    continue;
+
+                try
+                {
+                    if (GetFileType(copy) == FileTypeDisk && FinalPath(copy) is { } path)
+                        found.Enqueue((path, targets[processId].AppName));
+                }
+                finally
+                {
+                    CloseHandle(copy);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            progress.Failure = ex;
+        }
+        finally
+        {
+            foreach (var process in processes.Values)
+            {
+                if (process != IntPtr.Zero)
+                    CloseHandle(process);
+            }
+
+            progress.Done = true;
+        }
+    }
+
+    /// <summary>What one walk thread reports to the watchdog, and the watchdog to it.</summary>
+    private sealed class WalkProgress
+    {
+        private long stepStarted = Stopwatch.GetTimestamp();
+
+        public WalkProgress(int start)
+        {
+            Start = start;
+            Current = start;
+        }
+
+        public int Start { get; }
+
+        /// <summary>The index of the handle being asked about.</summary>
+        public volatile int Current;
+
+        /// <summary>When that began (a Stopwatch timestamp). A long can't be volatile, so it is read and written through Volatile.</summary>
+        public long StepStarted
+        {
+            get => Volatile.Read(ref stepStarted);
+            set => Volatile.Write(ref stepStarted, value);
+        }
+
+        /// <summary>Set by the watchdog: stop before the next handle.</summary>
+        public volatile bool Cancelled;
+
+        public volatile bool Done;
+
+        public volatile Exception? Failure;
+    }
+
+    /// <summary>
+    /// The entries of every handle in the system whose process id
+    /// <paramref name="keep"/> accepts. The id is read from the raw bytes
+    /// first, so only the wanted entries are ever converted.
+    /// </summary>
+    private static List<SystemHandleEntry> SystemHandles(Func<nuint, bool> keep)
     {
         var size = 4 << 20;
         while (true)
@@ -190,9 +380,14 @@ public static class WindowsHeldFiles
                 if (count < 0 || header + count * entrySize > size)
                     throw new InvalidOperationException("The system handle list is malformed.");
 
-                var entries = new SystemHandleEntry[count];
+                var entries = new List<SystemHandleEntry>();
                 for (var i = 0; i < count; i++)
-                    entries[i] = Marshal.PtrToStructure<SystemHandleEntry>(buffer + header + checked((int)(i * entrySize)));
+                {
+                    var offset = checked((int)(header + i * entrySize));
+                    if (keep((nuint)Marshal.ReadIntPtr(buffer, offset + IntPtr.Size)))
+                        entries.Add(Marshal.PtrToStructure<SystemHandleEntry>(buffer + offset));
+                }
+
                 return entries;
             }
             finally
@@ -206,14 +401,14 @@ public static class WindowsHeldFiles
     private static string? FinalPath(IntPtr file)
     {
         var buffer = new StringBuilder(1024);
-        var length = GetFinalPathNameByHandle(file, buffer, (uint)buffer.Capacity, FileNameNormalizedDos);
+        var length = GetFinalPathNameByHandle(file, buffer, (uint)buffer.Capacity, FileNameOpenedDos);
         if (length == 0)
             return null;
 
         if (length >= buffer.Capacity)
         {
             buffer = new StringBuilder((int)length + 1);
-            length = GetFinalPathNameByHandle(file, buffer, (uint)buffer.Capacity, FileNameNormalizedDos);
+            length = GetFinalPathNameByHandle(file, buffer, (uint)buffer.Capacity, FileNameOpenedDos);
             if (length == 0 || length >= buffer.Capacity)
                 return null;
         }
@@ -243,21 +438,24 @@ public static class WindowsHeldFiles
     /// Reader's protected mode keeps its data; Roaming and Local are listed
     /// too in case either is redirected elsewhere. TEMP is expanded to its
     /// long name, since handles report long names and TEMP may be set to an
-    /// 8.3 one ("THOMAS~1").
+    /// 8.3 one ("THOMAS~1"). Folders are not checked to exist.
     /// </summary>
     private static IReadOnlyList<string> ExcludedFolders() => new[]
         {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "AppData"),
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Path.Combine(SpecialFolder(Environment.SpecialFolder.UserProfile), "AppData"),
+            SpecialFolder(Environment.SpecialFolder.ApplicationData),
+            SpecialFolder(Environment.SpecialFolder.LocalApplicationData),
+            SpecialFolder(Environment.SpecialFolder.CommonApplicationData),
+            SpecialFolder(Environment.SpecialFolder.ProgramFiles),
+            SpecialFolder(Environment.SpecialFolder.ProgramFilesX86),
+            SpecialFolder(Environment.SpecialFolder.Windows),
             LongPath(Path.GetTempPath()),
         }
         .Where(f => !string.IsNullOrEmpty(f))
         .ToList();
+
+    private static string SpecialFolder(Environment.SpecialFolder folder) =>
+        Environment.GetFolderPath(folder, Environment.SpecialFolderOption.DoNotVerify);
 
     /// <summary>The long form of a folder path ("C:\Users\Thomas\…" for "C:\Users\THOMAS~1\…"), or the path as given.</summary>
     private static string LongPath(string path)
@@ -277,7 +475,9 @@ public static class WindowsHeldFiles
     private const uint ProcessDupHandle = 0x0040;
     private const uint DuplicateSameAccess = 0x2;
     private const uint FileTypeDisk = 0x1;
-    private const uint FileNameNormalizedDos = 0x0;
+
+    /// <summary>FILE_NAME_OPENED | VOLUME_NAME_DOS: the name the file was opened by, which needs no round trip to a file server.</summary>
+    private const uint FileNameOpenedDos = 0x8;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct SystemHandleEntry
@@ -325,5 +525,5 @@ public static class WindowsHeldFiles
 
 /// <summary>What <see cref="WindowsHeldFiles.Read"/> found.</summary>
 /// <param name="Files">The held documents, as session paths.</param>
-/// <param name="IsComplete">False when the time limit ran out first, so some may be missing.</param>
+/// <param name="IsComplete">False when the time limit ran out or a walk failed or stalled too often, so some may be missing.</param>
 public sealed record HeldFilesRead(IReadOnlyList<HeldFile> Files, bool IsComplete);
