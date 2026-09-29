@@ -4,6 +4,9 @@ using System.Windows.Input;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
 
@@ -80,7 +83,17 @@ public partial class App : Application
         var activityStore = ActivityTrackingHost.CreateStore();
         var activityHost = new ActivityTrackingHost(activityStore);
 
-        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, themeManager);
+        var sessionStore = SessionStore.CreateDefault();
+
+        // One Recent Items reader, shared by the session scan and Recent Files tracking, so its shortcut cache is shared too.
+        var recentItems = new WindowsRecentItems();
+
+        // Recent Files: off until turned on; the tray's Pause tracking pauses it with folder tracking.
+        var recentFilesStore = RecentFilesStore.CreateDefault();
+        var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
+
+        var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems,
+            placesService, recentFilesStore, recentFilesHost, themeManager);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))
@@ -109,6 +122,9 @@ public partial class App : Application
                 }
             }
 
+            // A session change the Sessions window reported as unsaved gets one more try; a failure is logged there.
+            sessionStore.RetrySave();
+            recentFilesHost.Dispose();
             activityHost.Dispose();
             themeManager.Dispose();
             mainWindow.PersistWindowState(settings);
@@ -130,6 +146,7 @@ public partial class App : Application
         }
         mainWindow.Show();
         activityHost.Start();
+        recentFilesHost.Start();
 
         // A second launch attempt signals SingleInstance instead of
         // starting up (above); this is what the running instance does

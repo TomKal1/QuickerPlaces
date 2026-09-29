@@ -12,25 +12,6 @@
         global hotkey, and the tray and Windows startup opt-ins. Window size
         and the list's collapsed state are remembered automatically.
     -->
-    <Window.Resources>
-        <!--
-            Draws nothing: it only gives screen readers a named group around
-            the theme segments and the highlight swatches (a Border or a
-            StackPanel has no automation peer, so a name on it is never
-            announced). Not focusable, so no focus ring.
-        -->
-        <Style x:Key="GroupBox.Unstyled" TargetType="GroupBox">
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="IsTabStop" Value="False" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="GroupBox">
-                        <ContentPresenter />
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />

@@ -60,13 +60,22 @@
             </DataTrigger>
         </Style.Triggers>
     </Style>
-    <!-- The type icon in a table row: Highlight.Text, On.Highlight on a selected row. -->
-    <Style x:Key="Icon.RowPlaceType" TargetType="Path" BasedOn="{StaticResource Icon.PlaceType}">
+    <!-- An icon in a table row: Highlight.Text, On.Highlight on a selected row. Set Data, or base a style on it that does. -->
+    <Style x:Key="Icon.Row" TargetType="Path" BasedOn="{StaticResource Icon}">
         <Setter Property="Stroke" Value="{DynamicResource Highlight.Text}" />
         <Setter Property="Margin" Value="0,0,9,0" />
         <Style.Triggers>
             <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
                 <Setter Property="Stroke" Value="{DynamicResource On.Highlight}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+    <!-- A place's type icon in a table row: Icon.PlaceType's folder or globe, in Icon.Row's colours. -->
+    <Style x:Key="Icon.RowPlaceType" TargetType="Path" BasedOn="{StaticResource Icon.Row}">
+        <Setter Property="Data" Value="{StaticResource Icon.Globe}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Type}" Value="Folder">
+                <Setter Property="Data" Value="{StaticResource Icon.Folder}" />
             </DataTrigger>
         </Style.Triggers>
     </Style>
@@ -501,6 +510,24 @@
                             <Setter Property="Opacity" Value="0.5" />
                         </Trigger>
                     </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        Draws nothing: it only gives screen readers a named group around a
+        segmented control or Settings' highlight swatches (a Border or a
+        StackPanel has no automation peer, so a name on it is never
+        announced). Not focusable, so no focus ring.
+    -->
+    <Style x:Key="GroupBox.Unstyled" TargetType="GroupBox">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GroupBox">
+                    <ContentPresenter />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

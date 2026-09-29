@@ -8,6 +8,8 @@ public sealed class WindowsShell : IShell
 {
     public bool DirectoryExists(string path) => Directory.Exists(path);
 
+    public bool FileExists(string path) => File.Exists(path);
+
     // UseShellExecute lets Windows pick the right handler either way:
     // Explorer for a folder path, the default browser for a URL — no need
     // to branch on the place's type here. The Process it returns is null

@@ -41,6 +41,7 @@
     <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
     <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
+    <Compile Include="..\QuickerPlaces\Services\JsonStoreLoader.cs" Link="Linked\Services\JsonStoreLoader.cs" />
     <Compile Include="..\QuickerPlaces\Services\IShell.cs" Link="Linked\Services\IShell.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceLauncher.cs" Link="Linked\Services\PlaceLauncher.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
@@ -80,6 +81,25 @@
     <Compile Include="..\QuickerPlaces\Services\Activity\StopwatchMonotonicClock.cs" Link="Linked\Services\Activity\StopwatchMonotonicClock.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackingSignal.cs" Link="Linked\Services\Activity\TrackingSignal.cs" />
+    <!--
+      Project sessions and shared document code (ai/260928_PDF Project
+      Sessions Plan.md): document kinds and paths, the open-document resolver, the launcher and the two view models. The
+      Windows probe that gathers the resolver's evidence is app-only.
+    -->
+    <Compile Include="..\QuickerPlaces\Models\Sessions\ProjectSession.cs" Link="Linked\Models\Sessions\ProjectSession.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Sessions\SessionsDocument.cs" Link="Linked\Models\Sessions\SessionsDocument.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\SessionLauncher.cs" Link="Linked\Services\Sessions\SessionLauncher.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\DocumentKind.cs" Link="Linked\Services\Documents\DocumentKind.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
+    <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
+    <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Library\LibraryIndex.cs" Link="Linked\Services\Library\LibraryIndex.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\LibraryViewModel.cs" Link="Linked\ViewModels\LibraryViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\SessionsViewModel.cs" Link="Linked\ViewModels\SessionsViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\SessionEditorViewModel.cs" Link="Linked\ViewModels\SessionEditorViewModel.cs" />
     <!--
       The Recently Deleted dialog's view models (plan 5.5, D21): every
       decision the dialog makes lives in these, so they are tested here

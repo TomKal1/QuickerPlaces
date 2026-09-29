@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.Activity;
@@ -56,9 +55,6 @@ public sealed class ActivityStore
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
-
-    /// <summary>Duplicate keys are refused at parse time, as places.json's are, so they classify as Damaged.</summary>
-    private static readonly JsonDocumentOptions DocumentOptions = new() { AllowDuplicateProperties = false };
 
     private readonly object _sync = new();
     private readonly IPlacesStorage _storage;
@@ -401,57 +397,13 @@ public sealed class ActivityStore
     /// </summary>
     private (List<TrackedRoot> roots, StoreLoadOutcome outcome) Load()
     {
-        if (!_storage.Exists)
-            return (new List<TrackedRoot>(), StoreLoadOutcome.NotPresent);
+        var (document, outcome) = JsonStoreLoader.Load<ActivityDocument>(_storage, CurrentSchemaVersion, "roots", "Activity store", JsonOptions);
+        if (document is null)
+            return (new List<TrackedRoot>(), outcome);
 
-        string json;
-        try
-        {
-            json = _storage.Read();
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Error($"Activity store at {_storage.StoreFilePath} could not be opened; tracking is off for this session.", ex);
-            return (new List<TrackedRoot>(), StoreLoadOutcome.Unreadable);
-        }
-
-        try
-        {
-            var root = JsonNode.Parse(json, documentOptions: DocumentOptions) as JsonObject;
-            if (root?["schemaVersion"] is not JsonValue versionValue ||
-                versionValue.GetValueKind() != JsonValueKind.Number ||
-                !versionValue.TryGetValue<int>(out var version) ||
-                version < 1)
-            {
-                DiagnosticLog.Warn($"Activity store at {_storage.StoreFilePath} has no usable schemaVersion; treating as damaged.");
-                return (new List<TrackedRoot>(), StoreLoadOutcome.Damaged);
-            }
-
-            if (version > CurrentSchemaVersion)
-            {
-                DiagnosticLog.Warn($"Activity store at {_storage.StoreFilePath} has schemaVersion {version}, newer than this build's {CurrentSchemaVersion}.");
-                return (new List<TrackedRoot>(), StoreLoadOutcome.WrittenByNewerVersion);
-            }
-
-            var document = root.Deserialize<ActivityDocument>(JsonOptions);
-            if (document?.Roots is null)
-            {
-                DiagnosticLog.Warn($"Activity store at {_storage.StoreFilePath} holds no usable root list; treating as damaged.");
-                return (new List<TrackedRoot>(), StoreLoadOutcome.Damaged);
-            }
-
-            var roots = Normalize(document.Roots);
-            DiagnosticLog.Info($"Loaded {roots.Count} tracked root(s) from {_storage.StoreFilePath}.");
-            return (roots, StoreLoadOutcome.Ok);
-        }
-        catch (Exception ex)
-        {
-            // Read, but not understood: whatever the exception (a malformed
-            // date key or number can surface as more than JsonException),
-            // the bytes are intact on disk and quarantine only renames them.
-            DiagnosticLog.Error($"Activity store at {_storage.StoreFilePath} is not a valid activity document.", ex);
-            return (new List<TrackedRoot>(), StoreLoadOutcome.Damaged);
-        }
+        var loaded = Normalize(document.Roots);
+        DiagnosticLog.Info($"Loaded {loaded.Count} tracked root(s) from {_storage.StoreFilePath}.");
+        return (loaded, StoreLoadOutcome.Ok);
     }
 
     /// <summary>

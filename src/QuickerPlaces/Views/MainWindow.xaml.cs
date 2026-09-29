@@ -8,6 +8,9 @@ using System.Windows.Media;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views;
@@ -18,6 +21,11 @@ public partial class MainWindow : Window
     private readonly SettingsService _settingsService;
     private readonly ActivityStore _activityStore;
     private readonly ActivityTrackingHost _activityHost;
+    private readonly SessionStore _sessionStore;
+    private readonly WindowsRecentItems _recentItems;
+    private readonly PlacesService _placesService;
+    private readonly RecentFilesStore _recentFilesStore;
+    private readonly RecentFilesHost _recentFilesHost;
     private readonly ThemeManager _themeManager;
     private TrayIcon? _trayIcon;
     private bool _exitRequested;
@@ -28,7 +36,9 @@ public partial class MainWindow : Window
     private Point _bubbleDragStartPoint;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
-        ActivityStore activityStore, ActivityTrackingHost activityHost, ThemeManager themeManager)
+        ActivityStore activityStore, ActivityTrackingHost activityHost, SessionStore sessionStore,
+        WindowsRecentItems recentItems, PlacesService placesService, RecentFilesStore recentFilesStore, RecentFilesHost recentFilesHost,
+        ThemeManager themeManager)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -36,6 +46,11 @@ public partial class MainWindow : Window
         _settingsService = settingsService;
         _activityStore = activityStore;
         _activityHost = activityHost;
+        _sessionStore = sessionStore;
+        _recentItems = recentItems;
+        _placesService = placesService;
+        _recentFilesStore = recentFilesStore;
+        _recentFilesHost = recentFilesHost;
         _themeManager = themeManager;
         RestoreWindowState(settings);
         UpdateActivityIndicator();
@@ -49,6 +64,18 @@ public partial class MainWindow : Window
             (folder, owner) => viewModel.AddFolderFromActivity(folder, owner));
         window.ShowDialog();
         UpdateActivityIndicator();
+    }
+
+    private void SessionsButton_Click(object sender, RoutedEventArgs e)
+        => SessionsWindow.Show(this, _sessionStore, new WindowsShell(), new WindowsOpenDocumentProbe(_recentItems));
+
+    private void LibraryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel) return;
+        var shell = new WindowsShell();
+        var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
+            new PlaceLauncher(_placesService, shell), shell);
+        LibraryWindow.Show(this, library, _recentFilesHost, viewModel.NotePlaceOpened);
     }
 
     private void OptionsButton_Click(object sender, RoutedEventArgs e)

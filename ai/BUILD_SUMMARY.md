@@ -492,6 +492,75 @@ The user asked for a look that is simple, clean and easy to understand the first
 - The app icon is soft at 16px (the plan accepted this). TASA Orbiter's Q has a detached tail bar.
 - Not built (plan section 12): visits bars in the Recents table, rounded table corners, letter-spaced capitals, a free colour picker. The default could become Match Windows if the user prefers.
 
+## PDF project sessions (2026-09-28)
+
+Added at the user's request, outside the roadmap's phase order: *"a new feature that saves open PDFs to a tagable project session, that can then be seen and opened later."* The design, its decisions (D1–D13) and its limits are in [`260928_PDF Project Sessions Plan.md`](260928_PDF%20Project%20Sessions%20Plan.md). The roadmap's "no tags or workspaces" non-goal was amended for this feature only; places stay untagged, and Phase 4 is unchanged and still next.
+
+### What was built
+
+- **Sessions** in the main header opens **Project Sessions**: saved sessions, most recently used first, with a search box (name, tag or PDF name) and tag chips with counts; the selected session's PDFs, with **Open all**, **Open selected PDF**, **Edit…** and **Delete…**.
+- **Save open PDFs…** scans for open PDFs and shows a review list: files judged open ticked, recent and command-line suggestions unticked, **Add PDFs…** for anything missed. Only ticked files are saved.
+- Detection combines window titles, viewer command lines, the files the windows' programs hold open (added later: see *Held files* below), Restart Manager's files-in-use answer, and Windows' Recent Items (plan §4). No background watching: one scan, on request, on a worker thread with a time budget.
+- `sessions.json` beside `places.json` (roaming), with its own schema version, written at once through the existing `IPlacesStorage` seam; damaged, unreadable and newer files are handled as `activity.json`'s are.
+- Reopening goes through a new `SessionLauncher`, not `PlaceLauncher`, so place usage is untouched. `IShell` gained `FileExists`.
+
+### Verification status — read this before calling it done
+
+On Linux: the app, the ActivityProbe and the tests build with zero warnings, XAML included, and all 668 tests pass (121 new: store, paths, resolver, launcher, both view models). **Nothing has been run on Windows**: `WindowsOpenPdfProbe` and the two windows are compiled but unexercised, and how each PDF viewer actually shows up (plan §4's table) is expected behaviour, not observed. The Windows checklist is the plan's §8; record each item here as passed, failed or untested.
+
+## Word and Excel, Recent Files, and the Library (2026-09-28, later)
+
+The user then asked for Recents to extend to recent PDF, Word and Excel files, and to share code with sessions, while keeping file tracking separate from saved sessions "just how the recent folders and current saved folders/links are now". They also wanted everything viewable together, split into folders, links, PDFs, Word and Excel, or grouped by tag. They were away and asked for the work to go ahead; their UI rework is in a branch that exists only on their machine, so the logic went into UI-free services and view models, and the new UI into new files. The [sessions plan](260928_PDF%20Project%20Sessions%20Plan.md), now titled *Project sessions, Recent Files and the Library*, has the design and decisions D1–D20.
+
+### What was built
+
+- **Shared document code** in `Services/Documents`: PDF, Word and Excel kinds by extension; path normalisation; the open-file resolver, which now also matches Word and Excel titles that leave the extension out; the scan probe; and a Recent Items reader that the scan and Recent Files share. Sessions now hold all three kinds.
+- **`JsonStoreLoader`** replaces the load classification that `ActivityStore` and `SessionStore` each repeated; the existing tests pass unchanged. `ActivityCalendar.BuildYear` also takes any per-day weight, so the Library reuses Recents' year strip. Sessions now keep every reopen for a year.
+- **Recent Files**: `RecentFilesStore` (`recent-files.json`, local, off by default, a year of opens) and `RecentFilesHost`, which reads Recent Items once a minute. By default it records only files under folders tracked in Recents, never anything from before it was turned on, and each open once.
+- **The Library**: `LibraryIndex` merges saved places, session files, Recents folders and Recent Files into one row per thing. `LibraryViewModel` and `LibraryWindow` add kind chips, All/Saved/Recent, grouping by type or tag, search, a year strip where a day lists what was used on it, opening, and Recent Files' settings. A **Library** button sits beside **Sessions** in the header.
+
+### Verification status — read this before calling it done
+
+On Linux, the app, the ActivityProbe and the tests build with zero warnings, XAML included, and all 745 tests pass (77 more than the first sessions build), in UTC+10 and America/New_York. **Nothing has been run on Windows.** Untested there: the probe's Word and Excel window detection, the Recent Items reader, the Recent Files timer, and the two new windows. Whether Word's and Excel's own Open dialogs add to Recent Items is also untested. The Windows checklist is the plan's §9.
+
+## Held files (2026-09-28)
+
+Added because Recent Items misses tabs opened from Revu's own Open dialog. The design and decisions (H1–H4) are in [`260928_Held Files Detection Plan.md`](260928_Held%20Files%20Detection%20Plan.md); the commits are `650e4a2..HEAD`.
+
+### What was built
+
+- **`WindowsHeldFiles`** asks Windows which files the document windows' programs (and their same-named siblings) have open, from the system handle list, and names each one, expanding short 8.3 names. A stuck handle is abandoned on a watched thread and skipped on later scans, and the whole read has a 3 second budget inside the scan's 10.
+- **`HeldFilePaths`** turns those names into session paths: the mapped drive letter put back, other file types, `~$` owner files, Word and Excel templates, and program and per-user application folders (Revu's Studio cache) left out.
+- **`OpenDocumentResolver`** takes them as a new clue: every held file counts as open, title names match held paths first, and every clue is spelled with the mapped drive letter so one file is listed once. The review dialog is unchanged.
+
+### Verification status — read this before calling it done
+
+On Windows, the developer probe's Held files check found a helper process's test PDFs in 139 ms, and Revu with several local tabs in about 125 ms, without elevation. Everything builds with 0 warnings and all 781 tests pass. **Untested:** a mapped drive, a DFS path, a Studio Session document, the Save open files dialog end to end, 8.3 short names, and a document based on a network template. The user's personal PC has none of the network setups. The checks are the plan's §9, items 16–21.
+
+## Sessions and the Library restyled after the UI refresh (2026-09-28)
+
+The UI refresh reached `main` (PR #9) while project sessions, Recent Files, the Library and held files were still on `ccr-8d834d76-kqbdun`. `main` was merged into that branch, and the three new windows were brought into the new look, so the branch can go to `main` in one piece.
+
+### What changed
+
+- **Merge.** `App.xaml.cs` and `MainWindow.xaml.cs` take both sides: the sessions, Recent Files and Library services and the `ThemeManager`. The docs keep both sides' sections.
+- **Main window.** **Library** and **Sessions** sit after **Recents** in the header, as `Button.Primary` with new stroke icons (`Icon.Library`, `Icon.Sessions`). Six header buttons need more room, so `MinWidth` is 960, not 700; at 960 the app name still shows in full.
+- **Library.** Rewritten on Recents' pattern: window title, racing stripe, the Recents day cell with leather heat and its compact focus ring, **YEAR ACTIVITY** caption, icon buttons for the year and for clearing a day, kind chips in the tracked-folder chip look, **Show**, **Group by** and Recent Files' **Where** as segmented controls, the main window's search box, capitals in the table headers, a folder, globe or document icon per row (`LibraryRowViewModel.Kind`; the Segoe `Glyph()` mapping is gone), paths in IBM Plex Mono, and the status lines in `Highlight.Text`, `Signal` and `Danger`.
+- **Project Sessions.** The same title, stripe and search box; session cards and tag chips in the chip look; tags as small plain leather labels like the favourite cards; a document icon per file; **Save open files…** keeps Alt+S through an `AccessText`.
+- **Save and edit session dialog.** Field labels at the `FieldLabel` size, **YOUR TAGS** and **FILES** captions, tag suggestions as chips, compact buttons, capitals in the table headers, a document icon per file, and the path column in Plex Mono.
+- **Shared styles.** `Icons.xaml` gains `Icon.Document`, `Icon.Library` and `Icon.Sessions`. `Styles.xaml` gains `Icon.Row` (a table-row icon in `Highlight.Text`, `On.Highlight` when selected), which `Icon.RowPlaceType` is now based on, and `GroupBox.Unstyled`, moved out of `SettingsDialog.xaml` so the Library can name its segmented controls for screen readers.
+
+No colour or palette key was added, so `PaletteFileTests` and the Design System's tokens are unchanged.
+
+### Verification status
+
+On Windows: the app and the tests build with 0 warnings and 0 errors, and all 877 tests pass (781 on this branch plus the refresh's 96). A throwaway WPF probe loaded the Library (grouped by type, and by tag with a day chosen and Recent Files open), Project Sessions, the session dialog and the main window's header at 960 and 1000 wide, in Dark and in Light, rendered each to an image, and logged no binding or resource errors. The images were checked by eye. **Not done:** a person using the restyled windows in the running app, Match Windows, the other highlight colours, and keyboard focus through the new controls.
+
+### Known gaps
+
+- With Recent Files expanded, the Library's table has little height left at the default 780 px window height; this was so before the restyle too.
+- The Library's **Type** column stays, because PDF, Word and Excel share the document icon.
+
 ## Status snapshot — 2026-09-28
 
-Phases 1, 2, 3 and 9 are on `main`. The UI refresh is on `claude/ui-refresh`, pushed with a pull request open: it builds with 0 warnings, all 643 tests pass, and the user reported it working on Windows. Next: merge it. The Design System (version 9) records the header buttons, badge, sort arrow and racing stripe from `4a29e79`. Then, per the roadmap's §1.1, write the Phase 4 detailed plan (general file support). Phase 8 must still check Phase 9's COM interop in a single-file build.
+Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.

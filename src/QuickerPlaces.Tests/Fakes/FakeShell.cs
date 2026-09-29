@@ -14,6 +14,12 @@ public sealed class FakeShell : IShell
     /// <summary>Paths DirectoryExists answers true for (case-insensitive, like Windows).</summary>
     public HashSet<string> ExistingDirectories { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Paths FileExists answers true for (case-insensitive, like Windows).</summary>
+    public HashSet<string> ExistingFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Targets Open throws for, as Windows refuses one file with no handler; ThrowOnOpen applies to every target.</summary>
+    public HashSet<string> RefusedTargets { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>When set, Open throws this, as Process.Start does when Windows refuses a launch.</summary>
     public Exception? ThrowOnOpen { get; set; }
 
@@ -29,10 +35,14 @@ public sealed class FakeShell : IShell
         return ExistingDirectories.Contains(path);
     }
 
+    public bool FileExists(string path) => ExistingFiles.Contains(path);
+
     public void Open(string target)
     {
         if (ThrowOnOpen is not null)
             throw ThrowOnOpen;
+        if (RefusedTargets.Contains(target))
+            throw new System.ComponentModel.Win32Exception("No application is associated with the specified file.");
 
         Opened.Add(target);
     }

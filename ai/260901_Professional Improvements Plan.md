@@ -2,7 +2,7 @@
 
 **Status:** Phases 1, 2, 3 and 9 implemented and merged to `main` (547 tests pass; every manual checklist closed); Phase 4 is next, then 6 → 7 → 8 → 5 (§1.1)  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-27 — Phase 9 merged; Phase 4 is next. 2026-09-25 — the release split withdrawn for a plain order of work, with Phase 9 moved up to next (§1.1); the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 merged  
+**Last revised:** 2026-09-28 — project sessions, Recent Files and the Library added at the user's request, outside the phase order ([plan](260928_PDF%20Project%20Sessions%20Plan.md)); the tags/workspaces non-goal no longer applies to them (§2). 2026-09-27 — Phase 9 merged; Phase 4 is next. 2026-09-25 — the release split withdrawn for a plain order of work, with Phase 9 moved up to next (§1.1); the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 merged  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 3](260925_Phase%203%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
@@ -32,6 +32,7 @@ The planned release adds:
 |---|---|---|
 | 1–3 | Phases 1, 2, 3: persistence, Recently Deleted, usage tracking and sorting | Done, on `main` |
 | 4th | Phase 9: opt-in root folder activity tracking ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) | Done, on `main` (2026-09-27); some live checks not done, judged not needed (plan §9 step 8) |
+| Added | Project sessions (save the PDF, Word and Excel files open now as a tagged session), opt-in Recent Files (Recents for files), and the Library (everything together, by kind or tag, with a year strip) ([plan](260928_PDF%20Project%20Sessions%20Plan.md)) | Requested 2026-09-28 and built outside the phase order; builds and tests pass, not yet checked on Windows (its §9). Their files are not places, so Phase 4 is unchanged |
 | **Next** | **Phase 4: general file support** | Planned; its detailed plan is written next |
 | Then | Phase 6: explicit multi-folder import | Planned |
 | Then | Phase 7: search and retrieval polish | Planned |
@@ -50,8 +51,8 @@ The following are intentionally excluded:
 - Drag-and-drop folder or file creation. It is too easy to miss as a feature and can make accidental drops ambiguous.
 - Reading Explorer's undocumented Quick Access or `AutomaticDestinations` storage.
 - Automatic favourites or automatic reordering based on usage.
-- Tags, categories, workspaces, cloud sync, or accounts.
-- File previews, PDF rendering, or document editing.
+- Tags, categories, workspaces, cloud sync, or accounts. *Amended 2026-09-28:* the user asked for tagged project sessions and a Library that groups by those tags, so tags and sessions are in scope for those features alone ([plan](260928_PDF%20Project%20Sessions%20Plan.md) §2). Places themselves stay untagged, and the rest of this line stands.
+- File previews, PDF rendering, or document editing. (Sessions, Recent Files and the Library store document paths and hand them to Windows; they never read a document.)
 - Complex usage analytics. Phase 9's activity tracking is the single, bounded exception: it is opt-in per root, local-only, visible while it runs, and exists for the person at the keyboard to read their own week — never for anyone else to read about them (see Phase 9, §8 of its detailed plan). Reading Explorer's own storage remains excluded above regardless.
 - Automatic version detection for every proprietary file format. Version-aware integrations may be added individually when a supported vendor API exists.
 - Retargeting the application to classic .NET Framework.
