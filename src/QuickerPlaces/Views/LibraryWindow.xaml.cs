@@ -74,7 +74,7 @@ public partial class LibraryWindow : Window
             _viewModel.SelectCalendarDate(date);
     }
 
-    private void ClearDay_Click(object sender, RoutedEventArgs e) => _viewModel.ClearSelectedDay();
+    private void ClearDay_Click(object sender, RoutedEventArgs e) => _viewModel.ClearPeriod();
 
     private void PreviousYear_Click(object sender, RoutedEventArgs e) => _viewModel.SelectCalendarYear(_viewModel.CalendarYear - 1);
 

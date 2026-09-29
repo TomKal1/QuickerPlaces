@@ -183,11 +183,15 @@ public static class LibraryQueryEngine
             ? data.Sessions
             : data.Sessions.Where(s => In(data.LocalDate(s.CreatedAt), period) || s.OpenedAt.Any(o => In(data.LocalDate(o), period)));
 
-    /// <summary>Folders visited in the period, from the kept detail, summed across days.</summary>
+    /// <summary>
+    /// Folders visited in the period, from the kept detail, summed across
+    /// days. Detail older than the kept window is ignored even before Recents
+    /// prunes it, so what is listed doesn't depend on when pruning last ran.
+    /// </summary>
     private static IEnumerable<FolderActivity> FoldersIn(LibrarySnapshot data, (DateOnly From, DateOnly To)? period)
         => data.Roots
             .SelectMany(r => r.FolderDays)
-            .Where(d => In(d.Date, period))
+            .Where(d => d.Date >= data.FolderDetailKeptFrom && In(d.Date, period))
             .SelectMany(d => d.Folders)
             .GroupBy(f => f.Folder, StringComparer.OrdinalIgnoreCase)
             .Select(g => new FolderActivity(g.First().Folder, TimeSpan.FromTicks(g.Sum(f => f.Time.Ticks)), g.Sum(f => f.Visits), g.Max(f => f.LastVisited)));
@@ -258,7 +262,7 @@ public static class LibraryQueryEngine
         else
         {
             foreach (var root in data.Roots)
-            foreach (var day in root.FolderDays)
+            foreach (var day in root.FolderDays.Where(d => d.Date >= data.FolderDetailKeptFrom))
             foreach (var folder in day.Folders)
             {
                 if (everything.TryGetValue(ResourceIdentity.Key(LibraryKind.Folder, folder.Folder), out var item) && Passes(item, filter))

@@ -70,6 +70,13 @@ public static class ActivityCalendar
                     }
 
                     days.TryGetValue(date, out var day);
+                    if (day is { Unknown: true })
+                    {
+                        cells[offset] = new ActivityCalendarCell(date, true, false, -1,
+                            $"{dateText} — {day.Summary}", isSelected, date == today);
+                        continue;
+                    }
+
                     var intensity = day is null || day.Weight <= 0 ? 0
                         : Math.Clamp((int)Math.Ceiling(4.0 * UpperRank(nonzero, day.Weight) / nonzero.Length), 1, 4);
                     var label = day is null || day.Weight <= 0
@@ -181,8 +188,13 @@ public static class ActivityCalendar
     }
 }
 
-/// <summary>One day for the year strip: how much happened (any unit; only the ranking matters) and what to say about it.</summary>
-public sealed record CalendarDay(double Weight, string Summary);
+/// <summary>
+/// One day for the year strip: how much happened (any unit; only the ranking
+/// matters) and what to say about it. An <paramref name="Unknown"/> day is
+/// shown as untracked with its summary as the reason: what happened that day
+/// can't be told for the current filter (configurable canvas plan D5).
+/// </summary>
+public sealed record CalendarDay(double Weight, string Summary, bool Unknown = false);
 
 public sealed record ActivityCalendarResult(IReadOnlyList<ActivityCalendarWeek> Weeks,
     IReadOnlyList<string> WeekdayLabels);

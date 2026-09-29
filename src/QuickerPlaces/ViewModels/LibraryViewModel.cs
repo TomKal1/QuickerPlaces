@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.RecentFiles;
+using QuickerPlaces.Models.Workspace;
 using QuickerPlaces.Mvvm;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
@@ -25,24 +26,43 @@ public enum LibraryGrouping
     Tag,
 }
 
+/// <summary>How much a click on the year strip chooses (configurable canvas plan D1: Day/Week/Month selection).</summary>
+public enum CalendarSelectionUnit
+{
+    Day,
+    Week,
+    Month,
+}
+
 /// <summary>
-/// Backs the Library window (documents plan §6): everything QuickerPlaces
-/// knows about, together — saved places, files in saved sessions, folders
-/// from Recents and files from Recent Files — split by kind (folders, links,
-/// PDFs, Word, Excel), filtered to saved or recent, searched, and grouped by
-/// type or by tag, with a year strip of when they were used. The four
-/// sources stay separate, each with its own switch; this only reads them,
-/// except for Recent Files' own settings, which live here because this is
-/// where Recent Files is seen.
+/// Backs the Library window and the workspace's Year activity and File shelf
+/// panels (documents plan §6; configurable canvas plan D4, D5, M2):
+/// everything QuickerPlaces knows about, together — saved places, files in
+/// saved sessions, folders from Recents and files from Recent Files — split
+/// by kind, filtered to saved or recent, to a Session tag and by search,
+/// grouped by type or by tag, for a chosen period, with a year strip of the
+/// activity each source recorded.
 ///
-/// UI-free and linked into the test project; LibraryWindow only binds and
-/// passes clicks in.
+/// The query is one explicit thing (D4): <see cref="CurrentQuery"/> reads it
+/// and <see cref="ApplyQuery"/> replaces it, and <see cref="QueryChanged"/>
+/// says when the user changed it. Choosing a period changes the rows and the
+/// selection outline, never the year's heat, which covers everything kept for
+/// the other filters. What a source can't show is said in
+/// <see cref="CoverageNotes"/> and <see cref="PeriodNotes"/>, never shown as
+/// zero (D5).
+///
+/// Sources are read into a <see cref="LibrarySnapshot"/> on the UI thread
+/// and queried through <see cref="IBackgroundWork"/>; a result that arrives
+/// after a newer query started is dropped. The selected row is kept across
+/// refreshes by the item's identity, not its position.
+///
+/// The four sources stay separate, each with its own switch; this only reads
+/// them, except for Recent Files' own settings, which live here because this
+/// is where Recent Files is seen. UI-free and linked into the test project;
+/// the views only bind and pass clicks in.
 /// </summary>
 public sealed class LibraryViewModel : ObservableObject
 {
-    /// <summary>Days of Recents folder detail the Library reads when no day is chosen: all that is kept.</summary>
-    private const int FolderDays = ActivityStore.DetailDays;
-
     private readonly PlacesService _places;
     private readonly SessionStore _sessions;
     private readonly ActivityStore _activity;
@@ -51,18 +71,25 @@ public sealed class LibraryViewModel : ObservableObject
     private readonly IShell _shell;
     private readonly TimeProvider _time;
     private readonly CultureInfo _culture;
-    private IReadOnlyList<LibraryItem> _items = Array.Empty<LibraryItem>();
+    private readonly IBackgroundWork _work;
+    private LibrarySnapshot _snapshot;
+    private LibraryQueryResult? _result;
+    private int _generation;
     private LibraryKind? _selectedKind;
     private LibrarySourceFilter _source;
     private LibraryGrouping _grouping;
     private string _searchText = "";
-    private DateOnly? _selectedDay;
+    private string? _tag;
+    private DateRule _date = DateRule.All();
+    private CalendarSelectionUnit _selectionUnit;
     private int _calendarYear;
+    private string? _selectedKey;
+    private LibraryRowViewModel? _selectedRow;
     private string? _statusMessage;
     private string? _errorMessage;
 
     public LibraryViewModel(PlacesService places, SessionStore sessions, ActivityStore activity, RecentFilesStore recentFiles,
-        PlaceLauncher placeLauncher, IShell shell, TimeProvider? time = null, CultureInfo? culture = null)
+        PlaceLauncher placeLauncher, IShell shell, TimeProvider? time = null, CultureInfo? culture = null, IBackgroundWork? work = null)
     {
         _places = places;
         _sessions = sessions;
@@ -72,12 +99,63 @@ public sealed class LibraryViewModel : ObservableObject
         _shell = shell;
         _time = time ?? TimeProvider.System;
         _culture = culture ?? CultureInfo.CurrentCulture;
+        _work = work ?? InlineBackgroundWork.Instance;
         _calendarYear = Today().Year;
-        Reload();
+        _snapshot = Capture();
+        Refresh();
+        OnRecentFilesSettingsChanged();
     }
 
     /// <summary>Raised after a saved place was opened from here, so the main grid can show its new Last Opened.</summary>
     public event Action<Place, PersistenceResult>? PlaceOpened;
+
+    /// <summary>Raised when the user changes the query (not by <see cref="ApplyQuery"/>), so the workspace can remember it.</summary>
+    public event Action? QueryChanged;
+
+    // ---------------------------------------------------------------
+    // The query (D4)
+    // ---------------------------------------------------------------
+
+    /// <summary>The query as the workspace stores it.</summary>
+    public WorkspaceQuery CurrentQuery => new()
+    {
+        Text = _searchText,
+        Kind = _selectedKind?.ToString().ToLowerInvariant(),
+        Source = _source switch
+        {
+            LibrarySourceFilter.Saved => "saved",
+            LibrarySourceFilter.Recent => "recent",
+            _ => null,
+        },
+        Tag = _tag,
+        Date = _date.Clone(),
+    };
+
+    /// <summary>
+    /// Replaces the whole query at once — a layout's saved filters, or the
+    /// defaults — with one refresh. A kind or source this build doesn't know
+    /// reads as all. Does not raise <see cref="QueryChanged"/>.
+    /// </summary>
+    public void ApplyQuery(WorkspaceQuery query)
+    {
+        _searchText = query.Text ?? "";
+        _selectedKind = Enum.TryParse<LibraryKind>(query.Kind, ignoreCase: true, out var kind) ? kind : null;
+        _source = query.Source switch
+        {
+            "saved" => LibrarySourceFilter.Saved,
+            "recent" => LibrarySourceFilter.Recent,
+            _ => LibrarySourceFilter.All,
+        };
+        _tag = string.IsNullOrWhiteSpace(query.Tag) ? null : query.Tag;
+        _date = query.Date?.Clone() ?? DateRule.All();
+
+        OnPropertyChanged(nameof(SearchText));
+        OnPropertyChanged(nameof(SelectedKind));
+        NotifySource();
+        OnPropertyChanged(nameof(Tag));
+        NotifyPeriod();
+        Refresh();
+    }
 
     // ---------------------------------------------------------------
     // Filters
@@ -93,7 +171,7 @@ public sealed class LibraryViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _selectedKind, value))
-                Refresh();
+                QueryEdited();
         }
     }
 
@@ -104,10 +182,8 @@ public sealed class LibraryViewModel : ObservableObject
         {
             if (!SetProperty(ref _source, value))
                 return;
-            OnPropertyChanged(nameof(IsSourceAll));
-            OnPropertyChanged(nameof(IsSourceSaved));
-            OnPropertyChanged(nameof(IsSourceRecent));
-            Refresh();
+            NotifySource();
+            QueryEdited();
         }
     }
 
@@ -124,7 +200,7 @@ public sealed class LibraryViewModel : ObservableObject
                 return;
             OnPropertyChanged(nameof(IsGroupedByType));
             OnPropertyChanged(nameof(IsGroupedByTag));
-            Refresh();
+            BuildRows();
         }
     }
 
@@ -137,19 +213,109 @@ public sealed class LibraryViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _searchText, value ?? ""))
-                Refresh();
+                QueryEdited();
         }
     }
 
-    /// <summary>The day chosen on the year strip: only what was used that day is listed. Null for everything kept.</summary>
-    public DateOnly? SelectedDay => _selectedDay;
+    /// <summary>An existing Session tag to narrow to (D4: tags, never inferred projects), or null for any.</summary>
+    public string? Tag
+    {
+        get => _tag;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == AnyTag)
+                value = null;
+            if (SetProperty(ref _tag, value))
+                QueryEdited();
+        }
+    }
 
-    public bool HasSelectedDay => _selectedDay is not null;
+    /// <summary>What the tag picker shows for no tag.</summary>
+    public const string AnyTag = "Any tag";
 
-    /// <summary>"Used on Mon 28 Sep 2026", for the chip that clears the day.</summary>
-    public string SelectedDayText => _selectedDay is { } day
-        ? $"Used on {day.ToDateTime(TimeOnly.MinValue).ToString("ddd d MMM yyyy", _culture)}"
-        : "";
+    /// <summary>"Any tag", then every Session tag in use, for the tag picker.</summary>
+    public IReadOnlyList<string> TagChoices
+        => new[] { AnyTag }.Concat(_snapshot.Sessions.SelectMany(s => s.Tags)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.CurrentCultureIgnoreCase)).ToList();
+
+    // ---------------------------------------------------------------
+    // Period (D3, D4)
+    // ---------------------------------------------------------------
+
+    /// <summary>The date rule: all recorded time, this week or month, or chosen days.</summary>
+    public DateRule Date => _date.Clone();
+
+    /// <summary>The inclusive days listed, resolved from <see cref="Date"/> today, or null for everything kept.</summary>
+    public (DateOnly From, DateOnly To)? Period => _date.Resolve(_time, _culture);
+
+    public bool HasPeriod => Period is not null;
+
+    /// <summary>"Used on Mon 28 Sep 2026", "Used 21–27 Sep 2026", "Used this week (…)": the chip that clears the period.</summary>
+    public string PeriodText
+    {
+        get
+        {
+            if (Period is not { } p)
+                return "";
+            var days = FormatDays(p.From, p.To, _culture);
+            return _date.Kind switch
+            {
+                DateRuleKind.ThisWeek => $"Used this week ({days})",
+                DateRuleKind.ThisMonth => $"Used this month ({days})",
+                _ => p.From == p.To ? $"Used on {days}" : $"Used {days}",
+            };
+        }
+    }
+
+    /// <summary>Whether a click on the year strip chooses a day, its week or its month.</summary>
+    public CalendarSelectionUnit SelectionUnit
+    {
+        get => _selectionUnit;
+        set
+        {
+            if (!SetProperty(ref _selectionUnit, value))
+                return;
+            OnPropertyChanged(nameof(IsUnitDay));
+            OnPropertyChanged(nameof(IsUnitWeek));
+            OnPropertyChanged(nameof(IsUnitMonth));
+        }
+    }
+
+    public bool IsUnitDay { get => _selectionUnit == CalendarSelectionUnit.Day; set { if (value) SelectionUnit = CalendarSelectionUnit.Day; } }
+    public bool IsUnitWeek { get => _selectionUnit == CalendarSelectionUnit.Week; set { if (value) SelectionUnit = CalendarSelectionUnit.Week; } }
+    public bool IsUnitMonth { get => _selectionUnit == CalendarSelectionUnit.Month; set { if (value) SelectionUnit = CalendarSelectionUnit.Month; } }
+
+    /// <summary>
+    /// Chooses the day, week or month (<see cref="SelectionUnit"/>) holding
+    /// <paramref name="date"/>; choosing exactly the current period again
+    /// clears it. Future and untracked days can be chosen: the list then says
+    /// why it is empty (D5).
+    /// </summary>
+    public void SelectCalendarDate(DateOnly date)
+    {
+        var (from, to) = _selectionUnit switch
+        {
+            CalendarSelectionUnit.Week => WeekOf(date),
+            CalendarSelectionUnit.Month => (new DateOnly(date.Year, date.Month, 1), new DateOnly(date.Year, date.Month, 1).AddMonths(1).AddDays(-1)),
+            _ => (date, date),
+        };
+
+        SetDateRule(Period == (from, to) && _date.Kind == DateRuleKind.Range ? DateRule.All() : DateRule.Between(from, to));
+    }
+
+    /// <summary>Sets the date rule: This week and This month stay relative, and move with the clock (D3).</summary>
+    public void SetDateRule(DateRule rule)
+    {
+        if (rule.SameAs(_date))
+            return;
+        _date = rule.Clone();
+        NotifyPeriod();
+        QueryEdited();
+    }
+
+    /// <summary>Back to all recorded time.</summary>
+    public void ClearPeriod() => SetDateRule(DateRule.All());
 
     // ---------------------------------------------------------------
     // Rows
@@ -158,12 +324,47 @@ public sealed class LibraryViewModel : ObservableObject
     /// <summary>The rows shown, in group order; each carries its group's name for the view to group on.</summary>
     public ObservableCollection<LibraryRowViewModel> Rows { get; } = new();
 
+    /// <summary>The selected row. Kept across refreshes by the item's identity, so a reload doesn't lose it.</summary>
+    public LibraryRowViewModel? SelectedRow
+    {
+        get => _selectedRow;
+        set
+        {
+            if (!SetProperty(ref _selectedRow, value))
+                return;
+            if (value is not null)
+                _selectedKey = value.Item.Key;
+        }
+    }
+
     public bool IsEmpty => Rows.Count == 0;
 
-    /// <summary>What to say in place of an empty list.</summary>
-    public string EmptyText => _items.Count == 0 && _selectedDay is null
-        ? "Nothing here yet. Save places, save open files as a session, or turn on Recents or Recent Files."
-        : "Nothing matches. Clear the search, choose All, or pick another day.";
+    /// <summary>What to say in place of an empty list: why nothing is there, not just that nothing is (D5).</summary>
+    public string EmptyText
+    {
+        get
+        {
+            var inPeriod = _result?.ItemsInPeriod ?? 0;
+            if (Period is not { } p)
+                return inPeriod == 0
+                    ? "Nothing here yet. Save places, save open files as a session, or turn on Recents or Recent Files."
+                    : "Nothing matches. Clear the search, choose All, or pick another day.";
+
+            if (inPeriod > 0)
+                return "Nothing in this period matches. Clear the search or choose All.";
+            var today = Today();
+            if (p.From > today)
+                return "That's still to come, so nothing has been used then yet.";
+            if (_result is { } result && p.To < result.TrackingStartedOn)
+                return $"Nothing was being recorded then: the earliest record starts on {FormatDays(result.TrackingStartedOn, result.TrackingStartedOn, _culture)}.";
+            return "Nothing was recorded as used in this period." + (PeriodNotes.Count > 0 ? " " + string.Join(" ", PeriodNotes) : "");
+        }
+    }
+
+    /// <summary>What the list can't include for this period, as sentences. Empty when nothing is missing.</summary>
+    public IReadOnlyList<string> PeriodNotes => _result?.PeriodNotes ?? Array.Empty<string>();
+
+    public string PeriodNotesText => string.Join(" ", PeriodNotes);
 
     // ---------------------------------------------------------------
     // Year strip
@@ -176,31 +377,25 @@ public sealed class LibraryViewModel : ObservableObject
     public int CalendarYear => _calendarYear;
     public string CalendarYearLabel => $"{_calendarYear}";
 
-    /// <summary>What the strip counts for the current kind filter, as its caption.</summary>
+    /// <summary>What the strip counts for the current kind filter, as its caption: recorded activity, never "files used" (D5).</summary>
     public string CalendarCaption => _selectedKind switch
     {
         LibraryKind.Folder => "Folder visits from Recents",
         LibraryKind.Link => "Links keep no history, only when each was last opened",
         LibraryKind.Pdf or LibraryKind.Word or LibraryKind.Excel => $"{_selectedKind.Value.PluralLabel()} opened (Recent Files), and sessions saved or reopened",
-        _ => "Folder visits, files opened, and sessions saved or reopened",
+        _ => "Recorded activity: folder visits, files opened, and sessions saved or reopened",
     };
 
-    /// <summary>Chooses a day to list only what was used on it; choosing it again clears it.</summary>
-    public void SelectCalendarDate(DateOnly day)
-    {
-        _selectedDay = _selectedDay == day ? null : day;
-        NotifyDayChanged();
-        Reload();
-    }
+    /// <summary>Each source the strip counts, and how much of it: "Folder visits: partly counted — …".</summary>
+    public IReadOnlyList<SourceCoverage> Coverage => _result?.Coverage ?? Array.Empty<SourceCoverage>();
 
-    public void ClearSelectedDay()
-    {
-        if (_selectedDay is null)
-            return;
-        _selectedDay = null;
-        NotifyDayChanged();
-        Reload();
-    }
+    /// <summary>One line for each source the strip can't fully count, for under the strip. Empty when all are counted.</summary>
+    public IReadOnlyList<string> CoverageNotes
+        => Coverage.Where(c => c.State is CoverageState.Partial or CoverageState.Unavailable)
+            .Select(c => c.State == CoverageState.Partial ? $"{c.Source}: partly counted. {c.Reason}" : $"{c.Source}: not counted. {c.Reason}")
+            .ToList();
+
+    public string CoverageNotesText => string.Join("\n", CoverageNotes);
 
     public bool SelectCalendarYear(int year)
     {
@@ -209,7 +404,7 @@ public sealed class LibraryViewModel : ObservableObject
         _calendarYear = year;
         OnPropertyChanged(nameof(CalendarYear));
         OnPropertyChanged(nameof(CalendarYearLabel));
-        RebuildCalendar();
+        BuildCalendar();
         return true;
     }
 
@@ -231,6 +426,7 @@ public sealed class LibraryViewModel : ObservableObject
                 return;
             Report(_recentFiles.SetEnabled(value), value ? "Recent Files is on. Files you open from now on will appear here within a minute." : "Recent Files is off. What it recorded is kept.");
             OnRecentFilesSettingsChanged();
+            Reload();
         }
     }
 
@@ -325,8 +521,9 @@ public sealed class LibraryViewModel : ObservableObject
 
     /// <summary>
     /// Opens a row: a saved place through PlaceLauncher, so it counts as a
-    /// place open exactly as from the main grid; anything else is checked
-    /// and handed to Windows, and counts as nothing.
+    /// place open exactly as from the main grid, and the list is read again
+    /// to show it; anything else is checked and handed to Windows, and
+    /// counts as nothing.
     /// </summary>
     public void Open(LibraryRowViewModel? row)
     {
@@ -354,6 +551,7 @@ public sealed class LibraryViewModel : ObservableObject
             if (!outcome.Persistence.Saved)
                 ErrorMessage = outcome.Persistence.UserMessage;
             PlaceOpened?.Invoke(place, outcome.Persistence);
+            Reload();
             return;
         }
 
@@ -376,22 +574,53 @@ public sealed class LibraryViewModel : ObservableObject
         }
     }
 
-    /// <summary>Reads all four sources again and rebuilds the rows and the year strip.</summary>
+    /// <summary>Reads all four sources again and refreshes the rows and the year strip: after a launch, a change to a source, or new tracking.</summary>
     public void Reload()
     {
-        _items = LibraryIndex.Build(PlacesInPeriod(), SessionsInPeriod(), FoldersInPeriod(), FilesInPeriod());
+        _snapshot = Capture();
+        OnPropertyChanged(nameof(TagChoices));
         Refresh();
-        OnRecentFilesSettingsChanged();
     }
 
     // ---------------------------------------------------------------
     // Building
     // ---------------------------------------------------------------
 
+    private LibrarySnapshot Capture() => LibrarySnapshot.Capture(_places, _sessions, _activity, _recentFiles, _time);
+
+    private void QueryEdited()
+    {
+        Refresh();
+        QueryChanged?.Invoke();
+    }
+
+    /// <summary>Runs the query on the current snapshot; a result overtaken by a newer query is dropped.</summary>
     private void Refresh()
     {
-        var passing = _items.Where(i => PassesSource(i) && LibraryIndex.Matches(i, _searchText)).ToList();
+        var generation = ++_generation;
+        var snapshot = _snapshot;
+        var filter = new LibraryFilter(_selectedKind, _source, _searchText, _tag);
+        var period = Period;
+        var culture = _culture;
+        _work.Run(() => LibraryQueryEngine.Run(snapshot, filter, period, culture), result =>
+        {
+            if (generation != _generation)
+                return;
+            _result = result;
+            BuildRows();
+            BuildCalendar();
+            OnPropertyChanged(nameof(CalendarCaption));
+            OnPropertyChanged(nameof(Coverage));
+            OnPropertyChanged(nameof(CoverageNotes));
+            OnPropertyChanged(nameof(CoverageNotesText));
+            OnPropertyChanged(nameof(PeriodNotes));
+            OnPropertyChanged(nameof(PeriodNotesText));
+        });
+    }
 
+    private void BuildRows()
+    {
+        var passing = _result?.Items ?? Array.Empty<LibraryItem>();
         var selected = _selectedKind;
         KindFilters.Clear();
         KindFilters.Add(new LibraryKindFilter(null, $"All ({passing.Count})", selected is null));
@@ -399,6 +628,7 @@ public sealed class LibraryViewModel : ObservableObject
             KindFilters.Add(new LibraryKindFilter(kind, $"{kind.PluralLabel()} ({passing.Count(i => i.Kind == kind)})", selected == kind));
 
         var shown = passing.Where(i => selected is null || i.Kind == selected).ToList();
+        var keep = _selectedKey;
         Rows.Clear();
         if (_grouping == LibraryGrouping.Type)
         {
@@ -419,79 +649,22 @@ public sealed class LibraryViewModel : ObservableObject
                 Rows.Add(new LibraryRowViewModel(item, "No tag", tags.Count, _time.LocalTimeZone, _culture));
         }
 
+        // The same item keeps the selection, wherever the refresh put it; the key survives a row that is gone for now.
+        SelectedRow = keep is null ? null : Rows.FirstOrDefault(r => ResourceIdentity.Comparer.Equals(r.Item.Key, keep));
+        _selectedKey = keep;
+
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyText));
-        OnPropertyChanged(nameof(CalendarCaption));
-        RebuildCalendar();
     }
 
-    private bool PassesSource(LibraryItem item) => _source switch
+    private void BuildCalendar()
     {
-        LibrarySourceFilter.Saved => item.IsSaved,
-        LibrarySourceFilter.Recent => item.IsRecent,
-        _ => true,
-    };
-
-    private IEnumerable<Place> PlacesInPeriod()
-        => _selectedDay is { } day
-            ? _places.Places.Where(p => p.LastOpenedAt is { } at && LocalDate(at) == day)
-            : _places.Places;
-
-    private IEnumerable<SessionSnapshot> SessionsInPeriod()
-        => _selectedDay is { } day
-            ? _sessions.Sessions.Where(s => LocalDate(s.CreatedAt) == day || s.OpenedAt.Any(o => LocalDate(o) == day))
-            : _sessions.Sessions;
-
-    private IEnumerable<FolderActivity> FoldersInPeriod()
-    {
-        var to = _selectedDay ?? Today();
-        var from = _selectedDay ?? Today().AddDays(-(FolderDays - 1));
-        return _activity.Roots.SelectMany(root => _activity.QueryPeriod(root.RootId, from, to)?.Folders ?? Array.Empty<FolderActivity>());
-    }
-
-    private IEnumerable<RecentFileSummary> FilesInPeriod()
-        => _recentFiles.QueryFiles(_selectedDay, _selectedDay);
-
-    private void RebuildCalendar()
-    {
-        var days = new Dictionary<DateOnly, (int Visits, int Opens, int Saved, int Reopens)>();
-        void Add(DateOnly date, int visits = 0, int opens = 0, int saved = 0, int reopens = 0)
-        {
-            days.TryGetValue(date, out var day);
-            days[date] = (day.Visits + visits, day.Opens + opens, day.Saved + saved, day.Reopens + reopens);
-        }
-
-        var kind = _selectedKind;
-        var starts = new List<DateOnly>();
-
-        if (kind is null or LibraryKind.Folder)
-        {
-            foreach (var root in _activity.Roots)
-            {
-                starts.Add(LocalDate(root.TrackingStartedAt));
-                foreach (var (date, total) in _activity.QueryDayTotals(root.RootId) ?? new Dictionary<DateOnly, ActivityDayTotal>())
-                    Add(date, visits: total.Visits);
-            }
-        }
-
-        if (kind is null or LibraryKind.Pdf or LibraryKind.Word or LibraryKind.Excel)
-        {
-            if (_recentFiles.Settings.TrackingStartedAt is { } started)
-                starts.Add(LocalDate(started));
-            var kinds = kind?.ToDocumentKind() is { } documentKind ? new[] { documentKind } : null;
-            foreach (var (date, total) in _recentFiles.QueryDayTotals(kinds))
-                Add(date, opens: total.Opens);
-
-            foreach (var session in _sessions.Sessions)
-                starts.Add(LocalDate(session.CreatedAt));
-            foreach (var (date, total) in _sessions.QueryDays())
-                Add(date, saved: total.Saved, reopens: total.Reopens);
-        }
-
-        var calendarDays = days.ToDictionary(d => d.Key, d => new CalendarDay(
-            d.Value.Visits + d.Value.Opens + d.Value.Saved + d.Value.Reopens, DaySummary(d.Value)));
-        var trackingStartedOn = starts.Count > 0 ? starts.Min() : Today();
-        var year = ActivityCalendar.BuildYear(calendarDays, trackingStartedOn, Today(), _calendarYear, _culture, _selectedDay);
+        var result = _result;
+        var heat = result?.Heat ?? new Dictionary<DateOnly, HeatDay>();
+        var days = heat.ToDictionary(d => d.Key, d => new CalendarDay(d.Value.Weight, d.Value.Summary, Unknown: d.Value.FoldersUnknown && d.Value.Weight == 0));
+        var period = Period;
+        var year = ActivityCalendar.BuildYear(days, result?.TrackingStartedOn ?? Today(), Today(), _calendarYear, _culture,
+            period?.From, period?.To);
 
         CalendarWeeks.Clear();
         foreach (var week in year.Weeks)
@@ -505,16 +678,25 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(CalendarStripWidth));
     }
 
-    private static string DaySummary((int Visits, int Opens, int Saved, int Reopens) day)
+    private (DateOnly From, DateOnly To) WeekOf(DateOnly date)
     {
-        static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
+        var offset = ((int)date.DayOfWeek - (int)_culture.DateTimeFormat.FirstDayOfWeek + 7) % 7;
+        var start = date.AddDays(-offset);
+        return (start, start.AddDays(6));
+    }
 
-        var parts = new List<string>();
-        if (day.Visits > 0) parts.Add(Count(day.Visits, "folder visit", "folder visits"));
-        if (day.Opens > 0) parts.Add(Count(day.Opens, "file opened", "files opened"));
-        if (day.Saved > 0) parts.Add(Count(day.Saved, "session saved", "sessions saved"));
-        if (day.Reopens > 0) parts.Add(Count(day.Reopens, "session reopened", "sessions reopened"));
-        return string.Join(" · ", parts);
+    /// <summary>"Thu 24 Sep 2026" for one day, "21–27 Sep 2026" within a month, "28 Sep – 4 Oct 2026" across months.</summary>
+    public static string FormatDays(DateOnly from, DateOnly to, CultureInfo culture)
+    {
+        string F(DateOnly d, string format) => d.ToDateTime(TimeOnly.MinValue).ToString(format, culture);
+
+        if (from == to)
+            return F(from, "ddd d MMM yyyy");
+        if (from.Year != to.Year)
+            return $"{F(from, "d MMM yyyy")} – {F(to, "d MMM yyyy")}";
+        if (from.Month != to.Month)
+            return $"{F(from, "d MMM")} – {F(to, "d MMM yyyy")}";
+        return $"{F(from, "%d")}–{F(to, "d MMM yyyy")}";
     }
 
     private bool Tracks(DocumentKind kind) => _recentFiles.Settings.Kinds.Contains(kind);
@@ -553,17 +735,23 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(RecentFilesStatus));
     }
 
-    private void NotifyDayChanged()
+    private void NotifySource()
     {
-        OnPropertyChanged(nameof(SelectedDay));
-        OnPropertyChanged(nameof(HasSelectedDay));
-        OnPropertyChanged(nameof(SelectedDayText));
+        OnPropertyChanged(nameof(Source));
+        OnPropertyChanged(nameof(IsSourceAll));
+        OnPropertyChanged(nameof(IsSourceSaved));
+        OnPropertyChanged(nameof(IsSourceRecent));
     }
 
-    private DateOnly Today() => LocalDate(_time.GetUtcNow());
+    private void NotifyPeriod()
+    {
+        OnPropertyChanged(nameof(Date));
+        OnPropertyChanged(nameof(Period));
+        OnPropertyChanged(nameof(HasPeriod));
+        OnPropertyChanged(nameof(PeriodText));
+    }
 
-    private DateOnly LocalDate(DateTimeOffset instant)
-        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, _time.LocalTimeZone).DateTime);
+    private DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone).DateTime);
 }
 
 /// <summary>One Library row: an item, and the group it is shown in.</summary>

@@ -146,9 +146,14 @@ public sealed class LibraryViewModelTests
         Assert.EndsWith("1 folder visit", today.Label);
         Assert.Equal("Folder visits from Recents", vm.CalendarCaption);
 
+        // The session holds a PDF and a Word file, so its save counts for those kinds, not for Excel.
         vm.SelectedKind = LibraryKind.Excel;
         today = vm.CalendarWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today);
-        Assert.EndsWith("1 file opened · 1 session saved", today.Label);
+        Assert.EndsWith("1 file opened", today.Label);
+
+        vm.SelectedKind = LibraryKind.Pdf;
+        today = vm.CalendarWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today);
+        Assert.EndsWith("1 session saved", today.Label);
     }
 
     [Fact]
@@ -160,13 +165,13 @@ public sealed class LibraryViewModelTests
 
         vm.SelectCalendarDate(yesterday);
         Assert.True(vm.IsEmpty);
-        Assert.Equal("Used on Thu 24 Sep 2026", vm.SelectedDayText);
+        Assert.Equal("Used on Thu 24 Sep 2026", vm.PeriodText);
 
         vm.SelectCalendarDate(Today);
         Assert.Equal(new[] { "A-101.pdf", "Acme", "Budget.xlsx", "Report.docx" }, vm.Rows.Select(r => r.Name).OrderBy(n => n));
 
         vm.SelectCalendarDate(Today);
-        Assert.False(vm.HasSelectedDay);
+        Assert.False(vm.HasPeriod);
         Assert.Equal(6, vm.Rows.Count);
     }
 

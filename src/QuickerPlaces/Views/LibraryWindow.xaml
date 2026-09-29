@@ -185,9 +185,9 @@
                 <DockPanel Grid.Row="0" Margin="0,0,0,5">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Border Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28" Padding="12,0,3,0" Margin="0,0,10,0"
-                                Visibility="{Binding HasSelectedDay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                Visibility="{Binding HasPeriod, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding SelectedDayText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding PeriodText}" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <Button Style="{StaticResource Button.IconOnlyCompact}" Width="22" Height="22" Margin="6,0,0,0"
                                         ToolTip="Show everything again" AutomationProperties.Name="Clear the day"
                                         Click="ClearDay_Click">
