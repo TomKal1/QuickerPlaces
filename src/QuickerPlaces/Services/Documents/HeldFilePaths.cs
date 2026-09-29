@@ -12,7 +12,8 @@ namespace QuickerPlaces.Services.Documents;
 /// user's mapped drive letter when one points there, and anything that
 /// isn't a document the user opened left out — other file types, Office's
 /// "~$" owner files, and files in program, system and per-user application
-/// folders, such as Revu's Studio cache.
+/// folders, such as Revu's Studio cache. An excluded folder is matched in
+/// both its own spelling and its mapped-drive spelling.
 ///
 /// Pure logic: WindowsHeldFiles gathers the raw paths. UI-free and linked
 /// into the test project.
@@ -29,10 +30,14 @@ public static class HeldFilePaths
     public static IReadOnlyList<HeldFile> Resolve(IEnumerable<(string FinalPath, string AppName)> raw,
         IReadOnlyDictionary<string, string> mappedDrives, IReadOnlyList<string> excludedFolders)
     {
+        // A folder is excluded in its own spelling and in its mapped drive's,
+        // as a held path is always compared in the mapped-drive spelling.
         var excluded = excludedFolders
+            .SelectMany(f => new[] { f, ToMappedDrive(f, mappedDrives) })
             .Select(RootPathMatcher.Normalize)
             .OfType<string>()
             .Select(f => f.TrimEnd('\\') + '\\')
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var files = new List<HeldFile>();
@@ -90,16 +95,26 @@ public static class HeldFilePaths
         foreach (var (letter, remote) in mappedDrives.OrderBy(d => d.Key, StringComparer.OrdinalIgnoreCase))
         {
             var root = remote.TrimEnd('\\');
-            if (root.Length <= rootLength)
+            if (root.Length <= rootLength || !IsShare(root))
                 continue;
             if (path.Length > root.Length && path[root.Length] == '\\' && path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
             {
-                drive = letter.TrimEnd('\\');
+                drive = letter.TrimEnd('\\').ToUpperInvariant();
                 rootLength = root.Length;
             }
         }
 
         return drive is null ? path : drive + path[rootLength..];
+    }
+
+    /// <summary>True for "\\server\share" or deeper: a mapping to anything less can't be a share to match against.</summary>
+    private static bool IsShare(string root)
+    {
+        if (!root.StartsWith(@"\\", StringComparison.Ordinal))
+            return false;
+
+        var cut = root.IndexOf('\\', 2);
+        return cut > 2 && cut < root.Length - 1;
     }
 }
 

@@ -90,6 +90,32 @@ public sealed class HeldFilePathsTests
         => Assert.Equal(new[] { @"P:\Tower A\A-101.pdf" }, Paths(new[] { @"\\?\UNC\files\projects\Tower A\A-101.pdf" }, Drives));
 
     [Fact]
+    public void Resolve_DropsFilesInAFolderRedirectedToAMappedShare()
+        => Assert.Equal(new[] { @"H:\Jobs\A-101.pdf" }, Paths(new[]
+        {
+            @"\\?\UNC\srv\profiles\Tom\AppData\Roaming\Microsoft\Excel\XLSTART\PERSONAL.XLSB",
+            @"\\?\UNC\srv\profiles\Tom\Jobs\A-101.pdf",
+        }, new Dictionary<string, string> { ["H:"] = @"\\srv\profiles\Tom" }, new[] { @"\\srv\profiles\Tom\AppData\Roaming" }));
+
+    [Fact]
+    public void Resolve_AFolderThatOnlySharesAnExcludedFoldersPrefix_IsKept()
+        => Assert.Equal(new[] { @"C:\Program Files Archive\Tower A\A-101.pdf" },
+            Paths(new[] { @"\\?\C:\Program Files Archive\Tower A\A-101.pdf" }, folders: AppFolders));
+
+    [Fact]
+    public void ToMappedDrive_IgnoresAMappingThatIsNotAShare()
+    {
+        var drives = new Dictionary<string, string> { ["P:"] = "", ["Q:"] = @"\\", ["R:"] = @"\\files", ["S:"] = @"\\files\" };
+
+        Assert.Equal(@"\\files\projects\A-101.pdf", HeldFilePaths.ToMappedDrive(@"\\files\projects\A-101.pdf", drives));
+    }
+
+    [Fact]
+    public void ToMappedDrive_WritesTheDriveLetterInUpperCase()
+        => Assert.Equal(@"P:\A-101.pdf",
+            HeldFilePaths.ToMappedDrive(@"\\files\projects\A-101.pdf", new Dictionary<string, string> { ["p:"] = @"\\files\projects" }));
+
+    [Fact]
     public void Resolve_AFileHeldTwice_IsListedOnceWithTheFirstProgram()
     {
         var files = HeldFilePaths.Resolve(
