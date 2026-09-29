@@ -98,28 +98,35 @@ public static class WindowsHeldFiles
 
         var targets = SelectTargets(programs);
         if (targets.Count == 0)
-            return new HeldFilesRead(Array.Empty<HeldFile>(), IsComplete: true);
+            return new HeldFilesRead(Array.Empty<HeldFile>(), IsComplete: true, DrivesWithin(drivesTask, clock, timeout));
 
         var handles = ListFileHandles(targets);
         var found = new ConcurrentQueue<(string FinalPath, string AppName)>();
         var isComplete = WalkAll(handles, targets, found, clock, timeout);
 
-        IReadOnlyDictionary<string, string> drives;
+        var drives = DrivesWithin(drivesTask, clock, timeout);
+        return new HeldFilesRead(HeldFilePaths.Resolve(found.ToArray(), drives, ExcludedFolders()), isComplete, drives);
+    }
+
+    /// <summary>
+    /// The mapped drives, waiting for them within what is left of the budget but
+    /// at least <see cref="MinimumDriveWait"/>, so the drive spelling of a path
+    /// doesn't depend on how long the walk took. Empty if they can't be read in time.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> DrivesWithin(Task<IReadOnlyDictionary<string, string>> drivesTask, Stopwatch clock, TimeSpan timeout)
+    {
         try
         {
-            // A minimum wait, so the drive spelling of a path doesn't depend on how long the walk took.
             var remaining = timeout - clock.Elapsed;
-            drives = drivesTask.Wait(remaining > MinimumDriveWait ? remaining : MinimumDriveWait)
+            return drivesTask.Wait(remaining > MinimumDriveWait ? remaining : MinimumDriveWait)
                 ? drivesTask.Result
                 : new Dictionary<string, string>();
         }
         catch (Exception)
         {
             // An unmapped \\server\share path is still usable.
-            drives = new Dictionary<string, string>();
+            return new Dictionary<string, string>();
         }
-
-        return new HeldFilesRead(HeldFilePaths.Resolve(found.ToArray(), drives, ExcludedFolders()), isComplete);
     }
 
     private readonly record struct Target(string AppName, int Order);
@@ -580,4 +587,5 @@ public static class WindowsHeldFiles
 /// <summary>What <see cref="WindowsHeldFiles.Read"/> found.</summary>
 /// <param name="Files">The held documents, as session paths.</param>
 /// <param name="IsComplete">False when the time limit ran out or a walk failed or stalled too often, so some may be missing.</param>
-public sealed record HeldFilesRead(IReadOnlyList<HeldFile> Files, bool IsComplete);
+/// <param name="MappedDrives">Each mapped drive and its share, as used to spell the files, for the resolver to spell every other clue the same way (H3).</param>
+public sealed record HeldFilesRead(IReadOnlyList<HeldFile> Files, bool IsComplete, IReadOnlyDictionary<string, string> MappedDrives);

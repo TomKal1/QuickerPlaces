@@ -21,10 +21,16 @@ namespace QuickerPlaces.Services.Documents;
 ///   OpusApp and XLMAIN, whatever their titles say), with the owning
 ///   program's description and command line (NtQueryInformationProcess,
 ///   ProcessCommandLineInformation).
+/// - The PDF, Word and Excel files those windows' programs hold open, with
+///   full paths, through <see cref="WindowsHeldFiles"/>: every Revu or
+///   Acrobat tab, whether or not it is in Recent Items.
 /// - Recent Items, through the shared <see cref="WindowsRecentItems"/>.
-/// - For each candidate that exists, whether a program has it open,
+/// - For each other candidate that exists, whether a program has it open,
 ///   through Restart Manager, ignoring Explorer's preview and indexing
 ///   processes, which hold a file only to show or index it.
+///
+/// Every clue is spelled with the user's mapped drive letters (H3), so one
+/// file found several ways is listed once.
 ///
 /// Runs off the UI thread with a time budget: a slow network share cuts the
 /// scan short with a warning rather than freezing the window (D8). Logs
@@ -49,6 +55,9 @@ public sealed class WindowsOpenDocumentProbe
     /// <summary>The whole scan's budget, after which what was found so far is returned.</summary>
     private static readonly TimeSpan ScanBudget = TimeSpan.FromSeconds(10);
 
+    /// <summary>How long listing the files programs hold open may take, within the scan's budget (H4).</summary>
+    private static readonly TimeSpan HeldFilesBudget = TimeSpan.FromSeconds(3);
+
     private readonly WindowsRecentItems _recentItems;
 
     public WindowsOpenDocumentProbe(WindowsRecentItems recentItems) => _recentItems = recentItems;
@@ -69,16 +78,38 @@ public sealed class WindowsOpenDocumentProbe
         var warnings = new List<string>();
 
         IReadOnlyList<ViewerWindow> windows;
+        IReadOnlyList<(uint ProcessId, string AppName)> programs;
         try
         {
-            windows = FindViewerWindows();
+            (windows, programs) = FindViewerWindows();
         }
         catch (Exception ex)
         {
             DiagnosticLog.Warn($"Listing document windows failed ({ex.GetType().Name}).");
             windows = Array.Empty<ViewerWindow>();
+            programs = Array.Empty<(uint, string)>();
             warnings.Add("Open windows couldn't be read.");
         }
+
+        IReadOnlyList<HeldFile> held;
+        IReadOnlyDictionary<string, string> drives;
+        try
+        {
+            var read = WindowsHeldFiles.Read(programs, HeldFilesBudget);
+            held = read.Files;
+            drives = read.MappedDrives;
+            if (!read.IsComplete)
+                warnings.Add("Listing the files open in PDF, Word and Excel programs took too long, so some may be missing.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Warn($"Listing held documents failed ({ex.GetType().Name}).");
+            held = Array.Empty<HeldFile>();
+            drives = new Dictionary<string, string>();
+            warnings.Add("The files open in PDF, Word and Excel programs couldn't be listed, so some may be missing.");
+        }
+
+        var heldPaths = new HashSet<string>(held.Select(h => h.Path), StringComparer.OrdinalIgnoreCase);
 
         IReadOnlyList<RecentDocument> recents;
         try
@@ -92,7 +123,7 @@ public sealed class WindowsOpenDocumentProbe
             warnings.Add("Windows' recent files couldn't be read.");
         }
 
-        var evidence = new OpenDocumentEvidence(windows, recents);
+        var evidence = new OpenDocumentEvidence(windows, recents) { HeldFiles = held, MappedDrives = drives };
         var inUse = new List<string>();
         var slowServers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var existing = new List<string>();
@@ -101,6 +132,10 @@ public sealed class WindowsOpenDocumentProbe
 
         foreach (var path in OpenDocumentResolver.CandidatePaths(evidence))
         {
+            // A held file exists and is open: the program holding it said so.
+            if (heldPaths.Contains(path))
+                continue;
+
             if (clock.Elapsed > ScanBudget)
             {
                 timedOut = true;
@@ -152,10 +187,14 @@ public sealed class WindowsOpenDocumentProbe
             warnings.Add("The scan took too long and stopped early. Add any missing files by hand.");
 
         // A recent file that no longer exists isn't worth suggesting; one on a slow share is kept, unchecked.
-        var kept = new OpenDocumentEvidence(windows, recents.Where(r => !missing.Contains(DocumentPaths.Normalize(r.Path) ?? r.Path)).ToList());
+        var kept = new OpenDocumentEvidence(windows, recents.Where(r => !missing.Contains(OpenDocumentResolver.Spell(r.Path, evidence) ?? r.Path)).ToList())
+        {
+            HeldFiles = held,
+            MappedDrives = drives,
+        };
         var scan = OpenDocumentResolver.Resolve(kept, inUse);
 
-        DiagnosticLog.Info($"Document scan: {windows.Count} window(s), {recents.Count} recent, {inUse.Count} in use, " +
+        DiagnosticLog.Info($"Document scan: {windows.Count} window(s), {held.Count} held, {recents.Count} recent, {inUse.Count} in use, " +
                            $"{scan.Candidates.Count(c => c.IsLikelyOpen)} judged open, {scan.UnmatchedTitles.Count} unmatched, {clock.ElapsedMilliseconds} ms.");
 
         return warnings.Count == 0 ? scan : scan with { Warning = string.Join(" ", warnings) };
@@ -165,7 +204,8 @@ public sealed class WindowsOpenDocumentProbe
     // Windows
     // ---------------------------------------------------------------
 
-    private static IReadOnlyList<ViewerWindow> FindViewerWindows()
+    /// <summary>The document windows, and each program that owns one, for WindowsHeldFiles.</summary>
+    private static (IReadOnlyList<ViewerWindow> Windows, IReadOnlyList<(uint ProcessId, string AppName)> Programs) FindViewerWindows()
     {
         var found = new List<(string Title, uint ProcessId, DocumentKind? OfficeKind)>();
         var own = (uint)Environment.ProcessId;
@@ -203,7 +243,7 @@ public sealed class WindowsOpenDocumentProbe
             windows.Add(new ViewerWindow(title, program.AppName, program.CommandLine, officeKind));
         }
 
-        return windows;
+        return (windows, programs.Select(p => (p.Key, p.Value.AppName)).ToList());
     }
 
     /// <summary>The program's own description ("Adobe Acrobat"), or its process name, and its command line if it can be read.</summary>
