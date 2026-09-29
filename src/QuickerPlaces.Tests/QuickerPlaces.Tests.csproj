@@ -97,6 +97,9 @@
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
     <Compile Include="..\QuickerPlaces\Services\Library\LibraryIndex.cs" Link="Linked\Services\Library\LibraryIndex.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Library\ResourceIdentity.cs" Link="Linked\Services\Library\ResourceIdentity.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Library\LibrarySnapshot.cs" Link="Linked\Services\Library\LibrarySnapshot.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Library\LibraryQueryEngine.cs" Link="Linked\Services\Library\LibraryQueryEngine.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\LibraryViewModel.cs" Link="Linked\ViewModels\LibraryViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionsViewModel.cs" Link="Linked\ViewModels\SessionsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionEditorViewModel.cs" Link="Linked\ViewModels\SessionEditorViewModel.cs" />

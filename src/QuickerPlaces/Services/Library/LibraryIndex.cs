@@ -84,6 +84,9 @@ public sealed record LibraryItem(
     int RecentCount,
     DateTimeOffset? LastUsedAt)
 {
+    /// <summary>Who this item is, whichever source named it (<see cref="ResourceIdentity"/>): stable across refreshes.</summary>
+    public string Key => ResourceIdentity.Key(Kind, Location);
+
     public bool IsSavedPlace => Place is not null;
 
     public bool IsInSession => Sessions.Count > 0;
@@ -124,8 +127,7 @@ public sealed record LibraryItem(
 /// with separate switches; this only reads them. One row per thing: the
 /// same folder saved as a place and visited in Recents is one row, and a
 /// file in two sessions and in Recent Files is one row with both sessions'
-/// tags. Paths are compared ignoring case and separators; links exactly as
-/// saved, ignoring case.
+/// tags. What counts as the same thing is <see cref="ResourceIdentity"/>.
 ///
 /// Pure logic; UI-free and linked into the test project.
 /// </summary>
@@ -137,11 +139,11 @@ public static class LibraryIndex
         IEnumerable<FolderActivity> recentFolders,
         IEnumerable<RecentFileSummary> recentFiles)
     {
-        var items = new Dictionary<string, Builder>(StringComparer.OrdinalIgnoreCase);
+        var items = new Dictionary<string, Builder>(ResourceIdentity.Comparer);
 
         Builder Get(LibraryKind kind, string location)
         {
-            var key = $"{kind}|{Key(kind, location)}";
+            var key = ResourceIdentity.Key(kind, location);
             if (!items.TryGetValue(key, out var builder))
                 items[key] = builder = new Builder(kind, location);
             return builder;
@@ -198,13 +200,6 @@ public static class LibraryIndex
             item.Tags.Any(t => t.Contains(word, StringComparison.CurrentCultureIgnoreCase)) ||
             item.Sessions.Any(s => s.Contains(word, StringComparison.CurrentCultureIgnoreCase)));
     }
-
-    private static string Key(LibraryKind kind, string location) => kind switch
-    {
-        LibraryKind.Link => location.Trim(),
-        LibraryKind.Folder => RootPathMatcher.Normalize(location) ?? location.Trim(),
-        _ => DocumentPaths.Normalize(location) ?? location.Trim(),
-    };
 
     private sealed class Builder
     {

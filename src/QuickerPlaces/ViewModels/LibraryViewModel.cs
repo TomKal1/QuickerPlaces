@@ -15,19 +15,6 @@ using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.ViewModels;
 
-/// <summary>Which items the Library shows by where they come from.</summary>
-public enum LibrarySourceFilter
-{
-    /// <summary>Everything.</summary>
-    All,
-
-    /// <summary>Saved places and files in saved sessions.</summary>
-    Saved,
-
-    /// <summary>Folders from Recents and files from Recent Files.</summary>
-    Recent,
-}
-
 /// <summary>How the Library's rows are grouped.</summary>
 public enum LibraryGrouping
 {
