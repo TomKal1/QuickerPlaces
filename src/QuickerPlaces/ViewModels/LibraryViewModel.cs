@@ -83,6 +83,8 @@ public sealed class LibraryViewModel : ObservableObject
     private DateRule _date = DateRule.All();
     private CalendarSelectionUnit _selectionUnit;
     private int _calendarYear;
+    private int _calendarMonth;
+    private ActivityCalendarYearResult? _lastYear;
     private string? _selectedKey;
     private LibraryRowViewModel? _selectedRow;
     private string? _statusMessage;
@@ -101,6 +103,7 @@ public sealed class LibraryViewModel : ObservableObject
         _culture = culture ?? CultureInfo.CurrentCulture;
         _work = work ?? InlineBackgroundWork.Instance;
         _calendarYear = Today().Year;
+        _calendarMonth = Today().Month;
         _snapshot = Capture();
         Refresh();
         OnRecentFilesSettingsChanged();
@@ -412,9 +415,56 @@ public sealed class LibraryViewModel : ObservableObject
         if (year < 2000 || year > Today().Year || year == _calendarYear)
             return false;
         _calendarYear = year;
+        if (year == Today().Year && _calendarMonth > Today().Month)
+            _calendarMonth = Today().Month;
         OnPropertyChanged(nameof(CalendarYear));
         OnPropertyChanged(nameof(CalendarYearLabel));
         BuildCalendar();
+        return true;
+    }
+
+    // ---------------------------------------------------------------
+    // Month view (M4): the strip's fallback where a year doesn't fit
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// The weeks of one month of <see cref="CalendarYear"/>, laid out as the
+    /// year strip lays them out, for a panel too narrow for the whole year
+    /// (configurable canvas plan D1). Same cells, so the chosen period's
+    /// outline and today's ring carry over.
+    /// </summary>
+    public ObservableCollection<ActivityCalendarWeek> CalendarMonthWeeks { get; } = new();
+
+    /// <summary>1–12: the month the month view shows. Follows a chosen period that starts in the year shown.</summary>
+    public int CalendarMonth => _calendarMonth;
+
+    public string CalendarMonthLabel => new DateTime(_calendarYear, _calendarMonth, 1).ToString("MMMM yyyy", _culture);
+
+    public bool CanShowNextMonth => new DateOnly(_calendarYear, _calendarMonth, 1) < new DateOnly(Today().Year, Today().Month, 1);
+
+    public bool CanShowPreviousMonth => _calendarYear > 2000 || _calendarMonth > 1;
+
+    /// <summary>The month view's arrows: one month back or on, into the next or previous year when needed. Never past this month.</summary>
+    public bool ShowCalendarMonth(int delta)
+    {
+        var first = new DateOnly(_calendarYear, _calendarMonth, 1).AddMonths(delta);
+        if (first.Year < 2000 || first > new DateOnly(Today().Year, Today().Month, 1))
+            return false;
+
+        var yearChanged = first.Year != _calendarYear;
+        _calendarYear = first.Year;
+        _calendarMonth = first.Month;
+        if (yearChanged)
+        {
+            OnPropertyChanged(nameof(CalendarYear));
+            OnPropertyChanged(nameof(CalendarYearLabel));
+            BuildCalendar();
+        }
+        else
+        {
+            BuildMonth(_lastYear);
+        }
+
         return true;
     }
 
@@ -694,6 +744,23 @@ public sealed class LibraryViewModel : ObservableObject
         CalendarStripWidth = year.StripWidth;
         OnPropertyChanged(nameof(CalendarWeekdayLabels));
         OnPropertyChanged(nameof(CalendarStripWidth));
+        _lastYear = year;
+        BuildMonth(year);
+    }
+
+    private void BuildMonth(ActivityCalendarYearResult? year)
+    {
+        CalendarMonthWeeks.Clear();
+        if (year?.Months.FirstOrDefault(m => m.Month == _calendarMonth) is { } month)
+        {
+            foreach (var week in month.Weeks)
+                CalendarMonthWeeks.Add(week);
+        }
+
+        OnPropertyChanged(nameof(CalendarMonth));
+        OnPropertyChanged(nameof(CalendarMonthLabel));
+        OnPropertyChanged(nameof(CanShowNextMonth));
+        OnPropertyChanged(nameof(CanShowPreviousMonth));
     }
 
     private (DateOnly From, DateOnly To) WeekOf(DateOnly date)
@@ -763,6 +830,11 @@ public sealed class LibraryViewModel : ObservableObject
 
     private void NotifyPeriod()
     {
+        // The month view shows where a period chosen in the year shown starts, so a
+        // week picked on the year strip is still outlined when the panel narrows.
+        if (Period is { } period && period.From.Year == _calendarYear)
+            _calendarMonth = period.From.Month;
+
         OnPropertyChanged(nameof(Date));
         OnPropertyChanged(nameof(Period));
         OnPropertyChanged(nameof(HasPeriod));

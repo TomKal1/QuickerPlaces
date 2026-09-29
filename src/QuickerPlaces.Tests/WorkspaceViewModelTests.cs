@@ -18,7 +18,7 @@ namespace QuickerPlaces.Tests;
 /// The workspace in the main window (configurable canvas plan M3): Activity
 /// Atlas's panels and where they go, the one query shared with the Library
 /// and remembered per layout, Add panel and Hide committed at once, and the
-/// shelf's documents as a session.
+/// shelf's documents as a session; Arrange mode, Undo and reflow (M4).
 /// </summary>
 public sealed class WorkspaceViewModelTests
 {
@@ -183,5 +183,199 @@ public sealed class WorkspaceViewModelTests
 
         workspace.SearchText = "report";
         Assert.Equal(new[] { Word }, workspace.ListedFileSet().Files);
+    }
+
+    // ---------------------------------------------------------------
+    // Arrange mode (M4)
+    // ---------------------------------------------------------------
+
+    private static string[] Types(WorkspaceViewModel workspace) => workspace.Panels.Select(p => p.Type).ToArray();
+
+    [Fact]
+    public void Hide_OffersUndo_WhichPutsThePanelBack()
+    {
+        var workspace = NewWorkspace();
+
+        Assert.True(workspace.HidePanel("sessions"));
+        Assert.True(workspace.CanUndo);
+        Assert.Equal("Undo Hide Sessions", workspace.UndoText);
+
+        workspace.Undo();
+
+        Assert.Equal(new[] { "activity", "shelf", "sessions" }, Types(workspace));
+        Assert.Equal("Undid Hide Sessions.", workspace.Status);
+        Assert.False(workspace.CanUndo);
+        Assert.Equal(new[] { "activity", "shelf", "sessions" }, Types(NewWorkspace()));
+    }
+
+    [Fact]
+    public void UndoingAHide_KeepsTheSearchShown()
+    {
+        var workspace = NewWorkspace();
+        workspace.HidePanel("sessions");
+        workspace.SearchText = "acme";
+
+        workspace.Undo();
+
+        Assert.Equal("acme", workspace.SearchText);
+        workspace.FlushPending();
+        Assert.Equal("acme", NewWorkspace().SearchText);
+    }
+
+    [Fact]
+    public void ArrangeMode_MovesAndResizes_InADraft_ThatDoneWritesOnce()
+    {
+        var workspace = NewWorkspace();
+        var before = _layoutStorage.WriteCount;
+
+        workspace.BeginArrange();
+        Assert.True(workspace.IsArranging);
+        Assert.True(workspace.MoveEarlier("sessions"));
+        Assert.Equal("Moved Sessions before File shelf.", workspace.Status);
+        Assert.True(workspace.SetSpan("sessions", PanelSpans.TwoThirds));
+        Assert.Equal("Sessions is now two thirds wide.", workspace.Status);
+        Assert.Equal(new[] { "activity", "sessions", "shelf" }, Types(workspace));
+        Assert.True(workspace.IsModified);
+        Assert.Equal(before, _layoutStorage.WriteCount);
+
+        workspace.Done();
+
+        Assert.False(workspace.IsArranging);
+        Assert.Equal(before + 1, _layoutStorage.WriteCount);
+        var reopened = NewWorkspace();
+        Assert.Equal(new[] { "activity", "sessions", "shelf" }, Types(reopened));
+        Assert.Equal(PanelSpans.TwoThirds, reopened.Panels[1].StoredSpan);
+    }
+
+    [Fact]
+    public void Revert_PutsBackWhatArrangeModeStartedWith_AndWritesNothing()
+    {
+        var workspace = NewWorkspace();
+        var before = _layoutStorage.WriteCount;
+        workspace.BeginArrange();
+        workspace.Drop("activity", "sessions", after: true);
+        workspace.HidePanel("shelf");
+        workspace.AddPanel(PanelTypes.Places);
+
+        workspace.Revert();
+
+        Assert.False(workspace.IsArranging);
+        Assert.Equal(new[] { "activity", "shelf", "sessions" }, Types(workspace));
+        Assert.Equal(before, _layoutStorage.WriteCount);
+        Assert.False(workspace.CanUndo);
+    }
+
+    [Fact]
+    public void UndoInArrangeMode_StepsBackOneEditAtATime()
+    {
+        var workspace = NewWorkspace();
+        workspace.BeginArrange();
+        workspace.MoveLater("activity");
+        workspace.SetSpan("shelf", PanelSpans.Half);
+
+        Assert.Equal("Undo Resize File shelf", workspace.UndoText);
+        workspace.Undo();
+        Assert.Equal(PanelSpans.TwoThirds, workspace.Panels.First(p => p.Type == "shelf").StoredSpan);
+        Assert.Equal("Undo Move Year activity", workspace.UndoText);
+        workspace.Undo();
+        Assert.Equal(new[] { "activity", "shelf", "sessions" }, Types(workspace));
+        Assert.True(workspace.IsArranging);
+        Assert.False(workspace.CanUndo);
+    }
+
+    [Fact]
+    public void ADropWhereThePanelAlreadyIs_ChangesNothing()
+    {
+        var workspace = NewWorkspace();
+        workspace.BeginArrange();
+
+        Assert.False(workspace.Drop("shelf", "activity", after: true));
+        Assert.False(workspace.Drop("shelf", "shelf", after: false));
+
+        Assert.False(workspace.CanUndo);
+        Assert.False(workspace.IsModified);
+    }
+
+    [Fact]
+    public void TheFirstAndLastPanels_CannotMoveFurther()
+    {
+        var workspace = NewWorkspace();
+        workspace.BeginArrange();
+
+        Assert.False(workspace.Panels[0].CanMoveEarlier);
+        Assert.True(workspace.Panels[0].CanMoveLater);
+        Assert.False(workspace.Panels[^1].CanMoveLater);
+        Assert.False(workspace.MoveEarlier("activity"));
+        Assert.False(workspace.MoveLater("sessions"));
+    }
+
+    [Fact]
+    public void RestoreBuiltInLayout_PutsTheFactoryArrangementBack_WithUndo()
+    {
+        var workspace = NewWorkspace();
+        workspace.HidePanel("sessions");
+        Assert.True(workspace.IsModified);
+        Assert.Equal("Restore built-in layout", workspace.RestoreLabel);
+
+        workspace.RestoreSaved();
+
+        Assert.False(workspace.IsModified);
+        Assert.Equal(new[] { "activity", "shelf", "sessions" }, Types(workspace));
+        Assert.Equal("Undo Restore built-in layout", workspace.UndoText);
+        workspace.Undo();
+        Assert.Equal(new[] { "activity", "shelf" }, Types(workspace));
+    }
+
+    [Fact]
+    public void WidthsChangeOnlyInArrangeMode_AndPickingTheShownLayoutKeepsArranging()
+    {
+        var workspace = NewWorkspace();
+        workspace.SetSpan("shelf", PanelSpans.Half);       // outside Arrange: refused
+        Assert.False(workspace.IsModified);
+
+        workspace.BeginArrange();
+        workspace.HidePanel("sessions");
+        workspace.SelectedLayout = workspace.Layouts[0];     // already shown: nothing happens
+        Assert.True(workspace.IsArranging);
+
+        workspace.Done();
+        Assert.Equal(new[] { "activity", "shelf" }, Types(NewWorkspace()));
+    }
+
+    // ---------------------------------------------------------------
+    // Reflow (M4)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void ANarrowCanvas_StacksThePanels_WithoutChangingOrWritingTheirWidths()
+    {
+        var workspace = NewWorkspace();
+        var changed = 0;
+        workspace.PanelsChanged += () => changed++;
+        var before = _layoutStorage.WriteCount;
+
+        workspace.Reflow(780);
+
+        Assert.Equal(1, changed);
+        Assert.Equal(new[] { (0, 12), (1, 12), (2, 12) }, workspace.Panels.Select(p => (p.Row, p.Span)));
+        Assert.Equal(new[] { 12, 8, 4 }, workspace.Panels.Select(p => p.StoredSpan));
+        Assert.Equal(before, _layoutStorage.WriteCount);
+
+        workspace.Reflow(1400);
+        Assert.Equal(new[] { (0, 12), (1, 8), (1, 4) }, workspace.Panels.Select(p => (p.Row, p.Span)));
+        workspace.Reflow(1500);
+        Assert.Equal(2, changed);
+    }
+
+    [Fact]
+    public void AWidthSetInANarrowWindow_SaysItIsShownWiderForNow()
+    {
+        var workspace = NewWorkspace();
+        workspace.Reflow(780);
+        workspace.BeginArrange();
+
+        Assert.True(workspace.SetSpan("shelf", PanelSpans.Half));
+
+        Assert.Equal("File shelf is now half wide; shown full width until the window is wider.", workspace.Status);
     }
 }

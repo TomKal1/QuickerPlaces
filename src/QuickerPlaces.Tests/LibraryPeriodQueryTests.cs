@@ -323,6 +323,70 @@ public sealed class LibraryPeriodQueryTests
     public void Periods_ReadNaturally(string from, string to, string expected)
         => Assert.Equal(expected, LibraryViewModel.FormatDays(DateOnly.Parse(from), DateOnly.Parse(to), Uk));
 
+    // ---------------------------------------------------------------
+    // Month view (M4)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void TheMonthView_ShowsThisMonth_AsTheYearStripLaysItOut()
+    {
+        var vm = NewViewModel();
+
+        Assert.Equal(9, vm.CalendarMonth);
+        Assert.Equal("September 2026", vm.CalendarMonthLabel);
+        var days = vm.CalendarMonthWeeks.SelectMany(w => w.Days).Where(d => d.Date is not null).Select(d => d.Date!.Value).ToList();
+        Assert.Equal(30, days.Count);
+        Assert.All(days, d => Assert.Equal(9, d.Month));
+        Assert.All(vm.CalendarMonthWeeks, w => Assert.Equal(DayOfWeek.Monday, w.StartsOn.DayOfWeek));
+        Assert.True(vm.CalendarMonthWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today).IsToday);
+        Assert.False(vm.CanShowNextMonth);
+    }
+
+    [Fact]
+    public void AChosenPeriod_StaysOutlinedInTheMonthView_AndTheMonthFollowsIt()
+    {
+        var vm = NewViewModel();
+        vm.SelectionUnit = CalendarSelectionUnit.Week;
+
+        vm.SelectCalendarDate(new DateOnly(2026, 3, 11));
+
+        Assert.Equal(3, vm.CalendarMonth);
+        var selected = vm.CalendarMonthWeeks.SelectMany(w => w.Days).Where(d => d.IsSelected).Select(d => d.Date!.Value).ToList();
+        Assert.Equal(Enumerable.Range(9, 7).Select(d => new DateOnly(2026, 3, d)), selected);
+    }
+
+    [Fact]
+    public void TheMonthArrows_CrossIntoTheYearBefore_ButNotPastThisMonth()
+    {
+        var vm = NewViewModel();
+
+        Assert.False(vm.ShowCalendarMonth(1));
+        for (var i = 0; i < 9; i++)
+            Assert.True(vm.ShowCalendarMonth(-1));
+
+        Assert.Equal(2025, vm.CalendarYear);
+        Assert.Equal(12, vm.CalendarMonth);
+        Assert.Equal("December 2025", vm.CalendarMonthLabel);
+        Assert.All(vm.CalendarMonthWeeks.SelectMany(w => w.Days).Where(d => d.Date is not null), d => Assert.Equal(2025, d.Date!.Value.Year));
+        Assert.True(vm.ShowCalendarMonth(1));
+        Assert.Equal((2026, 1), (vm.CalendarYear, vm.CalendarMonth));
+    }
+
+    [Fact]
+    public void ChoosingThisYearAgain_NeverShowsAMonthStillToCome()
+    {
+        var vm = NewViewModel();
+        vm.SelectCalendarYear(2025);
+        Assert.True(vm.ShowCalendarMonth(3));
+        Assert.Equal((2025, 12), (vm.CalendarYear, vm.CalendarMonth));
+
+        vm.SelectCalendarYear(2026);
+
+        Assert.Equal(9, vm.CalendarMonth);
+        Assert.False(vm.CanShowNextMonth);
+    }
+
+
     /// <summary>Holds background work until the test runs it, in whatever order it chooses.</summary>
     private sealed class QueuedWork : IBackgroundWork
     {

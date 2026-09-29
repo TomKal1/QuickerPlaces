@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using QuickerPlaces.Models.Workspace;
 
 namespace QuickerPlaces.Services.Workspace;
@@ -9,43 +11,169 @@ namespace QuickerPlaces.Services.Workspace;
 /// and a panel that no longer fits in what is left of a row starts the next
 /// one. Nothing overlaps and nothing depends on screen coordinates.
 ///
-/// M3 packs at the full twelve columns. M4 adds narrow-window reflow (stacking
-/// without changing stored spans) here, where it can be tested. Pure logic;
-/// UI-free and linked into the test project.
+/// Given the width available (M4), a panel whose stored span would be
+/// narrower than it can be read at is shown wider, up to the full width, so
+/// a narrow window stacks panels instead of squeezing them. That is
+/// presentation only: stored spans and order never change here. Also the
+/// arithmetic behind a drop (which panel a dragged one goes before) and a
+/// resize (which allowed span a dragged edge snaps to), so both are tested
+/// without WPF. Pure logic; UI-free and linked into the test project.
 /// </summary>
 public static class PanelLayoutEngine
 {
-    /// <summary>Places every panel that isn't hidden. A span this build doesn't allow is snapped to one it does.</summary>
-    public static IReadOnlyList<PanelPlacement> Pack(IEnumerable<PanelInstance> panels)
+    /// <summary>The space between two panels, in device-independent pixels: each panel's frame has a margin of half this.</summary>
+    public const double Gap = 12;
+
+    /// <summary>Places every panel that isn't hidden at the stored spans, as on a canvas wide enough for all of them.</summary>
+    public static IReadOnlyList<PanelPlacement> Pack(IEnumerable<PanelInstance> panels) => Pack(panels, double.PositiveInfinity);
+
+    /// <summary>
+    /// Places every panel that isn't hidden on a canvas <paramref name="width"/>
+    /// pixels wide. A span this build doesn't allow is snapped to one it does;
+    /// a panel narrower than <see cref="MinimumWidth"/> at its span is shown
+    /// at the narrowest allowed span that is wide enough, or full width; and
+    /// a row that such a wider panel leaves or joins is filled by stretching
+    /// its last panel, so stacking leaves no holes.
+    /// </summary>
+    public static IReadOnlyList<PanelPlacement> Pack(IEnumerable<PanelInstance> panels, double width)
     {
-        var placements = new List<PanelPlacement>();
-        var row = 0;
+        var rows = new List<List<PanelPlacement>>();
+        var row = new List<PanelPlacement>();
         var column = 0;
+        var stretchRow = false;
+
+        void EndRow()
+        {
+            if (row.Count == 0)
+                return;
+            if (stretchRow && column < PanelSpans.Columns)
+            {
+                var last = row[^1];
+                row[^1] = last with { Span = PanelSpans.Columns - last.Column };
+            }
+
+            rows.Add(row);
+            row = new List<PanelPlacement>();
+            column = 0;
+            stretchRow = false;
+        }
 
         foreach (var panel in panels)
         {
             if (panel.Hidden)
                 continue;
 
-            var span = PanelSpans.IsAllowed(panel.Span) ? panel.Span : PanelSpans.Snap(panel.Span);
+            var stored = PanelSpans.IsAllowed(panel.Span) ? panel.Span : PanelSpans.Snap(panel.Span);
+            var span = ShownSpan(panel.Type, stored, width);
+            var widened = span != stored;
             if (column > 0 && column + span > PanelSpans.Columns)
             {
-                row++;
-                column = 0;
+                // The row this panel no longer fits beside is filled when reflow is why.
+                stretchRow |= widened;
+                EndRow();
             }
 
-            placements.Add(new PanelPlacement(panel.Id, panel.Type, row, column, span));
+            row.Add(new PanelPlacement(panel.Id, panel.Type, rows.Count, column, span, stored));
+            stretchRow |= widened;
             column += span;
             if (column >= PanelSpans.Columns)
-            {
-                row++;
-                column = 0;
-            }
+                EndRow();
         }
 
-        return placements;
+        EndRow();
+        return rows.SelectMany(r => r).ToList();
+    }
+
+    /// <summary>
+    /// The narrowest a panel of this type can be read at, in device-independent
+    /// pixels. The Year activity panel switches to a month view below the
+    /// year's width, so its minimum is the month view's; Saved places is a
+    /// four-column table.
+    /// </summary>
+    public static double MinimumWidth(string type) => type switch
+    {
+        PanelTypes.Activity => 360,
+        PanelTypes.Shelf => 460,
+        PanelTypes.Sessions => 300,
+        PanelTypes.Places => 560,
+        _ => 280,
+    };
+
+    /// <summary>The span a panel is shown at on a canvas this wide: its own when it is wide enough there, otherwise the next wider allowed span that is, or full width.</summary>
+    public static int ShownSpan(string type, int span, double width)
+    {
+        var minimum = MinimumWidth(type);
+        foreach (var allowed in PanelSpans.Allowed)
+        {
+            if (allowed >= span && PanelWidth(allowed, width) >= minimum)
+                return allowed;
+        }
+
+        return PanelSpans.Full;
+    }
+
+    /// <summary>A panel's own width at this span on a canvas this wide, without the gap around it.</summary>
+    public static double PanelWidth(int span, double canvasWidth) => span * canvasWidth / PanelSpans.Columns - Gap;
+
+    /// <summary>
+    /// Resizing by a panel's edge: the allowed span nearest to a panel
+    /// <paramref name="width"/> pixels wide (gap included) on a canvas this
+    /// wide. The wider span wins a tie, as <see cref="PanelSpans.Snap"/>.
+    /// </summary>
+    public static int SpanForWidth(double width, double canvasWidth)
+    {
+        if (canvasWidth <= 0 || double.IsNaN(width))
+            return PanelSpans.Full;
+
+        var columns = width / (canvasWidth / PanelSpans.Columns);
+        var best = PanelSpans.Full;
+        foreach (var allowed in PanelSpans.Allowed)
+        {
+            if (Math.Abs(allowed - columns) <= Math.Abs(best - columns))
+                best = allowed;
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// A drop while dragging <paramref name="draggedId"/> over
+    /// <paramref name="targetId"/>, before it or, when
+    /// <paramref name="after"/>, after it. The result names the panel the
+    /// dragged one would go before (null: last), or is null when the drop
+    /// would leave the order as it is — on itself, or beside where it already is.
+    /// </summary>
+    public static DropTarget? Drop(IReadOnlyList<PanelPlacement> placements, string draggedId, string targetId, bool after)
+    {
+        var order = placements.Select(p => p.PanelId).ToList();
+        var dragged = order.IndexOf(draggedId);
+        var target = order.IndexOf(targetId);
+        if (dragged < 0 || target < 0 || dragged == target)
+            return null;
+
+        var beforeIndex = after ? target + 1 : target;
+        if (beforeIndex == dragged || beforeIndex == dragged + 1)
+            return null;
+
+        return new DropTarget(beforeIndex < order.Count ? order[beforeIndex] : null);
     }
 }
 
-/// <summary>One panel's place: its row, first column (0–11) and width in columns.</summary>
-public sealed record PanelPlacement(string PanelId, string Type, int Row, int Column, int Span);
+/// <summary>
+/// One panel's place: its row, first column (0–11) and the columns it is
+/// shown across. <see cref="StoredSpan"/> is its own width, which
+/// <see cref="Span"/> exceeds when a narrow canvas makes it wider.
+/// </summary>
+public sealed record PanelPlacement(string PanelId, string Type, int Row, int Column, int Span, int StoredSpan)
+{
+    public PanelPlacement(string panelId, string type, int row, int column, int span)
+        : this(panelId, type, row, column, span, span)
+    {
+    }
+
+    /// <summary>True when the panel is shown wider than its own span, because the canvas is too narrow for it.</summary>
+    public bool IsWidened => Span > StoredSpan;
+}
+
+/// <summary>Where a dropped panel goes: just before <see cref="BeforePanelId"/>, or last when that is null.</summary>
+public sealed record DropTarget(string? BeforePanelId);

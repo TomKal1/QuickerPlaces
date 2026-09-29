@@ -219,6 +219,82 @@ public sealed class WorkspaceLayoutServiceTests
     }
 
     [Fact]
+    public void HideOutsideArrangeMode_IsWrittenAtOnce_AndUndoBringsItBack()
+    {
+        var storage = NewStorage();
+        var service = NewService(storage);
+
+        Assert.True(service.HideNow(PanelTypes.Sessions, out var persistence));
+        Ok(persistence);
+        Assert.False(service.IsArranging);
+        Assert.Equal(1, storage.WriteCount);
+        Assert.DoesNotContain(PanelTypes.Sessions, Order(NewService(storage)));
+        Assert.Equal("Hide Sessions", service.UndoLabel);
+
+        Ok(service.Undo());
+        Assert.Contains(PanelTypes.Sessions, Order(service));
+        Assert.False(service.IsModified);
+        Assert.False(service.CanUndo);
+        Assert.Contains(PanelTypes.Sessions, Order(NewService(storage)));
+    }
+
+    [Fact]
+    public void AddPanelOutsideArrangeMode_IsWrittenAtOnce_WithUndo()
+    {
+        var storage = NewStorage();
+        var service = NewService(storage);
+
+        Assert.True(service.AddPanelNow(PanelTypes.Places, out var persistence));
+        Ok(persistence);
+        Assert.Contains(PanelTypes.Places, Order(NewService(storage)));
+        Assert.Equal("Add Saved places", service.UndoLabel);
+
+        Ok(service.Undo());
+        Assert.DoesNotContain(PanelTypes.Places, Order(service));
+    }
+
+    [Fact]
+    public void AStepThatChangesNothing_WritesNothing_AndOffersNoUndo()
+    {
+        var storage = NewStorage();
+        var service = NewService(storage);
+
+        Assert.False(service.HideNow("nope", out _));
+        Assert.False(service.AddPanelNow(PanelTypes.Shelf, out _));
+
+        Assert.False(service.CanUndo);
+        Assert.False(service.IsArranging);
+        Assert.Equal(0, storage.WriteCount);
+    }
+
+    [Fact]
+    public void HideInArrangeMode_IsADraftEdit()
+    {
+        var storage = NewStorage();
+        var service = NewService(storage);
+        service.BeginArrange();
+
+        Assert.True(service.HideNow(PanelTypes.Sessions, out _));
+
+        Assert.True(service.IsArranging);
+        Assert.Equal(0, storage.WriteCount);
+        service.Revert();
+        Assert.Contains(PanelTypes.Sessions, Order(service));
+    }
+
+    [Fact]
+    public void ArrangeMode_EndsAnUndoOfferFromBeforeIt()
+    {
+        var service = NewService(NewStorage());
+        Assert.True(service.HideNow(PanelTypes.Sessions, out _));
+
+        service.BeginArrange();
+
+        // Undo in Arrange mode steps back through the draft only.
+        Assert.False(service.CanUndo);
+    }
+
+    [Fact]
     public void AnEmptyCanvas_StillOffersAddPanel()
     {
         var service = NewService(NewStorage());

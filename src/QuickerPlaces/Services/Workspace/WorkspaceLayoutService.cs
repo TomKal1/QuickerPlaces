@@ -173,13 +173,18 @@ public sealed class WorkspaceLayoutService
 
     public bool IsArranging => _arrangeSnapshot is not null;
 
-    /// <summary>Starts Arrange mode, remembering the arrangement to go back to on Revert.</summary>
+    /// <summary>
+    /// Starts Arrange mode, remembering the arrangement to go back to on
+    /// Revert. Undo in Arrange mode steps back through the draft only, so an
+    /// offer from before it (a Hide made outside, a Restore) ends here.
+    /// </summary>
     public void BeginArrange()
     {
         if (IsArranging)
             return;
 
         _arrangeSnapshot = Clone(_panels);
+        _undo.Clear();
     }
 
     /// <summary>Done: keeps the draft as the working arrangement and writes it once.</summary>
@@ -289,6 +294,15 @@ public sealed class WorkspaceLayoutService
 
         return ApplyDraft(draft, $"Add {PanelTypes.DisplayName(type)}");
     }
+
+    /// <summary>
+    /// Hide outside Arrange mode (M4): one step, kept and written at once,
+    /// with Undo. In Arrange mode it is a draft edit, as <see cref="Hide"/>.
+    /// </summary>
+    public bool HideNow(string panelId, out PersistenceResult persistence) => EditNow(() => Hide(panelId), out persistence);
+
+    /// <summary>Add panel outside Arrange mode (M4): one step, kept and written at once, with Undo. In Arrange mode, a draft edit.</summary>
+    public bool AddPanelNow(string type, out PersistenceResult persistence) => EditNow(() => AddPanel(type), out persistence);
 
     /// <summary>
     /// Restore saved layout (D2): shows the active layout's definition again,
@@ -586,6 +600,36 @@ public sealed class WorkspaceLayoutService
         _arrangeSnapshot = null;
         _undo.RemoveAll(u => u.Document is null);
     }
+
+    /// <summary>
+    /// Runs one Arrange edit as a finished step: every layout is remembered
+    /// for Undo, the edit is made to a draft and the draft is kept and
+    /// written. Undo then offers it by the edit's own name ("Hide Sessions").
+    /// </summary>
+    private bool EditNow(Func<bool> edit, out PersistenceResult persistence)
+    {
+        persistence = PersistenceResult.Ok();
+        if (IsArranging)
+            return edit();
+
+        PushUndo("");
+        var undoAt = _undo.Count - 1;
+        BeginArrangeKeepingUndo();
+        if (!edit())
+        {
+            EndArrange(keepDraft: false);
+            _undo.RemoveAt(undoAt);
+            return false;
+        }
+
+        var label = _undo[^1].Label;
+        EndArrange(keepDraft: true);
+        _undo[undoAt] = _undo[undoAt] with { Label = label };
+        persistence = Persist(keepUndo: true);
+        return true;
+    }
+
+    private void BeginArrangeKeepingUndo() => _arrangeSnapshot = Clone(_panels);
 
     private bool ApplyDraft(List<PanelInstance> draft, string label)
     {
