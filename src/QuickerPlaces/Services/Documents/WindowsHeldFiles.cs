@@ -32,6 +32,9 @@ namespace QuickerPlaces.Services.Documents;
 ///   a disk file (GetFileType), and named by GetFinalPathNameByHandle with
 ///   FILE_NAME_OPENED, which needs no round trip to a file server, unlike
 ///   FILE_NAME_NORMALIZED, so a slow share can't stall it.
+/// - A local path with a short 8.3 component ("C:\Users\THOMAS~1\…") is
+///   expanded to its long form (GetLongPathName), so it is spelled like every
+///   other clue.
 /// - <see cref="HeldFilePaths"/> turns the names into session paths.
 ///
 /// This is how Process Explorer and handle.exe list open files. It needs
@@ -45,7 +48,9 @@ namespace QuickerPlaces.Services.Documents;
 /// <see cref="HandleTimeout"/> is abandoned with its thread, remembered in
 /// <see cref="StuckHandles"/> so no later scan asks about it (unless the
 /// abandoned thread comes back, showing it was only slow, and forgets it), and
-/// the walk carries on from the next handle on a fresh thread. The whole read
+/// the walk carries on from the next handle on a fresh thread. A handle
+/// remembered as stuck is skipped silently on later scans (no warning), by
+/// design, so one stuck pipe doesn't warn on every scan. The whole read
 /// also has the caller's time limit; what was found so far is returned when
 /// it runs out.
 ///
@@ -57,9 +62,12 @@ public static class WindowsHeldFiles
     /// Programs never read, even when a window of theirs is given or a
     /// sibling of a given program: Explorer and the shell helpers hold files
     /// only to show them, and browsers don't keep a PDF open and run dozens
-    /// of processes full of pipes. Kept in step with
+    /// of processes full of pipes. Overlaps with
     /// WindowsOpenDocumentProbe.IgnoredHolders, which names the same helpers
-    /// for Restart Manager.
+    /// for Restart Manager: this list adds SearchHost and the browsers, which
+    /// only matter when asking a program for its handles, and that one adds
+    /// "System", which Restart Manager can report as a holder but is never a
+    /// program with a window.
     /// </summary>
     private static readonly HashSet<string> SkippedPrograms = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -109,7 +117,22 @@ public static class WindowsHeldFiles
         var isComplete = WalkAll(handles, targets, found, clock, timeout);
 
         var drives = DrivesWithin(drivesTask, clock, timeout);
-        return new HeldFilesRead(HeldFilePaths.Resolve(found.ToArray(), drives, ExcludedFolders()), isComplete, drives);
+        var expanded = found.Select(f => (ExpandShortNames(f.FinalPath), f.AppName)).ToArray();
+        return new HeldFilesRead(HeldFilePaths.Resolve(expanded, drives, ExcludedFolders()), isComplete, drives);
+    }
+
+    /// <summary>
+    /// <paramref name="finalPath"/> with any short 8.3 components made long, as
+    /// FILE_NAME_OPENED can return the short spelling a file was opened by.
+    /// Only a local drive-letter path that contains a '~' is asked about; a
+    /// share's path is left alone, so no round trip to a file server is made.
+    /// The original is kept if Windows can't say.
+    /// </summary>
+    private static string ExpandShortNames(string finalPath)
+    {
+        var isLocal = finalPath.Length >= 7 && finalPath.StartsWith(@"\\?\", StringComparison.Ordinal)
+                      && char.IsAsciiLetter(finalPath[4]) && finalPath[5] == ':' && finalPath[6] == '\\';
+        return isLocal && finalPath.Contains('~') ? LongPath(finalPath) : finalPath;
     }
 
     /// <summary>
@@ -501,9 +524,10 @@ public static class WindowsHeldFiles
     /// Folders whose files are programs' own, never the user's documents (H2).
     /// The profile's whole AppData folder covers LocalLow, where Acrobat
     /// Reader's protected mode keeps its data; Roaming and Local are listed
-    /// too in case either is redirected elsewhere. TEMP is expanded to its
-    /// long name, since handles report long names and TEMP may be set to an
-    /// 8.3 one ("THOMAS~1"). Folders are not checked to exist.
+    /// too in case either is redirected elsewhere. TEMP is listed in both its
+    /// own spelling and its long name, as it may be set to an 8.3 one
+    /// ("THOMAS~1"); held paths are expanded to long names the same way.
+    /// Folders are not checked to exist.
     /// </summary>
     private static IReadOnlyList<string> ExcludedFolders() => new[]
         {
@@ -514,6 +538,7 @@ public static class WindowsHeldFiles
             SpecialFolder(Environment.SpecialFolder.ProgramFiles),
             SpecialFolder(Environment.SpecialFolder.ProgramFilesX86),
             SpecialFolder(Environment.SpecialFolder.Windows),
+            Path.GetTempPath(),
             LongPath(Path.GetTempPath()),
         }
         .Where(f => !string.IsNullOrEmpty(f))

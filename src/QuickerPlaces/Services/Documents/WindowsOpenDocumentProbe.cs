@@ -142,7 +142,7 @@ public sealed class WindowsOpenDocumentProbe
             }
 
             var volume = SlowKeyOf(path, drives);
-            if (slowVolumes.Contains(volume))
+            if (volume is not null && slowVolumes.Contains(volume))
                 continue;
 
             switch (ExistsWithin(path, ExistenceTimeout))
@@ -154,7 +154,8 @@ public sealed class WindowsOpenDocumentProbe
                     missing.Add(path);
                     break;
                 default:
-                    slowVolumes.Add(volume);
+                    if (volume is not null)
+                        slowVolumes.Add(volume);
                     break;
             }
         }
@@ -378,19 +379,32 @@ public sealed class WindowsOpenDocumentProbe
     /// <summary>
     /// What a slow answer is blamed on, so the volume's other files are skipped:
     /// the server for a UNC path or a mapped drive (candidates are spelled with
-    /// mapped drive letters, which hide the server), else the drive ("C:").
+    /// mapped drive letters, which hide the server), else the drive ("E:") if
+    /// it is a network or removable one that isn't mapped. Null for anything
+    /// else: a fixed local drive is fast and one slow file there says nothing
+    /// about the rest (a locked or damaged file), so only that file is skipped.
     /// </summary>
-    private static string SlowKeyOf(string path, IReadOnlyDictionary<string, string> drives)
+    private static string? SlowKeyOf(string path, IReadOnlyDictionary<string, string> drives)
     {
         var share = path;
         if (!path.StartsWith(@"\\", StringComparison.Ordinal))
         {
             if (path.Length < 2 || path[1] != ':')
-                return path; // Not a path we know how to group.
+                return null; // Not a path we know how to group.
 
             var drive = path[..2];
             if (!drives.TryGetValue(drive, out share!))
-                return drive;
+            {
+                try
+                {
+                    var type = new DriveInfo(drive).DriveType;
+                    return type is DriveType.Network or DriveType.Removable ? drive : null;
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            }
         }
 
         var end = share.IndexOf('\\', 2);

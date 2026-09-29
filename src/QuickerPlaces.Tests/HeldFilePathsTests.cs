@@ -72,6 +72,14 @@ public sealed class HeldFilePathsTests
             Paths(new[] { @"\\?\C:\Jobs\A-101.pdf", @"\\?\C:\Jobs\markups.bfx", @"\\?\C:\Jobs\Budget.xlsx", @"\\?\C:\Jobs" }));
 
     [Fact]
+    public void Resolve_DropsTemplatesAProgramHoldsForItsDocuments()
+        => Assert.Equal(new[] { @"C:\Jobs\Letter.docx" }, Paths(new[]
+        {
+            @"\\?\S:\Templates\Letterhead.dotx", @"\\?\C:\Jobs\Letter.docx", @"\\?\S:\Templates\Macro.DOTM",
+            @"\\?\S:\Templates\Budget.xltx", @"\\?\S:\Templates\Budget.xltm",
+        }));
+
+    [Fact]
     public void Resolve_DropsOfficeOwnerFiles()
         => Assert.Equal(new[] { @"C:\Jobs\Report.docx" }, Paths(new[] { @"\\?\C:\Jobs\~$Report.docx", @"\\?\C:\Jobs\Report.docx" }));
 

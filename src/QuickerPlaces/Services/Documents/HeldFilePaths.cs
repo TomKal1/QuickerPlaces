@@ -11,8 +11,9 @@ namespace QuickerPlaces.Services.Documents;
 /// plan H2, H3): the "\\?\" prefix removed, a share spelled with the
 /// user's mapped drive letter when one points there, and anything that
 /// isn't a document the user opened left out — other file types, Office's
-/// "~$" owner files, and files in program, system and per-user application
-/// folders, such as Revu's Studio cache. An excluded folder is matched in
+/// "~$" owner files, Word and Excel templates (which a program holds open
+/// for the document based on them), and files in program, system and
+/// per-user application folders, such as Revu's Studio cache. An excluded folder is matched in
 /// both its own spelling and its mapped-drive spelling.
 ///
 /// Pure logic: WindowsHeldFiles gathers the raw paths. UI-free and linked
@@ -20,6 +21,9 @@ namespace QuickerPlaces.Services.Documents;
 /// </summary>
 public static class HeldFilePaths
 {
+    /// <summary>Word and Excel keep a document's template open; a firm template on a share would otherwise be ticked.</summary>
+    private static readonly string[] TemplateExtensions = { ".dotx", ".dotm", ".xltx", ".xltm" };
+
     /// <summary>
     /// The held documents among <paramref name="raw"/>, each once, in the
     /// order found, with the first program that held it.
@@ -49,6 +53,8 @@ public static class HeldFilePaths
             if (DocumentPaths.Normalize(ToMappedDrive(plain, mappedDrives)) is not { } path)
                 continue;
             if (DocumentPaths.FileName(path).StartsWith("~$", StringComparison.Ordinal))
+                continue;
+            if (TemplateExtensions.Any(e => path.EndsWith(e, StringComparison.OrdinalIgnoreCase)))
                 continue;
             if (excluded.Any(folder => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)))
                 continue;
