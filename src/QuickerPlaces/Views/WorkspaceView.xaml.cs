@@ -55,6 +55,10 @@ public partial class WorkspaceView : UserControl
     private const double AutoScrollStep = 18;
 
     private readonly Dictionary<string, PanelFrame> _frames = new();
+
+    /// <summary>A columns layout's two stacks, placed on the canvas across their columns (Desk layout design §2).</summary>
+    private readonly Grid _leftStack = new();
+    private readonly Grid _mainStack = new();
     private readonly DispatcherTimer _flushTimer;
     private WorkspaceViewModel? _workspace;
     private MainViewModel? _places;
@@ -227,38 +231,56 @@ public partial class WorkspaceView : UserControl
     // -----------------------------------------------------------------
 
     /// <summary>
-    /// Places every shown panel: twelve equal columns, one grid row per
-    /// canvas row. A row holding only the year strip takes its own height;
-    /// any other row shares what is left, never below <see cref="MinRowHeight"/>.
-    /// Panels are made once; a hidden one's frame is collapsed, not removed.
+    /// Places every shown panel. A rows layout: twelve equal columns, one
+    /// grid row per canvas row. A columns layout: a stack per column, each a
+    /// grid across its column's span, one row per panel. A row holding only
+    /// the year strip takes its own height; any other shares what is left,
+    /// never below <see cref="MinRowHeight"/>. Panels are made once; a hidden
+    /// one's frame is collapsed, not removed, and a frame changes grid only
+    /// when it changes column.
     /// </summary>
     private void BuildCanvas()
     {
         if (_workspace is null)
             return;
 
+        var panels = _workspace.Panels;
+        var columns = panels.Any(p => p.Dock != PanelDock.None);
         PanelCanvas.RowDefinitions.Clear();
-        foreach (var row in _workspace.Panels.GroupBy(p => p.Row).OrderBy(g => g.Key))
+        _leftStack.RowDefinitions.Clear();
+        _mainStack.RowDefinitions.Clear();
+
+        if (columns)
         {
-            var fitsContent = row.All(p => p.Type == PanelTypes.Activity);
-            PanelCanvas.RowDefinitions.Add(fitsContent
-                ? new RowDefinition { Height = GridLength.Auto }
-                : new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = MinRowHeight });
+            PlaceStack(_leftStack, panels.Where(p => p.Dock == PanelDock.Left).ToList());
+            PlaceStack(_mainStack, panels.Where(p => p.Dock == PanelDock.Main).ToList());
+        }
+        else
+        {
+            _leftStack.Visibility = Visibility.Collapsed;
+            _mainStack.Visibility = Visibility.Collapsed;
+            foreach (var row in panels.GroupBy(p => p.Row).OrderBy(g => g.Key))
+                PanelCanvas.RowDefinitions.Add(RowFor(fitsContent: row.All(p => p.Type == PanelTypes.Activity)));
         }
 
         var shown = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var panel in _workspace.Panels)
+        foreach (var panel in panels)
         {
             if (!_frames.TryGetValue(panel.Id, out var frame))
             {
                 frame = CreateFrame(panel);
                 _frames[panel.Id] = frame;
-                PanelCanvas.Children.Add(frame);
             }
 
+            Reparent(frame, panel.Dock switch
+            {
+                PanelDock.Left => _leftStack,
+                PanelDock.Main => _mainStack,
+                _ => PanelCanvas,
+            });
             Grid.SetRow(frame, panel.Row);
-            Grid.SetColumn(frame, panel.Column);
-            Grid.SetColumnSpan(frame, panel.Span);
+            Grid.SetColumn(frame, columns ? 0 : panel.Column);
+            Grid.SetColumnSpan(frame, columns ? 1 : panel.Span);
             frame.Visibility = Visibility.Visible;
             shown.Add(panel.Id);
         }
@@ -282,6 +304,39 @@ public partial class WorkspaceView : UserControl
         FitCanvasHeight();
     }
 
+    private static RowDefinition RowFor(bool fitsContent) => fitsContent
+        ? new RowDefinition { Height = GridLength.Auto }
+        : new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = MinRowHeight };
+
+    /// <summary>One column of a columns layout: a grid across the column's span, one row per panel; collapsed when the column is empty.</summary>
+    private void PlaceStack(Grid stack, IReadOnlyList<WorkspacePanelViewModel> panels)
+    {
+        if (panels.Count == 0)
+        {
+            stack.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (stack.Parent is null)
+            PanelCanvas.Children.Add(stack);
+        Grid.SetRow(stack, 0);
+        Grid.SetColumn(stack, panels[0].Column);
+        Grid.SetColumnSpan(stack, panels[0].Span);
+        stack.Visibility = Visibility.Visible;
+        foreach (var panel in panels)
+            stack.RowDefinitions.Add(RowFor(fitsContent: panel.Type == PanelTypes.Activity));
+    }
+
+    /// <summary>Moves a frame to another grid only when it must: a move within one keeps the panel loaded, with its selection and scroll (M4).</summary>
+    private static void Reparent(PanelFrame frame, Grid parent)
+    {
+        if (ReferenceEquals(frame.Parent, parent))
+            return;
+
+        (frame.Parent as Panel)?.Children.Remove(frame);
+        parent.Children.Add(frame);
+    }
+
     /// <summary>Each frame's title, arrows and width choice, and Arrange mode's controls on or off.</summary>
     private void UpdateFrames()
     {
@@ -291,7 +346,7 @@ public partial class WorkspaceView : UserControl
         foreach (var panel in _workspace.Panels)
         {
             if (_frames.TryGetValue(panel.Id, out var frame))
-                frame.Update(panel, _workspace.IsArranging);
+                frame.Update(panel, _workspace.IsArranging, _workspace.IsColumns);
         }
     }
 
@@ -302,6 +357,7 @@ public partial class WorkspaceView : UserControl
         frame.MoveEarlierRequested += f => _workspace?.MoveEarlier(f.PanelId);
         frame.MoveLaterRequested += f => _workspace?.MoveLater(f.PanelId);
         frame.SpanRequested += (f, span) => _workspace?.SetSpan(f.PanelId, span);
+        frame.DockRequested += (f, dock) => _workspace?.SetDock(f.PanelId, dock);
         frame.MoveDragStarted += MoveDragStarted;
         frame.MoveDragMoved += MoveDragMoved;
         frame.MoveDragEnded += MoveDragEnded;
@@ -342,31 +398,42 @@ public partial class WorkspaceView : UserControl
 
     /// <summary>
     /// The canvas's height: the window's, or more when the rows' least
-    /// heights add up to more, and the canvas then scrolls. Shared rows get
-    /// a real height to share, so the lists in them stay virtualized.
+    /// heights add up to more (in a columns layout, the taller column's), and
+    /// the canvas then scrolls. Shared rows get a real height to share, so the
+    /// lists in them stay virtualized.
     /// </summary>
     private void FitCanvasHeight()
     {
+        var needed = Math.Max(Needed(PanelCanvas), Math.Max(Needed(_leftStack), Needed(_mainStack)));
+        var height = Math.Max(CanvasScroller.ActualHeight, needed);
+        if (double.IsNaN(PanelCanvas.Height) || Math.Abs(PanelCanvas.Height - height) >= 0.5)
+            PanelCanvas.Height = height;
+    }
+
+    /// <summary>What a grid's rows need at least: a shared row its minimum, a row sized to the year strip its tallest frame.</summary>
+    private static double Needed(Grid grid)
+    {
+        if (grid.Visibility != Visibility.Visible)
+            return 0;
+
         var needed = 0.0;
-        for (var row = 0; row < PanelCanvas.RowDefinitions.Count; row++)
+        for (var row = 0; row < grid.RowDefinitions.Count; row++)
         {
-            var definition = PanelCanvas.RowDefinitions[row];
+            var definition = grid.RowDefinitions[row];
             if (!definition.Height.IsAuto)
             {
                 needed += definition.MinHeight;
                 continue;
             }
 
-            needed += _frames.Values
+            needed += grid.Children.OfType<PanelFrame>()
                 .Where(f => f.Visibility == Visibility.Visible && Grid.GetRow(f) == row)
                 .Select(f => f.DesiredSize.Height)
                 .DefaultIfEmpty(0)
                 .Max();
         }
 
-        var height = Math.Max(CanvasScroller.ActualHeight, needed);
-        if (double.IsNaN(PanelCanvas.Height) || Math.Abs(PanelCanvas.Height - height) >= 0.5)
-            PanelCanvas.Height = height;
+        return needed;
     }
 
     /// <summary>The frames shown, with their places on the canvas.</summary>
@@ -394,8 +461,8 @@ public partial class WorkspaceView : UserControl
 
     /// <summary>
     /// Shows where the dragged panel would go: before or after the panel
-    /// nearest the pointer — above or below a full-width one, left or right
-    /// of any other. Nothing is shown where it would not move.
+    /// nearest the pointer — above or below a full-width panel or any panel of
+    /// a columns layout, left or right of any other. Nothing is shown where it would not move.
     /// </summary>
     private void MoveDragMoved(PanelFrame frame)
     {
@@ -412,9 +479,15 @@ public partial class WorkspaceView : UserControl
         }
 
         var bounds = nearest.Bounds;
-        var fullWidth = nearest.Frame.Panel.Span == PanelSpans.Columns;
-        var after = fullWidth ? pointer.Y > bounds.Top + bounds.Height / 2 : pointer.X > bounds.Left + bounds.Width / 2;
-        if (PanelLayoutEngine.Drop(_workspace.Panels.Select(p => p.Placement).ToList(), frame.PanelId, nearest.Frame.PanelId, after) is null)
+        var columns = _workspace.IsColumns;
+
+        // In a column, or beside a full-width panel, a drop goes above or below; otherwise left or right.
+        var vertical = columns || nearest.Frame.Panel.Span == PanelSpans.Columns;
+        var after = vertical ? pointer.Y > bounds.Top + bounds.Height / 2 : pointer.X > bounds.Left + bounds.Width / 2;
+        var possible = columns
+            ? _workspace.ColumnDrop(frame.PanelId, nearest.Frame.PanelId, after) is not null
+            : PanelLayoutEngine.Drop(_workspace.Panels.Select(p => p.Placement).ToList(), frame.PanelId, nearest.Frame.PanelId, after) is not null;
+        if (!possible)
         {
             HideDropMarker();
             return;
@@ -425,7 +498,7 @@ public partial class WorkspaceView : UserControl
 
         // In the gap between panels: each frame's margin is half of it.
         var inset = PanelLayoutEngine.Gap / 2;
-        if (fullWidth)
+        if (vertical)
         {
             DropMarker.Width = Math.Max(0, bounds.Width - PanelLayoutEngine.Gap);
             DropMarker.Height = 4;
@@ -454,8 +527,13 @@ public partial class WorkspaceView : UserControl
 
         if (cancelled)
             _workspace?.DragCancelled();
-        else if (target is not null)
-            _workspace?.Drop(frame.PanelId, target, _dropAfter);
+        else if (target is not null && _workspace is { } workspace)
+        {
+            if (workspace.IsColumns)
+                workspace.DropInColumn(frame.PanelId, target, _dropAfter);
+            else
+                workspace.Drop(frame.PanelId, target, _dropAfter);
+        }
     }
 
     private void HideDropMarker()

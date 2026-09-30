@@ -6,7 +6,8 @@
         One panel on the workspace canvas (configurable canvas plan D1, M4):
         its title and Hide above the panel itself. In Arrange mode it also
         shows a handle to drag it by, Move earlier and Move later, a width
-        choice, a dashed outline, and an edge to drag for its width. The
+        choice, or in a columns layout a column choice and up/down arrows,
+        a dashed outline, and an edge to drag for its width. The
         handle and the edge are for the mouse; the buttons and the width
         choice do the same from the keyboard. The workspace view places the
         frame and does the dragging; this only raises what was asked.
@@ -24,11 +25,11 @@
                             Visibility="Collapsed">
                     <Button x:Name="EarlierButton" Style="{StaticResource Button.IconOnlyCompact}" Width="24" Height="24"
                             Click="Earlier_Click">
-                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronLeft}" />
+                        <Path x:Name="EarlierIcon" Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronLeft}" />
                     </Button>
                     <Button x:Name="LaterButton" Style="{StaticResource Button.IconOnlyCompact}" Width="24" Height="24" Margin="4,0,6,0"
                             Click="Later_Click">
-                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronRight}" />
+                        <Path x:Name="LaterIcon" Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronRight}" />
                     </Button>
                     <ComboBox x:Name="WidthChoice" Height="26" MinWidth="104" Padding="8,0,6,0" FontSize="12"
                               SelectionChanged="WidthChoice_SelectionChanged">
@@ -36,6 +37,12 @@
                         <ComboBoxItem Content="Half" Tag="6" />
                         <ComboBoxItem Content="Two thirds" Tag="8" />
                         <ComboBoxItem Content="Full width" Tag="12" />
+                    </ComboBox>
+                    <!-- Columns layouts: which column, instead of a width (Desk layout design §3). -->
+                    <ComboBox x:Name="ColumnChoice" Height="26" MinWidth="120" Padding="8,0,6,0" FontSize="12" Visibility="Collapsed"
+                              SelectionChanged="ColumnChoice_SelectionChanged">
+                        <ComboBoxItem Content="Left column" Tag="left" />
+                        <ComboBoxItem Content="Main column" Tag="main" />
                     </ComboBox>
                 </StackPanel>
                 <Thumb x:Name="MoveHandle" DockPanel.Dock="Left" Width="18" Height="24" Margin="0,0,6,0" Cursor="SizeAll"

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using QuickerPlaces.Models.Workspace;
 using QuickerPlaces.ViewModels;
 
@@ -25,7 +26,7 @@ public partial class PanelFrame : UserControl
         InitializeComponent();
         PanelId = panel.Id;
         ContentHost.Child = content;
-        Update(panel, arranging: false);
+        Update(panel, arranging: false, columns: false);
     }
 
     public string PanelId { get; }
@@ -37,6 +38,9 @@ public partial class PanelFrame : UserControl
     public event Action<PanelFrame>? MoveEarlierRequested;
     public event Action<PanelFrame>? MoveLaterRequested;
     public event Action<PanelFrame, int>? SpanRequested;
+
+    /// <summary>A columns layout's Column choice: "left" or "main".</summary>
+    public event Action<PanelFrame, string>? DockRequested;
 
     /// <summary>The handle: dragging started, moved, and ended (true when cancelled).</summary>
     public event Action<PanelFrame>? MoveDragStarted;
@@ -58,8 +62,8 @@ public partial class PanelFrame : UserControl
         ResizeHandle.CancelDrag();
     }
 
-    /// <summary>Shows the panel's current place and whether Arrange mode's controls are shown.</summary>
-    public void Update(WorkspacePanelViewModel panel, bool arranging)
+    /// <summary>Shows the panel's current place, whether Arrange mode's controls are shown, and whether the layout is in columns.</summary>
+    public void Update(WorkspacePanelViewModel panel, bool arranging, bool columns)
     {
         Panel = panel;
         var title = panel.Title;
@@ -69,8 +73,12 @@ public partial class PanelFrame : UserControl
         var arrange = arranging ? Visibility.Visible : Visibility.Collapsed;
         ArrangeControls.Visibility = arrange;
         MoveHandle.Visibility = arrange;
-        ResizeHandle.Visibility = arrange;
         ArrangeOutline.Visibility = arrange;
+
+        // A column's width comes from the column: no edge to drag, and a column choice instead of a width.
+        ResizeHandle.Visibility = arranging && !columns ? Visibility.Visible : Visibility.Collapsed;
+        WidthChoice.Visibility = columns ? Visibility.Collapsed : Visibility.Visible;
+        ColumnChoice.Visibility = columns ? Visibility.Visible : Visibility.Collapsed;
 
         HideButton.ToolTip = arranging ? $"Hide {title}" : $"Hide {title}. Undo or Add panel brings it back.";
         AutomationProperties.SetName(HideButton, $"Hide {title}");
@@ -81,12 +89,16 @@ public partial class PanelFrame : UserControl
         else if (LaterButton.IsKeyboardFocused && !panel.CanMoveLater && panel.CanMoveEarlier)
             EarlierButton.Focus();
 
+        EarlierIcon.Data = (Geometry)FindResource(columns ? "Icon.ArrowUp" : "Icon.ChevronLeft");
+        LaterIcon.Data = (Geometry)FindResource(columns ? "Icon.ArrowDown" : "Icon.ChevronRight");
+        var earlier = columns ? $"Move {title} up" : $"Move {title} earlier";
+        var later = columns ? $"Move {title} down" : $"Move {title} later";
         EarlierButton.IsEnabled = panel.CanMoveEarlier;
-        EarlierButton.ToolTip = $"Move {title} earlier";
-        AutomationProperties.SetName(EarlierButton, $"Move {title} earlier");
+        EarlierButton.ToolTip = earlier;
+        AutomationProperties.SetName(EarlierButton, earlier);
         LaterButton.IsEnabled = panel.CanMoveLater;
-        LaterButton.ToolTip = $"Move {title} later";
-        AutomationProperties.SetName(LaterButton, $"Move {title} later");
+        LaterButton.ToolTip = later;
+        AutomationProperties.SetName(LaterButton, later);
 
         MoveHandle.ToolTip = $"Drag to move {title}. Esc cancels.";
         ResizeHandle.ToolTip = $"Drag to change the width of {title}. Esc cancels.";
@@ -94,11 +106,14 @@ public partial class PanelFrame : UserControl
         // Its own width: in a narrow window it may be shown wider, which the tooltip says.
         _updating = true;
         WidthChoice.SelectedItem = WidthChoice.Items.OfType<ComboBoxItem>().FirstOrDefault(i => Equals(i.Tag, panel.StoredSpan.ToString()));
+        ColumnChoice.SelectedIndex = panel.InLeftColumn ? 0 : 1;
         _updating = false;
         WidthChoice.ToolTip = panel.IsWidened
             ? $"Width of {title}. Shown {PanelSpans.DisplayName(panel.Span)} while the window is too narrow for {PanelSpans.DisplayName(panel.StoredSpan)}."
             : $"Width of {title}";
         AutomationProperties.SetName(WidthChoice, $"Width of {title}");
+        ColumnChoice.ToolTip = $"Column of {title}";
+        AutomationProperties.SetName(ColumnChoice, $"Column of {title}");
     }
 
     private void Hide_Click(object sender, RoutedEventArgs e) => HideRequested?.Invoke(this);
@@ -111,6 +126,12 @@ public partial class PanelFrame : UserControl
     {
         if (!_updating && WidthChoice.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out var span))
             SpanRequested?.Invoke(this, span);
+    }
+
+    private void ColumnChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_updating && ColumnChoice.SelectedItem is ComboBoxItem { Tag: string dock })
+            DockRequested?.Invoke(this, dock);
     }
 
     private void MoveHandle_DragStarted(object sender, DragStartedEventArgs e) => MoveDragStarted?.Invoke(this);
