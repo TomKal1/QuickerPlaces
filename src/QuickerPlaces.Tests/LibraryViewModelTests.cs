@@ -416,6 +416,22 @@ public sealed class LibraryViewModelTests
     }
 
     [Fact]
+    public void TheScopesStatusLine_GoesWithTheScope()
+    {
+        Seed();
+        var vm = NewViewModel();
+        var acme = _sessions.Sessions.Single(s => s.Name == "Acme").Id;
+
+        vm.ScopeToSession(acme);
+        vm.ClearSessionScope();
+        Assert.Null(vm.StatusMessage);
+
+        vm.ScopeToSession(acme);
+        vm.Tab = LibraryTab.All;
+        Assert.Null(vm.StatusMessage);
+    }
+
+    [Fact]
     public void ASessionScope_ClearsWhenItsSessionIsDeleted_OrTheTabChanges()
     {
         Seed();

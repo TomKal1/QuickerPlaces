@@ -94,6 +94,7 @@ public sealed class LibraryViewModel : ObservableObject
     private string? _rootId;
     private LibraryTab? _tab;
     private string? _sessionId;
+    private string? _scopeStatus;
     private DateRule _date = DateRule.All();
     private CalendarSelectionUnit _selectionUnit;
     private DateOnly? _clickedDate;
@@ -321,7 +322,10 @@ public sealed class LibraryViewModel : ObservableObject
 
             _tab = value;
             if (value != LibraryTab.Sessions)
+            {
                 _sessionId = null;
+                ClearScopeStatus();
+            }
             if (value == LibraryTab.Sessions && _grouping == LibraryGrouping.Level)
                 Grouping = LibraryGrouping.Type;
 
@@ -391,7 +395,17 @@ public sealed class LibraryViewModel : ObservableObject
         _sessionId = sessionId;
         NotifySessionScope();
         Refresh();
-        StatusMessage = SessionScopeName is { } name ? $"Showing the files in {name}." : null;
+        _scopeStatus = SessionScopeName is { } name ? $"Showing the files in {name}." : null;
+        StatusMessage = _scopeStatus;
+    }
+
+    /// <summary>Takes the scope's status line down with the scope, unless another message has replaced it since.</summary>
+    private void ClearScopeStatus()
+    {
+        if (_scopeStatus is not null && StatusMessage == _scopeStatus)
+            StatusMessage = null;
+
+        _scopeStatus = null;
     }
 
     /// <summary>The chip's ×: every session's files again.</summary>
@@ -401,6 +415,7 @@ public sealed class LibraryViewModel : ObservableObject
             return;
 
         _sessionId = null;
+        ClearScopeStatus();
         NotifySessionScope();
         Refresh();
     }
@@ -826,7 +841,10 @@ public sealed class LibraryViewModel : ObservableObject
         _snapshot = Capture();
         BuildRootChips();
         if (_sessionId is not null && SessionScopeName is null)
+        {
             _sessionId = null;
+            ClearScopeStatus();
+        }
         NotifySessionScope();
         OnPropertyChanged(nameof(TagChoices));
         Refresh();
