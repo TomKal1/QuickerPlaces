@@ -67,6 +67,11 @@ public sealed class WorkspaceLayoutService
 
     public string ActiveName => NameOf(ActivePresetId);
 
+    /// <summary>The active layout's arrangement: <see cref="LayoutArrangements.Columns"/>, or null for rows (Desk layout design §2).</summary>
+    public string? ActiveArrangement => ArrangementOf(ActivePresetId);
+
+    public bool ActiveIsColumns => LayoutArrangements.IsColumns(ActiveArrangement);
+
     /// <summary>The panels shown, in order, hidden ones included. Copies: change them through this service.</summary>
     public IReadOnlyList<PanelInstance> Panels => _panels.Select(p => p.Clone()).ToList();
 
@@ -225,18 +230,18 @@ public sealed class WorkspaceLayoutService
         return ApplyDraft(moved, $"Move {PanelTypes.DisplayName(panel.Type)}");
     }
 
-    /// <summary>Keyboard Move earlier: swaps with the visible panel before it (D1).</summary>
+    /// <summary>Keyboard Move earlier: swaps with the visible panel before it in its column (D1; Desk layout design §3).</summary>
     public bool MoveEarlier(string panelId)
     {
-        var visible = _panels.Where(p => !p.Hidden).ToList();
+        var visible = VisibleInColumnOf(panelId);
         var index = visible.FindIndex(p => p.Id == panelId);
         return index > 0 && MoveBefore(panelId, visible[index - 1].Id);
     }
 
-    /// <summary>Keyboard Move later: swaps with the visible panel after it (D1).</summary>
+    /// <summary>Keyboard Move later: swaps with the visible panel after it in its column (D1; Desk layout design §3).</summary>
     public bool MoveLater(string panelId)
     {
-        var visible = _panels.Where(p => !p.Hidden).ToList();
+        var visible = VisibleInColumnOf(panelId);
         var index = visible.FindIndex(p => p.Id == panelId);
         if (index < 0 || index >= visible.Count - 1)
             return false;
@@ -257,6 +262,50 @@ public sealed class WorkspaceLayoutService
 
         panel.Span = span;
         return ApplyDraft(draft, $"Resize {PanelTypes.DisplayName(panel.Type)}");
+    }
+
+    /// <summary>
+    /// Columns layouts' Column choice: moves a panel to the bottom of the
+    /// other column. False outside Arrange mode, in a rows layout, or when it
+    /// is in that column already.
+    /// </summary>
+    public bool SetDock(string panelId, string dock)
+    {
+        if (!IsArranging || !ActiveIsColumns)
+            return false;
+
+        var draft = Clone(_panels);
+        var panel = draft.Find(p => p.Id == panelId);
+        var column = PanelDocks.Normalize(dock);
+        if (panel is null || PanelDocks.Normalize(panel.Dock) == column)
+            return false;
+
+        panel.Dock = column;
+        draft.Remove(panel);
+        draft.Add(panel);
+        return ApplyDraft(draft, $"Move {PanelTypes.DisplayName(panel.Type)}");
+    }
+
+    /// <summary>
+    /// A drop in a columns layout: the panel goes into <paramref name="dock"/>,
+    /// just before <paramref name="beforePanelId"/> in the stored order, or
+    /// last when that is null, as one step (D1).
+    /// </summary>
+    public bool MoveTo(string panelId, string dock, string? beforePanelId)
+    {
+        if (!IsArranging || !ActiveIsColumns || panelId == beforePanelId)
+            return false;
+
+        var draft = Clone(_panels);
+        var panel = draft.Find(p => p.Id == panelId);
+        if (panel is null || (beforePanelId is not null && !draft.Exists(p => p.Id == beforePanelId)))
+            return false;
+
+        panel.Dock = PanelDocks.Normalize(dock);
+        draft.Remove(panel);
+        var at = beforePanelId is null ? draft.Count : draft.FindIndex(p => p.Id == beforePanelId);
+        draft.Insert(at, panel);
+        return ApplyDraft(draft, $"Move {PanelTypes.DisplayName(panel.Type)}");
     }
 
     /// <summary>Hides a panel. Presentation only: whatever it shows is untouched (D1, D6). Undo brings it back.</summary>
@@ -292,7 +341,13 @@ public sealed class WorkspaceLayoutService
         else
         {
             var ids = draft.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
-            draft.Add(new PanelInstance { Id = WorkspaceValidation.NewPanelId(type, ids), Type = type, Span = PanelTypes.DefaultSpan(type) });
+            draft.Add(new PanelInstance
+            {
+                Id = WorkspaceValidation.NewPanelId(type, ids),
+                Type = type,
+                Span = PanelTypes.DefaultSpan(type),
+                Dock = ActiveIsColumns ? PanelDocks.Main : null,
+            });
         }
 
         return ApplyDraft(draft, $"Add {PanelTypes.DisplayName(type)}");
@@ -380,6 +435,7 @@ public sealed class WorkspaceLayoutService
         if (!validation.Success)
             return validation;
 
+        var arrangement = ActiveArrangement;
         var shown = Clone(_panels);
         EndArrange(keepDraft: false);
         KeepWorking();
@@ -388,6 +444,7 @@ public sealed class WorkspaceLayoutService
         {
             Id = NewPresetId(),
             Name = cleanName,
+            Arrangement = arrangement,
             Panels = shown,
             Filters = filters?.Clone(),
         };
@@ -445,6 +502,7 @@ public sealed class WorkspaceLayoutService
         {
             Id = NewPresetId(),
             Name = WorkspaceValidation.UniqueName(NameOf(id), _document.Presets),
+            Arrangement = ArrangementOf(id),
             Panels = DefinitionPanels(id),
             Filters = FindPreset(id)?.Filters?.Clone(),
         };
@@ -548,6 +606,19 @@ public sealed class WorkspaceLayoutService
     private WorkingArrangement? FindWorking(string id) => _document.Working.Find(w => w.PresetId == id);
 
     private string NameOf(string id) => BuiltInLayouts.Find(id)?.Name ?? FindPreset(id)?.Name ?? "";
+
+    private string? ArrangementOf(string id) => BuiltInLayouts.Find(id)?.Arrangement ?? FindPreset(id)?.Arrangement;
+
+    /// <summary>The visible panels a keyboard move swaps among: all of them in a rows layout, the panel's own column in a columns layout.</summary>
+    private List<PanelInstance> VisibleInColumnOf(string panelId)
+    {
+        var visible = _panels.Where(p => !p.Hidden).ToList();
+        if (!ActiveIsColumns)
+            return visible;
+
+        var column = PanelDocks.Normalize(visible.Find(p => p.Id == panelId)?.Dock);
+        return visible.Where(p => PanelDocks.Normalize(p.Dock) == column).ToList();
+    }
 
     /// <summary>A fresh copy of a layout's definition: factory panels for a built-in, saved panels for a user layout.</summary>
     private List<PanelInstance> DefinitionPanels(string id)

@@ -77,13 +77,20 @@ public static class BuiltInLayouts
 /// <summary>One built-in layout's factory definition.</summary>
 public sealed class BuiltInLayout
 {
-    private readonly (string Type, int Span)[] _panels;
+    private readonly (string Type, int Span, string? Dock)[] _panels;
 
     public BuiltInLayout(string id, string name, int version, (string Type, int Span)[] panels)
+        : this(id, name, version, null, panels.Select(p => (p.Type, p.Span, (string?)null)).ToArray())
+    {
+    }
+
+    /// <summary>A built-in with an arrangement (<see cref="LayoutArrangements"/>) and, in columns, each panel's column.</summary>
+    public BuiltInLayout(string id, string name, int version, string? arrangement, (string Type, int Span, string? Dock)[] panels)
     {
         Id = id;
         Name = name;
         Version = version;
+        Arrangement = arrangement;
         _panels = panels;
     }
 
@@ -94,10 +101,13 @@ public sealed class BuiltInLayout
     /// <summary>Raised whenever the factory definition changes.</summary>
     public int Version { get; }
 
+    /// <summary>Null for rows, or <see cref="LayoutArrangements.Columns"/>.</summary>
+    public string? Arrangement { get; }
+
     /// <summary>True when every panel this layout needs is available in this build.</summary>
     public bool IsOffered => _panels.All(p => PanelTypes.IsAvailable(p.Type));
 
     /// <summary>A fresh copy of the factory panels. Panel ids are the panel types: one of each.</summary>
     public List<PanelInstance> CreatePanels()
-        => _panels.Select(p => new PanelInstance { Id = p.Type, Type = p.Type, Span = p.Span }).ToList();
+        => _panels.Select(p => new PanelInstance { Id = p.Type, Type = p.Type, Span = p.Span, Dock = p.Dock }).ToList();
 }

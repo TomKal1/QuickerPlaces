@@ -698,4 +698,133 @@ public sealed class WorkspaceLayoutServiceTests
         Assert.Contains("99", storage.ContentsToReturn);
         Assert.DoesNotContain(PanelTypes.Sessions, Order(service));
     }
+
+    // ---------------------------------------------------------------
+    // Columns layouts (Desk layout design §2, §3)
+    // ---------------------------------------------------------------
+
+    private const string ColumnsFile = """
+        {
+          "schemaVersion": 1,
+          "presets": [
+            { "id": "cols", "name": "Cols", "arrangement": "columns",
+              "panels": [ { "id": "sessions", "type": "sessions", "span": 4, "dock": "left" },
+                          { "id": "places", "type": "places", "span": 12, "dock": "main" },
+                          { "id": "shelf", "type": "shelf", "span": 8, "dock": "main" } ] }
+          ],
+          "working": [],
+          "activePresetId": "cols"
+        }
+        """;
+
+    private static WorkspaceLayoutService ColumnsService(FakePlacesStorage storage)
+    {
+        storage.ContentsToReturn = ColumnsFile;
+        return NewService(storage);
+    }
+
+    private static string[] Column(WorkspaceLayoutService service, string dock)
+        => service.VisiblePanels.Where(p => PanelDocks.Normalize(p.Dock) == dock).Select(p => p.Id).ToArray();
+
+    [Fact]
+    public void AColumnsLayout_SaysSo_AndARowsLayoutDoesnt()
+    {
+        var service = ColumnsService(NewStorage());
+
+        Assert.True(service.ActiveIsColumns);
+        Ok(service.Activate(BuiltInLayouts.ActivityAtlasId));
+        Assert.False(service.ActiveIsColumns);
+    }
+
+    [Fact]
+    public void SetDock_MovesAPanelToTheBottomOfTheOtherColumn_AsOneUndoableStep()
+    {
+        var service = ColumnsService(NewStorage());
+        service.BeginArrange();
+
+        Assert.True(service.SetDock("shelf", PanelDocks.Left));
+        Assert.Equal(new[] { "sessions", "shelf" }, Column(service, PanelDocks.Left));
+        Assert.Equal(new[] { "places" }, Column(service, PanelDocks.Main));
+        Assert.Equal($"Move {PanelTypes.DisplayName(PanelTypes.Shelf)}", service.UndoLabel);
+        Assert.False(service.SetDock("shelf", PanelDocks.Left));
+
+        service.Undo();
+        Assert.Equal(new[] { "places", "shelf" }, Column(service, PanelDocks.Main));
+    }
+
+    [Fact]
+    public void SetDock_OnARowsLayout_OrOutsideArrange_ChangesNothing()
+    {
+        var columns = ColumnsService(NewStorage());
+        Assert.False(columns.SetDock("shelf", PanelDocks.Left));
+
+        var rows = NewService(NewStorage());
+        rows.BeginArrange();
+        Assert.False(rows.SetDock("shelf", PanelDocks.Left));
+    }
+
+    [Fact]
+    public void MoveEarlierAndLater_StayInThePanelsColumn()
+    {
+        var service = ColumnsService(NewStorage());
+        service.BeginArrange();
+
+        // Places is first in the main column, though Sessions comes before it in the stored order.
+        Assert.False(service.MoveEarlier("places"));
+        Assert.False(service.MoveLater("shelf"));
+        Assert.False(service.MoveLater("sessions"));
+
+        Assert.True(service.MoveEarlier("shelf"));
+        Assert.Equal(new[] { "shelf", "places" }, Column(service, PanelDocks.Main));
+    }
+
+    [Fact]
+    public void MoveTo_DropsIntoTheOtherColumn_BeforeAPanel()
+    {
+        var service = ColumnsService(NewStorage());
+        service.BeginArrange();
+
+        Assert.True(service.MoveTo("shelf", PanelDocks.Left, "sessions"));
+        Assert.Equal(new[] { "shelf", "sessions" }, Column(service, PanelDocks.Left));
+        Ok(service.Done());
+        Assert.True(service.IsModified);
+    }
+
+    [Fact]
+    public void AddPanel_OnAColumnsLayout_GoesToTheBottomOfTheMainColumn()
+    {
+        var service = ColumnsService(NewStorage());
+
+        Assert.True(service.AddPanelNow(PanelTypes.Activity, out var persistence));
+        Ok(persistence);
+        Assert.Equal(new[] { "places", "shelf", "activity" }, Column(service, PanelDocks.Main));
+    }
+
+    [Fact]
+    public void SaveAsNew_AndDuplicate_KeepAColumnsArrangement()
+    {
+        var storage = NewStorage();
+        var service = ColumnsService(storage);
+
+        var mine = SaveAs(service, "Mine");
+        Assert.True(NewService(storage).ActiveIsColumns);
+
+        Assert.True(service.Duplicate("cols", out var copy, out var persistence).Success);
+        Ok(persistence);
+        Ok(service.Activate(copy!));
+        Assert.True(service.ActiveIsColumns);
+        Assert.NotEqual(mine, copy);
+    }
+
+    [Fact]
+    public void ARowsLayout_WritesNoArrangementOrDock()
+    {
+        var storage = NewStorage();
+        var service = NewService(storage);
+
+        SaveAs(service, "Mine");
+
+        Assert.DoesNotContain("arrangement", storage.LastWritten);
+        Assert.DoesNotContain("\"dock\"", storage.LastWritten);
+    }
 }
