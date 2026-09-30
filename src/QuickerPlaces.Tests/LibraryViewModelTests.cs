@@ -327,4 +327,140 @@ public sealed class LibraryViewModelTests
         Assert.Equal(6, vm.Rows.Count);
         Assert.False(vm.TrackedRootChips.Single().IsSelected);
     }
+
+    // ---------------------------------------------------------------
+    // The File viewer's tabs (File viewer design §4, §5)
+    // ---------------------------------------------------------------
+
+    private static string[] Names(LibraryViewModel vm) => vm.Rows.Select(r => r.Name).OrderBy(n => n).ToArray();
+
+    private static (bool Choice, bool WhereFrom, bool VisitsAndTime, bool Tags, bool Sessions, bool Tracked, bool Markers, bool Level) Columns(LibraryViewModel vm)
+        => (vm.ShowsSourceChoice, vm.ShowsWhereFrom, vm.ShowsVisitsAndTime, vm.ShowsTags, vm.ShowsSessions, vm.ShowsTrackedFolders, vm.ShowsSourceMarkers, vm.ShowsFolderLevel);
+
+    [Fact]
+    public void EachFileViewerTab_ChoosesItsSourceAndColumns_AndNoTabIsAsBefore()
+    {
+        Seed();
+        var vm = NewViewModel();
+        Assert.Null(vm.Tab);
+        Assert.Equal((true, true, true, true, false, true, false, true), Columns(vm));
+
+        vm.Tab = LibraryTab.Recent;
+        Assert.Equal(new[] { "Acme", "Budget.xlsx" }, Names(vm));
+        Assert.Equal((false, false, true, false, false, true, false, true), Columns(vm));
+
+        vm.Tab = LibraryTab.Sessions;
+        Assert.Equal(new[] { "A-101.pdf", "Report.docx" }, Names(vm));
+        Assert.Equal((false, false, false, true, true, false, false, false), Columns(vm));
+        Assert.Equal("sessions", vm.CurrentQuery.Source);
+
+        vm.Tab = LibraryTab.All;
+        Assert.Equal(6, vm.Rows.Count);
+        Assert.Equal((false, true, false, true, false, false, true, true), Columns(vm));
+
+        vm.Tab = LibraryTab.Sessions;
+        vm.Tab = null;
+        Assert.Equal(LibrarySourceFilter.All, vm.Source);
+        Assert.Equal(6, vm.Rows.Count);
+    }
+
+    [Fact]
+    public void WhileATabIsShown_ALayoutsQuery_KeepsTheTabsSource()
+    {
+        Seed();
+        var vm = NewViewModel();
+        vm.Tab = LibraryTab.Sessions;
+
+        vm.ApplyQuery(new WorkspaceQuery { Source = "recent" });
+
+        Assert.Equal(LibrarySourceFilter.Sessions, vm.Source);
+        Assert.Equal(new[] { "A-101.pdf", "Report.docx" }, Names(vm));
+    }
+
+    [Fact]
+    public void TheSessionsTab_HasNoFolderLevel_SoThatGroupingFallsBackToType()
+    {
+        Seed();
+        var vm = NewViewModel();
+        vm.Grouping = LibraryGrouping.Level;
+
+        vm.Tab = LibraryTab.Sessions;
+
+        Assert.Equal(LibraryGrouping.Type, vm.Grouping);
+    }
+
+    [Fact]
+    public void ViewSessionFiles_ScopesTheSessionsTab_FollowsARename_AndClears()
+    {
+        Seed();
+        Assert.True(_sessions.TryCreate("Beta", Array.Empty<string>(), new[] { Excel }, out _, out _).Success);
+        var vm = NewViewModel();
+        var acme = _sessions.Sessions.Single(s => s.Name == "Acme").Id;
+
+        vm.ScopeToSession(acme);
+
+        Assert.Equal(LibraryTab.Sessions, vm.Tab);
+        Assert.Equal(new[] { "A-101.pdf", "Report.docx" }, Names(vm));
+        Assert.Equal("Session: Acme", vm.SessionScopeText);
+        Assert.True(vm.HasSessionScope);
+        Assert.Equal("Showing the files in Acme.", vm.StatusMessage);
+
+        Assert.True(_sessions.TryUpdate(acme, "Acme tower", new[] { "Acme", "markups" }, new[] { Pdf, Word }, out _).Success);
+        vm.Reload();
+        Assert.Equal("Session: Acme tower", vm.SessionScopeText);
+        Assert.Equal(new[] { "A-101.pdf", "Report.docx" }, Names(vm));
+
+        vm.ClearSessionScope();
+        Assert.False(vm.HasSessionScope);
+        Assert.Equal(new[] { "A-101.pdf", "Budget.xlsx", "Report.docx" }, Names(vm));
+    }
+
+    [Fact]
+    public void ASessionScope_ClearsWhenItsSessionIsDeleted_OrTheTabChanges()
+    {
+        Seed();
+        Assert.True(_sessions.TryCreate("Beta", Array.Empty<string>(), new[] { Excel }, out var beta, out _).Success);
+        var vm = NewViewModel();
+
+        vm.ScopeToSession(beta!.Id);
+        Assert.Equal(new[] { "Budget.xlsx" }, Names(vm));
+        _sessions.Delete(beta.Id);
+        vm.Reload();
+        Assert.False(vm.HasSessionScope);
+        Assert.Null(vm.SessionScope);
+        Assert.Equal(new[] { "A-101.pdf", "Report.docx" }, Names(vm));
+
+        var acme = _sessions.Sessions.Single(s => s.Name == "Acme").Id;
+        vm.ScopeToSession(acme);
+        vm.Tab = LibraryTab.All;
+        Assert.False(vm.HasSessionScope);
+        Assert.Equal(6, vm.Rows.Count);
+    }
+
+    [Fact]
+    public void AllTabRows_CarryTheirSourceMarkers_AndSessionsRowsTheirSessions()
+    {
+        Seed();
+        var vm = NewViewModel();
+        vm.Tab = LibraryTab.All;
+
+        var jobs = vm.Rows.Single(r => r.Name == "Jobs");
+        var pdf = vm.Rows.Single(r => r.Name == "A-101.pdf");
+        var budget = vm.Rows.Single(r => r.Name == "Budget.xlsx");
+
+        Assert.Equal((true, false, false, "Saved place"), (jobs.IsSavedPlace, jobs.IsRecent, jobs.IsInSession, jobs.MarkersText));
+        Assert.Equal((false, false, true, "In a session", "Acme"), (pdf.IsSavedPlace, pdf.IsRecent, pdf.IsInSession, pdf.MarkersText, pdf.SessionsText));
+        Assert.Equal("Recent", budget.MarkersText);
+    }
+
+    [Fact]
+    public void EmptyTabs_SayWhatWouldFillThem()
+    {
+        var vm = NewViewModel();
+
+        vm.Tab = LibraryTab.Sessions;
+        Assert.Equal("No session files yet. Save open files as a session from the Sessions panel.", vm.EmptyText);
+        vm.Tab = LibraryTab.Recent;
+        Assert.Equal("Nothing recent yet. Track a folder above, or turn on Recent Files.", vm.EmptyText);
+    }
 }

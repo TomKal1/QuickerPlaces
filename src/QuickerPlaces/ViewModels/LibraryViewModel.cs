@@ -29,6 +29,14 @@ public enum LibraryGrouping
     Level,
 }
 
+/// <summary>The File viewer's tabs that show the Library (File viewer design §4). Its Saved places tab is the places table.</summary>
+public enum LibraryTab
+{
+    Recent,
+    Sessions,
+    All,
+}
+
 /// <summary>How much a click on the year strip chooses (configurable canvas plan D1: Day/Week/Month selection).</summary>
 public enum CalendarSelectionUnit
 {
@@ -84,6 +92,8 @@ public sealed class LibraryViewModel : ObservableObject
     private string _searchText = "";
     private string? _tag;
     private string? _rootId;
+    private LibraryTab? _tab;
+    private string? _sessionId;
     private DateRule _date = DateRule.All();
     private CalendarSelectionUnit _selectionUnit;
     private DateOnly? _clickedDate;
@@ -134,6 +144,7 @@ public sealed class LibraryViewModel : ObservableObject
         {
             LibrarySourceFilter.Saved => "saved",
             LibrarySourceFilter.Recent => "recent",
+            LibrarySourceFilter.Sessions => "sessions",
             _ => null,
         },
         Tag = _tag,
@@ -154,9 +165,15 @@ public sealed class LibraryViewModel : ObservableObject
         {
             "saved" => LibrarySourceFilter.Saved,
             "recent" => LibrarySourceFilter.Recent,
+            "sessions" => LibrarySourceFilter.Sessions,
             _ => LibrarySourceFilter.All,
         };
-        _tag = string.IsNullOrWhiteSpace(query.Tag) ? null : query.Tag;
+
+        // While the File viewer shows a tab, the tab decides the source (File viewer design §4).
+        if (_tab is { } shown)
+            _source = SourceOf(shown);
+
+        _tag =string.IsNullOrWhiteSpace(query.Tag) ? null : query.Tag;
         _rootId = string.IsNullOrWhiteSpace(query.Root) ? null : query.Root;
         _date = query.Date?.Clone() ?? DateRule.All();
 
@@ -285,6 +302,124 @@ public sealed class LibraryViewModel : ObservableObject
     public void ToggleRootScope(string rootId) => RootScope = _rootId == rootId ? null : rootId;
 
     // ---------------------------------------------------------------
+    // The File viewer's tabs (File viewer design §4, §5)
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// The File viewer tab shown, or null outside it: a Recents panel and the
+    /// Library window, where every column shows as before. A tab decides the
+    /// source. Leaving Sessions clears a session scope. Sessions has no
+    /// Folder level, so that grouping falls back to Type there.
+    /// </summary>
+    public LibraryTab? Tab
+    {
+        get => _tab;
+        set
+        {
+            if (_tab == value)
+                return;
+
+            _tab = value;
+            if (value != LibraryTab.Sessions)
+                _sessionId = null;
+            if (value == LibraryTab.Sessions && _grouping == LibraryGrouping.Level)
+                Grouping = LibraryGrouping.Type;
+
+            // No tab: a Recents panel's Show segment has no Sessions choice, so that source reads as All there.
+            var source = value is { } tab ? SourceOf(tab) : _source == LibrarySourceFilter.Sessions ? LibrarySourceFilter.All : _source;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowsSourceChoice));
+            OnPropertyChanged(nameof(ShowsTrackedFolders));
+            OnPropertyChanged(nameof(ShowsWhereFrom));
+            OnPropertyChanged(nameof(ShowsVisitsAndTime));
+            OnPropertyChanged(nameof(ShowsTags));
+            OnPropertyChanged(nameof(ShowsSessions));
+            OnPropertyChanged(nameof(ShowsSourceMarkers));
+            OnPropertyChanged(nameof(ShowsFolderLevel));
+            NotifySessionScope();
+
+            if (source != _source)
+            {
+                _source = source;
+                NotifySource();
+                QueryEdited();
+            }
+            else
+            {
+                Refresh();
+            }
+        }
+    }
+
+    /// <summary>The Show segment (All / Saved / Recent): the tabs replace it.</summary>
+    public bool ShowsSourceChoice => _tab is null;
+
+    /// <summary>The tracked folders strip: Recent's.</summary>
+    public bool ShowsTrackedFolders => _tab is null or LibraryTab.Recent;
+
+    public bool ShowsWhereFrom => _tab is null or LibraryTab.All;
+
+    public bool ShowsVisitsAndTime => _tab is null or LibraryTab.Recent;
+
+    public bool ShowsTags => _tab != LibraryTab.Recent;
+
+    /// <summary>Which sessions hold each file: the Sessions tab's column.</summary>
+    public bool ShowsSessions => _tab == LibraryTab.Sessions;
+
+    /// <summary>The Source markers (saved place, recent, in a session): the All tab's column.</summary>
+    public bool ShowsSourceMarkers => _tab == LibraryTab.All;
+
+    /// <summary>Folder level grouping: sessions hold files from anywhere, so not on Sessions.</summary>
+    public bool ShowsFolderLevel => _tab != LibraryTab.Sessions;
+
+    /// <summary>The session the Sessions tab is narrowed to, by id, or null for every session's files (File viewer design §5).</summary>
+    public string? SessionScope => _sessionId;
+
+    /// <summary>The scoped session's name now: a rename keeps the scope, and a deleted session scopes nothing.</summary>
+    private string? SessionScopeName
+        => _sessionId is null ? null : _snapshot.Sessions.FirstOrDefault(s => s.Id == _sessionId)?.Name;
+
+    public bool HasSessionScope => SessionScopeName is not null;
+
+    /// <summary>"Session: Tower B": the chip that clears the scope.</summary>
+    public string SessionScopeText => SessionScopeName is { } name ? $"Session: {name}" : "";
+
+    /// <summary>A session card's View session files: the Sessions tab, narrowed to that session.</summary>
+    public void ScopeToSession(string sessionId)
+    {
+        Tab = LibraryTab.Sessions;
+        _sessionId = sessionId;
+        NotifySessionScope();
+        Refresh();
+        StatusMessage = SessionScopeName is { } name ? $"Showing the files in {name}." : null;
+    }
+
+    /// <summary>The chip's ×: every session's files again.</summary>
+    public void ClearSessionScope()
+    {
+        if (_sessionId is null)
+            return;
+
+        _sessionId = null;
+        NotifySessionScope();
+        Refresh();
+    }
+
+    private static LibrarySourceFilter SourceOf(LibraryTab tab) => tab switch
+    {
+        LibraryTab.Recent => LibrarySourceFilter.Recent,
+        LibraryTab.Sessions => LibrarySourceFilter.Sessions,
+        _ => LibrarySourceFilter.All,
+    };
+
+    private void NotifySessionScope()
+    {
+        OnPropertyChanged(nameof(SessionScope));
+        OnPropertyChanged(nameof(HasSessionScope));
+        OnPropertyChanged(nameof(SessionScopeText));
+    }
+
+    // ---------------------------------------------------------------
     // Period (D3, D4)
     // ---------------------------------------------------------------
 
@@ -404,6 +539,10 @@ public sealed class LibraryViewModel : ObservableObject
     {
         get
         {
+            if (Period is null && _tab == LibraryTab.Sessions && _snapshot.Sessions.All(s => s.Files.Count == 0))
+                return "No session files yet. Save open files as a session from the Sessions panel.";
+            if (Period is null && _tab == LibraryTab.Recent && _snapshot.Roots.Count == 0 && _snapshot.Files.Count == 0)
+                return "Nothing recent yet. Track a folder above, or turn on Recent Files.";
             var inPeriod = _result?.ItemsInPeriod ?? 0;
             if (Period is not { } p)
                 return inPeriod == 0
@@ -686,6 +825,9 @@ public sealed class LibraryViewModel : ObservableObject
     {
         _snapshot = Capture();
         BuildRootChips();
+        if (_sessionId is not null && SessionScopeName is null)
+            _sessionId = null;
+        NotifySessionScope();
         OnPropertyChanged(nameof(TagChoices));
         Refresh();
     }
@@ -720,7 +862,7 @@ public sealed class LibraryViewModel : ObservableObject
     {
         var generation = ++_generation;
         var snapshot = _snapshot;
-        var filter = new LibraryFilter(_selectedKind, _source, _searchText, _tag, ScopeFor(_rootId));
+        var filter = new LibraryFilter(_selectedKind, _source, _searchText, _tag, ScopeFor(_rootId), SessionScopeName);
         var period = Period;
         var culture = _culture;
         _work.Run(() => LibraryQueryEngine.Run(snapshot, filter, period, culture), result =>
@@ -968,11 +1110,27 @@ public sealed class LibraryRowViewModel
     /// <summary>A folder that isn't a saved place yet: the Recents panel offers Add as place.</summary>
     public bool CanAddAsPlace => Item.Kind == LibraryKind.Folder && !Item.IsSavedPlace;
 
+    /// <summary>The All tab's Source markers (File viewer design §4).</summary>
+    public bool IsSavedPlace => Item.IsSavedPlace;
+    public bool IsRecent => Item.IsRecent;
+    public bool IsInSession => Item.IsInSession;
+
+    /// <summary>The markers in words, for screen readers: "Saved place, Recent, In a session".</summary>
+    public string MarkersText => string.Join(", ", new[]
+    {
+        IsSavedPlace ? "Saved place" : null,
+        IsRecent ? "Recent" : null,
+        IsInSession ? "In a session" : null,
+    }.OfType<string>());
+
+    /// <summary>The sessions that hold it, for the Sessions tab.</summary>
+    public string SessionsText => string.Join(", ", Item.Sessions);
+
     /// <summary>True when <paramref name="other"/> is the same item, shown the same way in the same group.</summary>
     public bool Looks(LibraryRowViewModel other)
         => ResourceIdentity.Comparer.Equals(Item.Key, other.Item.Key) && GroupName == other.GroupName && Name == other.Name &&
            SourceText == other.SourceText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
-           VisitsText == other.VisitsText && TimeText == other.TimeText &&
+           VisitsText == other.VisitsText && TimeText == other.TimeText && SessionsText == other.SessionsText &&
            ReferenceEquals(Item.Place, other.Item.Place);
 
     /// <summary>True for a file Recent Files recorded, which Remove from Recent Files can forget.</summary>
