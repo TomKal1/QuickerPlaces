@@ -211,7 +211,7 @@ public sealed class PanelLayoutEngineTests
     };
 
     [Fact]
-    public void Columns_StackEachColumn_LeftAThird_MainTwoThirds()
+    public void Columns_StackEachColumn_LeftOneCardWide_MainTheRest()
     {
         var placed = PanelLayoutEngine.PackColumns(Desk, 1800);
 
@@ -240,11 +240,35 @@ public sealed class PanelLayoutEngineTests
     [Fact]
     public void ANarrowWindow_StacksTheColumns_MainFirst_FullWidth()
     {
-        // A third of 700 is too narrow for Sessions (300).
+        // 700 less the card-wide left column leaves Saved places (560) too little.
         var placed = PanelLayoutEngine.PackColumns(Desk, 700);
 
         Assert.Equal(new[] { "places@0:0+12/None", "shelf@1:0+12/None", "activity@2:0+12/None", "sessions@3:0+12/None" },
             placed.Select(DescribeDocked));
+    }
+
+    [Fact]
+    public void TheLeftColumn_IsOneCardWide_WhateverTheCanvasWidth()
+    {
+        var types = new[] { PanelTypes.Favourites, PanelTypes.Sessions };
+
+        Assert.Equal(PanelLayoutEngine.CardWidth + PanelLayoutEngine.Gap, PanelLayoutEngine.LeftColumnWidth(types));
+    }
+
+    [Fact]
+    public void TheLeftColumn_GrowsToTheWidestPanelDockedInIt()
+    {
+        var width = PanelLayoutEngine.LeftColumnWidth(new[] { PanelTypes.Sessions, PanelTypes.Files });
+
+        Assert.Equal(PanelLayoutEngine.MinimumWidth(PanelTypes.Files) + PanelLayoutEngine.Gap, width);
+    }
+
+    [Fact]
+    public void Columns_StackOnlyWhenTheMainColumnGetsTooLittle_NotTheLeft()
+    {
+        // The left column takes 352, so Saved places (560) needs the canvas to be 352 + 12 + 560 = 924.
+        Assert.Equal(PanelDock.None, PanelLayoutEngine.PackColumns(Desk, 923).First().Dock);
+        Assert.Equal(PanelDock.Left, PanelLayoutEngine.PackColumns(Desk, 924).First().Dock);
     }
 
     [Fact]

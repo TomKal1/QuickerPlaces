@@ -23,6 +23,29 @@ public partial class FavouritesPanel : UserControl
         set => TitleText.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// One favourite to a row, each as wide as the panel: the workspace's left
+    /// column is one card wide, and favourites stack down it as they are added.
+    /// Off, they wrap side by side, as in the main window's strip.
+    /// </summary>
+    public bool Stacked
+    {
+        get => _stacked;
+        set
+        {
+            if (_stacked == value)
+                return;
+            _stacked = value;
+            var panel = new FrameworkElementFactory(_stacked ? typeof(StackPanel) : typeof(WrapPanel));
+            panel.SetValue(StackPanel.OrientationProperty, System.Windows.Controls.Orientation.Vertical);
+            if (!_stacked)
+                panel.SetValue(WrapPanel.OrientationProperty, System.Windows.Controls.Orientation.Horizontal);
+            FavouritesItemsControl.ItemsPanel = new ItemsPanelTemplate(panel);
+        }
+    }
+
+    private bool _stacked;
+
     // -----------------------------------------------------------------
     // Favourite bubble drag-to-reorder (SI §6.4). A Button already
     // consumes the mouse for its own Click, so reordering is driven from

@@ -266,11 +266,15 @@ public partial class WorkspaceView : UserControl
 
         if (columns)
         {
-            PlaceStack(_leftStack, panels.Where(p => p.Dock == PanelDock.Left).ToList());
-            PlaceStack(_mainStack, panels.Where(p => p.Dock == PanelDock.Main).ToList());
+            var left = panels.Where(p => p.Dock == PanelDock.Left).ToList();
+            var main = panels.Where(p => p.Dock == PanelDock.Main).ToList();
+            SetCanvasColumns(left.Count > 0 && main.Count > 0 ? PanelLayoutEngine.LeftColumnWidth(left.Select(p => p.Type)) : null);
+            PlaceStack(_leftStack, left, 0);
+            PlaceStack(_mainStack, main, left.Count > 0 && main.Count > 0 ? 1 : 0);
         }
         else
         {
+            SetCanvasColumns(null, twelve: true);
             _leftStack.Visibility = Visibility.Collapsed;
             _mainStack.Visibility = Visibility.Collapsed;
             foreach (var row in panels.GroupBy(p => p.Row).OrderBy(g => g.Key))
@@ -332,8 +336,29 @@ public partial class WorkspaceView : UserControl
         ? new RowDefinition { Height = GridLength.Auto }
         : new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = MinRowHeight };
 
+    /// <summary>
+    /// The canvas's grid columns: twelve equal ones for a rows layout. A columns
+    /// layout with both columns has a left one <paramref name="leftWidth"/> wide
+    /// (one card, plus the gap) and a main one with the rest; with one column
+    /// shown, that column has the whole canvas.
+    /// </summary>
+    private void SetCanvasColumns(double? leftWidth, bool twelve = false)
+    {
+        PanelCanvas.ColumnDefinitions.Clear();
+        if (twelve)
+        {
+            for (var i = 0; i < PanelSpans.Columns; i++)
+                PanelCanvas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            return;
+        }
+
+        if (leftWidth is { } width)
+            PanelCanvas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+        PanelCanvas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+    }
+
     /// <summary>One column of a columns layout: a grid across the column's span, one row per panel; collapsed when the column is empty.</summary>
-    private void PlaceStack(Grid stack, IReadOnlyList<WorkspacePanelViewModel> panels)
+    private void PlaceStack(Grid stack, IReadOnlyList<WorkspacePanelViewModel> panels, int column)
     {
         if (panels.Count == 0)
         {
@@ -344,8 +369,8 @@ public partial class WorkspaceView : UserControl
         if (stack.Parent is null)
             PanelCanvas.Children.Add(stack);
         Grid.SetRow(stack, 0);
-        Grid.SetColumn(stack, panels[0].Column);
-        Grid.SetColumnSpan(stack, panels[0].Span);
+        Grid.SetColumn(stack, column);
+        Grid.SetColumnSpan(stack, 1);
         stack.Visibility = Visibility.Visible;
         foreach (var panel in panels)
             stack.RowDefinitions.Add(RowFor(fitsContent: panel.Type == PanelTypes.Activity));
@@ -844,7 +869,14 @@ public partial class WorkspaceView : UserControl
                 return new PlacesPanel { DataContext = _places, CollapsesWithWindow = false };
 
             case PanelTypes.Favourites:
-                return new FavouritesPanel { DataContext = _places, ShowsTitle = false };
+                // Stacked one to a row, so a long list scrolls in its panel.
+                return new ScrollViewer
+                {
+                    Content = new FavouritesPanel { DataContext = _places, ShowsTitle = false, Stacked = true },
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    Focusable = false,
+                };
 
             default:
                 // A panel from a newer build, or one this build lists but hasn't made yet: kept, never dropped (D6).

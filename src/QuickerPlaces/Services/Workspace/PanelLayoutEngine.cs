@@ -84,11 +84,24 @@ public static class PanelLayoutEngine
         return rows.SelectMany(r => r).ToList();
     }
 
+    /// <summary>The width of one card in the left column of a columns layout: a session card, or a favourite, one to a row.</summary>
+    public const double CardWidth = 340;
+
+    /// <summary>
+    /// How wide a columns layout's left column is, gap included: one card wide,
+    /// or as wide as the widest panel docked there needs, so it is never cut off.
+    /// </summary>
+    public static double LeftColumnWidth(IEnumerable<string> leftPanelTypes)
+        => Math.Max(CardWidth, leftPanelTypes.Select(MinimumWidth).DefaultIfEmpty(0).Max()) + Gap;
+
     /// <summary>
     /// Places a columns layout's panels (Desk layout design §2): a left column
-    /// a third wide and a main column two-thirds wide, each a stack of its own
-    /// panels in their stored order. An empty column gives its width to the
-    /// other. When a panel can't be read at its column's width
+    /// one card wide (<see cref="LeftColumnWidth"/>) and a main column with the
+    /// rest, each a stack of its own panels in their stored order. An empty
+    /// column gives its width to the other. The placements' column and span
+    /// only say which column a panel is in, and whether it shares the canvas
+    /// (4 and 8) or has it alone (12): the view sizes the left column in
+    /// pixels. When a panel can't be read at its column's width
     /// (<see cref="MinimumWidth"/>), the columns stack instead, main first,
     /// every panel full width and <see cref="PanelDock.None"/>: presentation
     /// only, as reflow is. Stored docks never change here.
@@ -101,8 +114,10 @@ public static class PanelLayoutEngine
         var leftSpan = main.Count == 0 ? PanelSpans.Full : PanelSpans.Third;
         var mainSpan = left.Count == 0 ? PanelSpans.Full : PanelSpans.TwoThirds;
 
-        var fits = left.All(p => PanelWidth(leftSpan, width) >= MinimumWidth(p.Type)) &&
-                   main.All(p => PanelWidth(mainSpan, width) >= MinimumWidth(p.Type));
+        var leftWidth = left.Count == 0 || main.Count == 0 ? PanelWidth(PanelSpans.Full, width) : LeftColumnWidth(left.Select(p => p.Type)) - Gap;
+        var mainWidth = left.Count == 0 ? PanelWidth(PanelSpans.Full, width) : main.Count == 0 ? 0 : width - LeftColumnWidth(left.Select(p => p.Type)) - Gap;
+        var fits = left.All(p => leftWidth >= MinimumWidth(p.Type)) &&
+                   main.All(p => mainWidth >= MinimumWidth(p.Type));
         if (!fits)
         {
             return main.Concat(left)
