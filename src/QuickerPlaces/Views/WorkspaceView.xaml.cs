@@ -66,7 +66,12 @@ public partial class WorkspaceView : UserControl
     private WindowsOpenDocumentProbe? _probe;
     private RecentFilesHost? _recentFilesHost;
     private LibraryRefresh? _refresh;
-    private FileShelfPanel? _shelf;
+    /// <summary>The Library grids made so far: a Recents panel's and the File viewer's (File viewer design §7).</summary>
+    private readonly List<FileShelfPanel> _shelves = new();
+    private FilesPanel? _filesPanel;
+
+    /// <summary>The shelf on screen, if any: the one the search box's Down key moves into.</summary>
+    private FileShelfPanel? ShownShelf => _shelves.FirstOrDefault(s => s.IsVisible);
     private SessionsPanel? _sessionsPanel;
     private ActivityStore? _activityStore;
     private ActivityTrackingHost? _activityHost;
@@ -307,8 +312,9 @@ public partial class WorkspaceView : UserControl
         }
 
         UpdateFrames();
-        if (_shelf is not null)
-            _shelf.ShowsPeriod = _workspace.Panels.All(p => p.Type != PanelTypes.Activity);
+        var noCalendar = _workspace.Panels.All(p => p.Type != PanelTypes.Activity);
+        foreach (var shelf in _shelves)
+            shelf.ShowsPeriod = noCalendar;
         EmptyCanvasText.Visibility = _workspace.HasPanels ? Visibility.Collapsed : Visibility.Visible;
         FitCanvasHeight();
     }
@@ -810,20 +816,12 @@ public partial class WorkspaceView : UserControl
                 };
 
             case PanelTypes.Shelf:
-                // The Recents panel (Desk layout design §4): the shelf, with Recents' tracked folders and actions.
-                _shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false, ShowsSaveAsSession = true };
-                _shelf.SaveAsSessionRequested += SaveShelfAsSession;
-                _shelf.AddAsPlaceRequested += AddAsPlace;
-                var activity = new ActivityViewModel(_activityStore!, () =>
-                {
-                    _activityHost!.RootsChanged();
-                    _trackingChanged?.Invoke();
-                    _shelf?.UpdateTracking();
-                    RequestReload();
-                });
-                _shelf.AttachTracking(activity, _networkDrives!, () => ActivityFormat.TrackingSummary(
-                    _activityStore!.EnabledRoots().Count, _activityStore.Roots.Count, _activityHost!.IsPaused));
-                return _shelf;
+                return CreateShelf();
+
+            case PanelTypes.Files:
+                // The File viewer (File viewer design §3): Saved places and Recents as tabs, with Sessions and All.
+                _filesPanel = new FilesPanel(new PlacesPanel { DataContext = _places, CollapsesWithWindow = false }, CreateShelf(), _workspace!.Library);
+                return _filesPanel;
 
             case PanelTypes.Sessions:
                 _sessionsPanel = new SessionsPanel();
@@ -856,6 +854,30 @@ public partial class WorkspaceView : UserControl
                 placeholder.SetResourceReference(Border.BorderBrushProperty, "Border.Default");
                 return placeholder;
         }
+    }
+
+    /// <summary>
+    /// A Library grid with Recents' tracked folders and actions (Desk layout
+    /// design §4): the Recents panel, or the File viewer's Recent, Sessions and
+    /// All tabs.
+    /// </summary>
+    private FileShelfPanel CreateShelf()
+    {
+        var shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false, ShowsSaveAsSession = true };
+        shelf.SaveAsSessionRequested += SaveShelfAsSession;
+        shelf.AddAsPlaceRequested += AddAsPlace;
+        var activity = new ActivityViewModel(_activityStore!, () =>
+        {
+            _activityHost!.RootsChanged();
+            _trackingChanged?.Invoke();
+            foreach (var each in _shelves)
+                each.UpdateTracking();
+            RequestReload();
+        });
+        shelf.AttachTracking(activity, _networkDrives!, () => ActivityFormat.TrackingSummary(
+            _activityStore!.EnabledRoots().Count, _activityStore.Roots.Count, _activityHost!.IsPaused));
+        _shelves.Add(shelf);
+        return shelf;
     }
 
     /// <summary>
@@ -909,7 +931,7 @@ public partial class WorkspaceView : UserControl
                 if (_workspace.IsSearching)
                     _workspace.SearchText = "";
                 else
-                    _shelf?.FocusList();
+                    ShownShelf?.FocusList();
                 e.Handled = true;
                 break;
 
@@ -920,9 +942,9 @@ public partial class WorkspaceView : UserControl
                 break;
 
             case Key.Down:
-                if (_shelf is { IsVisible: true })
+                if (ShownShelf is { } shelf)
                 {
-                    _shelf.FocusList();
+                    shelf.FocusList();
                     e.Handled = true;
                 }
                 break;
