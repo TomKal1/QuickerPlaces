@@ -75,7 +75,8 @@ public partial class MainWindow : Window
         _workspaceView = new WorkspaceView();
         var workspace = new WorkspaceViewModel(workspaceLayout, library);
         _workspaceView.Attach(workspace, viewModel, sessionStore,
-            new WindowsOpenDocumentProbe(recentItems), recentFilesHost, activityHost);
+            new WindowsOpenDocumentProbe(recentItems), recentFilesHost, activityHost,
+            activityStore, new NetworkDriveResolver(), UpdateActivityIndicator);
 
         // Desk shows favourites as a panel; the strip is for layouts that don't (Desk layout design §5).
         void ShowFavouritesStrip() => FavouritesStrip.Visibility = workspace.ShowsFavouritesPanel ? Visibility.Collapsed : Visibility.Visible;
@@ -122,11 +123,8 @@ public partial class MainWindow : Window
     public void UpdateActivityIndicator()
     {
         var count = _activityStore.EnabledRoots().Count;
-        var text = count > 0 && _activityHost.IsPaused
-            ? "Recents — tracking paused"
-            : count > 0
-            ? $"Recents — tracking {count} {(count == 1 ? "folder" : "folders")}"
-            : _activityStore.Roots.Count > 0 ? "Recents — paused" : "Recents — no folders tracked";
+        var summary = ActivityFormat.TrackingSummary(count, _activityStore.Roots.Count, _activityHost.IsPaused);
+        var text = $"Recents — {char.ToLowerInvariant(summary[0])}{summary[1..]}";
         ActivityButton.ToolTip = text;
         AutomationProperties.SetName(ActivityButton, text);
         ActivityDot.Visibility = count > 0 && !_activityHost.IsPaused ? Visibility.Visible : Visibility.Collapsed;

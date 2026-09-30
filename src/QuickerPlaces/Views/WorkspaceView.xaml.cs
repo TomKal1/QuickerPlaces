@@ -68,6 +68,10 @@ public partial class WorkspaceView : UserControl
     private LibraryRefresh? _refresh;
     private FileShelfPanel? _shelf;
     private SessionsPanel? _sessionsPanel;
+    private ActivityStore? _activityStore;
+    private ActivityTrackingHost? _activityHost;
+    private INetworkDriveResolver? _networkDrives;
+    private Action? _trackingChanged;
     private bool _reloadQueued;
     private bool _loadedOnce;
     private PanelFrame? _moveFrame;
@@ -94,13 +98,18 @@ public partial class WorkspaceView : UserControl
 
     /// <summary>Connects the view to the workspace, the places and the stores the panels need. Call once, before it is shown.</summary>
     public void Attach(WorkspaceViewModel workspace, MainViewModel places, SessionStore sessions, WindowsOpenDocumentProbe probe,
-        RecentFilesHost recentFilesHost, ActivityTrackingHost activityHost)
+        RecentFilesHost recentFilesHost, ActivityTrackingHost activityHost, ActivityStore activityStore,
+        INetworkDriveResolver networkDrives, Action trackingChanged)
     {
         _workspace = workspace;
         _places = places;
         _sessions = sessions;
         _probe = probe;
         _recentFilesHost = recentFilesHost;
+        _activityHost = activityHost;
+        _activityStore = activityStore;
+        _networkDrives = networkDrives;
+        _trackingChanged = trackingChanged;
         DataContext = workspace;
 
         _refresh = new LibraryRefresh(Dispatcher, workspace.Library, recentFilesHost, activityHost);
@@ -801,8 +810,19 @@ public partial class WorkspaceView : UserControl
                 };
 
             case PanelTypes.Shelf:
+                // The Recents panel (Desk layout design §4): the shelf, with Recents' tracked folders and actions.
                 _shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false, ShowsSaveAsSession = true };
                 _shelf.SaveAsSessionRequested += SaveShelfAsSession;
+                _shelf.AddAsPlaceRequested += AddAsPlace;
+                var activity = new ActivityViewModel(_activityStore!, () =>
+                {
+                    _activityHost!.RootsChanged();
+                    _trackingChanged?.Invoke();
+                    _shelf?.UpdateTracking();
+                    RequestReload();
+                });
+                _shelf.AttachTracking(activity, _networkDrives!, () => ActivityFormat.TrackingSummary(
+                    _activityStore!.EnabledRoots().Count, _activityStore.Roots.Count, _activityHost!.IsPaused));
                 return _shelf;
 
             case PanelTypes.Sessions:
@@ -860,6 +880,16 @@ public partial class WorkspaceView : UserControl
             return;
 
         _sessionsPanel?.NoteSaved(editor.SavedId!, editor.SavePersistenceMessage);
+        RequestReload();
+    }
+
+    /// <summary>The Recents panel's Add as place: the usual Add folder dialog for that folder, then the Library read again.</summary>
+    private void AddAsPlace(string folder)
+    {
+        if (_places is null || Window.GetWindow(this) is not { } owner)
+            return;
+
+        _places.AddFolderFromActivity(folder, owner);
         RequestReload();
     }
 

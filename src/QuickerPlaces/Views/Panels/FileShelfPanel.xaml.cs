@@ -1,8 +1,11 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Microsoft.Win32;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Activity;
 using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views.Panels;
@@ -10,7 +13,8 @@ namespace QuickerPlaces.Views.Panels;
 /// <summary>
 /// The File shelf panel (configurable canvas plan M2): a thin view over the
 /// shared <see cref="LibraryViewModel"/> it gets as its DataContext. Hosted
-/// by the Library window and by the workspace (M3).
+/// by the Library window and by the workspace (M3), where it is the Recents
+/// panel (Desk layout design §4).
 /// </summary>
 public partial class FileShelfPanel : UserControl
 {
@@ -74,6 +78,111 @@ public partial class FileShelfPanel : UserControl
             RowsGrid.Focus();
     }
 
+    private ActivityViewModel? _activity;
+    private INetworkDriveResolver? _networkDrives;
+    private Func<string>? _trackingSummary;
+
+    /// <summary>Raised by Add as place with the folder; the workspace has the places and the Add folder dialog.</summary>
+    public event Action<string>? AddAsPlaceRequested;
+
+    /// <summary>True in the workspace's Recents panel, once <see cref="AttachTracking"/> ran.</summary>
+    public bool ShowsTracking => TrackingArea.Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// Makes this the Recents panel (Desk layout design §4): the tracked
+    /// folders strip, whose actions go to <paramref name="activity"/>, and the
+    /// line <paramref name="trackingSummary"/> writes.
+    /// </summary>
+    public void AttachTracking(ActivityViewModel activity, INetworkDriveResolver networkDrives, Func<string> trackingSummary)
+    {
+        _activity = activity;
+        _networkDrives = networkDrives;
+        _trackingSummary = trackingSummary;
+        TrackingProblem.DataContext = activity;
+        TrackingProblem.SetBinding(VisibilityProperty, new System.Windows.Data.Binding(nameof(ActivityViewModel.HasError))
+        {
+            Converter = new BooleanToVisibilityConverter(),
+        });
+        TrackingArea.Visibility = Visibility.Visible;
+        UpdateTracking();
+    }
+
+    /// <summary>Rewrites the tracking line: after a change to the tracked folders, or to tracking's pause.</summary>
+    public void UpdateTracking()
+    {
+        if (_trackingSummary is not null)
+            TrackingSummaryText.Text = _trackingSummary();
+    }
+
+    private void TrackFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activity is null || _networkDrives is null || Window.GetWindow(this) is not { } owner)
+            return;
+
+        var picker = new OpenFolderDialog { Title = "Choose a folder to track" };
+        if (picker.ShowDialog(owner) != true)
+            return;
+        var equivalents = AddRootDialog.Show(owner, picker.FolderName, _networkDrives);
+        if (equivalents is not null)
+            _activity.AddRoot(picker.FolderName, equivalents);
+    }
+
+    private void RootChip_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is TrackedRootChip chip)
+            ViewModel?.ToggleRootScope(chip.RootId);
+    }
+
+    /// <summary>Points the Recents actions at the chip right-clicked, and names Stop or Resume tracking.</summary>
+    private void RootChip_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (_activity is null || sender is not Button { DataContext: TrackedRootChip chip, ContextMenu: { } menu })
+        {
+            e.Handled = true;
+            return;
+        }
+
+        _activity.SelectedRoot = _activity.Roots.FirstOrDefault(r => r.RootId == chip.RootId);
+        foreach (var item in menu.Items.OfType<MenuItem>())
+        {
+            if (Equals(item.Tag, "Toggle"))
+                item.Header = chip.Enabled ? "Stop tracking" : "Resume tracking";
+            item.IsEnabled = item.Tag is null || _activity.CanManage;
+        }
+    }
+
+    private void EditRoot_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activity?.SelectedRoot is not null && Window.GetWindow(this) is { } owner)
+            new ActivityFolderSettingsDialog(owner, _activity).ShowDialog();
+    }
+
+    private void AboutRoot_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activity?.SelectedRoot is not null)
+            MessageForm.Show(_activity.AboutSelectedFolderText, "About tracked folder", owner: Window.GetWindow(this));
+    }
+
+    private void ToggleRoot_Click(object sender, RoutedEventArgs e) => _activity?.ToggleSelected();
+
+    private void DeleteRoot_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activity?.SelectedRoot is not { } selected)
+            return;
+
+        var message = $"Delete \"{selected.Path}\" and all of its recorded activity? This cannot be undone. To keep the data, use Stop tracking instead.";
+        if (MessageForm.ShowDestructiveConfirm(message, "Delete tracked folder", "Delete folder and its data", Window.GetWindow(this)))
+            _activity.DeleteSelected();
+    }
+
+    private void RetryTrackingSave_Click(object sender, RoutedEventArgs e) => _activity?.RetrySave();
+
+    private void AddAsPlace_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedRow is { CanAddAsPlace: true } row)
+            AddAsPlaceRequested?.Invoke(row.Location);
+    }
+
     private void KindChip_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is LibraryKindFilter filter && ViewModel is { } vm)
@@ -105,6 +214,7 @@ public partial class FileShelfPanel : UserControl
         }
 
         ForgetMenuItem.IsEnabled = SelectedRow.CanForget;
+        AddAsPlaceMenuItem.Visibility = ShowsTracking && SelectedRow.CanAddAsPlace ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OpenMenu_Click(object sender, RoutedEventArgs e) => ViewModel?.Open(SelectedRow);

@@ -18,4 +18,15 @@ public static class ActivityFormat
 
     public static string LastVisited(DateTimeOffset instant, TimeZoneInfo zone, CultureInfo culture)
         => TimeZoneInfo.ConvertTime(instant, zone).ToString("g", culture);
+
+    /// <summary>
+    /// What Recents is tracking, in a line: the Recents panel shows it as is,
+    /// and the header's tooltip after "Recents — ". Paused is the tracking
+    /// host's own pause, while folders are tracked.
+    /// </summary>
+    public static string TrackingSummary(int enabledRoots, int allRoots, bool paused)
+        => enabledRoots > 0 && paused ? "Tracking paused"
+            : enabledRoots > 0 ? $"Tracking {enabledRoots} {(enabledRoots == 1 ? "folder" : "folders")}"
+            : allRoots > 0 ? "Tracking is off for every folder"
+            : "No folders tracked";
 }

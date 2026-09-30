@@ -7,7 +7,9 @@
         DataContext is the shared LibraryViewModel. The list is virtualized,
         also while grouped, and the view model keeps the selected row by the
         item's identity across refreshes. The code-behind only passes clicks
-        and keys in and copies to the clipboard.
+        and keys in and copies to the clipboard. In the workspace it is the
+        Recents panel (Desk layout design §4): the tracked folders strip, Add
+        as place, and the Recents window's actions.
     -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
@@ -33,6 +35,73 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
+                <!--
+                    The Recents panel's tracked folders (ShowsTracking; Desk layout
+                    design §4): a chip scopes the list to its folder, its menu
+                    manages tracking, and Track a folder adds one. The chips are
+                    the Library's (TrackedRootChips); the actions go to the
+                    ActivityViewModel the workspace attaches.
+                -->
+                <StackPanel x:Name="TrackingArea" Visibility="Collapsed" Margin="0,0,0,10">
+                    <DockPanel LastChildFill="True">
+                        <Button DockPanel.Dock="Right" Click="TrackFolder_Click" Style="{StaticResource Button.Compact}"
+                                ToolTip="Add a folder to track" AutomationProperties.Name="Track a folder" Margin="10,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
+                                <TextBlock Text="Track a folder" Margin="7,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="TRACKED FOLDERS" Style="{StaticResource TextBlock.Caps}" Margin="0,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="TrackingSummaryText" Foreground="{DynamicResource Text.Secondary}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" />
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding TrackedRootChips}" Margin="0,8,0,0" AutomationProperties.Name="Tracked folders">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource Button.KindChip}" Click="RootChip_Click" ContextMenuOpening="RootChip_ContextMenuOpening"
+                                        ToolTip="{Binding Path}" AutomationProperties.Name="{Binding Path}"
+                                        AutomationProperties.HelpText="Shows only what is in this folder; again shows everything. Right-click to manage tracking.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Edit tracking settings…" Tag="Manage" Click="EditRoot_Click" />
+                                            <MenuItem Header="About folder…" Click="AboutRoot_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Stop tracking" Tag="Toggle" Click="ToggleRoot_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Delete tracked folder…" Tag="Manage" Click="DeleteRoot_Click" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Folder}" Margin="0,0,7,0" />
+                                        <TextBlock Text="{Binding Path}" FontFamily="{StaticResource Font.Mono}" FontSize="12.5"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="260" VerticalAlignment="Center" />
+                                        <TextBlock Text="Paused" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Text.Secondary}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Enabled}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <!-- Recents' own save problem, with Retry, as its window shows it. DataContext: the ActivityViewModel. -->
+                    <DockPanel x:Name="TrackingProblem" Margin="0,6,0,0" Visibility="Collapsed">
+                        <Button DockPanel.Dock="Right" Content="Retry save" Click="RetryTrackingSave_Click" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </DockPanel>
+                </StackPanel>
                 <!--
                     The chosen period, which clears it: shown when no Year activity
                     panel is (ShowsPeriod), so the shelf is never narrowed by a
@@ -86,8 +155,11 @@
                                 <RadioButton Content="Type" GroupName="Grouping" IsChecked="{Binding IsGroupedByType}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" />
                                 <RadioButton Content="Tag" GroupName="Grouping" IsChecked="{Binding IsGroupedByTag}"
-                                             Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0"
                                              ToolTip="One group per session tag; untagged items last" />
+                                <RadioButton Content="Folder level" GroupName="Grouping" IsChecked="{Binding IsGroupedByLevel}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
+                                             ToolTip="By depth below the tracked folder each item is in; the rest last" />
                             </StackPanel>
                         </Border>
                     </GroupBox>
@@ -192,6 +264,7 @@
                     <ContextMenu>
                         <MenuItem Header="Open" FontWeight="Bold" Click="OpenMenu_Click" />
                         <MenuItem Header="Copy path or link" Click="CopyMenu_Click" />
+                        <MenuItem x:Name="AddAsPlaceMenuItem" Header="Add as place…" Click="AddAsPlace_Click" Visibility="Collapsed" />
                         <Separator />
                         <MenuItem x:Name="ForgetMenuItem" Header="Remove from Recent Files" Click="ForgetMenu_Click" />
                     </ContextMenu>
@@ -210,6 +283,8 @@
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
                     <DataGridTextColumn Header="WHERE FROM" Binding="{Binding SourceText}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <DataGridTextColumn Header="VISITS" Binding="{Binding VisitsText}" Width="60" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <DataGridTextColumn Header="TIME" Binding="{Binding TimeText}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
                     <DataGridTextColumn Header="TAGS" Binding="{Binding TagsText}" Width="*" ElementStyle="{StaticResource Cell.Text}" />
                     <DataGridTextColumn Header="FOLDER" Binding="{Binding Folder}" Width="2*" ElementStyle="{StaticResource Cell.Path}" />
                     <DataGridTextColumn Header="LAST USED" Binding="{Binding LastUsedText}" Width="140" ElementStyle="{StaticResource Cell.Secondary}" />
