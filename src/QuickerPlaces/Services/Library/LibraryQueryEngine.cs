@@ -21,21 +21,25 @@ public enum LibrarySourceFilter
 
     /// <summary>Folders from Recents and files from Recent Files.</summary>
     Recent,
+
+    /// <summary>Files in saved sessions: the File viewer's Sessions tab (File viewer design §4).</summary>
+    Sessions,
 }
 
 /// <summary>
 /// The query's filters other than the period (configurable canvas plan D4):
 /// a kind, saved or recent, search words, and an existing Session tag. The
 /// File shelf lists items passing all of them; the year strip counts
-/// evidence for items passing all of them.
+/// evidence for items passing all of them. Also a tracked folder, and one
+/// session by name (File viewer design §5).
 /// </summary>
 public sealed record LibraryFilter(LibraryKind? Kind = null, LibrarySourceFilter Source = LibrarySourceFilter.All,
-    string Text = "", string? Tag = null, RootScope? Root = null)
+    string Text = "", string? Tag = null, RootScope? Root = null, string? Session = null)
 {
     public static LibraryFilter None { get; } = new();
 
     /// <summary>True when nothing but the kind narrows the items.</summary>
-    public bool OnlyKind => Source == LibrarySourceFilter.All && string.IsNullOrWhiteSpace(Text) && Tag is null && Root is null;
+    public bool OnlyKind => Source == LibrarySourceFilter.All && string.IsNullOrWhiteSpace(Text) && Tag is null && Root is null && Session is null;
 }
 
 /// <summary>A tracked folder the Library is narrowed to (Desk layout design §4): its root id, and its path.</summary>
@@ -164,9 +168,11 @@ public static class LibraryQueryEngine
            {
                LibrarySourceFilter.Saved => item.IsSaved,
                LibrarySourceFilter.Recent => item.IsRecent,
+               LibrarySourceFilter.Sessions => item.IsInSession,
                _ => true,
            } &&
            (filter.Tag is null || item.Tags.Contains(filter.Tag, StringComparer.OrdinalIgnoreCase)) &&
+           (filter.Session is null || item.Sessions.Contains(filter.Session, StringComparer.OrdinalIgnoreCase)) &&
            (filter.Root is null || (item.TreePath.Length > 0 && TrackedFolderPaths.LevelBelow(filter.Root.Path, item.TreePath) is not null)) &&
            LibraryIndex.Matches(item, filter.Text);
 
@@ -245,8 +251,9 @@ public static class LibraryQueryEngine
     private static SourceCoverage AddFolderHeat(LibrarySnapshot data, LibraryFilter filter,
         IReadOnlyDictionary<string, LibraryItem> everything, Dictionary<DateOnly, HeatDay> heat, List<DateOnly> starts)
     {
-        // Folders carry no Session tags, and a document or link filter leaves them out.
-        if (filter.Kind is not (null or LibraryKind.Folder) || filter.Tag is not null)
+        // Folders carry no Session tags and are in no session, and a document or link filter leaves them out.
+        if (filter.Kind is not (null or LibraryKind.Folder) || filter.Tag is not null ||
+            filter.Source == LibrarySourceFilter.Sessions || filter.Session is not null)
             return new SourceCoverage(FolderSource, CoverageState.NotApplicable);
         if (!data.RecentsAvailable)
             return new SourceCoverage(FolderSource, CoverageState.Unavailable, data.RecentsNotice ?? "Recents couldn't be read.");
@@ -344,10 +351,12 @@ public static class LibraryQueryEngine
 
         foreach (var session in data.Sessions)
         {
+            if (filter.Session is not null && !string.Equals(session.Name, filter.Session, StringComparison.OrdinalIgnoreCase))
+                continue;
             if (filter.Tag is not null && !session.Tags.Contains(filter.Tag, StringComparer.OrdinalIgnoreCase))
                 continue;
 
-            var fileFilter = filter with { Tag = null };
+            var fileFilter = filter with { Tag = null, Session = null };
             var counts = session.Files.Any(path =>
                 DocumentKinds.FromPath(path) is { } kind &&
                 everything.TryGetValue(ResourceIdentity.Key(LibraryKinds.From(kind), path), out var item) &&

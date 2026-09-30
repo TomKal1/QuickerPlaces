@@ -333,4 +333,44 @@ public sealed class LibraryQueryEngineTests
         Assert.Equal(5, scoped.Heat[Today].FolderVisits);
         Assert.Equal(1, scoped.Heat[Today].FileOpens);
     }
+
+    [Fact]
+    public void TheSessionsSource_ListsOnlySessionFiles_AndCountsNoFolderVisits()
+    {
+        var data = Snapshot(
+            sessions: new[]
+            {
+                Session("Acme", new[] { "tower" }, new[] { Plan, Budget }, Today),
+                Session("Beta", Array.Empty<string>(), new[] { Spec }, Today, Today),
+            },
+            roots: new[] { Root(new[] { (Today, new[] { Visit(Acme, 2, Today) }) }) },
+            files: new[] { File(Plan, Today) });
+
+        var sessions = Run(data, new LibraryFilter(Source: LibrarySourceFilter.Sessions));
+
+        Assert.Equal(new[] { "Budget.xlsx", "Plan.pdf", "Spec.pdf" }, Names(sessions));
+        Assert.Equal(CoverageState.NotApplicable, sessions.Coverage.Single(c => c.Source == LibraryQueryEngine.FolderSource).State);
+        Assert.Equal(0, sessions.Heat[Today].FolderVisits);
+        Assert.Equal(1, sessions.Heat[Today].FileOpens);
+        Assert.Equal((2, 1), (sessions.Heat[Today].SessionsSaved, sessions.Heat[Today].SessionsReopened));
+    }
+
+    [Fact]
+    public void ASessionFilter_ListsThatSessionsFiles_AndCountsOnlyThatSession()
+    {
+        var data = Snapshot(
+            sessions: new[]
+            {
+                Session("Acme", new[] { "tower" }, new[] { Plan, Budget }, Today),
+                Session("Beta", Array.Empty<string>(), new[] { Spec }, Today, Today),
+            },
+            files: new[] { File(Plan, Today) });
+
+        var beta = Run(data, new LibraryFilter(Source: LibrarySourceFilter.Sessions, Session: "beta"));
+
+        Assert.Equal(new[] { "Spec.pdf" }, Names(beta));
+        Assert.Equal(0, beta.Heat[Today].FileOpens);
+        Assert.Equal((1, 1), (beta.Heat[Today].SessionsSaved, beta.Heat[Today].SessionsReopened));
+        Assert.False(new LibraryFilter(Session: "Beta").OnlyKind);
+    }
 }
