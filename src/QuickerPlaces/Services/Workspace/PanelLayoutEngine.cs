@@ -85,6 +85,38 @@ public static class PanelLayoutEngine
     }
 
     /// <summary>
+    /// Places a columns layout's panels (Desk layout design §2): a left column
+    /// a third wide and a main column two-thirds wide, each a stack of its own
+    /// panels in their stored order. An empty column gives its width to the
+    /// other. When a panel can't be read at its column's width
+    /// (<see cref="MinimumWidth"/>), the columns stack instead, main first,
+    /// every panel full width and <see cref="PanelDock.None"/>: presentation
+    /// only, as reflow is. Stored docks never change here.
+    /// </summary>
+    public static IReadOnlyList<PanelPlacement> PackColumns(IEnumerable<PanelInstance> panels, double width)
+    {
+        var shown = panels.Where(p => !p.Hidden).ToList();
+        var left = shown.Where(p => PanelDocks.IsLeft(p.Dock)).ToList();
+        var main = shown.Where(p => !PanelDocks.IsLeft(p.Dock)).ToList();
+        var leftSpan = main.Count == 0 ? PanelSpans.Full : PanelSpans.Third;
+        var mainSpan = left.Count == 0 ? PanelSpans.Full : PanelSpans.TwoThirds;
+
+        var fits = left.All(p => PanelWidth(leftSpan, width) >= MinimumWidth(p.Type)) &&
+                   main.All(p => PanelWidth(mainSpan, width) >= MinimumWidth(p.Type));
+        if (!fits)
+        {
+            return main.Concat(left)
+                .Select((p, row) => new PanelPlacement(p.Id, p.Type, row, 0, PanelSpans.Full, PanelSpans.Full))
+                .ToList();
+        }
+
+        var mainColumn = left.Count == 0 ? 0 : PanelSpans.Third;
+        return left.Select((p, row) => new PanelPlacement(p.Id, p.Type, row, 0, leftSpan, leftSpan, PanelDock.Left))
+            .Concat(main.Select((p, row) => new PanelPlacement(p.Id, p.Type, row, mainColumn, mainSpan, mainSpan, PanelDock.Main)))
+            .ToList();
+    }
+
+    /// <summary>
     /// The narrowest a panel of this type can be read at, in device-independent
     /// pixels. The Year activity panel switches to a month view below the
     /// year's width, so its minimum is the month view's; Saved places is a
@@ -157,14 +189,47 @@ public static class PanelLayoutEngine
 
         return new DropTarget(beforeIndex < order.Count ? order[beforeIndex] : null);
     }
+
+    /// <summary>
+    /// A drop in a columns layout while dragging <paramref name="draggedId"/>
+    /// over <paramref name="targetId"/>, above it or, when
+    /// <paramref name="after"/>, below it: the target's column, and the panel
+    /// the dragged one would go before in the stored order (null: last). Null
+    /// when the drop would leave it where it is. <paramref name="panels"/> are
+    /// the shown panels in stored order.
+    /// </summary>
+    public static ColumnDropTarget? ColumnDrop(IReadOnlyList<PanelInstance> panels, string draggedId, string targetId, bool after)
+    {
+        var dragged = panels.FirstOrDefault(p => p.Id == draggedId);
+        var target = panels.FirstOrDefault(p => p.Id == targetId);
+        if (dragged is null || target is null || draggedId == targetId)
+            return null;
+
+        var dock = PanelDocks.Normalize(target.Dock);
+        var column = panels.Where(p => PanelDocks.Normalize(p.Dock) == dock).Select(p => p.Id).ToList();
+        var others = column.Where(id => id != draggedId).ToList();
+        var at = others.IndexOf(targetId) + (after ? 1 : 0);
+        var before = at < others.Count ? others[at] : null;
+
+        if (PanelDocks.Normalize(dragged.Dock) == dock)
+        {
+            var index = column.IndexOf(draggedId);
+            var currentBefore = index + 1 < column.Count ? column[index + 1] : null;
+            if (currentBefore == before)
+                return null;
+        }
+
+        return new ColumnDropTarget(dock, before);
+    }
 }
 
 /// <summary>
 /// One panel's place: its row, first column (0–11) and the columns it is
-/// shown across. <see cref="StoredSpan"/> is its own width, which
+/// shown across. In a columns layout, <see cref="Row"/> is its place in its own column (<see cref="Dock"/>).
+/// <see cref="StoredSpan"/> is its own width, which
 /// <see cref="Span"/> exceeds when a narrow canvas makes it wider.
 /// </summary>
-public sealed record PanelPlacement(string PanelId, string Type, int Row, int Column, int Span, int StoredSpan)
+public sealed record PanelPlacement(string PanelId, string Type, int Row, int Column, int Span, int StoredSpan, PanelDock Dock = PanelDock.None)
 {
     public PanelPlacement(string panelId, string type, int row, int column, int span)
         : this(panelId, type, row, column, span, span)
@@ -177,3 +242,14 @@ public sealed record PanelPlacement(string PanelId, string Type, int Row, int Co
 
 /// <summary>Where a dropped panel goes: just before <see cref="BeforePanelId"/>, or last when that is null.</summary>
 public sealed record DropTarget(string? BeforePanelId);
+
+/// <summary>Which column of a columns layout a placement is in: none in a rows layout, or when a narrow window stacks the columns.</summary>
+public enum PanelDock
+{
+    None,
+    Left,
+    Main,
+}
+
+/// <summary>Where a panel dropped in a columns layout goes: into <see cref="Dock"/>, just before <see cref="BeforePanelId"/> in the stored order, or last.</summary>
+public sealed record ColumnDropTarget(string Dock, string? BeforePanelId);

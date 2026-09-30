@@ -192,4 +192,84 @@ public sealed class PanelLayoutEngineTests
     [InlineData("shelf", "nope", false)]
     public void ADropThatChangesNothing_IsNoDrop(string dragged, string target, bool after)
         => Assert.Null(PanelLayoutEngine.Drop(Atlas, dragged, target, after));
+
+    // ---------------------------------------------------------------
+    // Columns layouts (Desk layout design §2)
+    // ---------------------------------------------------------------
+
+    private static PanelInstance Docked(string type, string? dock, bool hidden = false)
+        => new() { Id = type, Type = type, Span = PanelSpans.Third, Dock = dock, Hidden = hidden };
+
+    private static string DescribeDocked(PanelPlacement p) => $"{p.PanelId}@{p.Row}:{p.Column}+{p.Span}/{p.Dock}";
+
+    private static readonly PanelInstance[] Desk =
+    {
+        Docked(PanelTypes.Sessions, PanelDocks.Left),
+        Docked(PanelTypes.Places, PanelDocks.Main),
+        Docked(PanelTypes.Shelf, PanelDocks.Main),
+        Docked(PanelTypes.Activity, PanelDocks.Main),
+    };
+
+    [Fact]
+    public void Columns_StackEachColumn_LeftAThird_MainTwoThirds()
+    {
+        var placed = PanelLayoutEngine.PackColumns(Desk, 1800);
+
+        Assert.Equal(new[] { "sessions@0:0+4/Left", "places@0:4+8/Main", "shelf@1:4+8/Main", "activity@2:4+8/Main" },
+            placed.Select(DescribeDocked));
+    }
+
+    [Fact]
+    public void AnEmptyColumn_GivesItsWidthToTheOther()
+    {
+        var mainOnly = PanelLayoutEngine.PackColumns(new[] { Docked(PanelTypes.Shelf, PanelDocks.Main), Docked(PanelTypes.Sessions, PanelDocks.Left, hidden: true) }, 1800);
+        var leftOnly = PanelLayoutEngine.PackColumns(new[] { Docked(PanelTypes.Sessions, PanelDocks.Left) }, 1800);
+
+        Assert.Equal(new[] { "shelf@0:0+12/Main" }, mainOnly.Select(DescribeDocked));
+        Assert.Equal(new[] { "sessions@0:0+12/Left" }, leftOnly.Select(DescribeDocked));
+    }
+
+    [Fact]
+    public void AnUnknownDock_ReadsAsMain()
+    {
+        var placed = PanelLayoutEngine.PackColumns(new[] { Docked(PanelTypes.Sessions, PanelDocks.Left), Docked(PanelTypes.Shelf, "sideways") }, 1800);
+
+        Assert.Equal(PanelDock.Main, placed.Single(p => p.PanelId == PanelTypes.Shelf).Dock);
+    }
+
+    [Fact]
+    public void ANarrowWindow_StacksTheColumns_MainFirst_FullWidth()
+    {
+        // A third of 700 is too narrow for Sessions (300).
+        var placed = PanelLayoutEngine.PackColumns(Desk, 700);
+
+        Assert.Equal(new[] { "places@0:0+12/None", "shelf@1:0+12/None", "activity@2:0+12/None", "sessions@3:0+12/None" },
+            placed.Select(DescribeDocked));
+    }
+
+    [Fact]
+    public void ColumnDrop_ReordersWithinAColumn()
+    {
+        var drop = PanelLayoutEngine.ColumnDrop(Desk, PanelTypes.Activity, PanelTypes.Places, after: false);
+
+        Assert.Equal(new ColumnDropTarget(PanelDocks.Main, PanelTypes.Places), drop);
+    }
+
+    [Fact]
+    public void ColumnDrop_AcrossColumns_TakesTheTargetsColumn()
+    {
+        var below = PanelLayoutEngine.ColumnDrop(Desk, PanelTypes.Shelf, PanelTypes.Sessions, after: true);
+        var above = PanelLayoutEngine.ColumnDrop(Desk, PanelTypes.Shelf, PanelTypes.Sessions, after: false);
+
+        Assert.Equal(new ColumnDropTarget(PanelDocks.Left, null), below);
+        Assert.Equal(new ColumnDropTarget(PanelDocks.Left, PanelTypes.Sessions), above);
+    }
+
+    [Theory]
+    [InlineData("shelf", "shelf", false)]
+    [InlineData("shelf", "places", true)]
+    [InlineData("shelf", "activity", false)]
+    [InlineData("activity", "shelf", true)]
+    public void ColumnDrop_WhereItAlreadyIs_IsNoDrop(string dragged, string target, bool after)
+        => Assert.Null(PanelLayoutEngine.ColumnDrop(Desk, dragged, target, after));
 }
