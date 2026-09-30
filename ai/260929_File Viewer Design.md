@@ -47,7 +47,7 @@ Built-ins (`Services/Workspace/BuiltInLayouts.cs`):
 
 ## 3. The Files panel type
 
-- `PanelTypes.Files = "files"`, display name **"Files"**. It is known and available. Its default span is full, and its minimum width is Recents'.
+- `PanelTypes.Files = "files"`, display name **"Files"**. It is known and available. Its default span is full, and its minimum width is Saved places' (560), since it holds that table.
 - **Files covers Saved places and Recents**, so a layout holds Files or those panels, never both:
   - `AddablePanelTypes` leaves out Files while a Saved places or Recents panel is shown, and leaves those out while Files is shown.
   - Hidden panels don't count: hiding Files makes Saved places and Recents addable again, and the other way round.
@@ -76,11 +76,11 @@ Files hosts two existing views:
 - **The Show All / Saved / Recent segment** is hidden inside Files, because the tabs replace it. Recents panels outside Files keep it.
 - **The period:** a day, week or month picked in Year activity narrows Recent, Sessions and All, as it narrows the shelf today. The Saved places tab is not narrowed.
 - **Search:**
-  - The workspace search box searches the Library grid, as today.
-  - On the Saved places tab it searches that table.
-  - Down from the search box moves into whichever tab is shown.
+  - The workspace search box searches the Library grid (Recent, Sessions, All), as today.
+  - The Saved places tab keeps the table's own search box, as the Saved places panel does in Desk · separate panels.
+  - Down from the workspace search box moves into the Library grid when a Library tab is shown.
 - **Empty tabs** say why:
-  - Recent: "Nothing recent in this period.", or the tracking hint when no folder is tracked.
+  - Recent: "Nothing recent yet. Track a folder above, or turn on Recent Files." when nothing is tracked and Recent Files holds nothing; otherwise the existing texts, which cover periods and searches.
   - Sessions: "No session files yet. Save open files as a session from the Sessions panel."
   - All: the existing empty text.
 
@@ -99,29 +99,30 @@ Files hosts two existing views:
 - **Renamed or deleted sessions:**
   - A session renamed while it is the scope keeps the scope, under its new name.
   - A session deleted while it is the scope clears the scope.
-- **What the scope matches.** Session names are unique (`SessionStore` refuses a used name), so the scope is the session's name. It is not saved with the layout.
+- **What the scope matches.** The scope holds the session's id. Each refresh narrows the list to the session's current name (the Library index knows sessions by name, and `SessionStore` refuses a used name). That is how a rename keeps the scope and a deletion clears it. The scope is not saved with the layout.
 
 ## 6. Model and view-model changes (UI-free, tested)
 
 - `LibrarySourceFilter` gains **`Sessions`**: items in at least one session. `Saved` keeps its meaning (saved places and session files) for the Library window.
 - `LibraryFilter` gains `string? Session`: only items whose sessions include it. `OnlyKind` requires it null. The year strip counts only those items' evidence, as it does for a tag.
 - `LibraryViewModel`:
-  - a `Tab` (Recent / Sessions / All) that sets the source and raises the column flags: `ShowsVisitsAndTime`, `ShowsSessions`, `ShowsSourceMarkers`, `ShowsWhereFrom`, `ShowsTrackedFolders`, and `ShowsFolderLevel`, which covers Folder level grouping;
-  - `SessionScope` and `ScopeToSession(name)`, plus `ClearSessionScope()`;
+  - a `Tab` (Recent / Sessions / All) that sets the source and raises the column flags: `ShowsVisitsAndTime`, `ShowsSessions`, `ShowsSourceMarkers`, `ShowsWhereFrom`, `ShowsTrackedFolders`, `ShowsTags`, `ShowsSourceChoice` (the Show segment), and `ShowsFolderLevel`, which covers Folder level grouping. With no tab (a Recents panel, the Library window), everything shows as today;
+  - `SessionScope` (an id) and `ScopeToSession(id)`, plus `ClearSessionScope()`;
   - on Sessions, a Folder level grouping falls back to Type.
 - `LibraryRowViewModel`: `IsSavedPlace`, `IsRecent` and `IsInSession` for the markers, `MarkersText` for automation, and `SessionsText`.
-- `SessionsViewModel`: `CanViewFiles`, set by the workspace while a Files panel is shown.
+- `SessionsPanel.ShowsViewFiles`, a view flag the workspace sets while a Files panel is shown. No view-model change is needed.
 - `PanelTypes`: `Files`, and the rule that Files excludes Saved places and Recents, in `WorkspaceLayoutService.AddablePanelTypes`.
 
 ## 7. Views
 
 - New `Views/Panels/FilesPanel.xaml(.cs)`: a tab strip (the app's segment style, as Group by uses) above a content area that holds the `PlacesPanel` and the `FileShelfPanel`. Only one is visible at a time. Both are created once and kept, so switching tabs keeps each one's selection and scroll.
-- `FileShelfPanel`: binds each column's visibility and the Show segment's visibility to the view-model flags. It adds the Source template column and the session scope chip.
+- `FileShelfPanel`: binds each column's visibility and the Show segment's visibility to the view-model flags. It adds the Source template column and the session scope chip. Its radio buttons drop `GroupName`, so the two shelves one window can hold don't uncheck each other.
 - `WorkspaceView.CreateContent`:
   - a `files` case builds the Files panel;
-  - the workspace's `_shelf` and `_placesPanel` references point at its inner views, so search, the Down key, tracking and the period work as they do with separate panels;
+  - the workspace keeps a list of its shelves: a Recents panel's and the File viewer's. The one on screen takes the search box's Down key. Each shows the period chip and follows tracking changes, as they work with separate panels.
+  - the File viewer gives the Library its tab only while it is on screen. When it's hidden, or another layout shows, the tab is null, so a Recents panel shows as today.
   - it keeps the Files panel's content once made, as it does for every panel, so the tab survives Arrange and layout switches while the app runs.
-- `SessionsPanel`: the card context menu, raising `ViewFilesRequested(name)`. `WorkspaceView` handles it by calling the Files panel's `ShowSession(name)`.
+- `SessionsPanel`: the card context menu, raising `ViewFilesRequested(id)`. `WorkspaceView` handles it by calling the Files panel's `ShowSession(id)`.
 
 ## 8. Testing
 
