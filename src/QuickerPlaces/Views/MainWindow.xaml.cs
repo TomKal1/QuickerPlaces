@@ -35,7 +35,6 @@ public partial class MainWindow : Window
     private GlobalHotkey? _globalHotkey;
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
-    private Point _bubbleDragStartPoint;
     private readonly Action _focusSearch;
     private readonly WorkspaceView? _workspaceView;
 
@@ -74,8 +73,18 @@ public partial class MainWindow : Window
         var library = new LibraryViewModel(placesService, sessionStore, activityStore, recentFilesStore,
             new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
         _workspaceView = new WorkspaceView();
-        _workspaceView.Attach(new WorkspaceViewModel(workspaceLayout, library), viewModel, sessionStore,
+        var workspace = new WorkspaceViewModel(workspaceLayout, library);
+        _workspaceView.Attach(workspace, viewModel, sessionStore,
             new WindowsOpenDocumentProbe(recentItems), recentFilesHost, activityHost);
+
+        // Desk shows favourites as a panel; the strip is for layouts that don't (Desk layout design §5).
+        void ShowFavouritesStrip() => FavouritesStrip.Visibility = workspace.ShowsFavouritesPanel ? Visibility.Collapsed : Visibility.Visible;
+        workspace.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WorkspaceViewModel.ShowsFavouritesPanel))
+                ShowFavouritesStrip();
+        };
+        ShowFavouritesStrip();
         MainContent.Content = _workspaceView;
         _focusSearch = _workspaceView.FocusSearch;
         LibraryButton.Visibility = Visibility.Collapsed;
@@ -415,92 +424,5 @@ public partial class MainWindow : Window
             viewModel.PauseStatusTimer();
         else
             viewModel.ResumeStatusTimer();
-    }
-
-    // -----------------------------------------------------------------
-    // Favourite bubble drag-to-reorder (SI §6.4). A Button already
-    // consumes the mouse for its own Click, so reordering is driven from
-    // Preview* events: PreviewMouseLeftButtonDown records where the drag
-    // could start, PreviewMouseMove checks whether the pointer has moved
-    // past the OS drag threshold and — only then — starts a WPF drag/drop
-    // operation. A plain click (no meaningful movement) never reaches
-    // DoDragDrop, so it still fires the Button's own Click/Open normally.
-    // -----------------------------------------------------------------
-
-    private void Bubble_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        => _bubbleDragStartPoint = e.GetPosition(null);
-
-    private void Bubble_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed)
-            return;
-
-        if (sender is not Button { DataContext: PlaceViewModel place } button)
-            return;
-
-        var current = e.GetPosition(null);
-        var movedX = System.Math.Abs(current.X - _bubbleDragStartPoint.X);
-        var movedY = System.Math.Abs(current.Y - _bubbleDragStartPoint.Y);
-
-        if (movedX < SystemParameters.MinimumHorizontalDragDistance &&
-            movedY < SystemParameters.MinimumVerticalDragDistance)
-            return;
-
-        DragDrop.DoDragDrop(button, new DataObject(typeof(PlaceViewModel), place), DragDropEffects.Move);
-    }
-
-    private void FavouritesItemsControl_DragOver(object sender, DragEventArgs e)
-    {
-        e.Effects = e.Data.GetDataPresent(typeof(PlaceViewModel)) ? DragDropEffects.Move : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    private void FavouritesItemsControl_Drop(object sender, DragEventArgs e)
-    {
-        if (!e.Data.GetDataPresent(typeof(PlaceViewModel)))
-            return;
-
-        if (e.Data.GetData(typeof(PlaceViewModel)) is not PlaceViewModel dragged)
-            return;
-
-        if (DataContext is not MainViewModel viewModel)
-            return;
-
-        var dropPosition = e.GetPosition(FavouritesItemsControl);
-        var targetPlace = FindPlaceUnderPoint(dropPosition);
-
-        // Dropped back onto itself (a short wobble rather than a real
-        // move): leave it where it was. Only a drop on empty space — past
-        // the last bubble, or in a gap — means "move to the end".
-        if (ReferenceEquals(targetPlace, dragged))
-            return;
-
-        var items = viewModel.FavouritePlaces;
-        var targetIndex = targetPlace is not null
-            ? items.IndexOf(targetPlace)
-            : items.Count - 1;
-
-        viewModel.MoveFavourite(dragged, targetIndex);
-    }
-
-    /// <summary>
-    /// Walks up from whatever visual was hit at <paramref name="point"/>
-    /// (inside FavouritesItemsControl) until it finds an element whose
-    /// DataContext is a PlaceViewModel — i.e. which bubble, if any, the
-    /// drop landed on.
-    /// </summary>
-    private PlaceViewModel? FindPlaceUnderPoint(Point point)
-    {
-        var hit = VisualTreeHelper.HitTest(FavouritesItemsControl, point)?.VisualHit;
-
-        while (hit is not null)
-        {
-            if (hit is FrameworkElement { DataContext: PlaceViewModel place })
-                return place;
-
-            hit = VisualTreeHelper.GetParent(hit);
-        }
-
-        return null;
     }
 }

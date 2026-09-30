@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:converters="clr-namespace:QuickerPlaces.Converters"
+        xmlns:panels="clr-namespace:QuickerPlaces.Views.Panels"
         mc:Ignorable="d"
         Title="{Binding AppName}"
         Height="650" Width="1000"
@@ -16,19 +17,6 @@
         <converters:BoolToGridLengthConverter x:Key="BoolToGridLengthConverter" />
         <converters:CollectionCountToVisibilityConverter x:Key="CollectionCountToVisibilityConverter" />
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-
-        <!-- SI §6.4: a favourite card's own menu offers removal directly. -->
-        <ContextMenu x:Key="BubbleContextMenu">
-            <MenuItem Header="Open" FontWeight="Bold"
-                      Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Copy folder or link"
-                      Command="{Binding PlacementTarget.Tag.CopyResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Remove from favourites"
-                      Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-        </ContextMenu>
     </Window.Resources>
 
     <!--
@@ -173,62 +161,11 @@
         <Control Grid.Row="2" Style="{StaticResource TrimBand}" Margin="-20,16,-20,14" />
 
         <!--
-            Favourites (SI §6.4): leather cards; click opens, drag reorders
-            (Bubble_PreviewMouseMove starts the drag, FavouritesItemsControl_Drop
-            calls MainViewModel.MoveFavourite).
+            Favourites (SI §6.4): the strip under the header. In the workspace
+            it shows only while the layout has no Favourites panel (Desk
+            layout design §5).
         -->
-        <StackPanel Grid.Row="3" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="FAVOURITES" Style="{StaticResource TextBlock.Caps}" />
-                <TextBlock Text="Ctrl+1 to Ctrl+9 open them from the keyboard" Style="{StaticResource TextBlock.Hint}"
-                           Foreground="{DynamicResource Text.Tertiary}" Margin="10,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-            <Grid Margin="0,8,0,0">
-                <TextBlock Text="Right-click a place below and choose &quot;Toggle favourite&quot; to pin it here."
-                           Foreground="{DynamicResource Text.Tertiary}" Margin="0,0,0,8"
-                           Visibility="{Binding FavouritePlaces.Count, Converter={StaticResource CollectionCountToVisibilityConverter}}" />
-                <ItemsControl x:Name="FavouritesItemsControl" ItemsSource="{Binding FavouritePlaces}"
-                              AllowDrop="True" DragOver="FavouritesItemsControl_DragOver" Drop="FavouritesItemsControl_Drop">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Button Style="{StaticResource Button.Favourite}"
-                                    ToolTip="{Binding ToolTipText}"
-                                    Tag="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext}"
-                                    ContextMenu="{StaticResource BubbleContextMenu}"
-                                    Command="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.OpenCommand}"
-                                    CommandParameter="{Binding}"
-                                    AutomationProperties.Name="{Binding Alias}"
-                                    PreviewMouseLeftButtonDown="Bubble_PreviewMouseLeftButtonDown"
-                                    PreviewMouseMove="Bubble_PreviewMouseMove">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border>
-                                        <Border.Style>
-                                            <Style TargetType="Border" BasedOn="{StaticResource Border.FavouriteNumber}">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding FavouriteShortcut}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <TextBlock Text="{Binding FavouriteShortcut}" FontSize="12" FontWeight="Bold"
-                                                   Foreground="{DynamicResource On.Leather.Badge}"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    </Border>
-                                    <Path Style="{StaticResource Icon.PlaceType}" />
-                                    <TextBlock Text="{Binding Alias}" Margin="7,0,0,0" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
-        </StackPanel>
+        <panels:FavouritesPanel x:Name="FavouritesStrip" Grid.Row="3" Margin="0,0,0,10" />
 
         <!--
             The main content: the places list (PlacesPanel), or with the

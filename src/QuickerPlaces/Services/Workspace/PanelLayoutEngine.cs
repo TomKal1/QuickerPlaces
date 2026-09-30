@@ -120,7 +120,7 @@ public static class PanelLayoutEngine
     /// The narrowest a panel of this type can be read at, in device-independent
     /// pixels. The Year activity panel switches to a month view below the
     /// year's width, so its minimum is the month view's; Saved places is a
-    /// four-column table.
+    /// four-column table. Favourites' cards wrap, so it reads narrow.
     /// </summary>
     public static double MinimumWidth(string type) => type switch
     {
@@ -128,6 +128,7 @@ public static class PanelLayoutEngine
         PanelTypes.Shelf => 460,
         PanelTypes.Sessions => 300,
         PanelTypes.Places => 560,
+        PanelTypes.Favourites => 200,
         _ => 280,
     };
 

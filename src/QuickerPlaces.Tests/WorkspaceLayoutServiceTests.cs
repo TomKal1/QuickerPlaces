@@ -184,7 +184,7 @@ public sealed class WorkspaceLayoutServiceTests
         var service = NewService(NewStorage());
         service.BeginArrange();
 
-        Assert.Equal(new[] { PanelTypes.Places }, service.AddablePanelTypes);
+        Assert.Equal(new[] { PanelTypes.Places, PanelTypes.Favourites }, service.AddablePanelTypes);
         Assert.False(service.AddPanel(PanelTypes.Shelf)); // already shown
         Assert.False(service.AddPanel(PanelTypes.Collections)); // not built yet
 
@@ -304,7 +304,7 @@ public sealed class WorkspaceLayoutServiceTests
             service.Hide(panel.Id);
 
         Assert.Empty(service.VisiblePanels);
-        Assert.Equal(new[] { PanelTypes.Activity, PanelTypes.Shelf, PanelTypes.Sessions, PanelTypes.Places }, service.AddablePanelTypes);
+        Assert.Equal(new[] { PanelTypes.Activity, PanelTypes.Shelf, PanelTypes.Sessions, PanelTypes.Places, PanelTypes.Favourites }, service.AddablePanelTypes);
     }
 
     // ---------------------------------------------------------------

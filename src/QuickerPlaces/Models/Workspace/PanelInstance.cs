@@ -83,11 +83,12 @@ public static class PanelTypes
     public const string Shelf = "shelf";
     public const string Sessions = "sessions";
     public const string Places = "places";
+    public const string Favourites = "favourites";
     public const string Collections = "collections";
     public const string Searches = "searches";
 
     /// <summary>Every type this build can recognise, in Add panel order.</summary>
-    public static readonly IReadOnlyList<string> Known = new[] { Activity, Shelf, Sessions, Places, Collections, Searches };
+    public static readonly IReadOnlyList<string> Known = new[] { Activity, Shelf, Sessions, Places, Favourites, Collections, Searches };
 
     /// <summary>
     /// The types that have a working panel. Collections and Saved searches
@@ -95,7 +96,7 @@ public static class PanelTypes
     /// repaired away) but not offered, and neither is a built-in layout that
     /// needs them (plan M1: no dead placeholders shipped as features).
     /// </summary>
-    public static readonly IReadOnlyList<string> Available = new[] { Activity, Shelf, Sessions, Places };
+    public static readonly IReadOnlyList<string> Available = new[] { Activity, Shelf, Sessions, Places, Favourites };
 
     public static bool IsKnown(string? type) => type is not null && ((IList<string>)Known).Contains(type);
 
@@ -108,6 +109,7 @@ public static class PanelTypes
         Shelf => "File shelf",
         Sessions => "Sessions",
         Places => "Saved places",
+        Favourites => "Favourites",
         Collections => "Collections",
         Searches => "Saved searches",
         _ => "Unavailable panel",

@@ -127,14 +127,14 @@ public sealed class WorkspaceViewModelTests
         var changed = 0;
         workspace.PanelsChanged += () => changed++;
 
-        Assert.Equal(new[] { PanelTypes.Places }, workspace.AddablePanels.Select(p => p.Type));
+        Assert.Equal(new[] { PanelTypes.Places, PanelTypes.Favourites }, workspace.AddablePanels.Select(p => p.Type));
         Assert.True(workspace.AddPanel(PanelTypes.Places));
 
         var places = workspace.Panels.Last();
         Assert.Equal((PanelTypes.Places, 2, 0, 12), (places.Type, places.Row, places.Column, places.Span));
         Assert.Equal(1, changed);
-        Assert.Empty(workspace.AddablePanels);
-        Assert.False(workspace.CanAddPanel);
+        Assert.Equal(new[] { PanelTypes.Favourites }, workspace.AddablePanels.Select(p => p.Type));
+        Assert.True(workspace.CanAddPanel);
         Assert.Equal("Added Saved places.", workspace.Status);
         workspace.SearchText = "jobs";
         Assert.Null(workspace.Status);
@@ -149,7 +149,7 @@ public sealed class WorkspaceViewModelTests
 
         Assert.True(workspace.HidePanel("shelf"));
         Assert.Equal(new[] { "activity", "sessions" }, workspace.Panels.Select(p => p.Type));
-        Assert.Equal(new[] { PanelTypes.Shelf, PanelTypes.Places }, workspace.AddablePanels.Select(p => p.Type));
+        Assert.Equal(new[] { PanelTypes.Shelf, PanelTypes.Places, PanelTypes.Favourites }, workspace.AddablePanels.Select(p => p.Type));
         Assert.Equal(new[] { "activity", "sessions" }, NewWorkspace().Panels.Select(p => p.Type));
 
         Assert.True(workspace.AddPanel(PanelTypes.Shelf));
@@ -707,5 +707,22 @@ public sealed class WorkspaceViewModelTests
 
         Assert.All(workspace.Panels, p => Assert.Equal((PanelDock.None, 12), (p.Dock, p.Span)));
         Assert.Equal(new[] { "places", "shelf", "sessions" }, workspace.Panels.Select(p => p.Id));
+    }
+
+    [Fact]
+    public void TheFavouritesStrip_IsNeededOnlyWhileNoFavouritesPanelIsShown()
+    {
+        var workspace = NewWorkspace();
+        Assert.False(workspace.ShowsFavouritesPanel);
+
+        Assert.True(workspace.AddPanel(PanelTypes.Favourites));
+        Assert.True(workspace.ShowsFavouritesPanel);
+        Assert.Equal("Added Favourites.", workspace.Status);
+
+        Assert.True(workspace.HidePanel(PanelTypes.Favourites));
+        Assert.False(workspace.ShowsFavouritesPanel);
+
+        workspace.Undo();
+        Assert.True(workspace.ShowsFavouritesPanel);
     }
 }

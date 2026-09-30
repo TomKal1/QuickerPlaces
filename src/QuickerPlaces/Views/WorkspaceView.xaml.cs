@@ -814,6 +814,9 @@ public partial class WorkspaceView : UserControl
             case PanelTypes.Places:
                 return new PlacesPanel { DataContext = _places, CollapsesWithWindow = false };
 
+            case PanelTypes.Favourites:
+                return new FavouritesPanel { DataContext = _places, ShowsTitle = false };
+
             default:
                 // A panel from a newer build, or one this build lists but hasn't made yet: kept, never dropped (D6).
                 // Resource references, not lookups, so a theme change reaches it.

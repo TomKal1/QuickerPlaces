@@ -119,6 +119,13 @@ public sealed class WorkspaceViewModel : ObservableObject
     public bool IsColumns => _layout.ActiveIsColumns;
 
     /// <summary>
+    /// True while the layout shows the Favourites panel (Desk layout design
+    /// §5). The main window shows its favourites strip only while this is
+    /// false, so favourites are never out of reach.
+    /// </summary>
+    public bool ShowsFavouritesPanel => _panels.Any(p => p.Type == PanelTypes.Favourites);
+
+    /// <summary>
     /// The canvas's width in device-independent pixels: panels too narrow
     /// there are shown wider, so they stack (D1). Presentation only; nothing
     /// is written and stored widths don't change.
@@ -649,6 +656,7 @@ public sealed class WorkspaceViewModel : ObservableObject
         OnPropertyChanged(nameof(Panels));
         OnPropertyChanged(nameof(HasPanels));
         OnPropertyChanged(nameof(IsColumns));
+        OnPropertyChanged(nameof(ShowsFavouritesPanel));
         OnPropertyChanged(nameof(AddablePanels));
         OnPropertyChanged(nameof(CanAddPanel));
         OnPropertyChanged(nameof(Layouts));
