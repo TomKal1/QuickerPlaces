@@ -212,7 +212,7 @@ public sealed class WorkspaceLayoutServiceTests
         Assert.Equal("Hide Sessions", service.UndoLabel);
         Ok(service.Undo());
         Assert.Contains(PanelTypes.Sessions, Order(service));
-        Assert.Equal("Resize File shelf", service.UndoLabel);
+        Assert.Equal("Resize Recents", service.UndoLabel);
         Ok(service.Undo());
         Assert.False(service.IsModified);
         Assert.False(service.CanUndo);

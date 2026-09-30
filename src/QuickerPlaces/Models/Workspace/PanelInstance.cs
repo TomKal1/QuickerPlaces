@@ -102,11 +102,14 @@ public static class PanelTypes
 
     public static bool IsAvailable(string? type) => type is not null && ((IList<string>)Available).Contains(type);
 
-    /// <summary>The panel's title, as Add panel and Undo name it.</summary>
+    /// <summary>
+    /// The panel's title, as Add panel and Undo name it. The shelf is Recents in the
+    /// workspace (Desk layout design §4); its stored type stays shelf.
+    /// </summary>
     public static string DisplayName(string? type) => type switch
     {
         Activity => "Year activity",
-        Shelf => "File shelf",
+        Shelf => "Recents",
         Sessions => "Sessions",
         Places => "Saved places",
         Favourites => "Favourites",

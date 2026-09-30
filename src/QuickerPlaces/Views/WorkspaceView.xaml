@@ -116,7 +116,7 @@
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              PreviewKeyDown="SearchBox_PreviewKeyDown"
                              AutomationProperties.Name="Search places, folders, files and sessions"
-                             ToolTip="Search by name, path, tag or session (Ctrl+F). Enter opens the top result; Down moves into the File shelf; Esc clears." />
+                             ToolTip="Search by name, path, tag or session (Ctrl+F). Enter opens the top result; Down moves into Recents; Esc clears." />
                     <TextBlock Grid.Column="1" Text="Search places, folders, files and sessions" IsHitTestVisible="False"
                                Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
                         <TextBlock.Style>

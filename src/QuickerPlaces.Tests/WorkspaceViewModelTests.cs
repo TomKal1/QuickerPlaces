@@ -259,7 +259,7 @@ public sealed class WorkspaceViewModelTests
         workspace.BeginArrange();
         Assert.True(workspace.IsArranging);
         Assert.True(workspace.MoveEarlier("sessions"));
-        Assert.Equal("Moved Sessions before File shelf.", workspace.Status);
+        Assert.Equal("Moved Sessions before Recents.", workspace.Status);
         Assert.True(workspace.SetSpan("sessions", PanelSpans.TwoThirds));
         Assert.Equal("Sessions is now two thirds wide.", workspace.Status);
         Assert.Equal(new[] { "activity", "sessions", "shelf" }, Types(workspace));
@@ -301,7 +301,7 @@ public sealed class WorkspaceViewModelTests
         workspace.MoveLater("activity");
         workspace.SetSpan("shelf", PanelSpans.Half);
 
-        Assert.Equal("Undo Resize File shelf", workspace.UndoText);
+        Assert.Equal("Undo Resize Recents", workspace.UndoText);
         workspace.Undo();
         Assert.Equal(PanelSpans.TwoThirds, workspace.Panels.First(p => p.Type == "shelf").StoredSpan);
         Assert.Equal("Undo Move Year activity", workspace.UndoText);
@@ -404,7 +404,7 @@ public sealed class WorkspaceViewModelTests
 
         Assert.True(workspace.SetSpan("shelf", PanelSpans.Half));
 
-        Assert.Equal("File shelf is now half wide; shown full width until the window is wider.", workspace.Status);
+        Assert.Equal("Recents is now half wide; shown full width until the window is wider.", workspace.Status);
     }
 
     // ---------------------------------------------------------------
