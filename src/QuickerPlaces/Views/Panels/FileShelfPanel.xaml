@@ -46,66 +46,66 @@
                 -->
                 <!-- Only on the File viewer's Recent tab, or with no tab (File viewer design §4). -->
                 <Border Visibility="{Binding ShowsTrackedFolders, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel x:Name="TrackingArea" Visibility="Collapsed" Margin="0,0,0,10">
-                    <DockPanel LastChildFill="True">
-                        <Button DockPanel.Dock="Right" Click="TrackFolder_Click" Style="{StaticResource Button.Compact}"
-                                ToolTip="Add a folder to track" AutomationProperties.Name="Track a folder" Margin="10,0,0,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
-                                <TextBlock Text="Track a folder" Margin="7,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <TextBlock Text="TRACKED FOLDERS" Style="{StaticResource TextBlock.Caps}" Margin="0,0,12,0" VerticalAlignment="Center" />
-                        <TextBlock x:Name="TrackingSummaryText" Foreground="{DynamicResource Text.Secondary}" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" />
-                    </DockPanel>
-                    <ItemsControl ItemsSource="{Binding TrackedRootChips}" Margin="0,8,0,0" AutomationProperties.Name="Tracked folders">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Button Style="{StaticResource Button.KindChip}" Click="RootChip_Click" ContextMenuOpening="RootChip_ContextMenuOpening"
-                                        ToolTip="{Binding Path}" AutomationProperties.Name="{Binding Path}"
-                                        AutomationProperties.HelpText="Shows only what is in this folder; again shows everything. Right-click to manage tracking.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Edit tracking settings…" Tag="Manage" Click="EditRoot_Click" />
-                                            <MenuItem Header="About folder…" Click="AboutRoot_Click" />
-                                            <Separator />
-                                            <MenuItem Header="Stop tracking" Tag="Toggle" Click="ToggleRoot_Click" />
-                                            <Separator />
-                                            <MenuItem Header="Delete tracked folder…" Tag="Manage" Click="DeleteRoot_Click" />
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Folder}" Margin="0,0,7,0" />
-                                        <TextBlock Text="{Binding Path}" FontFamily="{StaticResource Font.Mono}" FontSize="12.5"
-                                                   TextTrimming="CharacterEllipsis" MaxWidth="260" VerticalAlignment="Center" />
-                                        <TextBlock Text="Paused" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource Text.Secondary}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Enabled}" Value="False">
-                                                            <Setter Property="Visibility" Value="Visible" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <!-- Recents' own save problem, with Retry, as its window shows it. DataContext: the ActivityViewModel. -->
-                    <DockPanel x:Name="TrackingProblem" Margin="0,6,0,0" Visibility="Collapsed">
-                        <Button DockPanel.Dock="Right" Content="Retry save" Click="RetryTrackingSave_Click" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" />
-                        <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                    </DockPanel>
-                </StackPanel>
+                    <StackPanel x:Name="TrackingArea" Visibility="Collapsed" Margin="0,0,0,10">
+                        <DockPanel LastChildFill="True">
+                            <Button DockPanel.Dock="Right" Click="TrackFolder_Click" Style="{StaticResource Button.Compact}"
+                                    ToolTip="Add a folder to track" AutomationProperties.Name="Track a folder" Margin="10,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
+                                    <TextBlock Text="Track a folder" Margin="7,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <TextBlock Text="TRACKED FOLDERS" Style="{StaticResource TextBlock.Caps}" Margin="0,0,12,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="TrackingSummaryText" Foreground="{DynamicResource Text.Secondary}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite" />
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding TrackedRootChips}" Margin="0,8,0,0" AutomationProperties.Name="Tracked folders">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource Button.KindChip}" Click="RootChip_Click" ContextMenuOpening="RootChip_ContextMenuOpening"
+                                            ToolTip="{Binding Path}" AutomationProperties.Name="{Binding Path}"
+                                            AutomationProperties.HelpText="Shows only what is in this folder; again shows everything. Right-click to manage tracking.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Edit tracking settings…" Tag="Manage" Click="EditRoot_Click" />
+                                                <MenuItem Header="About folder…" Click="AboutRoot_Click" />
+                                                <Separator />
+                                                <MenuItem Header="Stop tracking" Tag="Toggle" Click="ToggleRoot_Click" />
+                                                <Separator />
+                                                <MenuItem Header="Delete tracked folder…" Tag="Manage" Click="DeleteRoot_Click" />
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Folder}" Margin="0,0,7,0" />
+                                            <TextBlock Text="{Binding Path}" FontFamily="{StaticResource Font.Mono}" FontSize="12.5"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="260" VerticalAlignment="Center" />
+                                            <TextBlock Text="Paused" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource Text.Secondary}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Enabled}" Value="False">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- Recents' own save problem, with Retry, as its window shows it. DataContext: the ActivityViewModel. -->
+                        <DockPanel x:Name="TrackingProblem" Margin="0,6,0,0" Visibility="Collapsed">
+                            <Button DockPanel.Dock="Right" Content="Retry save" Click="RetryTrackingSave_Click" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" />
+                            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </StackPanel>
                 </Border>
                 <!--
                     The chosen period, which clears it: shown when no Year activity
@@ -154,22 +154,22 @@
                 <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
                     <StackPanel Orientation="Horizontal" Margin="0,0,24,0"
                                 Visibility="{Binding ShowsSourceChoice, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <TextBlock Text="SHOW" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" />
-                    <!-- No GroupName: radios group by their parent, so two shelves in one window don't uncheck each other (File viewer design §7). -->
-                    <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Show">
-                        <Border Style="{StaticResource Border.SegmentGroup}">
-                            <StackPanel Orientation="Horizontal">
-                                <RadioButton Content="All" IsChecked="{Binding IsSourceAll}"
-                                             Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" />
-                                <RadioButton Content="Saved" IsChecked="{Binding IsSourceSaved}"
-                                             Style="{StaticResource RadioButton.Segment}" Tag="0"
-                                             ToolTip="Saved places, and files in saved sessions" />
-                                <RadioButton Content="Recent" IsChecked="{Binding IsSourceRecent}"
-                                             Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
-                                             ToolTip="Folders from Recents, and files from Recent Files" />
-                            </StackPanel>
-                        </Border>
-                    </GroupBox>
+                        <TextBlock Text="SHOW" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" />
+                        <!-- No GroupName: radios group by their parent, so two shelves in one window don't uncheck each other (File viewer design §7). -->
+                        <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Show">
+                            <Border Style="{StaticResource Border.SegmentGroup}">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="All" IsChecked="{Binding IsSourceAll}"
+                                                 Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" />
+                                    <RadioButton Content="Saved" IsChecked="{Binding IsSourceSaved}"
+                                                 Style="{StaticResource RadioButton.Segment}" Tag="0"
+                                                 ToolTip="Saved places, and files in saved sessions" />
+                                    <RadioButton Content="Recent" IsChecked="{Binding IsSourceRecent}"
+                                                 Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
+                                                 ToolTip="Folders from Recents, and files from Recent Files" />
+                                </StackPanel>
+                            </Border>
+                        </GroupBox>
                     </StackPanel>
                     <TextBlock Text="GROUP BY" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" />
                     <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Group by">
