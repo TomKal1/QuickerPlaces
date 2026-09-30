@@ -62,6 +62,9 @@ public sealed class WorkspaceLayoutService
 
     public bool ActiveIsBuiltIn => BuiltInLayouts.IsBuiltInId(ActivePresetId);
 
+    /// <summary>True when the active layout is a user layout saved with filters, which Save changes replaces with the current query (D3).</summary>
+    public bool ActiveHasFilters => FindPreset(ActivePresetId)?.Filters is not null;
+
     public string ActiveName => NameOf(ActivePresetId);
 
     /// <summary>The panels shown, in order, hidden ones included. Copies: change them through this service.</summary>
@@ -173,13 +176,18 @@ public sealed class WorkspaceLayoutService
 
     public bool IsArranging => _arrangeSnapshot is not null;
 
-    /// <summary>Starts Arrange mode, remembering the arrangement to go back to on Revert.</summary>
+    /// <summary>
+    /// Starts Arrange mode, remembering the arrangement to go back to on
+    /// Revert. Undo in Arrange mode steps back through the draft only, so an
+    /// offer from before it (a Hide made outside, a Restore) ends here.
+    /// </summary>
     public void BeginArrange()
     {
         if (IsArranging)
             return;
 
         _arrangeSnapshot = Clone(_panels);
+        _undo.Clear();
     }
 
     /// <summary>Done: keeps the draft as the working arrangement and writes it once.</summary>
@@ -291,6 +299,15 @@ public sealed class WorkspaceLayoutService
     }
 
     /// <summary>
+    /// Hide outside Arrange mode (M4): one step, kept and written at once,
+    /// with Undo. In Arrange mode it is a draft edit, as <see cref="Hide"/>.
+    /// </summary>
+    public bool HideNow(string panelId, out PersistenceResult persistence) => EditNow(() => Hide(panelId), out persistence);
+
+    /// <summary>Add panel outside Arrange mode (M4): one step, kept and written at once, with Undo. In Arrange mode, a draft edit.</summary>
+    public bool AddPanelNow(string type, out PersistenceResult persistence) => EditNow(() => AddPanel(type), out persistence);
+
+    /// <summary>
     /// Restore saved layout (D2): shows the active layout's definition again,
     /// clearing its working changes (for a built-in, Restore built-in layout).
     /// In Arrange mode it changes the draft; otherwise it is written at once.
@@ -348,6 +365,14 @@ public sealed class WorkspaceLayoutService
     /// Arrange mode began.
     /// </summary>
     public ValidationResult SaveAsNew(string? name, bool includeFilters, out string? newId, out PersistenceResult persistence)
+        => SaveAsNew(name, includeFilters ? Query : null, out newId, out persistence);
+
+    /// <summary>
+    /// Save as new with the filters to keep, or none (M5): the Save dialog
+    /// may keep a chosen week as "this week". The new layout then shows
+    /// exactly what it saved.
+    /// </summary>
+    public ValidationResult SaveAsNew(string? name, WorkspaceQuery? filters, out string? newId, out PersistenceResult persistence)
     {
         newId = null;
         persistence = PersistenceResult.Ok();
@@ -364,15 +389,29 @@ public sealed class WorkspaceLayoutService
             Id = NewPresetId(),
             Name = cleanName,
             Panels = shown,
-            Filters = includeFilters ? Query.Clone() : null,
+            Filters = filters?.Clone(),
         };
         _document.Presets.Add(preset);
         ActivePresetId = preset.Id;
         _panels = Clone(shown);
+        if (filters is not null)
+            Query = filters.Clone();
 
         newId = preset.Id;
         persistence = Persist();
         return ValidationResult.Ok();
+    }
+
+    /// <summary>
+    /// The name Save as new suggests: "My Activity Atlas" from a built-in,
+    /// "Mine copy" from a user layout (M5). Always unused.
+    /// </summary>
+    public string SuggestedNewName()
+    {
+        var baseName = ActiveIsBuiltIn ? $"My {ActiveName}" : ActiveName;
+        return _document.Presets.Any(p => string.Equals(p.Name, baseName, StringComparison.OrdinalIgnoreCase))
+            ? WorkspaceValidation.UniqueName(baseName, _document.Presets)
+            : baseName;
     }
 
     /// <summary>Renames a user layout. Ids stay, so nothing that refers to it changes (D2).</summary>
@@ -587,6 +626,36 @@ public sealed class WorkspaceLayoutService
         _undo.RemoveAll(u => u.Document is null);
     }
 
+    /// <summary>
+    /// Runs one Arrange edit as a finished step: every layout is remembered
+    /// for Undo, the edit is made to a draft and the draft is kept and
+    /// written. Undo then offers it by the edit's own name ("Hide Sessions").
+    /// </summary>
+    private bool EditNow(Func<bool> edit, out PersistenceResult persistence)
+    {
+        persistence = PersistenceResult.Ok();
+        if (IsArranging)
+            return edit();
+
+        PushUndo("");
+        var undoAt = _undo.Count - 1;
+        BeginArrangeKeepingUndo();
+        if (!edit())
+        {
+            EndArrange(keepDraft: false);
+            _undo.RemoveAt(undoAt);
+            return false;
+        }
+
+        var label = _undo[^1].Label;
+        EndArrange(keepDraft: true);
+        _undo[undoAt] = _undo[undoAt] with { Label = label };
+        persistence = Persist(keepUndo: true);
+        return true;
+    }
+
+    private void BeginArrangeKeepingUndo() => _arrangeSnapshot = Clone(_panels);
+
     private bool ApplyDraft(List<PanelInstance> draft, string label)
     {
         if (SamePanels(draft, _panels))
@@ -628,4 +697,16 @@ public sealed record LayoutEntry(
     bool IsActive,
     bool IsModified,
     bool IsStartup,
-    bool HasFilters);
+    bool HasFilters)
+{
+    /// <summary>The picker's heading for this row: "Built-in" or "My layouts" (M5).</summary>
+    public string Group => IsBuiltIn ? "Built-in" : "My layouts";
+
+    /// <summary>"Modified · Starts here · Filters": what the picker says beside the name, or "".</summary>
+    public string Notes => string.Join(" · ", new[]
+    {
+        IsModified ? "Modified" : null,
+        IsStartup ? "Starts here" : null,
+        HasFilters ? "Filters" : null,
+    }.Where(n => n is not null));
+}

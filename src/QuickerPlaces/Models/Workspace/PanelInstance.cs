@@ -129,6 +129,16 @@ public static class PanelSpans
 
     public static bool IsAllowed(int span) => span is Third or Half or TwoThirds or Full;
 
+    /// <summary>A width as Arrange mode names it: "a third", "half", "two thirds", "full width".</summary>
+    public static string DisplayName(int span) => span switch
+    {
+        Third => "a third",
+        Half => "half",
+        TwoThirds => "two thirds",
+        Full => "full width",
+        _ => $"{span} columns",
+    };
+
     /// <summary>The nearest allowed span, the wider one on a tie, for repairing a hand-edited value.</summary>
     public static int Snap(int span)
     {

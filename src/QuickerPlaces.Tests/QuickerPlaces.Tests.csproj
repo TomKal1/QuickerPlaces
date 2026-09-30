@@ -136,6 +136,7 @@
     <Compile Include="..\QuickerPlaces\Services\Workspace\PanelLayoutEngine.cs" Link="Linked\Services\Workspace\PanelLayoutEngine.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionFileSet.cs" Link="Linked\Services\Sessions\SessionFileSet.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\WorkspaceViewModel.cs" Link="Linked\ViewModels\WorkspaceViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\SaveLayoutViewModel.cs" Link="Linked\ViewModels\SaveLayoutViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — configurable canvas and saved layouts
-status: in progress; M0–M3 implemented on ccr-6156d37a-mo223d (see BUILD_SUMMARY.md)
+status: in progress; M0–M5 implemented on ccr-6156d37a-mo223d (see BUILD_SUMMARY.md)
 created: 2026-09-29
 branch: codex/configurable-canvas-plan
 baseline: main at 6ba577d22cd38ac28424233b6e238f4a81fa4d81
@@ -138,6 +138,7 @@ Collection resources need their own stable reference IDs plus kind and normalize
 
 - Implement models, built-in registry, working-versus-saved state, validation and store recovery.
 - Define Activity Atlas (activity 12; shelf 8; sessions 4), Project Canvas (collections 12; shelf 8; activity 4), Personal Desk (shelf 8; searches 4; activity 8; sessions 4).
+- Added during M4, at the user's request: Files First (shelf 8; activity 4, shown as the month view; sessions 12), so the year strip is not the only starting layout. Time filtering stays with the activity calendar.
 - Keep presets requiring panels not yet implemented out of the user-facing picker until M6; do not ship dead placeholders as completed features.
 - Implement all preset operations and startup fallback in UI-free services with storage-failure tests.
 
@@ -237,8 +238,8 @@ Manual Windows acceptance, using test stores:
 - [x] M1 reliable preset domain/store implemented (UI-free; 60 tests).
 - [x] M2 shared query and reusable existing panels implemented (engine, periods, coverage, panels; not yet run on Windows).
 - [x] M3 real-data Activity Atlas integrated behind `--workspace` (shell, Saved places panel, shared search, Save as session; not yet run on Windows).
-- [ ] M4 arrangement and accessibility verified.
-- [ ] M5 personal preset UX and restart behavior verified.
+- [x] M4 arrangement and responsive layout implemented (Arrange mode, drag and keyboard, Undo, reflow, month view; not yet run on Windows, so accessibility is not yet verified).
+- [x] M5 personal preset UX and restart behavior implemented (picker, Layout menu, Save dialog with filters and relative dates, Delete with Undo, startup, backup restore; restart behaviour tested without WPF; not yet run on Windows). First delivery increment complete.
 - [ ] M6 Collections, Saved searches and all built-in presets complete.
 - [ ] M7 default workspace, regression checks and documentation complete.
 
