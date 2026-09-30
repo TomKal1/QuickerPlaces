@@ -14,7 +14,7 @@ namespace QuickerPlaces.Services.Workspace;
 ///
 /// A built-in is offered only when every panel it needs has a working panel
 /// (<see cref="PanelTypes.Available"/>): until Collections and Saved searches
-/// land in M6, that is Activity Atlas and Files First. UI-free.
+/// land in M6, that is Activity Atlas, Files First and Desk. UI-free.
 /// </summary>
 public static class BuiltInLayouts
 {
@@ -22,6 +22,7 @@ public static class BuiltInLayouts
     public const string FilesFirstId = "builtin.files-first";
     public const string ProjectCanvasId = "builtin.project-canvas";
     public const string PersonalDeskId = "builtin.personal-desk";
+    public const string DeskId = "builtin.desk";
 
     /// <summary>The prefix every built-in id has, and no user layout's id may.</summary>
     public const string IdPrefix = "builtin.";
@@ -48,6 +49,20 @@ public static class BuiltInLayouts
         (PanelTypes.Sessions, PanelSpans.Full),
     });
 
+    /// <summary>
+    /// The user's sketch (Desk layout design, 2026-09-29): favourites and
+    /// sessions in a left column; saved places, Recents and the year calendar
+    /// stacked in the main column.
+    /// </summary>
+    public static readonly BuiltInLayout Desk = new(DeskId, "Desk", 1, LayoutArrangements.Columns, new (string, int, string?)[]
+    {
+        (PanelTypes.Favourites, PanelSpans.Third, PanelDocks.Left),
+        (PanelTypes.Sessions, PanelSpans.Third, PanelDocks.Left),
+        (PanelTypes.Places, PanelSpans.Full, PanelDocks.Main),
+        (PanelTypes.Shelf, PanelSpans.TwoThirds, PanelDocks.Main),
+        (PanelTypes.Activity, PanelSpans.Full, PanelDocks.Main),
+    });
+
     public static readonly BuiltInLayout ProjectCanvas = new(ProjectCanvasId, "Project Canvas", 1, new[]
     {
         (PanelTypes.Collections, PanelSpans.Full),
@@ -64,7 +79,7 @@ public static class BuiltInLayouts
     });
 
     /// <summary>Every built-in, in picker order, offered or not.</summary>
-    public static readonly IReadOnlyList<BuiltInLayout> All = new[] { ActivityAtlas, FilesFirst, ProjectCanvas, PersonalDesk };
+    public static readonly IReadOnlyList<BuiltInLayout> All = new[] { ActivityAtlas, FilesFirst, Desk, ProjectCanvas, PersonalDesk };
 
     /// <summary>The built-ins the picker lists today.</summary>
     public static IReadOnlyList<BuiltInLayout> Offered => All.Where(b => b.IsOffered).ToList();
