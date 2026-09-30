@@ -9,11 +9,10 @@ A new built-in layout, **Desk**, from the user's sketch:
 ```
 +--------------------------------------------+
 | QP header                        buttons   |   unchanged, full width
-| Favourites ...                             |   unchanged, full width
 +-------------+------------------------------+
-| Sessions    | Saved places                 |
-|             +------------------------------+
-|             | Recents                      |   today's File shelf + the Recents window's features
+| Favourites  | Saved places                 |   Favourites: a panel now, not the top strip
++-------------+------------------------------+
+| Sessions    | Recents                      |   today's File shelf + the Recents window's features
 |             +------------------------------+
 |             | Year activity                |   the sketch's "Schedule"
 +-------------+------------------------------+
@@ -23,11 +22,14 @@ To get there:
 
 1. Layouts can be **columns** as well as **rows**: a left column a third wide and a main column two-thirds wide, each a vertical stack.
 2. The File shelf becomes the **Recents** panel and takes over everything the Recents window does.
-3. In the workspace, the header's Recents button goes.
+3. Favourites become a **Favourites** panel that Arrange can move, resize, hide and add like any other.
+4. In the workspace, the header's Recents button goes.
 
 Out of scope:
 - A rows/columns switch for existing layouts.
-- Header or favourites as panels.
+- The header as a panel.
+- Files as favourites: favourites stay saved places (folders and links).
+- Favourites display options (cards vs list, how many shown).
 - Column widths other than a third / two-thirds.
 - A new "Schedule" panel.
 - Changes to the list mode (no `--workspace`) or to tracking itself.
@@ -60,6 +62,7 @@ Out of scope:
 ## 3. Desk and Arrange mode
 
 - `BuiltInLayouts.Desk`, id `builtin.desk`, version 1, arrangement `columns`. Panels:
+  - Favourites, left.
   - Sessions, left.
   - Saved places, main.
   - Recents (`shelf`), main.
@@ -93,33 +96,46 @@ The workspace's `FileShelfPanel` (with a new `ShowsTracking = true`, off in the 
 
 After any tracking change, the Library and the year strip reload (the existing `RequestReload`), and the tray refreshes.
 
-## 5. Header and the Recents window
+## 5. The Favourites panel
+
+- **Panel type** `favourites` ("Favourites"): added to `PanelTypes.Known` and `Available`, default span a third. Add panel offers it, and Arrange moves, resizes (rows) or docks (columns) it, and hides it, like any panel. One per layout (D6's one-of-each rule).
+- **One control, two places.** The top strip in `MainWindow.xaml` (label, hint, the "Right-click a place…" empty text, the leather cards, drag to reorder) moves into a new `Views/Panels/FavouritesPanel` UserControl, as M3 did for Saved places. Its code-behind takes the drag-reorder handlers (`Bubble_PreviewMouseLeftButtonDown`, `Bubble_PreviewMouseMove`, `FavouritesItemsControl_DragOver` / `_Drop`) and the bubble context menu. It binds to the same `MainViewModel` (`FavouritePlaces`, `OpenCommand`, `MoveFavourite`, `ToggleFavouriteCommand`), so nothing about favourites' data or saving changes.
+  - List mode puts it in the top strip, exactly as today.
+  - The workspace makes it as a panel. The cards wrap to the panel's width, so a third-wide left column shows them two or three to a row.
+- **The top strip in the workspace** shows only while the active layout doesn't show the Favourites panel (absent or hidden). Activity Atlas and Files First, which have no Favourites panel, keep the strip as today, and Desk shows the panel instead. Hiding the panel brings the strip back, so favourites are never out of reach. Switching layouts updates it.
+- **Unchanged wherever favourites are shown:** Ctrl+1 to Ctrl+9 (window key bindings on `MainViewModel`, so they work even with neither strip nor panel visible), right-click → Toggle favourite in Saved places, and the number badges.
+
+## 6. Header and the Recents window
 
 - In the workspace, `MainWindow` collapses `ActivityButton`, as it already does `LibraryButton` and `SessionsButton`.
 - `UpdateActivityIndicator` keeps feeding the tray. The panel shows its own tracking line.
 - List mode is unchanged. The Recents window stays for list mode and is removed with the other legacy windows in M7.
 
-## 6. Testing
+## 7. Testing
 
 UI-free (`QuickerPlaces.Tests`):
 - `PackColumns`: two stacks and their rows; empty left or main column; narrow window (main then left, full width); hidden panels skipped; unknown dock reads as main.
 - Persistence: `arrangement` and `dock` round-trip; unknown values kept as written; an older file without them reads as rows; Save as new and Duplicate copy the arrangement.
-- `BuiltInLayouts.Desk` definition; Restore built-in; Modified after a column move.
+- `BuiltInLayouts.Desk` definition (Favourites and Sessions left); Restore built-in; Modified after a column move.
+- `PanelTypes`: Favourites is known, available, and offered by Add panel only while not shown.
+- `WorkspaceViewModel`: whether the top favourites strip shows (Favourites panel absent, hidden, shown; after switching layouts and after Undo of a Hide).
 - `WorkspaceLayoutService` / `WorkspaceViewModel`: `SetDock`, up/down within a column, drop across columns, Add panel on a columns layout, Undo and Revert of each.
 - `LibraryViewModel`: visits/time on folder rows for a period; Group by folder level (roots, levels, not tracked); the tracked-root scope, including a deleted root.
 
 On Windows, with `--workspace --data-root <scratch>`, driven by UI Automation with real mouse clicks (see the memory note on real-click testing):
-- Pick Desk: Sessions left; Saved places, Recents and Year activity stacked on the right.
+- Pick Desk: Favourites then Sessions on the left, no favourites strip at the top; Saved places, Recents and Year activity stacked on the right.
+- Favourites panel: click a card opens it; drag a card to reorder; Ctrl+1 opens the first; hide the panel and the top strip comes back.
 - Arrange: set Sessions to Main column and back; drag Recents above Saved places; Undo; Done.
 - Save as new from Desk; restart; it resumes with columns.
 - Narrow the window below the threshold: one stack, main first.
 - Track a scratch folder from the panel; right-click the chip to pause, resume, edit and delete; add a visited folder as a place.
 
-## 7. Order of work
+## 8. Order of work
 
 Each step is its own commit, with tests passing.
 
 1. Model and engine: `Arrangement`, `Dock`, `PackColumns`, persistence and validation.
 2. The view's two stacks, Desk, and Arrange for columns.
-3. The Recents panel: rename, tracked-folders strip, Visits/Time, Folder level, Add as place, save problems.
-4. Hide the header's Recents button in the workspace; `BUILD_SUMMARY.md` and user guide.
+3. The Favourites panel: extract `FavouritesPanel`, the panel type, the top strip's show/hide rule, Favourites in Desk.
+4. The Recents panel: rename, tracked-folders strip, Visits/Time, Folder level, Add as place, save problems.
+5. Hide the header's Recents button in the workspace; `BUILD_SUMMARY.md` and user guide.
