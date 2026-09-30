@@ -71,7 +71,7 @@ Out of scope:
 - **Arrange mode on a columns layout:**
   - The width choice becomes a **Column** choice: *Left column* / *Main column*, with the tooltip and automation name "Column of <panel>". Changing it moves the panel to the bottom of the other column, as one step with Undo.
   - Move earlier / later become up / down (icon and name) and swap within the column.
-  - Dragging the handle shows the drop line above or below the nearest panel in either column. Dropping on a panel in the other column changes its dock and position as one step. A drop into an empty column is offered by the empty column's area.
+  - Dragging the handle shows the drop line above or below the nearest panel in either column. Dropping on a panel in the other column changes its dock and position as one step. An empty column gives its width away, so the Column choice is how a panel moves into it.
   - The right-edge resize handle is hidden.
 - **Add panel** on a columns layout adds to the bottom of the main column, or shows a hidden panel where it was. Hide (×) is unchanged.
 - `WorkspaceLayoutService` gains `SetDock(panelId, dock)`. `MoveBefore` also takes the target's dock in a columns layout. Every edit changes the draft only, as today.
