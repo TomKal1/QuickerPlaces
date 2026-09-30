@@ -94,9 +94,15 @@ public sealed class WorkspaceLayoutService
     public IReadOnlyList<LayoutEntry> UserEntries
         => _document.Presets.Select(p => Entry(p.Id, p.Name, isBuiltIn: false)).ToList();
 
-    /// <summary>The panel types Add panel offers: available in this build, and not already shown.</summary>
+    /// <summary>The panel types Add panel offers: available in this build, not already shown, and not excluded by one shown (File viewer design §3).</summary>
     public IReadOnlyList<string> AddablePanelTypes
-        => PanelTypes.Available.Where(t => !_panels.Any(p => p.Type == t && !p.Hidden)).ToList();
+    {
+        get
+        {
+            var shown = _panels.Where(p => !p.Hidden).Select(p => p.Type).ToList();
+            return PanelTypes.Available.Where(t => !shown.Contains(t) && !PanelTypes.ExcludedBy(t, shown)).ToList();
+        }
+    }
 
     // ---------------------------------------------------------------
     // Persistence state

@@ -60,7 +60,7 @@ public sealed class WorkspaceViewModelTests
 
     [Fact]
     public void OnlyTheBuiltInsWithWorkingPanels_AreOffered()
-        => Assert.Equal(new[] { "Activity Atlas", "Files First", "Desk" }, NewWorkspace().Layouts.Select(l => l.Name));
+        => Assert.Equal(new[] { "Activity Atlas", "Files First", "Desk", "Desk · separate panels" }, NewWorkspace().Layouts.Select(l => l.Name));
 
     [Fact]
     public void FilesFirst_PutsTheShelfFirst_WithTheCalendarBesideIt_AndStartsWithoutFilters()
@@ -149,7 +149,7 @@ public sealed class WorkspaceViewModelTests
 
         Assert.True(workspace.HidePanel("shelf"));
         Assert.Equal(new[] { "activity", "sessions" }, workspace.Panels.Select(p => p.Type));
-        Assert.Equal(new[] { PanelTypes.Shelf, PanelTypes.Places, PanelTypes.Favourites }, workspace.AddablePanels.Select(p => p.Type));
+        Assert.Equal(new[] { PanelTypes.Shelf, PanelTypes.Places, PanelTypes.Favourites, PanelTypes.Files }, workspace.AddablePanels.Select(p => p.Type));
         Assert.Equal(new[] { "activity", "sessions" }, NewWorkspace().Panels.Select(p => p.Type));
 
         Assert.True(workspace.AddPanel(PanelTypes.Shelf));
@@ -436,8 +436,8 @@ public sealed class WorkspaceViewModelTests
         workspace.MoveEarlier("sessions");
         SaveAs(workspace, "Sessions first");
 
-        Assert.Equal(new[] { "Activity Atlas", "Files First", "Desk", "Just files", "Sessions first" }, workspace.Layouts.Select(l => l.Name));
-        Assert.Equal(new[] { "Built-in", "Built-in", "Built-in", "My layouts", "My layouts" }, workspace.Layouts.Select(l => l.Group));
+        Assert.Equal(new[] { "Activity Atlas", "Files First", "Desk", "Desk · separate panels", "Just files", "Sessions first" }, workspace.Layouts.Select(l => l.Name));
+        Assert.Equal(new[] { "Built-in", "Built-in", "Built-in", "Built-in", "My layouts", "My layouts" }, workspace.Layouts.Select(l => l.Group));
         Assert.Equal(new[] { "activity", "sessions", "shelf" }, Types(workspace));
 
         // A working change to a personal layout is recovered after switching away and back.
@@ -594,7 +594,7 @@ public sealed class WorkspaceViewModelTests
         workspace.Delete();
 
         Assert.Equal("Built-in layouts can't be deleted.", workspace.Status);
-        Assert.Equal(3, workspace.Layouts.Count);
+        Assert.Equal(4, workspace.Layouts.Count);
     }
 
     [Fact]
@@ -602,7 +602,7 @@ public sealed class WorkspaceViewModelTests
     {
         var workspace = NewWorkspace();
 
-        Assert.Equal(new[] { "The layout I used last", "Activity Atlas", "Files First", "Desk" }, workspace.StartupOptions.Select(o => o.Name));
+        Assert.Equal(new[] { "The layout I used last", "Activity Atlas", "Files First", "Desk", "Desk · separate panels" }, workspace.StartupOptions.Select(o => o.Name));
         Assert.True(workspace.StartupOptions[0].IsChosen);
 
         workspace.SetStartup(BuiltInLayouts.FilesFirstId);
@@ -736,7 +736,19 @@ public sealed class WorkspaceViewModelTests
         Assert.True(workspace.ShowsFavouritesPanel);
         Assert.Equal(new[] { (PanelTypes.Favourites, PanelDock.Left, 0), (PanelTypes.Sessions, PanelDock.Left, 1) },
             workspace.Panels.Where(p => p.Dock == PanelDock.Left).Select(p => (p.Type, p.Dock, p.Row)));
-        Assert.Equal(new[] { PanelTypes.Places, PanelTypes.Shelf, PanelTypes.Activity },
+        Assert.Equal(new[] { PanelTypes.Files, PanelTypes.Activity },
             workspace.Panels.Where(p => p.Dock == PanelDock.Main).Select(p => p.Type));
+    }
+
+    [Fact]
+    public void BothDesks_AreOffered_TheFileViewerOneFirst()
+    {
+        var workspace = NewWorkspace();
+        workspace.SelectedLayout = workspace.Layouts.Single(l => l.Id == BuiltInLayouts.DeskId);
+
+        Assert.Equal(new[] { PanelTypes.Files, PanelTypes.Activity },
+            workspace.Panels.Where(p => p.Dock == PanelDock.Main).Select(p => p.Type));
+        Assert.Equal("Files", workspace.Panels.Single(p => p.Type == PanelTypes.Files).Title);
+        Assert.Contains(workspace.Layouts, l => l.Id == BuiltInLayouts.DeskSeparateId && l.Name == "Desk · separate panels");
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -84,11 +85,12 @@ public static class PanelTypes
     public const string Sessions = "sessions";
     public const string Places = "places";
     public const string Favourites = "favourites";
+    public const string Files = "files";
     public const string Collections = "collections";
     public const string Searches = "searches";
 
     /// <summary>Every type this build can recognise, in Add panel order.</summary>
-    public static readonly IReadOnlyList<string> Known = new[] { Activity, Shelf, Sessions, Places, Favourites, Collections, Searches };
+    public static readonly IReadOnlyList<string> Known = new[] { Activity, Shelf, Sessions, Places, Favourites, Files, Collections, Searches };
 
     /// <summary>
     /// The types that have a working panel. Collections and Saved searches
@@ -96,7 +98,7 @@ public static class PanelTypes
     /// repaired away) but not offered, and neither is a built-in layout that
     /// needs them (plan M1: no dead placeholders shipped as features).
     /// </summary>
-    public static readonly IReadOnlyList<string> Available = new[] { Activity, Shelf, Sessions, Places, Favourites };
+    public static readonly IReadOnlyList<string> Available = new[] { Activity, Shelf, Sessions, Places, Favourites, Files };
 
     public static bool IsKnown(string? type) => type is not null && ((IList<string>)Known).Contains(type);
 
@@ -113,6 +115,7 @@ public static class PanelTypes
         Sessions => "Sessions",
         Places => "Saved places",
         Favourites => "Favourites",
+        Files => "Files",
         Collections => "Collections",
         Searches => "Saved searches",
         _ => "Unavailable panel",
@@ -124,10 +127,19 @@ public static class PanelTypes
     /// </summary>
     public static int DefaultSpan(string type) => type switch
     {
-        Activity or Places => PanelSpans.Full,
+        Activity or Places or Files => PanelSpans.Full,
         Shelf => PanelSpans.TwoThirds,
         _ => PanelSpans.Third,
     };
+
+    /// <summary>
+    /// True when a <paramref name="type"/> panel can't be added beside the
+    /// <paramref name="shown"/> types. Files holds Saved places and Recents as
+    /// tabs (File viewer design §3), so a layout shows Files or them, never both.
+    /// </summary>
+    public static bool ExcludedBy(string type, IReadOnlyCollection<string> shown) => type == Files
+        ? shown.Contains(Places) || shown.Contains(Shelf)
+        : (type is Places or Shelf) && shown.Contains(Files);
 }
 
 /// <summary>The widths a panel may take, in columns of twelve (plan D1).</summary>

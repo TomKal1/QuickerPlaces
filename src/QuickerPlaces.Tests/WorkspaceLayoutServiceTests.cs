@@ -58,8 +58,8 @@ public sealed class WorkspaceLayoutServiceTests
     {
         var service = NewService(NewStorage());
 
-        // Collections and Saved searches come in M6; until then Activity Atlas, Files First and Desk are the ones with every panel they need.
-        Assert.Equal(new[] { BuiltInLayouts.ActivityAtlasId, BuiltInLayouts.FilesFirstId, BuiltInLayouts.DeskId }, service.BuiltInEntries.Select(e => e.Id));
+        // Collections and Saved searches come in M6; until then Activity Atlas, Files First and the two Desks are the ones with every panel they need.
+        Assert.Equal(new[] { BuiltInLayouts.ActivityAtlasId, BuiltInLayouts.FilesFirstId, BuiltInLayouts.DeskId, BuiltInLayouts.DeskSeparateId }, service.BuiltInEntries.Select(e => e.Id));
         Assert.False(BuiltInLayouts.ProjectCanvas.IsOffered);
         Assert.False(BuiltInLayouts.PersonalDesk.IsOffered);
         Assert.False(service.Activate(BuiltInLayouts.PersonalDeskId).Saved);
@@ -304,7 +304,7 @@ public sealed class WorkspaceLayoutServiceTests
             service.Hide(panel.Id);
 
         Assert.Empty(service.VisiblePanels);
-        Assert.Equal(new[] { PanelTypes.Activity, PanelTypes.Shelf, PanelTypes.Sessions, PanelTypes.Places, PanelTypes.Favourites }, service.AddablePanelTypes);
+        Assert.Equal(new[] { PanelTypes.Activity, PanelTypes.Shelf, PanelTypes.Sessions, PanelTypes.Places, PanelTypes.Favourites, PanelTypes.Files }, service.AddablePanelTypes);
     }
 
     // ---------------------------------------------------------------
@@ -859,10 +859,10 @@ public sealed class WorkspaceLayoutServiceTests
     }
 
     [Fact]
-    public void Desk_PutsFavouritesAndSessionsLeft_AndTheRestInTheMainColumn()
+    public void DeskSeparate_PutsFavouritesAndSessionsLeft_AndTheRestInTheMainColumn()
     {
         var service = NewService(NewStorage());
-        Ok(service.Activate(BuiltInLayouts.DeskId));
+        Ok(service.Activate(BuiltInLayouts.DeskSeparateId));
 
         Assert.True(service.ActiveIsColumns);
         Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions }, Column(service, PanelDocks.Left));
@@ -875,5 +875,42 @@ public sealed class WorkspaceLayoutServiceTests
         Assert.True(service.IsModified);
         Ok(service.RestoreSaved());
         Assert.False(service.IsModified);
+    }
+
+    // ---------------------------------------------------------------
+    // The File viewer (File viewer design §2, §3)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void Desk_HasTheFileViewer_AndDeskSeparatePanels_TheSavedPlacesAndRecentsPanels()
+    {
+        var service = NewService(NewStorage());
+
+        Ok(service.Activate(BuiltInLayouts.DeskId));
+        Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions }, Column(service, PanelDocks.Left));
+        Assert.Equal(new[] { PanelTypes.Files, PanelTypes.Activity }, Column(service, PanelDocks.Main));
+
+        Ok(service.Activate(BuiltInLayouts.DeskSeparateId));
+        Assert.True(service.ActiveIsColumns);
+        Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions }, Column(service, PanelDocks.Left));
+        Assert.Equal(new[] { PanelTypes.Places, PanelTypes.Shelf, PanelTypes.Activity }, Column(service, PanelDocks.Main));
+    }
+
+    [Fact]
+    public void FilesAndTheSavedPlacesOrRecentsPanels_ExcludeEachOther_InAddPanel()
+    {
+        var service = NewService(NewStorage());
+        Ok(service.Activate(BuiltInLayouts.DeskId));
+        service.BeginArrange();
+
+        Assert.DoesNotContain(PanelTypes.Places, service.AddablePanelTypes);
+        Assert.DoesNotContain(PanelTypes.Shelf, service.AddablePanelTypes);
+        Assert.False(service.AddPanel(PanelTypes.Places));
+
+        Assert.True(service.Hide(PanelTypes.Files));
+        Assert.Contains(PanelTypes.Places, service.AddablePanelTypes);
+        Assert.True(service.AddPanel(PanelTypes.Shelf));
+        Assert.DoesNotContain(PanelTypes.Files, service.AddablePanelTypes);
+        Assert.False(service.AddPanel(PanelTypes.Files));
     }
 }
