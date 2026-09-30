@@ -9,7 +9,9 @@
         item's identity across refreshes. The code-behind only passes clicks
         and keys in and copies to the clipboard. In the workspace it is the
         Recents panel (Desk layout design §4): the tracked folders strip, Add
-        as place, and the Recents window's actions.
+        as place, and the Recents window's actions. In the File viewer, the
+        Library's tab picks the columns and hides the Show segment (File
+        viewer design §4).
     -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
@@ -42,6 +44,8 @@
                     the Library's (TrackedRootChips); the actions go to the
                     ActivityViewModel the workspace attaches.
                 -->
+                <!-- Only on the File viewer's Recent tab, or with no tab (File viewer design §4). -->
+                <Border Visibility="{Binding ShowsTrackedFolders, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <StackPanel x:Name="TrackingArea" Visibility="Collapsed" Margin="0,0,0,10">
                     <DockPanel LastChildFill="True">
                         <Button DockPanel.Dock="Right" Click="TrackFolder_Click" Style="{StaticResource Button.Compact}"
@@ -102,6 +106,7 @@
                         <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" VerticalAlignment="Center" />
                     </DockPanel>
                 </StackPanel>
+                </Border>
                 <!--
                     The chosen period, which clears it: shown when no Year activity
                     panel is (ShowsPeriod), so the shelf is never narrowed by a
@@ -120,6 +125,20 @@
                         </StackPanel>
                     </Border>
                 </Border>
+                <!-- A session card's View session files (File viewer design §5): the session shown, and × for every session's files. -->
+                <Border HorizontalAlignment="Left" Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28"
+                        Padding="12,0,3,0" Margin="0,0,0,8"
+                        Visibility="{Binding HasSessionScope, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Sessions}" Margin="0,0,7,0" />
+                        <TextBlock Text="{Binding SessionScopeText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button Style="{StaticResource Button.IconOnlyCompact}" Width="22" Height="22" Margin="6,0,0,0"
+                                ToolTip="Show every session's files" AutomationProperties.Name="Clear the session"
+                                Click="ClearSessionScope_Click">
+                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Close}" />
+                        </Button>
+                    </StackPanel>
+                </Border>
                 <ItemsControl ItemsSource="{Binding KindFilters}" AutomationProperties.Name="Show kind">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
@@ -133,31 +152,36 @@
                 </ItemsControl>
                 <!-- Wraps in a narrow workspace panel rather than cutting off the tag picker. -->
                 <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,24,0"
+                                Visibility="{Binding ShowsSourceChoice, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <TextBlock Text="SHOW" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" />
+                    <!-- No GroupName: radios group by their parent, so two shelves in one window don't uncheck each other (File viewer design §7). -->
                     <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Show">
                         <Border Style="{StaticResource Border.SegmentGroup}">
                             <StackPanel Orientation="Horizontal">
-                                <RadioButton Content="All" GroupName="Source" IsChecked="{Binding IsSourceAll}"
+                                <RadioButton Content="All" IsChecked="{Binding IsSourceAll}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" />
-                                <RadioButton Content="Saved" GroupName="Source" IsChecked="{Binding IsSourceSaved}"
+                                <RadioButton Content="Saved" IsChecked="{Binding IsSourceSaved}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="0"
                                              ToolTip="Saved places, and files in saved sessions" />
-                                <RadioButton Content="Recent" GroupName="Source" IsChecked="{Binding IsSourceRecent}"
+                                <RadioButton Content="Recent" IsChecked="{Binding IsSourceRecent}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
                                              ToolTip="Folders from Recents, and files from Recent Files" />
                             </StackPanel>
                         </Border>
                     </GroupBox>
-                    <TextBlock Text="GROUP BY" Style="{StaticResource TextBlock.Caps}" Margin="24,0,10,0" />
+                    </StackPanel>
+                    <TextBlock Text="GROUP BY" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" />
                     <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="Group by">
                         <Border Style="{StaticResource Border.SegmentGroup}">
                             <StackPanel Orientation="Horizontal">
-                                <RadioButton Content="Type" GroupName="Grouping" IsChecked="{Binding IsGroupedByType}"
+                                <RadioButton Content="Type" IsChecked="{Binding IsGroupedByType}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" />
-                                <RadioButton Content="Tag" GroupName="Grouping" IsChecked="{Binding IsGroupedByTag}"
+                                <RadioButton Content="Tag" IsChecked="{Binding IsGroupedByTag}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="0"
                                              ToolTip="One group per session tag; untagged items last" />
-                                <RadioButton Content="Folder level" GroupName="Grouping" IsChecked="{Binding IsGroupedByLevel}"
+                                <RadioButton Content="Folder level" IsChecked="{Binding IsGroupedByLevel}"
+                                             Visibility="{Binding ShowsFolderLevel, Converter={StaticResource BooleanToVisibilityConverter}}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
                                              ToolTip="By depth below the tracked folder each item is in; the rest last" />
                             </StackPanel>
@@ -270,6 +294,21 @@
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.Columns>
+                    <DataGridTemplateColumn x:Name="SourceColumn" Header="SOURCE" Width="76" Visibility="Collapsed">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Background="Transparent"
+                                            ToolTip="{Binding SourceText}" AutomationProperties.Name="{Binding MarkersText}">
+                                    <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Bookmark}" Margin="0,0,4,0"
+                                          Visibility="{Binding IsSavedPlace, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Clock}" Margin="0,0,4,0"
+                                          Visibility="{Binding IsRecent, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Sessions}" Margin="0"
+                                          Visibility="{Binding IsInSession, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="NAME" Width="2*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
@@ -282,10 +321,11 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
-                    <DataGridTextColumn Header="WHERE FROM" Binding="{Binding SourceText}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}" />
-                    <DataGridTextColumn Header="VISITS" Binding="{Binding VisitsText}" Width="60" ElementStyle="{StaticResource Cell.Secondary}" />
-                    <DataGridTextColumn Header="TIME" Binding="{Binding TimeText}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
-                    <DataGridTextColumn Header="TAGS" Binding="{Binding TagsText}" Width="*" ElementStyle="{StaticResource Cell.Text}" />
+                    <DataGridTextColumn x:Name="WhereFromColumn" Header="WHERE FROM" Binding="{Binding SourceText}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <DataGridTextColumn x:Name="VisitsColumn" Header="VISITS" Binding="{Binding VisitsText}" Width="60" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <DataGridTextColumn x:Name="TimeColumn" Header="TIME" Binding="{Binding TimeText}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <DataGridTextColumn x:Name="SessionsColumn" Header="SESSIONS" Binding="{Binding SessionsText}" Width="*" ElementStyle="{StaticResource Cell.Secondary}" Visibility="Collapsed" />
+                    <DataGridTextColumn x:Name="TagsColumn" Header="TAGS" Binding="{Binding TagsText}" Width="*" ElementStyle="{StaticResource Cell.Text}" />
                     <DataGridTextColumn Header="FOLDER" Binding="{Binding Folder}" Width="2*" ElementStyle="{StaticResource Cell.Path}" />
                     <DataGridTextColumn Header="LAST USED" Binding="{Binding LastUsedText}" Width="140" ElementStyle="{StaticResource Cell.Secondary}" />
                 </DataGrid.Columns>

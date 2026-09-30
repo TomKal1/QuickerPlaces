@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -18,7 +19,44 @@ namespace QuickerPlaces.Views.Panels;
 /// </summary>
 public partial class FileShelfPanel : UserControl
 {
-    public FileShelfPanel() => InitializeComponent();
+    public FileShelfPanel()
+    {
+        InitializeComponent();
+        DataContextChanged += (_, e) =>
+        {
+            if (e.OldValue is LibraryViewModel old)
+                old.PropertyChanged -= ViewModel_PropertyChanged;
+            if (e.NewValue is LibraryViewModel now)
+                now.PropertyChanged += ViewModel_PropertyChanged;
+            UpdateColumns();
+        };
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LibraryViewModel.Tab))
+            UpdateColumns();
+    }
+
+    /// <summary>
+    /// Shows the columns the File viewer's tab asks for (File viewer design §4).
+    /// With no tab, the columns are as they always were. DataGrid columns aren't
+    /// in the visual tree, so they can't bind to the DataContext: this sets them.
+    /// </summary>
+    private void UpdateColumns()
+    {
+        var vm = ViewModel;
+        static Visibility Show(bool shown) => shown ? Visibility.Visible : Visibility.Collapsed;
+
+        SourceColumn.Visibility = Show(vm?.ShowsSourceMarkers == true);
+        WhereFromColumn.Visibility = Show(vm?.ShowsWhereFrom != false);
+        VisitsColumn.Visibility = Show(vm?.ShowsVisitsAndTime != false);
+        TimeColumn.Visibility = VisitsColumn.Visibility;
+        SessionsColumn.Visibility = Show(vm?.ShowsSessions == true);
+        TagsColumn.Visibility = Show(vm?.ShowsTags != false);
+    }
+
+    private void ClearSessionScope_Click(object sender, RoutedEventArgs e) => ViewModel?.ClearSessionScope();
 
     private LibraryViewModel? ViewModel => DataContext as LibraryViewModel;
 
