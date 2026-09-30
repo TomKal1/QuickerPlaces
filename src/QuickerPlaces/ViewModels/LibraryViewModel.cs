@@ -80,6 +80,7 @@ public sealed class LibraryViewModel : ObservableObject
     private LibraryGrouping _grouping;
     private string _searchText = "";
     private string? _tag;
+    private string? _rootId;
     private DateRule _date = DateRule.All();
     private CalendarSelectionUnit _selectionUnit;
     private DateOnly? _clickedDate;
@@ -106,6 +107,7 @@ public sealed class LibraryViewModel : ObservableObject
         _calendarYear = Today().Year;
         _calendarMonth = Today().Month;
         _snapshot = Capture();
+        BuildRootChips();
         Refresh();
         OnRecentFilesSettingsChanged();
     }
@@ -132,6 +134,7 @@ public sealed class LibraryViewModel : ObservableObject
             _ => null,
         },
         Tag = _tag,
+        Root = _rootId,
         Date = _date.Clone(),
     };
 
@@ -151,6 +154,7 @@ public sealed class LibraryViewModel : ObservableObject
             _ => LibrarySourceFilter.All,
         };
         _tag = string.IsNullOrWhiteSpace(query.Tag) ? null : query.Tag;
+        _rootId = string.IsNullOrWhiteSpace(query.Root) ? null : query.Root;
         _date = query.Date?.Clone() ?? DateRule.All();
 
         OnPropertyChanged(nameof(SearchText));
@@ -159,6 +163,7 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(Tag));
         OnPropertyChanged(nameof(TagChoice));
         NotifyPeriod();
+        BuildRootChips();
         Refresh();
     }
 
@@ -252,6 +257,27 @@ public sealed class LibraryViewModel : ObservableObject
         => new[] { AnyTag }.Concat(_snapshot.Sessions.SelectMany(s => s.Tags)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(t => t, StringComparer.CurrentCultureIgnoreCase)).ToList();
+
+    /// <summary>Recents' tracked folders, as chips that scope the list (Desk layout design §4).</summary>
+    public ObservableCollection<TrackedRootChip> TrackedRootChips { get; } = new();
+
+    public bool HasTrackedRoots => TrackedRootChips.Count > 0;
+
+    /// <summary>The tracked folder the list is narrowed to, by root id, or null. A root that no longer exists scopes nothing.</summary>
+    public string? RootScope
+    {
+        get => _rootId;
+        set
+        {
+            if (!SetProperty(ref _rootId, value))
+                return;
+            BuildRootChips();
+            QueryEdited();
+        }
+    }
+
+    /// <summary>A chip's click: narrows to that tracked folder, or back to everything when it already is.</summary>
+    public void ToggleRootScope(string rootId) => RootScope = _rootId == rootId ? null : rootId;
 
     // ---------------------------------------------------------------
     // Period (D3, D4)
@@ -654,6 +680,7 @@ public sealed class LibraryViewModel : ObservableObject
     public void Reload()
     {
         _snapshot = Capture();
+        BuildRootChips();
         OnPropertyChanged(nameof(TagChoices));
         Refresh();
     }
@@ -663,6 +690,19 @@ public sealed class LibraryViewModel : ObservableObject
     // ---------------------------------------------------------------
 
     private LibrarySnapshot Capture() => LibrarySnapshot.Capture(_places, _sessions, _activity, _recentFiles, _time);
+
+    private RootScope? ScopeFor(string? rootId)
+        => rootId is not null && _snapshot.Roots.FirstOrDefault(r => r.RootId == rootId) is { } root
+            ? new RootScope(root.RootId, root.Path)
+            : null;
+
+    private void BuildRootChips()
+    {
+        TrackedRootChips.Clear();
+        foreach (var root in _snapshot.Roots)
+            TrackedRootChips.Add(new TrackedRootChip(root.RootId, root.Path, root.Enabled, root.RootId == _rootId));
+        OnPropertyChanged(nameof(HasTrackedRoots));
+    }
 
     private void QueryEdited()
     {
@@ -675,7 +715,7 @@ public sealed class LibraryViewModel : ObservableObject
     {
         var generation = ++_generation;
         var snapshot = _snapshot;
-        var filter = new LibraryFilter(_selectedKind, _source, _searchText, _tag);
+        var filter = new LibraryFilter(_selectedKind, _source, _searchText, _tag, ScopeFor(_rootId));
         var period = Period;
         var culture = _culture;
         _work.Run(() => LibraryQueryEngine.Run(snapshot, filter, period, culture), result =>
@@ -932,3 +972,6 @@ public sealed class LibraryKindFilter
     public string Label { get; }
     public bool IsSelected { get; }
 }
+
+/// <summary>One tracked folder as the Recents panel shows it: selected when the list is narrowed to it.</summary>
+public sealed record TrackedRootChip(string RootId, string Path, bool Enabled, bool IsSelected);

@@ -30,13 +30,16 @@ public enum LibrarySourceFilter
 /// evidence for items passing all of them.
 /// </summary>
 public sealed record LibraryFilter(LibraryKind? Kind = null, LibrarySourceFilter Source = LibrarySourceFilter.All,
-    string Text = "", string? Tag = null)
+    string Text = "", string? Tag = null, RootScope? Root = null)
 {
     public static LibraryFilter None { get; } = new();
 
     /// <summary>True when nothing but the kind narrows the items.</summary>
-    public bool OnlyKind => Source == LibrarySourceFilter.All && string.IsNullOrWhiteSpace(Text) && Tag is null;
+    public bool OnlyKind => Source == LibrarySourceFilter.All && string.IsNullOrWhiteSpace(Text) && Tag is null && Root is null;
 }
+
+/// <summary>A tracked folder the Library is narrowed to (Desk layout design §4): its root id, and its path.</summary>
+public sealed record RootScope(string RootId, string Path);
 
 /// <summary>How much of a source's history a view can show (plan D5).</summary>
 public enum CoverageState
@@ -164,6 +167,7 @@ public static class LibraryQueryEngine
                _ => true,
            } &&
            (filter.Tag is null || item.Tags.Contains(filter.Tag, StringComparer.OrdinalIgnoreCase)) &&
+           (filter.Root is null || (item.TreePath.Length > 0 && TrackedFolderPaths.LevelBelow(filter.Root.Path, item.TreePath) is not null)) &&
            LibraryIndex.Matches(item, filter.Text);
 
     // ---------------------------------------------------------------
@@ -249,19 +253,22 @@ public static class LibraryQueryEngine
         if (data.Roots.Count == 0)
             return new SourceCoverage(FolderSource, CoverageState.Unavailable, "No folders are tracked in Recents.");
 
-        starts.AddRange(data.Roots.Select(r => r.TrackingStartedOn));
+        // A tracked folder's scope counts that root's visits alone, from its day totals when nothing else narrows them.
+        var roots = filter.Root is { } scope ? data.Roots.Where(r => r.RootId == scope.RootId).ToList() : data.Roots;
+
+        starts.AddRange(roots.Select(r => r.TrackingStartedOn));
 
         // A Saved filter narrows folder visits too, to saved places' folders; a Recent filter doesn't: every visit is recent.
         var unfiltered = string.IsNullOrWhiteSpace(filter.Text) && filter.Source != LibrarySourceFilter.Saved;
         if (unfiltered)
         {
-            foreach (var root in data.Roots)
+            foreach (var root in roots)
             foreach (var (date, total) in root.DayTotals)
                 Add(heat, date, visits: total.Visits);
         }
         else
         {
-            foreach (var root in data.Roots)
+            foreach (var root in roots)
             foreach (var day in root.FolderDays.Where(d => d.Date >= data.FolderDetailKeptFrom))
             foreach (var folder in day.Folders)
             {
@@ -270,7 +277,7 @@ public static class LibraryQueryEngine
             }
 
             // Days whose totals outlive their detail: visits happened, but to which folders is no longer known.
-            foreach (var root in data.Roots)
+            foreach (var root in roots)
             foreach (var (date, total) in root.DayTotals)
             {
                 if (date < data.FolderDetailKeptFrom && total.Visits > 0)
@@ -285,7 +292,7 @@ public static class LibraryQueryEngine
             state = CoverageState.Partial;
             reason = $"Recents keeps which folders were visited for {ActivityStore.DetailDays} days, so earlier visits can't be searched or narrowed to saved places.";
         }
-        else if (data.Roots.All(r => !r.Enabled))
+        else if (roots.All(r => !r.Enabled))
         {
             state = CoverageState.Partial;
             reason = "Tracking is off for every folder in Recents, so nothing new is counted.";

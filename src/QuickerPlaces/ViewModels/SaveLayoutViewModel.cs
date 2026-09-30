@@ -149,6 +149,8 @@ public sealed class SaveLayoutViewModel : ObservableObject
             parts.Add("Recent only");
         if (!string.IsNullOrEmpty(query.Tag))
             parts.Add($"Sessions tagged “{query.Tag}”");
+        if (!string.IsNullOrEmpty(query.Root))
+            parts.Add("One tracked folder");
 
         switch (query.Date.Kind)
         {

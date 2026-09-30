@@ -47,7 +47,8 @@ public sealed record LibrarySnapshot(
                 root.Enabled,
                 Local(root.TrackingStartedAt),
                 activity.QueryDayTotals(root.RootId) ?? new Dictionary<DateOnly, ActivityDayTotal>(),
-                activity.QueryFolderDays(root.RootId) ?? Array.Empty<FolderDay>()))
+                activity.QueryFolderDays(root.RootId) ?? Array.Empty<FolderDay>(),
+                root.Path))
             .ToList();
 
         return new LibrarySnapshot(
@@ -70,9 +71,11 @@ public sealed record LibrarySnapshot(
 }
 
 /// <summary>One Recents root: whether it is tracking, since when, its day totals (a year) and its folder detail (<see cref="ActivityStore.DetailDays"/> days).</summary>
+/// <param name="Path">The tracked folder's path, for scoping and folder levels.</param>
 public sealed record RecentsRootData(
     string RootId,
     bool Enabled,
     DateOnly TrackingStartedOn,
     IReadOnlyDictionary<DateOnly, ActivityDayTotal> DayTotals,
-    IReadOnlyList<FolderDay> FolderDays);
+    IReadOnlyList<FolderDay> FolderDays,
+    string Path = "");

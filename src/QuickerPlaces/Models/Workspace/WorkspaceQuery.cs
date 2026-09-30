@@ -33,6 +33,9 @@ public sealed class WorkspaceQuery
     /// <summary>An existing Session tag, exactly as Sessions spell it.</summary>
     public string? Tag { get; set; }
 
+    /// <summary>A tracked folder's root id the list is narrowed to (the Recents panel's chips, Desk layout design §4), or null.</summary>
+    public string? Root { get; set; }
+
     public DateRule Date { get; set; } = new();
 
     [JsonExtensionData]
@@ -41,7 +44,7 @@ public sealed class WorkspaceQuery
     /// <summary>The defaults: no text, every kind and source, no scope, all recorded time.</summary>
     public static WorkspaceQuery Default => new();
 
-    public bool IsDefault => Text.Length == 0 && Kind is null && Source is null && CollectionId is null && Tag is null && Date.Kind == DateRuleKind.All;
+    public bool IsDefault => Text.Length == 0 && Kind is null && Source is null && CollectionId is null && Tag is null && Root is null && Date.Kind == DateRuleKind.All;
 
     public WorkspaceQuery Clone() => new()
     {
@@ -50,13 +53,14 @@ public sealed class WorkspaceQuery
         Source = Source,
         CollectionId = CollectionId,
         Tag = Tag,
+        Root = Root,
         Date = Date.Clone(),
         Extra = Extra is null ? null : new Dictionary<string, JsonElement>(Extra),
     };
 
     public bool SameAs(WorkspaceQuery other)
         => Text == other.Text && Kind == other.Kind && Source == other.Source && CollectionId == other.CollectionId &&
-           string.Equals(Tag, other.Tag, StringComparison.OrdinalIgnoreCase) && Date.SameAs(other.Date);
+           string.Equals(Tag, other.Tag, StringComparison.OrdinalIgnoreCase) && Root == other.Root && Date.SameAs(other.Date);
 }
 
 /// <summary>What a <see cref="DateRule"/> means (plan D3).</summary>

@@ -105,4 +105,15 @@ public sealed class WorkspaceQueryTests
     [InlineData(99, 12)]
     public void Spans_SnapToTheNearestAllowed_WiderOnATie(int span, int expected)
         => Assert.Equal(expected, PanelSpans.Snap(span));
+
+    [Fact]
+    public void ARootScope_IsPartOfTheQuery()
+    {
+        var scoped = new WorkspaceQuery { Root = "r1" };
+
+        Assert.False(scoped.IsDefault);
+        Assert.Equal("r1", scoped.Clone().Root);
+        Assert.False(scoped.SameAs(WorkspaceQuery.Default));
+        Assert.True(scoped.SameAs(new WorkspaceQuery { Root = "r1" }));
+    }
 }

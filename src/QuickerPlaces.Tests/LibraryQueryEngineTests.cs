@@ -61,13 +61,13 @@ public sealed class LibraryQueryEngineTests
 
     /// <summary>A root with detail for the given days, and day totals for those days plus <paramref name="oldTotals"/>.</summary>
     private static RecentsRootData Root(IEnumerable<(DateOnly Date, FolderActivity[] Folders)> detail,
-        IEnumerable<(DateOnly Date, int Visits)>? oldTotals = null, bool enabled = true)
+        IEnumerable<(DateOnly Date, int Visits)>? oldTotals = null, bool enabled = true, string id = "root", string path = @"C:\Jobs")
     {
         var days = detail.Select(d => new FolderDay(d.Date, d.Folders)).ToList();
         var totals = days.ToDictionary(d => d.Date, d => new ActivityDayTotal(TimeSpan.FromMinutes(5), d.Folders.Sum(f => f.Visits), d.Folders.Count));
         foreach (var (date, visits) in oldTotals ?? Array.Empty<(DateOnly, int)>())
             totals[date] = new ActivityDayTotal(TimeSpan.FromMinutes(5), visits, 1);
-        return new RecentsRootData("root", enabled, Today.AddDays(-200), totals, days);
+        return new RecentsRootData(id, enabled, Today.AddDays(-200), totals, days, path);
     }
 
     private static RecentFileHistory File(string path, params DateOnly[] opens)
@@ -313,5 +313,24 @@ public sealed class LibraryQueryEngineTests
 
         Assert.Equal(CoverageState.Partial, folders.State);
         Assert.Contains("Tracking is off", folders.Reason);
+    }
+
+    [Fact]
+    public void ARootScope_ListsOnlyWhatIsInThatTrackedFolder_AndCountsOnlyItsVisits()
+    {
+        var other = @"D:\Other\Site";
+        var data = Snapshot(
+            roots: new[]
+            {
+                Root(new[] { (Today, new[] { Visit(Acme, 2, Today) }) }),
+                Root(new[] { (Today, new[] { Visit(other, 5, Today) }) }, id: "other", path: @"D:\Other"),
+            },
+            files: new[] { File(Plan, Today), File(@"D:\Other\Site\Notes.docx", Today) });
+
+        var scoped = Run(data, new LibraryFilter(Root: new RootScope("other", @"D:\Other")));
+
+        Assert.Equal(new[] { "Notes.docx", "Site" }, Names(scoped));
+        Assert.Equal(5, scoped.Heat[Today].FolderVisits);
+        Assert.Equal(1, scoped.Heat[Today].FileOpens);
     }
 }

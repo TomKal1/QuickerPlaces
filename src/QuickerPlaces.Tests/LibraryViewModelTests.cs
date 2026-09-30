@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.RecentFiles;
+using QuickerPlaces.Models.Workspace;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
@@ -275,5 +276,40 @@ public sealed class LibraryViewModelTests
         Assert.True(acme.CanAddAsPlace);
         Assert.False(jobs.CanAddAsPlace);
         Assert.False(pdf.CanAddAsPlace);
+    }
+
+    [Fact]
+    public void ATrackedFolderChip_ScopesTheList_AndAgainClearsIt()
+    {
+        Seed();
+        var vm = NewViewModel();
+        var root = _activity.Roots.Single();
+        var changed = 0;
+        vm.QueryChanged += () => changed++;
+
+        var chip = Assert.Single(vm.TrackedRootChips);
+        Assert.Equal((root.RootId, root.Path, false), (chip.RootId, chip.Path, chip.IsSelected));
+
+        vm.ToggleRootScope(root.RootId);
+        Assert.Equal(new[] { "A-101.pdf", "Acme", "Budget.xlsx", "Report.docx" }, vm.Rows.Select(r => r.Name).OrderBy(n => n));
+        Assert.True(vm.TrackedRootChips.Single().IsSelected);
+        Assert.Equal(root.RootId, vm.CurrentQuery.Root);
+        Assert.Equal(1, changed);
+
+        vm.ToggleRootScope(root.RootId);
+        Assert.Equal(6, vm.Rows.Count);
+        Assert.Null(vm.CurrentQuery.Root);
+    }
+
+    [Fact]
+    public void AScopeForATrackedFolderThatIsGone_ScopesNothing()
+    {
+        Seed();
+        var vm = NewViewModel();
+
+        vm.ApplyQuery(new WorkspaceQuery { Root = "deleted-root" });
+
+        Assert.Equal(6, vm.Rows.Count);
+        Assert.False(vm.TrackedRootChips.Single().IsSelected);
     }
 }
