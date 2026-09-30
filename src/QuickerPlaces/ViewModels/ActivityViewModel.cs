@@ -454,21 +454,6 @@ public sealed record ActivityFolderRow(FolderActivity Activity, TimeZoneInfo Zon
     public int Visits => Activity.Visits;
     public DateTimeOffset LastVisited => Activity.LastVisited;
     public string LastVisitedText => ActivityFormat.LastVisited(LastVisited, Zone, Culture);
-    public int Level
-    {
-        get
-        {
-            var root = RootPath.TrimEnd('\\', '/');
-            if (!Folder.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return 0;
-            if (Folder.Length > root.Length && Folder[root.Length] is not ('\\' or '/')) return 0;
-            var below = Folder[root.Length..].TrimStart('\\', '/');
-            return below.Length == 0 ? 0 : below.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries).Length;
-        }
-    }
-    public string LevelLabel => Level switch
-    {
-        0 => "Root folder",
-        1 => "Level 1 · directly below root",
-        _ => $"Level {Level} · below root"
-    };
+    public int Level => TrackedFolderPaths.LevelBelow(RootPath, Folder) ?? 0;
+    public string LevelLabel => TrackedFolderPaths.LevelLabel(Level);
 }

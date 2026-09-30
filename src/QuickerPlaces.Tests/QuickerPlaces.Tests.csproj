@@ -84,6 +84,7 @@
     <Compile Include="..\QuickerPlaces\Services\Activity\StopwatchMonotonicClock.cs" Link="Linked\Services\Activity\StopwatchMonotonicClock.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackingSignal.cs" Link="Linked\Services\Activity\TrackingSignal.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\TrackedFolderPaths.cs" Link="Linked\Services\Activity\TrackedFolderPaths.cs" />
     <!--
       Project sessions and shared document code (ai/260928_PDF Project
       Sessions Plan.md): document kinds and paths, the open-document resolver, the launcher and the two view models. The
