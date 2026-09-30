@@ -729,6 +729,9 @@ public sealed class WorkspaceLayoutService
 
     private bool ApplyDraft(List<PanelInstance> draft, string label)
     {
+        if (ActiveIsColumns)
+            draft = InColumnOrder(draft);
+
         if (SamePanels(draft, _panels))
             return false;
 
@@ -752,6 +755,17 @@ public sealed class WorkspaceLayoutService
     }
 
     private static List<PanelInstance> Clone(IEnumerable<PanelInstance> panels) => panels.Select(p => p.Clone()).ToList();
+
+    /// <summary>
+    /// A columns layout's panels in stored order: the left column's, then the
+    /// main column's, each keeping its own order, hidden panels with their
+    /// column. Only the order within a column is ever seen, so this keeps a
+    /// move to the other column and back from reading as a change (Desk layout design §2).
+    /// </summary>
+    private static List<PanelInstance> InColumnOrder(List<PanelInstance> panels)
+        => panels.Where(p => PanelDocks.IsLeft(p.Dock))
+            .Concat(panels.Where(p => !PanelDocks.IsLeft(p.Dock)))
+            .ToList();
 
     private static bool SamePanels(IReadOnlyList<PanelInstance> a, IReadOnlyList<PanelInstance> b)
         => a.Count == b.Count && a.Zip(b).All(pair => pair.First.SameAs(pair.Second));

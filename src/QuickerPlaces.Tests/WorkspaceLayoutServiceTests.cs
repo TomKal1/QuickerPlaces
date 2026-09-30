@@ -791,6 +791,36 @@ public sealed class WorkspaceLayoutServiceTests
     }
 
     [Fact]
+    public void ADeskPanel_MovedToTheOtherColumnAndBack_LeavesDeskUnmodified()
+    {
+        var service = NewService(NewStorage());
+        Ok(service.Activate(BuiltInLayouts.DeskId));
+        service.BeginArrange();
+
+        Assert.True(service.SetDock(PanelTypes.Sessions, PanelDocks.Main));
+        Assert.True(service.SetDock(PanelTypes.Sessions, PanelDocks.Left));
+
+        Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions }, Column(service, PanelDocks.Left));
+        Ok(service.Done());
+        Assert.False(service.IsModified);
+    }
+
+    [Fact]
+    public void InAColumnsLayout_MovingTheLastLeftPanelDown_StaysPut()
+    {
+        var service = NewService(NewStorage());
+        Ok(service.Activate(BuiltInLayouts.DeskId));
+        service.BeginArrange();
+
+        Assert.False(service.MoveLater(PanelTypes.Sessions));
+
+        Assert.True(service.MoveLater(PanelTypes.Favourites));
+        Assert.True(service.MoveEarlier(PanelTypes.Favourites));
+        Ok(service.Done());
+        Assert.False(service.IsModified);
+    }
+
+    [Fact]
     public void AddPanel_OnAColumnsLayout_GoesToTheBottomOfTheMainColumn()
     {
         var service = ColumnsService(NewStorage());
