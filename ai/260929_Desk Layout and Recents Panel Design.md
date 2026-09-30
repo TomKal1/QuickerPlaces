@@ -1,6 +1,6 @@
 # Desk layout and the Recents panel — design
 
-Date: 2026-09-29. Status: approved in conversation, awaiting spec review. Builds on the [configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md) M1–M5 (branch `ccr-6156d37a-mo223d`).
+Date: 2026-09-29. Status: Built (see ai/BUILD_SUMMARY.md). Builds on the [configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md) M1–M5 (branch `ccr-6156d37a-mo223d`).
 
 ## 1. Outcome
 

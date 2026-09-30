@@ -758,6 +758,57 @@ On Linux (.NET SDK 10.0.112): 1068 tests pass (1051 before; new: `SaveLayoutView
 
 Checked on Windows 11 against a test data root with UI Automation and real mouse clicks: the picker and width choice open. Setting Sessions to Full width and then Save as new shows "My Activity Atlas". Switching to Activity Atlas and back brings its arrangement, `workspace-layouts.json` records it as active, and a restart resumes it. 1071 tests pass.
 
+## Desk layout, Favourites and Recents panels (2026-09-29)
+
+Built from [the Desk layout implementation plan](260929_Desk%20Layout%20Implementation%20Plan.md), to [the design](260929_Desk%20Layout%20and%20Recents%20Panel%20Design.md), on top of the configurable canvas (M1–M5). Still behind `--workspace`; try it with `--workspace --data-root <test folder>` and pick **Desk** in the layout picker.
+
+### What was built
+
+- **Columns layouts** (`bb4ab86`, `9e0c0c5`, `2855697`, `a5a5ecb`, `ba5a1ac`). A layout gains an optional `arrangement` (`"columns"`) and each panel an optional `dock` (`"left"` / `"main"`). `PanelLayoutEngine.PackColumns` places them and works out drops within and across columns; the row packer is untouched. `WorkspaceLayoutService` moves panels between and within columns, and `WorkspaceView` shows a columns layout as two stacks. In Arrange mode each panel has a **Column** choice and up/down arrows, and no resize edge. A window narrower than the two columns need shows one stack, main first.
+- **Desk** (`91fe5cf`). The built-in layout from the user's sketch: Favourites and Sessions on the left; Saved places, Recents and Year activity on the main side.
+- **Favourites panel** (`1c7b0f7`). The favourites strip becomes a reusable `FavouritesPanel`. The strip at the top of the window shows only while no Favourites panel does, so hiding the panel brings the strip back.
+- **Recents panel** (`f4e5aa9`, `18feb24`, `5ab5760`, `e7d7784`, `550ced1`, `7cfdefc`). The workspace's File shelf takes over the Recents window's features and is called **Recents**:
+  - `TrackedFolderPaths` (shared with the Library) works out the level below a tracked root, the innermost root and the level labels.
+  - Library rows carry a folder's Visits and Time and say which can be added as places; the Library and the shelf can narrow to one tracked folder, and group by **Folder level** (Root folder / Level 1 / Level 2).
+  - The shelf gains a tracked-folders strip (a chip per folder: click to scope, right-click for Stop/Resume tracking, Edit tracking settings, About folder, Delete), a tracking summary, Visits and Time columns and **Add as place…**.
+- **Header** (this commit). The Recents button is hidden in the workspace; the panel does what the Recents window did, and the tray still shows tracking.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Where the arrangement lives | On the layout, not on working arrangements | The rows-or-columns choice is saved and restored with the layout itself |
+| An empty column | Gives its width away | So the Column choice is how a panel reaches an empty column |
+| The favourites strip | Shows while no Favourites panel does | Favourites are never without a home; hiding the panel returns the strip |
+| The stored panel type | Stays `shelf` | Saved layouts keep loading; only the name shown changed to Recents |
+| The header's Recents tooltip | Says "tracking is off for every folder" where it said "paused" | The wording now matches the panel: no folder is being tracked |
+| Panel order in a columns layout | Kept canonical in `ApplyDraft`: left panels first, then main, stable | Without it, moving a panel to the other column and back left Desk reading "Modified" |
+| The shelf's activity data | It gets its own `ActivityViewModel` in the workspace | The panel's chips and summary follow tracking without depending on the Recents window |
+| Wording in the Library | The Library window keeps "File shelf", as the design says | Only the workspace panel is renamed. Session-save messages such as "…from the File shelf…" in `SessionFileSet.cs` and `SessionEditorViewModel.cs` were left unchanged |
+
+### Verification status
+
+1130 tests pass, and the app builds with 0 warnings and 0 errors, XAML included.
+
+Checked on Windows 11 against scratch data with UI Automation and real mouse clicks:
+
+- **Desk:** Favourites and Sessions on the left, Saved places, Recents (then still named File shelf) and Year activity on the main side. Measured maximized at 2576 wide: the left column is x=14, w=844; the main is x=858, w=1688.
+- **Favourites strip:** gone under Desk; hiding the Favourites panel brings the strip back, and Undo takes it away again.
+- **Column choice** by real click: Sessions to main, then back to left.
+- **Drag:** a real mouse drag of the shelf above Saved places; Undo and Done work.
+- **Narrow window** at 960: one stack, main first.
+- **Restart:** Desk persists.
+- **Column move** kept the shelf's selection and scroll offset (the design's risk).
+- **Recents panel:**
+  - The chips show and a click scopes the list.
+  - The chip menu has Stop/Resume, About and Edit.
+  - Visits and Time are filled.
+  - Folder level grouping gives Root folder / Level 1 / Level 2.
+  - Add as place… opens a prefilled dialog and adds the place.
+  - Track a folder updates the summary and the header tooltip.
+
+**Not exercised** (from the plan's Windows checks): Edit tracking settings, Delete tracked folder (and its confirmation), Retry save, dragging a Favourites card to reorder, Ctrl+1, the Library window in list mode (no tracked-folders strip or Add as place; Folder level grouping), and the dark and light themes (chips, Column choice and Favourites cards readable).
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.

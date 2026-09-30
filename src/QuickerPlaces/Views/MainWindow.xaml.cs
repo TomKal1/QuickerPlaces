@@ -90,6 +90,8 @@ public partial class MainWindow : Window
         _focusSearch = _workspaceView.FocusSearch;
         LibraryButton.Visibility = Visibility.Collapsed;
         SessionsButton.Visibility = Visibility.Collapsed;
+        // The Recents panel does what the Recents window did (Desk layout design §6); the tray still shows tracking.
+        ActivityButton.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>At exit, before the tracking hosts go: writes the workspace's waiting changes and stops its refreshes.</summary>
