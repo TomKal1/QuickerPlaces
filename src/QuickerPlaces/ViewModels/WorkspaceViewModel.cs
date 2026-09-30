@@ -115,6 +115,9 @@ public sealed class WorkspaceViewModel : ObservableObject
 
     public bool HasPanels => _panels.Count > 0;
 
+    /// <summary>True when the active layout is in two columns (Desk layout design §2).</summary>
+    public bool IsColumns => _layout.ActiveIsColumns;
+
     /// <summary>
     /// The canvas's width in device-independent pixels: panels too narrow
     /// there are shown wider, so they stack (D1). Presentation only; nothing
@@ -126,7 +129,7 @@ public sealed class WorkspaceViewModel : ObservableObject
             return;
 
         _width = width;
-        var placements = PanelLayoutEngine.Pack(_layout.Panels, _width);
+        var placements = Pack();
         if (placements.SequenceEqual(_panels.Select(p => p.Placement)))
             return;
 
@@ -224,9 +227,12 @@ public sealed class WorkspaceViewModel : ObservableObject
         RebuildPanels();
     }
 
-    /// <summary>Keyboard Move earlier: swaps with the shown panel before it.</summary>
+    /// <summary>Keyboard Move earlier: swaps with the shown panel before it, or above it in its column.</summary>
     public bool MoveEarlier(string panelId)
     {
+        if (IsColumns)
+            return _layout.MoveEarlier(panelId) && MovedInColumn(panelId, "up");
+
         var index = IndexOf(panelId);
         if (index <= 0 || !_layout.MoveEarlier(panelId))
             return false;
@@ -235,9 +241,12 @@ public sealed class WorkspaceViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>Keyboard Move later: swaps with the shown panel after it.</summary>
+    /// <summary>Keyboard Move later: swaps with the shown panel after it, or below it in its column.</summary>
     public bool MoveLater(string panelId)
     {
+        if (IsColumns)
+            return _layout.MoveLater(panelId) && MovedInColumn(panelId, "down");
+
         var index = IndexOf(panelId);
         if (index < 0 || index >= _panels.Count - 1 || !_layout.MoveLater(panelId))
             return false;
@@ -275,6 +284,33 @@ public sealed class WorkspaceViewModel : ObservableObject
         Status = shown.IsWidened
             ? $"{panel.Title} is now {PanelSpans.DisplayName(span)} wide; shown {PanelSpans.DisplayName(shown.Span)} until the window is wider."
             : $"{panel.Title} is now {PanelSpans.DisplayName(span)} wide.";
+        return true;
+    }
+
+    /// <summary>Columns layouts' Column choice: to the bottom of the other column.</summary>
+    public bool SetDock(string panelId, string dock)
+    {
+        var panel = _panels.FirstOrDefault(p => p.Id == panelId);
+        if (panel is null || !_layout.SetDock(panelId, dock))
+            return false;
+
+        RebuildPanels();
+        Status = $"Moved {panel.Title} to the {PanelDocks.DisplayName(dock)}.";
+        return true;
+    }
+
+    /// <summary>Where dragging <paramref name="draggedId"/> above or below <paramref name="targetId"/> would put it in a columns layout, or null for nowhere new.</summary>
+    public ColumnDropTarget? ColumnDrop(string draggedId, string targetId, bool after)
+        => PanelLayoutEngine.ColumnDrop(_layout.VisiblePanels, draggedId, targetId, after);
+
+    /// <summary>A drop in a columns layout, as one move.</summary>
+    public bool DropInColumn(string draggedId, string targetId, bool after)
+    {
+        if (ColumnDrop(draggedId, targetId, after) is not { } drop || !_layout.MoveTo(draggedId, drop.Dock, drop.BeforePanelId))
+            return false;
+
+        var target = _panels.First(p => p.Id == targetId).Title;
+        Moved(draggedId, after ? $"below {target}" : $"above {target}");
         return true;
     }
 
@@ -337,6 +373,26 @@ public sealed class WorkspaceViewModel : ObservableObject
         var title = _panels.First(p => p.Id == panelId).Title;
         RebuildPanels();
         Status = $"Moved {title} {where}.";
+    }
+
+    private bool MovedInColumn(string panelId, string direction)
+    {
+        var title = _panels.First(p => p.Id == panelId).Title;
+        RebuildPanels();
+        Status = $"Moved {title} {direction}.";
+        return true;
+    }
+
+    private IReadOnlyList<PanelPlacement> Pack()
+        => IsColumns ? PanelLayoutEngine.PackColumns(_layout.Panels, _width) : PanelLayoutEngine.Pack(_layout.Panels, _width);
+
+    /// <summary>A panel of a columns layout, whose arrows move it within its own column.</summary>
+    private static WorkspacePanelViewModel ColumnPanel(PanelPlacement placement, IReadOnlyList<PanelInstance> visible)
+    {
+        var dock = PanelDocks.Normalize(visible.First(v => v.Id == placement.PanelId).Dock);
+        var column = visible.Where(v => PanelDocks.Normalize(v.Dock) == dock).Select(v => v.Id).ToList();
+        var index = column.IndexOf(placement.PanelId);
+        return new WorkspacePanelViewModel(placement, index > 0, index < column.Count - 1, PanelDocks.IsLeft(dock));
     }
 
     private void NotifyArrange()
@@ -582,13 +638,17 @@ public sealed class WorkspaceViewModel : ObservableObject
 
     private void RebuildPanels()
     {
-        var placements = PanelLayoutEngine.Pack(_layout.Panels, _width);
+        var placements = Pack();
+        var visible = _layout.VisiblePanels;
         _panels = placements
-            .Select((p, i) => new WorkspacePanelViewModel(p, canMoveEarlier: i > 0, canMoveLater: i < placements.Count - 1))
+            .Select((p, i) => IsColumns
+                ? ColumnPanel(p, visible)
+                : new WorkspacePanelViewModel(p, canMoveEarlier: i > 0, canMoveLater: i < placements.Count - 1))
             .ToList();
 
         OnPropertyChanged(nameof(Panels));
         OnPropertyChanged(nameof(HasPanels));
+        OnPropertyChanged(nameof(IsColumns));
         OnPropertyChanged(nameof(AddablePanels));
         OnPropertyChanged(nameof(CanAddPanel));
         OnPropertyChanged(nameof(Layouts));
@@ -602,11 +662,12 @@ public sealed class WorkspaceViewModel : ObservableObject
 /// <summary>One shown panel: which it is, and where it goes.</summary>
 public sealed class WorkspacePanelViewModel
 {
-    public WorkspacePanelViewModel(PanelPlacement placement, bool canMoveEarlier = false, bool canMoveLater = false)
+    public WorkspacePanelViewModel(PanelPlacement placement, bool canMoveEarlier = false, bool canMoveLater = false, bool inLeftColumn = false)
     {
         Placement = placement;
         CanMoveEarlier = canMoveEarlier;
         CanMoveLater = canMoveLater;
+        InLeftColumn = inLeftColumn;
     }
 
     public PanelPlacement Placement { get; }
@@ -635,6 +696,12 @@ public sealed class WorkspacePanelViewModel
     public bool CanMoveEarlier { get; }
 
     public bool CanMoveLater { get; }
+
+    /// <summary>The column it is shown in; none in a rows layout, or while a narrow window stacks the columns.</summary>
+    public PanelDock Dock => Placement.Dock;
+
+    /// <summary>In a columns layout, true when its own column is the left one, even while stacked: the Column choice shows this.</summary>
+    public bool InLeftColumn { get; }
 }
 
 /// <summary>One choice for the layout QuickerPlaces starts with: a layout, or (null id) the one used last.</summary>

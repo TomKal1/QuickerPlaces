@@ -629,4 +629,83 @@ public sealed class WorkspaceViewModelTests
         Assert.Null(workspace.LayoutMessage);
         Assert.Equal("Mine", NewWorkspace().ActiveLayoutName);
     }
+
+    // ---------------------------------------------------------------
+    // Columns layouts (Desk layout design §2, §3)
+    // ---------------------------------------------------------------
+
+    private const string ColumnsFile = """
+        {
+          "schemaVersion": 1,
+          "presets": [
+            { "id": "cols", "name": "Cols", "arrangement": "columns",
+              "panels": [ { "id": "sessions", "type": "sessions", "span": 4, "dock": "left" },
+                          { "id": "places", "type": "places", "span": 12, "dock": "main" },
+                          { "id": "shelf", "type": "shelf", "span": 8, "dock": "main" } ] }
+          ],
+          "working": [],
+          "activePresetId": "cols"
+        }
+        """;
+
+    private WorkspaceViewModel NewColumnsWorkspace()
+    {
+        _layoutStorage.ContentsToReturn = ColumnsFile;
+        return NewWorkspace();
+    }
+
+    [Fact]
+    public void AColumnsLayout_PlacesItsPanelsInTwoStacks()
+    {
+        var workspace = NewColumnsWorkspace();
+
+        Assert.True(workspace.IsColumns);
+        Assert.Equal(new[] { ("sessions", PanelDock.Left, 0, 0, 4), ("places", PanelDock.Main, 0, 4, 8), ("shelf", PanelDock.Main, 1, 4, 8) },
+            workspace.Panels.Select(p => (p.Id, p.Dock, p.Row, p.Column, p.Span)));
+        Assert.True(workspace.Panels.Single(p => p.Id == "sessions").InLeftColumn);
+    }
+
+    [Fact]
+    public void InAColumnsLayout_TheArrowsMoveWithinAColumn()
+    {
+        var workspace = NewColumnsWorkspace();
+        workspace.BeginArrange();
+
+        var places = workspace.Panels.Single(p => p.Id == "places");
+        var shelf = workspace.Panels.Single(p => p.Id == "shelf");
+        var sessions = workspace.Panels.Single(p => p.Id == "sessions");
+        Assert.Equal((false, true), (places.CanMoveEarlier, places.CanMoveLater));
+        Assert.Equal((true, false), (shelf.CanMoveEarlier, shelf.CanMoveLater));
+        Assert.Equal((false, false), (sessions.CanMoveEarlier, sessions.CanMoveLater));
+
+        Assert.True(workspace.MoveEarlier("shelf"));
+        Assert.Equal($"Moved {PanelTypes.DisplayName(PanelTypes.Shelf)} up.", workspace.Status);
+    }
+
+    [Fact]
+    public void TheColumnChoice_AndADrop_MoveAPanelToTheOtherColumn()
+    {
+        var workspace = NewColumnsWorkspace();
+        workspace.BeginArrange();
+
+        Assert.True(workspace.SetDock("shelf", PanelDocks.Left));
+        Assert.Equal($"Moved {PanelTypes.DisplayName(PanelTypes.Shelf)} to the left column.", workspace.Status);
+        Assert.Equal(new[] { "sessions", "shelf" }, workspace.Panels.Where(p => p.Dock == PanelDock.Left).Select(p => p.Id));
+
+        Assert.NotNull(workspace.ColumnDrop("sessions", "places", after: true));
+        Assert.True(workspace.DropInColumn("sessions", "places", after: true));
+        Assert.Equal(new[] { "places", "sessions" }, workspace.Panels.Where(p => p.Dock == PanelDock.Main).Select(p => p.Id));
+        Assert.Equal("Moved Sessions below Saved places.", workspace.Status);
+    }
+
+    [Fact]
+    public void ANarrowWindow_StacksAColumnsLayout()
+    {
+        var workspace = NewColumnsWorkspace();
+
+        workspace.Reflow(700);
+
+        Assert.All(workspace.Panels, p => Assert.Equal((PanelDock.None, 12), (p.Dock, p.Span)));
+        Assert.Equal(new[] { "places", "shelf", "sessions" }, workspace.Panels.Select(p => p.Id));
+    }
 }
