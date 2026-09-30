@@ -218,6 +218,33 @@ public sealed class WorkspaceStoreTests
     }
 
     [Fact]
+    public void ArrangementAndDock_SurviveARoundTrip_UnknownValuesIncluded()
+    {
+        var storage = NewStorage("""
+            {
+              "schemaVersion": 1,
+              "presets": [
+                { "id": "p1", "name": "Cols", "arrangement": "columns",
+                  "panels": [ { "id": "sessions", "type": "sessions", "span": 4, "dock": "left" },
+                              { "id": "shelf", "type": "shelf", "span": 8, "dock": "sideways" } ] },
+                { "id": "p2", "name": "Later", "arrangement": "spiral",
+                  "panels": [ { "id": "shelf", "type": "shelf", "span": 12 } ] }
+              ],
+              "working": []
+            }
+            """);
+        var service = new WorkspaceLayoutService(NewStore(storage));
+        Assert.True(service.Activate("p1").Saved);
+
+        var written = storage.LastWritten!;
+        Assert.Contains("\"arrangement\": \"columns\"", written);
+        Assert.Contains("\"arrangement\": \"spiral\"", written);
+        Assert.Contains("\"dock\": \"left\"", written);
+        Assert.Contains("\"dock\": \"sideways\"", written);
+        Assert.Equal(PanelDocks.Left, service.Panels[0].Dock);
+    }
+
+    [Fact]
     public void AnUnknownDateRuleOrStartupMode_ReadsAsTheDefault()
     {
         var storage = NewStorage("""

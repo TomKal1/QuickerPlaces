@@ -20,6 +20,13 @@ public sealed class LayoutPreset
 
     public string Name { get; set; } = "";
 
+    /// <summary>
+    /// <see cref="LayoutArrangements.Columns"/> for a layout in two columns;
+    /// null (rows) otherwise. A value this build doesn't know reads as rows
+    /// and is kept as written.
+    /// </summary>
+    public string? Arrangement { get; set; }
+
     public List<PanelInstance> Panels { get; set; } = new();
 
     /// <summary>The saved query, or null when the layout was saved without filters (the default).</summary>
@@ -32,6 +39,7 @@ public sealed class LayoutPreset
     {
         Id = Id,
         Name = Name,
+        Arrangement = Arrangement,
         Panels = Panels.Select(p => p.Clone()).ToList(),
         Filters = Filters?.Clone(),
         Extra = Extra is null ? null : new Dictionary<string, JsonElement>(Extra),
@@ -71,4 +79,13 @@ public sealed class WorkingArrangement
         Query = Query?.Clone(),
         Extra = Extra is null ? null : new Dictionary<string, JsonElement>(Extra),
     };
+}
+
+/// <summary>How a layout places its panels (Desk layout design §2): rows of the twelve-column canvas, or two columns.</summary>
+public static class LayoutArrangements
+{
+    public const string Rows = "rows";
+    public const string Columns = "columns";
+
+    public static bool IsColumns(string? arrangement) => arrangement == Columns;
 }

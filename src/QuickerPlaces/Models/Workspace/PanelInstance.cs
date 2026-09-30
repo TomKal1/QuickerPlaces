@@ -30,6 +30,13 @@ public sealed class PanelInstance
     /// <summary>Hidden panels keep their place and span so Show puts them back where they were.</summary>
     public bool Hidden { get; set; }
 
+    /// <summary>
+    /// In a columns layout, the column: <see cref="PanelDocks.Left"/> or
+    /// <see cref="PanelDocks.Main"/>. Absent, or a value this build doesn't
+    /// know, reads as main and is kept as written. Rows layouts ignore it.
+    /// </summary>
+    public string? Dock { get; set; }
+
     /// <summary>Per-panel view choices (a grouping, a year/month view), as short named strings. Null when there are none.</summary>
     public Dictionary<string, string>? View { get; set; }
 
@@ -42,13 +49,15 @@ public sealed class PanelInstance
         Type = Type,
         Span = Span,
         Hidden = Hidden,
+        Dock = Dock,
         View = View is null ? null : new Dictionary<string, string>(View),
         Extra = Extra is null ? null : new Dictionary<string, JsonElement>(Extra),
     };
 
-    /// <summary>Same panel, place-independent: everything but <see cref="Extra"/>, which this build never changes.</summary>
+    /// <summary>Same panel, place-independent: everything but <see cref="Extra"/>, which this build never changes. Docks compare by column.</summary>
     public bool SameAs(PanelInstance other)
-        => Id == other.Id && Type == other.Type && Span == other.Span && Hidden == other.Hidden && SameView(View, other.View);
+        => Id == other.Id && Type == other.Type && Span == other.Span && Hidden == other.Hidden &&
+           PanelDocks.IsLeft(Dock) == PanelDocks.IsLeft(other.Dock) && SameView(View, other.View);
 
     private static bool SameView(Dictionary<string, string>? a, Dictionary<string, string>? b)
     {
@@ -151,4 +160,19 @@ public static class PanelSpans
 
         return best;
     }
+}
+
+/// <summary>The two columns of a columns layout (Desk layout design §2): a left third and a main two-thirds.</summary>
+public static class PanelDocks
+{
+    public const string Left = "left";
+    public const string Main = "main";
+
+    public static bool IsLeft(string? dock) => dock == Left;
+
+    /// <summary>Left, or main for anything else: absent and unknown docks read as main.</summary>
+    public static string Normalize(string? dock) => IsLeft(dock) ? Left : Main;
+
+    /// <summary>"left column" or "main column", as the status line and Undo name it.</summary>
+    public static string DisplayName(string? dock) => IsLeft(dock) ? "left column" : "main column";
 }
