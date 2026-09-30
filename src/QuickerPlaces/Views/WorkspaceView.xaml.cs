@@ -315,6 +315,8 @@ public partial class WorkspaceView : UserControl
         var noCalendar = _workspace.Panels.All(p => p.Type != PanelTypes.Activity);
         foreach (var shelf in _shelves)
             shelf.ShowsPeriod = noCalendar;
+        if (_sessionsPanel is not null)
+            _sessionsPanel.ShowsViewFiles = _workspace.Panels.Any(p => p.Type == PanelTypes.Files);
         EmptyCanvasText.Visibility = _workspace.HasPanels ? Visibility.Collapsed : Visibility.Visible;
         FitCanvasHeight();
     }
@@ -827,6 +829,7 @@ public partial class WorkspaceView : UserControl
                 _sessionsPanel = new SessionsPanel();
                 _sessionsPanel.Attach(_sessions!, new WindowsShell(), _probe!);
                 _sessionsPanel.SessionsChanged += RequestReload;
+                _sessionsPanel.ViewFilesRequested += id => _filesPanel?.ShowSession(id);
                 return _sessionsPanel;
 
             case PanelTypes.Places:

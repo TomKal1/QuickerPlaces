@@ -27,6 +27,12 @@ public partial class SessionsPanel : UserControl
     /// <summary>Raised after a session was saved, edited or deleted here, so views of the Library can read the sessions again.</summary>
     public event Action? SessionsChanged;
 
+    /// <summary>Raised by a card's View session files with the session's id: the workspace shows its files in the File viewer (File viewer design §5).</summary>
+    public event Action<string>? ViewFilesRequested;
+
+    /// <summary>Offers View session files on a card's menu. The workspace turns it on while a File viewer is shown.</summary>
+    public bool ShowsViewFiles { get; set; }
+
     /// <summary>Connects the panel to the sessions store; until then it shows nothing.</summary>
     public void Attach(SessionStore store, IShell shell, WindowsOpenDocumentProbe probe)
     {
@@ -143,6 +149,24 @@ public partial class SessionsPanel : UserControl
             _viewModel?.OpenFile(file);
         else
             MessageForm.Show("Select a file in the list first, or use Open all.", Title, owner: OwnerWindow);
+    }
+
+    /// <summary>Opens a card's menu on that card only: empty space has no session to act on.</summary>
+    private void SessionsList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (_viewModel?.SelectedRow is null || (e.OriginalSource as FrameworkElement)?.DataContext is not SessionRowViewModel)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        ViewFilesMenuItem.Visibility = ShowsViewFiles ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ViewFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel?.SelectedRow is { } row)
+            ViewFilesRequested?.Invoke(row.Id);
     }
 
     private void TagChip_Click(object sender, RoutedEventArgs e)

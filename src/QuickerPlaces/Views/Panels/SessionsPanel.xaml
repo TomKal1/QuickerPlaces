@@ -206,7 +206,19 @@
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              AutomationProperties.Name="Saved sessions"
                              MouseDoubleClick="SessionsList_MouseDoubleClick"
-                             KeyDown="SessionsList_KeyDown">
+                             KeyDown="SessionsList_KeyDown"
+                             ContextMenuOpening="SessionsList_ContextMenuOpening">
+                        <!-- A card's menu (File viewer design §5). Right-click selects the card first, so it acts on the selected session. -->
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem x:Name="ViewFilesMenuItem" Header="View session files" FontWeight="Bold"
+                                          Click="ViewFiles_Click" Visibility="Collapsed" />
+                                <MenuItem Header="Open all" Click="OpenAll_Click" />
+                                <Separator />
+                                <MenuItem Header="Edit…" Click="Edit_Click" IsEnabled="{Binding CanEditSelection}" />
+                                <MenuItem Header="Delete…" Click="Delete_Click" IsEnabled="{Binding CanEditSelection}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
