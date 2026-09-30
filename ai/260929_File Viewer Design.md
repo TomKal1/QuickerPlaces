@@ -30,7 +30,7 @@ Out of scope:
 - Changes to the Library window (list mode).
 - Full saved-place editing from the All tab: its saved-place rows offer Open, Copy and Edit place… only.
 - Saving a session scope with the layout.
-- Changing the Sessions panel's own file list.
+- Changing the Sessions panel's own file list **outside Desk**: Desk · separate panels keeps the selected session's files (§5, Cards only).
 
 ## 2. Layouts
 
@@ -100,6 +100,9 @@ Files hosts two existing views:
   - A session renamed while it is the scope keeps the scope, under its new name.
   - A session deleted while it is the scope clears the scope.
 - **What the scope matches.** The scope holds the session's id. Each refresh narrows the list to the session's current name (the Library index knows sessions by name, and `SessionStore` refuses a used name). That is how a rename keeps the scope and a deletion clears it. The scope is not saved with the layout.
+- **Cards only (Desk).** While a Files panel is shown, the Sessions panel shows the session cards alone: no selected-session pane, because every session's files are in Files' Sessions tab. The card menu keeps Open all, Edit… and Delete…. Without a Files panel (Desk · separate panels, Activity Atlas) the panel is as before. The workspace sets `SessionsPanel.CardsOnly` with `ShowsViewFiles`.
+- **The Sessions tab's buttons.** The tab has **Open all**, **Edit…** and **Delete…** beside the session chip. They act on the session the grid is scoped to and are off, with a hint, while no session is: View session files on a card scopes it. They show only while a Sessions panel is shown, since that panel holds the store and the editor. `FileShelfPanel` raises `SessionActionRequested(action, id)`, `FilesPanel` passes it on, and the workspace calls `SessionsPanel.RunSessionAction`, which selects the card by id (clearing a search or tag filter that hides it, `SessionsViewModel.Select`) and runs the same Open all / Edit / Delete, with the same confirmation, as the card's own buttons.
+- **The left column.** Favourites (top) and Sessions (bottom) are two shared rows of the left stack, so each gets half its height, with a 220px minimum each.
 
 ## 6. Model and view-model changes (UI-free, tested)
 

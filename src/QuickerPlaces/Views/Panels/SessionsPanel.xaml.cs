@@ -58,6 +58,25 @@ public partial class SessionsPanel : UserControl
     private const double StackBelow = 640;
 
     private bool _stacked;
+    private bool _cardsOnly;
+
+    /// <summary>
+    /// Shows the session cards alone, without the selected session's files: the
+    /// workspace turns this on while a File viewer is shown, whose Sessions tab
+    /// lists every session's files and has Open all, Edit and Delete (File
+    /// viewer design §5). The card menu still has them.
+    /// </summary>
+    public bool CardsOnly
+    {
+        get => _cardsOnly;
+        set
+        {
+            if (_cardsOnly == value)
+                return;
+            _cardsOnly = value;
+            ApplyBodyLayout();
+        }
+    }
 
     private void Body_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -65,8 +84,24 @@ public partial class SessionsPanel : UserControl
         if (stack == _stacked)
             return;
         _stacked = stack;
+        ApplyBodyLayout();
+    }
 
-        if (stack)
+    private void ApplyBodyLayout()
+    {
+        if (_cardsOnly)
+        {
+            ListColumn.Width = new GridLength(1, GridUnitType.Star);
+            ListColumn.MinWidth = 0;
+            GapColumn.Width = new GridLength(0);
+            DetailsRow.Height = new GridLength(0);
+            Grid.SetColumnSpan(ListArea, 3);
+            DetailsArea.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        DetailsArea.Visibility = Visibility.Visible;
+        if (_stacked)
         {
             ListColumn.Width = new GridLength(1, GridUnitType.Star);
             ListColumn.MinWidth = 0;
@@ -92,6 +127,30 @@ public partial class SessionsPanel : UserControl
         }
     }
 
+    /// <summary>
+    /// Does <paramref name="action"/> to the session with <paramref name="sessionId"/>,
+    /// as if its card were chosen and the button pressed: the File viewer's
+    /// Sessions tab asks for it. The card is selected first, past any filter.
+    /// </summary>
+    public void RunSessionAction(SessionAction action, string sessionId)
+    {
+        if (_viewModel is null || !_viewModel.Select(sessionId))
+            return;
+
+        switch (action)
+        {
+            case SessionAction.OpenAll:
+                OpenSelected();
+                break;
+            case SessionAction.Edit:
+                EditSelected(focusCards: false);
+                break;
+            case SessionAction.Delete:
+                DeleteSelected(focusCards: false);
+                break;
+        }
+    }
+
     private Window OwnerWindow => Window.GetWindow(this) ?? Application.Current.MainWindow;
 
     private string Title => OwnerWindow?.Title ?? AppInfo.Name;
@@ -110,7 +169,9 @@ public partial class SessionsPanel : UserControl
         FocusSelectedSession();
     }
 
-    private void Edit_Click(object sender, RoutedEventArgs e)
+    private void Edit_Click(object sender, RoutedEventArgs e) => EditSelected(focusCards: true);
+
+    private void EditSelected(bool focusCards)
     {
         if (_store is null || _probe is null || _viewModel?.SelectedRow is not { } row || !_viewModel.CanEditSelection)
             return;
@@ -121,10 +182,13 @@ public partial class SessionsPanel : UserControl
             _viewModel.NoteSaved(editor.SavedId!, editor.SavePersistenceMessage);
             SessionsChanged?.Invoke();
         }
-        FocusSelectedSession();
+        if (focusCards)
+            FocusSelectedSession();
     }
 
-    private void Delete_Click(object sender, RoutedEventArgs e)
+    private void Delete_Click(object sender, RoutedEventArgs e) => DeleteSelected(focusCards: true);
+
+    private void DeleteSelected(bool focusCards)
     {
         if (_viewModel is null || !_viewModel.CanEditSelection)
             return;
@@ -134,10 +198,13 @@ public partial class SessionsPanel : UserControl
 
         _viewModel.DeleteSelected();
         SessionsChanged?.Invoke();
-        FocusSelectedSession();
+        if (focusCards)
+            FocusSelectedSession();
     }
 
-    private void OpenAll_Click(object sender, RoutedEventArgs e)
+    private void OpenAll_Click(object sender, RoutedEventArgs e) => OpenSelected();
+
+    private void OpenSelected()
     {
         _viewModel?.OpenSelected();
         SessionsChanged?.Invoke();
@@ -245,4 +312,12 @@ public partial class SessionsPanel : UserControl
         else
             SessionsList.Focus();
     }
+}
+
+/// <summary>What the File viewer's Sessions tab can ask of a session (File viewer design §5).</summary>
+public enum SessionAction
+{
+    OpenAll,
+    Edit,
+    Delete,
 }

@@ -194,6 +194,31 @@ public sealed class SessionsViewModel : ObservableObject
         ApplyFilter(selectId);
     }
 
+    /// <summary>
+    /// Selects the session with <paramref name="sessionId"/>, for an action asked
+    /// for elsewhere (the File viewer's Sessions tab). A search or tag filter that
+    /// hides it is cleared first. False when no such session exists.
+    /// </summary>
+    public bool Select(string sessionId)
+    {
+        if (_store.Sessions.All(s => s.Id != sessionId))
+            return false;
+
+        if (Rows.All(r => r.Id != sessionId))
+        {
+            _searchText = "";
+            OnPropertyChanged(nameof(SearchText));
+            _selectedTag = null;
+            Reload(sessionId);
+        }
+        else
+        {
+            SelectedRow = Rows.First(r => r.Id == sessionId);
+        }
+
+        return SelectedRow?.Id == sessionId;
+    }
+
     /// <summary>Called by the view after the editor saved: shows the session and any save failure.</summary>
     public void NoteSaved(string sessionId, string? persistenceMessage)
     {

@@ -125,20 +125,51 @@
                         </StackPanel>
                     </Border>
                 </Border>
-                <!-- A session card's View session files (File viewer design §5): the session shown, and × for every session's files. -->
-                <Border HorizontalAlignment="Left" Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28"
-                        Padding="12,0,3,0" Margin="0,0,0,8"
-                        Visibility="{Binding HasSessionScope, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Sessions}" Margin="0,0,7,0" />
-                        <TextBlock Text="{Binding SessionScopeText}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <Button Style="{StaticResource Button.IconOnlyCompact}" Width="22" Height="22" Margin="6,0,0,0"
-                                ToolTip="Show every session's files" AutomationProperties.Name="Clear the session"
-                                Click="ClearSessionScope_Click">
-                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Close}" />
-                        </Button>
+                <!--
+                    The Sessions tab's session bar (File viewer design §5): a session
+                    card's View session files shows the session here, with × for every
+                    session's files. The buttons (ShowsSessionActions) act on that
+                    session, and are off while no session is shown.
+                -->
+                <WrapPanel x:Name="SessionBar" Orientation="Horizontal" Margin="0,0,0,8" Visibility="Collapsed">
+                    <Border HorizontalAlignment="Left" Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28"
+                            Padding="12,0,3,0" Margin="0,0,8,0"
+                            Visibility="{Binding HasSessionScope, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Sessions}" Margin="0,0,7,0" />
+                            <TextBlock Text="{Binding SessionScopeText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource Button.IconOnlyCompact}" Width="22" Height="22" Margin="6,0,0,0"
+                                    ToolTip="Show every session's files" AutomationProperties.Name="Clear the session"
+                                    Click="ClearSessionScope_Click">
+                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Close}" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    <StackPanel x:Name="SessionActions" Orientation="Horizontal" Visibility="Collapsed">
+                        <Button x:Name="OpenSessionButton" Content="Open all" Margin="0,0,8,0" Height="28"
+                                IsEnabled="{Binding HasSessionScope}" AutomationProperties.Name="Open all files in the session"
+                                ToolTip="Open every file in this session" Click="OpenSession_Click" />
+                        <Button x:Name="EditSessionButton" Content="Edit…" Margin="0,0,8,0" Height="28"
+                                IsEnabled="{Binding HasSessionScope}" AutomationProperties.Name="Edit the session"
+                                ToolTip="Rename, retag, or add and remove files" Click="EditSession_Click" />
+                        <Button x:Name="DeleteSessionButton" Content="Delete…" Margin="0,0,8,0" Height="28"
+                                IsEnabled="{Binding HasSessionScope}" AutomationProperties.Name="Delete the session"
+                                ToolTip="Delete this session. Its files are not touched." Click="DeleteSession_Click" />
+                        <TextBlock Text="Choose View session files on a session card to edit or delete it."
+                                   VerticalAlignment="Center" Foreground="{DynamicResource Text.Secondary}" FontSize="12.5">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasSessionScope}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
-                </Border>
+                </WrapPanel>
                 <ItemsControl ItemsSource="{Binding KindFilters}" AutomationProperties.Name="Show kind">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>

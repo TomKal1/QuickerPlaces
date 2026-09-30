@@ -29,6 +29,7 @@ public partial class FileShelfPanel : UserControl
             if (e.NewValue is LibraryViewModel now)
                 now.PropertyChanged += ViewModel_PropertyChanged;
             UpdateColumns();
+            UpdateSessionBar();
         };
     }
 
@@ -36,6 +37,8 @@ public partial class FileShelfPanel : UserControl
     {
         if (e.PropertyName == nameof(LibraryViewModel.Tab))
             UpdateColumns();
+        else if (e.PropertyName == nameof(LibraryViewModel.HasSessionScope))
+            UpdateSessionBar();
     }
 
     /// <summary>
@@ -57,6 +60,40 @@ public partial class FileShelfPanel : UserControl
     }
 
     private void ClearSessionScope_Click(object sender, RoutedEventArgs e) => ViewModel?.ClearSessionScope();
+
+    /// <summary>
+    /// Shows Open all, Edit and Delete for the session this list is narrowed to
+    /// (File viewer design §5). The File viewer turns it on for its Sessions tab.
+    /// Each raises <see cref="SessionActionRequested"/>: the host has the store and the editor.
+    /// </summary>
+    public bool ShowsSessionActions
+    {
+        get => SessionActions.Visibility == Visibility.Visible;
+        set
+        {
+            SessionActions.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+            UpdateSessionBar();
+        }
+    }
+
+    /// <summary>Raised by the session bar's buttons, with the id of the session the list is narrowed to.</summary>
+    public event Action<SessionAction, string>? SessionActionRequested;
+
+    /// <summary>The bar shows while it has a chip or buttons to hold, so an empty one takes no room.</summary>
+    private void UpdateSessionBar()
+        => SessionBar.Visibility = ShowsSessionActions || ViewModel?.HasSessionScope == true ? Visibility.Visible : Visibility.Collapsed;
+
+    private void OpenSession_Click(object sender, RoutedEventArgs e) => RaiseSessionAction(SessionAction.OpenAll);
+
+    private void EditSession_Click(object sender, RoutedEventArgs e) => RaiseSessionAction(SessionAction.Edit);
+
+    private void DeleteSession_Click(object sender, RoutedEventArgs e) => RaiseSessionAction(SessionAction.Delete);
+
+    private void RaiseSessionAction(SessionAction action)
+    {
+        if (ViewModel?.SessionScope is { } id)
+            SessionActionRequested?.Invoke(action, id);
+    }
 
     private LibraryViewModel? ViewModel => DataContext as LibraryViewModel;
 

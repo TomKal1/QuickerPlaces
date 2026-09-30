@@ -316,7 +316,14 @@ public partial class WorkspaceView : UserControl
         foreach (var shelf in _shelves)
             shelf.ShowsPeriod = noCalendar;
         if (_sessionsPanel is not null)
-            _sessionsPanel.ShowsViewFiles = _workspace.Panels.Any(p => p.Type == PanelTypes.Files);
+        {
+            // With a File viewer, its Sessions tab lists the files, so the cards need not (File viewer design §5).
+            var hasFiles = _workspace.Panels.Any(p => p.Type == PanelTypes.Files);
+            _sessionsPanel.ShowsViewFiles = hasFiles;
+            _sessionsPanel.CardsOnly = hasFiles;
+        }
+        if (_filesPanel is not null)
+            _filesPanel.OffersSessionActions = _workspace.Panels.Any(p => p.Type == PanelTypes.Sessions);
         EmptyCanvasText.Visibility = _workspace.HasPanels ? Visibility.Collapsed : Visibility.Visible;
         FitCanvasHeight();
     }
@@ -823,6 +830,7 @@ public partial class WorkspaceView : UserControl
             case PanelTypes.Files:
                 // The File viewer (File viewer design §3): Saved places and Recents as tabs, with Sessions and All.
                 _filesPanel = new FilesPanel(new PlacesPanel { DataContext = _places, CollapsesWithWindow = false }, CreateShelf(), _workspace!.Library);
+                _filesPanel.SessionActionRequested += (action, id) => _sessionsPanel?.RunSessionAction(action, id);
                 return _filesPanel;
 
             case PanelTypes.Sessions:

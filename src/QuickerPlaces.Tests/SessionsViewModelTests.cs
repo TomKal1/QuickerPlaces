@@ -61,6 +61,32 @@ public sealed class SessionsViewModelTests
     }
 
     [Fact]
+    public void Select_SelectsThatSession_AndClearsAFilterThatHidesIt()
+    {
+        Add("Tower A", new[] { "Tower A" }, Spec);
+        var towerB = Add("Tower B", new[] { "Tower B" }, A101);
+        var vm = NewViewModel();
+        vm.SelectedTag = "tower a";
+        Assert.DoesNotContain(vm.Rows, r => r.Id == towerB.Id);
+
+        Assert.True(vm.Select(towerB.Id));
+
+        Assert.Equal("Tower B", vm.SelectedRow!.Name);
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.Null(vm.SelectedTag);
+    }
+
+    [Fact]
+    public void Select_ReturnsFalse_ForASessionThatDoesNotExist()
+    {
+        Add("Tower A", new[] { "Tower A" }, Spec);
+        var vm = NewViewModel();
+
+        Assert.False(vm.Select("missing"));
+        Assert.Equal("Tower A", vm.SelectedRow!.Name);
+    }
+
+    [Fact]
     public void ChoosingATag_FiltersTheList_AndMarksTheChoice()
     {
         Add("Tower A", new[] { "Tower A", "Markups" }, Spec);
