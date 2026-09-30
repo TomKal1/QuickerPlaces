@@ -2828,6 +2828,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ### Task 15: Verify on Windows
 
+**Status (2026-09-29):** closed. The checks run while building are recorded in `BUILD_SUMMARY.md`. The rest move to the File viewer's Windows checks.
+
 Not code. Record every result in `BUILD_SUMMARY.md`'s *Verification status* and commit that.
 
 Build to a scratch folder and run against a scratch data root. Never run against the real data, and never call `app.Run()` from a probe.

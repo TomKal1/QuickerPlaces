@@ -809,6 +809,8 @@ Checked on Windows 11 against scratch data with UI Automation and real mouse cli
 
 **Not exercised** (from the plan's Windows checks): Edit tracking settings, Delete tracked folder (and its confirmation), Retry save, dragging a Favourites card to reorder, Ctrl+1, the Library window in list mode (no tracked-folders strip or Add as place; Folder level grouping), and the dark and light themes (chips, Column choice and Favourites cards readable).
 
+**Task 15 closed on 2026-09-29 at the user's call.** The checks listed under *Not exercised* were not run. They move to the Windows checks of the [File viewer design](260929_File%20Viewer%20Design.md), which changes Desk.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.
