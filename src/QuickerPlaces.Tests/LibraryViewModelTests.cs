@@ -259,4 +259,21 @@ public sealed class LibraryViewModelTests
         Assert.True(vm.IsEmpty);
         Assert.StartsWith("Nothing here yet.", vm.EmptyText);
     }
+
+    [Fact]
+    public void FolderRows_ShowVisitsAndTime_AndOfferAddAsPlaceUnlessSaved()
+    {
+        Seed();
+
+        var vm = NewViewModel();
+        var acme = vm.Rows.Single(r => r.Name == "Acme");
+        var jobs = vm.Rows.Single(r => r.Name == "Jobs");
+        var pdf = vm.Rows.Single(r => r.Name == "A-101.pdf");
+
+        Assert.Equal(("1", ActivityFormat.Duration(TimeSpan.FromSeconds(30))), (acme.VisitsText, acme.TimeText));
+        Assert.Equal(("", ""), (pdf.VisitsText, pdf.TimeText));
+        Assert.True(acme.CanAddAsPlace);
+        Assert.False(jobs.CanAddAsPlace);
+        Assert.False(pdf.CanAddAsPlace);
+    }
 }

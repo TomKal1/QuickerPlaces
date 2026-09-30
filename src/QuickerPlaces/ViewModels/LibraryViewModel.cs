@@ -898,10 +898,20 @@ public sealed class LibraryRowViewModel
         ? TimeZoneInfo.ConvertTime(at, _zone).DateTime.ToString("g", _culture)
         : "";
 
+    /// <summary>Visits in the period, for a folder Recents recorded; "" otherwise (Desk layout design §4).</summary>
+    public string VisitsText => Item.Kind == LibraryKind.Folder && Item.RecentCount > 0 ? Item.RecentCount.ToString(_culture) : "";
+
+    /// <summary>Time spent in the folder in the period (Recents); "" otherwise.</summary>
+    public string TimeText => Item.Kind == LibraryKind.Folder && Item.RecentTime > TimeSpan.Zero ? ActivityFormat.Duration(Item.RecentTime) : "";
+
+    /// <summary>A folder that isn't a saved place yet: the Recents panel offers Add as place.</summary>
+    public bool CanAddAsPlace => Item.Kind == LibraryKind.Folder && !Item.IsSavedPlace;
+
     /// <summary>True when <paramref name="other"/> is the same item, shown the same way in the same group.</summary>
     public bool Looks(LibraryRowViewModel other)
         => ResourceIdentity.Comparer.Equals(Item.Key, other.Item.Key) && GroupName == other.GroupName && Name == other.Name &&
            SourceText == other.SourceText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
+           VisitsText == other.VisitsText && TimeText == other.TimeText &&
            ReferenceEquals(Item.Place, other.Item.Place);
 
     /// <summary>True for a file Recent Files recorded, which Remove from Recent Files can forget.</summary>

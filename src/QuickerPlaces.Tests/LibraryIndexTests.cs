@@ -100,4 +100,19 @@ public sealed class LibraryIndexTests
 
         Assert.Equal(expected, LibraryIndex.Matches(item, search));
     }
+
+    [Fact]
+    public void AFoldersTimeInRecents_IsKept_AndAFilesIsZero()
+    {
+        var items = LibraryIndex.Build(
+            Array.Empty<Place>(),
+            Array.Empty<SessionSnapshot>(),
+            new[] { new FolderActivity(@"C:\Jobs\Acme", TimeSpan.FromMinutes(25), 3, DateTimeOffset.UnixEpoch) },
+            new[] { new RecentFileSummary(@"C:\Jobs\Acme\Plan.pdf", DocumentKind.Pdf, 1, DateTimeOffset.UnixEpoch) });
+
+        Assert.Equal(TimeSpan.FromMinutes(25), items.Single(i => i.Kind == LibraryKind.Folder).RecentTime);
+        Assert.Equal(TimeSpan.Zero, items.Single(i => i.Kind == LibraryKind.Pdf).RecentTime);
+        Assert.Equal(@"C:\Jobs\Acme", items.Single(i => i.Kind == LibraryKind.Folder).TreePath);
+        Assert.Equal(@"C:\Jobs\Acme", items.Single(i => i.Kind == LibraryKind.Pdf).TreePath);
+    }
 }
