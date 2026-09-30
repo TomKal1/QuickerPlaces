@@ -220,7 +220,6 @@ public partial class WorkspaceView : UserControl
     {
         var expanded = _places?.IsGridExpanded ?? true;
         CanvasArea.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        HideButton.Content = expanded ? "Hide panels" : "Show panels";
     }
 
     // -----------------------------------------------------------------
@@ -873,8 +872,6 @@ public partial class WorkspaceView : UserControl
     private void Import_Click(object sender, RoutedEventArgs e) => _places?.ImportCommand.Execute(null);
 
     private void Export_Click(object sender, RoutedEventArgs e) => _places?.ExportCommand.Execute(null);
-
-    private void Hide_Click(object sender, RoutedEventArgs e) => _places?.ToggleGridCommand.Execute(null);
 
     private void RetryLayouts_Click(object sender, RoutedEventArgs e) => _workspace?.RetrySave();
 }

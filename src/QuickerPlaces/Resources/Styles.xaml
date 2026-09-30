@@ -420,7 +420,12 @@
                                       Stroke="{DynamicResource Text.Secondary}" Margin="0,0,10,0" />
                             </Grid>
                         </Border>
-                        <ToggleButton x:Name="ToggleButton" Focusable="False" ClickMode="Press" Background="Transparent"
+                        <!--
+                            Covers the whole box, so a click anywhere opens it. No
+                            style: ThemeMode's Fluent ToggleButton style would align
+                            it left and centre, shrinking it to nothing to click.
+                        -->
+                        <ToggleButton x:Name="ToggleButton" Style="{x:Null}" Focusable="False" ClickMode="Press" Background="Transparent"
                                       IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
                             <ToggleButton.Template>
                                 <ControlTemplate TargetType="ToggleButton">

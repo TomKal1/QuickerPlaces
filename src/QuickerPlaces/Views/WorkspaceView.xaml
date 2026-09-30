@@ -12,8 +12,9 @@
         twelve-column canvas that the code-behind builds from
         WorkspaceViewModel.Panels, which scrolls when stacked panels are
         taller than the window. DataContext is the WorkspaceViewModel.
-        Hide (Ctrl+H) collapses the canvas and keeps the toolbar, as list
-        mode keeps the list's search box. The layout picker groups Built-in
+        Ctrl+H collapses the canvas and keeps the toolbar, as list mode
+        keeps the list's search box; there is no button for it, since each
+        panel hides on its own. The layout picker groups Built-in
         and My layouts and says which are modified, which starts, and which
         carry filters; the Layout menu beside it saves, renames, duplicates
         and deletes them and chooses the startup layout (M5).
@@ -35,7 +36,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar: layout, search, Arrange, Add panel, Options, Hide. -->
+        <!-- Toolbar: layout, search, Arrange, Add panel, Options. -->
         <Grid x:Name="Toolbar" Grid.Row="0" Margin="0,0,0,10" SizeChanged="Toolbar_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -49,7 +50,13 @@
 
             <StackPanel x:Name="LayoutTools" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="LAYOUT" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <!--
+                    Not synchronized with the view's current item: the list is
+                    rebuilt after every layout change, and a new view's current
+                    item is its first row, which would switch to that layout.
+                -->
                 <ComboBox x:Name="LayoutPicker" ItemsSource="{Binding Source={StaticResource GroupedLayouts}}"
+                          IsSynchronizedWithCurrentItem="False"
                           SelectedItem="{Binding SelectedLayout, Mode=TwoWay}"
                           MinWidth="190" MaxWidth="320" VerticalAlignment="Center"
                           AutomationProperties.Name="Layout" ToolTip="The layout shown: a built-in one, or one of yours">
@@ -172,7 +179,7 @@
                         <ContextMenu x:Name="AddPanelMenu" Placement="Bottom" />
                     </Button.ContextMenu>
                 </Button>
-                <Button x:Name="OptionsButton" Style="{StaticResource Button.IconOnly}" Click="Options_Click" Margin="0,0,8,0"
+                <Button x:Name="OptionsButton" Style="{StaticResource Button.IconOnly}" Click="Options_Click"
                         ToolTip="Options" AutomationProperties.Name="Options">
                     <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Menu}" />
                     <Button.ContextMenu>
@@ -194,7 +201,6 @@
                         </ContextMenu>
                     </Button.ContextMenu>
                 </Button>
-                <Button x:Name="HideButton" Click="Hide_Click" ToolTip="Hide or show the panels (Ctrl+H)" Content="Hide panels" />
             </StackPanel>
         </Grid>
 

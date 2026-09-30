@@ -750,6 +750,14 @@ On Linux (.NET SDK 10.0.112): 1068 tests pass (1051 before; new: `SaveLayoutView
 - Make `workspace-layouts.json` read-only: a save shows the warning with Retry; make it writable, Retry. Corrupt the file (with a `workspace-layouts.bak.json` beside it): the warning offers Restore layouts.
 - Keyboard: the picker's groups with the arrow keys, the Layout menu with Alt+Down or Enter, the dialog's radio buttons.
 
+### Fixes after the first Windows try (2026-09-29)
+
+- **No combo box opened with the mouse**, anywhere in the app: the layout picker, Arrange mode's width choice, the shelf's tag filter, Recents' roll-up. `ThemeManager` sets `ThemeMode`, whose Fluent `ToggleButton` style aligned the combo template's full-size toggle Left/Center, shrinking it to 0×0, so a click landed on the border beneath. The toggle now has `Style="{x:Null}"` (`Styles.xaml`). The keyboard and UI Automation had always worked, which is why tests and the probe missed it.
+- **Saved layouts didn't stay shown.** The picker's items come from a `CollectionViewSource`, and a selector over a non-default view follows its current item. Every layout change rebuilds the list, and the new view's current item is its first row, so after Save as new, Done or a switch the picker put back Activity Atlas. The layouts file had the new layout, but it wasn't shown. The picker is now `IsSynchronizedWithCurrentItem="False"`.
+- **The Hide panels button is gone** at the user's request: each panel's × hides it and Add panel brings it back. Ctrl+H still collapses the canvas.
+
+Checked on Windows 11 against a test data root with UI Automation and real mouse clicks: the picker and width choice open. Setting Sessions to Full width and then Save as new shows "My Activity Atlas". Switching to Activity Atlas and back brings its arrangement, `workspace-layouts.json` records it as active, and a restart resumes it. 1071 tests pass.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.
