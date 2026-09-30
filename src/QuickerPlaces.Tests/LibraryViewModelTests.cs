@@ -122,6 +122,21 @@ public sealed class LibraryViewModelTests
     }
 
     [Fact]
+    public void GroupByFolderLevel_PutsItemsUnderTheirDepth_AndTheRestLast()
+    {
+        Seed();
+        var vm = NewViewModel();
+
+        vm.Grouping = LibraryGrouping.Level;
+
+        Assert.True(vm.IsGroupedByLevel);
+        Assert.Equal(new[] { TrackedFolderPaths.LevelLabel(1), TrackedFolderPaths.NotTracked }, vm.Rows.Select(r => r.GroupName).Distinct());
+        Assert.Equal(new[] { "A-101.pdf", "Acme", "Budget.xlsx", "Report.docx" },
+            vm.Rows.Where(r => r.GroupName == TrackedFolderPaths.LevelLabel(1)).Select(r => r.Name).OrderBy(n => n));
+        Assert.Equal(new[] { "Jobs", "Wiki" }, vm.Rows.Where(r => r.GroupName == TrackedFolderPaths.NotTracked).Select(r => r.Name).OrderBy(n => n));
+    }
+
+    [Fact]
     public void Search_NarrowsEverything_IncludingTheChipCounts()
     {
         Seed();

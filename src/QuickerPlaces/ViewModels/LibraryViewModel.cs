@@ -24,6 +24,9 @@ public enum LibraryGrouping
 
     /// <summary>One group per session tag, then "No tag". An item with two tags is in both.</summary>
     Tag,
+
+    /// <summary>By depth below the tracked folder that holds each item, then "Not in a tracked folder" (Desk layout design §4).</summary>
+    Level,
 }
 
 /// <summary>How much a click on the year strip chooses (configurable canvas plan D1: Day/Week/Month selection).</summary>
@@ -40,7 +43,7 @@ public enum CalendarSelectionUnit
 /// everything QuickerPlaces knows about, together — saved places, files in
 /// saved sessions, folders from Recents and files from Recent Files — split
 /// by kind, filtered to saved or recent, to a Session tag and by search,
-/// grouped by type or by tag, for a chosen period, with a year strip of the
+/// grouped by type, tag or folder level, for a chosen period, with a year strip of the
 /// activity each source recorded.
 ///
 /// The query is one explicit thing (D4): <see cref="CurrentQuery"/> reads it
@@ -210,12 +213,14 @@ public sealed class LibraryViewModel : ObservableObject
                 return;
             OnPropertyChanged(nameof(IsGroupedByType));
             OnPropertyChanged(nameof(IsGroupedByTag));
+            OnPropertyChanged(nameof(IsGroupedByLevel));
             BuildRows();
         }
     }
 
     public bool IsGroupedByType { get => _grouping == LibraryGrouping.Type; set { if (value) Grouping = LibraryGrouping.Type; } }
     public bool IsGroupedByTag { get => _grouping == LibraryGrouping.Tag; set { if (value) Grouping = LibraryGrouping.Tag; } }
+    public bool IsGroupedByLevel { get => _grouping == LibraryGrouping.Level; set { if (value) Grouping = LibraryGrouping.Level; } }
 
     public string SearchText
     {
@@ -745,10 +750,26 @@ public sealed class LibraryViewModel : ObservableObject
 
         var shown = passing.Where(i => selected is null || i.Kind == selected).ToList();
         var rows = new List<LibraryRowViewModel>();
+        var zone = _time.LocalTimeZone;
         if (_grouping == LibraryGrouping.Type)
         {
             foreach (var item in shown.OrderBy(i => i.Kind))
-                rows.Add(new LibraryRowViewModel(item, item.Kind.PluralLabel(), (int)item.Kind, _time.LocalTimeZone, _culture));
+                rows.Add(new LibraryRowViewModel(item, item.Kind.PluralLabel(), (int)item.Kind, zone, _culture));
+        }
+        else if (_grouping == LibraryGrouping.Level)
+        {
+            var roots = _snapshot.Roots.Select(r => r.Path).Where(p => p.Length > 0).ToList();
+            var placed = shown.Select(item =>
+            {
+                var root = item.TreePath.Length == 0 ? null : TrackedFolderPaths.RootFor(roots, item.TreePath);
+                return (Item: item, Level: root is null ? null : TrackedFolderPaths.LevelBelow(root, item.TreePath));
+            }).ToList();
+
+            // OrderBy is stable: within a level, most recently used first, as elsewhere.
+            foreach (var (item, level) in placed.Where(p => p.Level is not null).OrderBy(p => p.Level))
+                rows.Add(new LibraryRowViewModel(item, TrackedFolderPaths.LevelLabel(level!.Value), level.Value, zone, _culture));
+            foreach (var (item, _) in placed.Where(p => p.Level is null))
+                rows.Add(new LibraryRowViewModel(item, TrackedFolderPaths.NotTracked, int.MaxValue, zone, _culture));
         }
         else
         {
@@ -757,11 +778,11 @@ public sealed class LibraryViewModel : ObservableObject
             for (var index = 0; index < tags.Count; index++)
             {
                 foreach (var item in shown.Where(i => i.Tags.Contains(tags[index], StringComparer.OrdinalIgnoreCase)))
-                    rows.Add(new LibraryRowViewModel(item, tags[index], index, _time.LocalTimeZone, _culture));
+                    rows.Add(new LibraryRowViewModel(item, tags[index], index, zone, _culture));
             }
 
             foreach (var item in shown.Where(i => i.Tags.Count == 0))
-                rows.Add(new LibraryRowViewModel(item, "No tag", tags.Count, _time.LocalTimeZone, _culture));
+                rows.Add(new LibraryRowViewModel(item, "No tag", tags.Count, zone, _culture));
         }
 
         // A refresh that changes nothing shown leaves the rows alone, so the list keeps its scroll position and selection.
