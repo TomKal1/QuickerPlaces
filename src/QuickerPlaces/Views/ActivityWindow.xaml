@@ -14,28 +14,6 @@
             <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
             <Setter Property="FontSize" Value="12.5" />
         </Style>
-        <Style x:Key="Button.CalendarYear" TargetType="Button">
-            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
-            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="YearBackground" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                            <StackPanel Orientation="Horizontal">
-                                <ContentPresenter VerticalAlignment="Center" />
-                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronDown}" Margin="4,0,0,0" />
-                            </StackPanel>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="YearBackground" Property="Background" Value="{DynamicResource Highlight.Soft}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
         <!-- Week / Month / Day: compact buttons whose on-state fills Highlight. -->
         <Style x:Key="Button.Period" TargetType="Button" BasedOn="{StaticResource Button.Compact}" />
         <Style x:Key="TrackedFolderCard" TargetType="ListBoxItem" BasedOn="{StaticResource ListBoxItem.Chip}">
@@ -219,33 +197,8 @@
                                                          VirtualizingPanel.VirtualizationMode="Recycling"
                                                          PreviewMouseLeftButtonUp="CalendarYearList_PreviewMouseLeftButtonUp"
                                                          KeyDown="CalendarYearList_KeyDown"
+                                                         ItemContainerStyle="{StaticResource ListBoxItem.YearChoice}"
                                                          AutomationProperties.Name="Choose activity year">
-                                                    <ListBox.ItemContainerStyle>
-                                                        <Style TargetType="ListBoxItem">
-                                                            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
-                                                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
-                                                            <Setter Property="Padding" Value="10,5" />
-                                                            <Setter Property="Cursor" Value="Hand" />
-                                                            <Setter Property="Template">
-                                                                <Setter.Value>
-                                                                    <ControlTemplate TargetType="ListBoxItem">
-                                                                        <Border x:Name="YearItemBackground" Background="Transparent"
-                                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                                            <ContentPresenter />
-                                                                        </Border>
-                                                                        <ControlTemplate.Triggers>
-                                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                                <Setter TargetName="YearItemBackground" Property="Background" Value="{DynamicResource Bg.Panel}" />
-                                                                            </Trigger>
-                                                                            <Trigger Property="IsSelected" Value="True">
-                                                                                <Setter TargetName="YearItemBackground" Property="Background" Value="{DynamicResource Highlight.Soft}" />
-                                                                            </Trigger>
-                                                                        </ControlTemplate.Triggers>
-                                                                    </ControlTemplate>
-                                                                </Setter.Value>
-                                                            </Setter>
-                                                        </Style>
-                                                    </ListBox.ItemContainerStyle>
                                                 </ListBox>
                                             </StackPanel>
                                         </Border>

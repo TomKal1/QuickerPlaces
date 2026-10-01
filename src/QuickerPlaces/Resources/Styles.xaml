@@ -585,6 +585,66 @@
     </Style>
 
     <!--
+        The same segment stacked top to bottom (the Activity panel's Day / Week / Month):
+        a rule under each, Tag "5,5,0,0" first, "0" middle, "0,0,5,5" last with BorderThickness="0".
+    -->
+    <Style x:Key="RadioButton.SegmentVertical" TargetType="RadioButton" BasedOn="{StaticResource RadioButton.Segment}">
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Padding" Value="12,0" />
+    </Style>
+
+    <!-- The year (or month's year) as a button that opens the list of years. -->
+    <Style x:Key="Button.CalendarYear" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="YearBackground" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentPresenter VerticalAlignment="Center" />
+                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronDown}" Margin="4,0,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="YearBackground" Property="Background" Value="{DynamicResource Highlight.Soft}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A year in the year list: plain text, a soft fill on hover and when chosen. -->
+    <Style x:Key="ListBoxItem.YearChoice" TargetType="ListBoxItem">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+        <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="YearItemBackground" Background="Transparent"
+                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="YearItemBackground" Property="Background" Value="{DynamicResource Bg.Panel}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="YearItemBackground" Property="Background" Value="{DynamicResource Highlight.Soft}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
         A highlight swatch in Settings: a 40 px circle in its Background, the
         name underneath. Tag="windows" draws the four-pane icon instead of a
         colour.

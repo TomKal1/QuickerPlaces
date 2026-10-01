@@ -900,7 +900,7 @@ public partial class WorkspaceView : UserControl
                 // height it needs, and never shows a scroll bar.
                 return new ScrollViewer
                 {
-                    Content = new YearActivityPanel { DataContext = _workspace!.Library },
+                    Content = new YearActivityPanel { DataContext = _workspace!.Library, ShowsTitle = false },
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     Focusable = false,

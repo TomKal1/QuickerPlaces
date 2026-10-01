@@ -9,8 +9,8 @@ namespace QuickerPlaces.ViewModels;
 /// <summary>One year of day cells, laid out by culture-specific weeks.</summary>
 public static class ActivityCalendar
 {
-    /// <summary>Beyond the strip itself: the weekday labels, the panel's border and padding, and a little room.</summary>
-    public const double YearChrome = 64;
+    /// <summary>Beyond the strip itself: the weekday labels, the panel's border and padding, a little room, plus the unit buttons' column.</summary>
+    public const double YearChrome = 150;
 
     /// <summary>
     /// True when the Year activity panel should show one month rather than the
