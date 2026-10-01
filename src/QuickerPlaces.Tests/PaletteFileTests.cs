@@ -70,6 +70,8 @@ public sealed class PaletteFileTests
     [InlineData(true, "Signal", "Bg.Base")]
     [InlineData(true, "On.Leather", "Leather")]
     [InlineData(true, "On.Leather.Badge", "Leather.Deep")]
+    [InlineData(true, "On.Session", "Session")]
+    [InlineData(true, "On.Session.Badge", "Session.Deep")]
     [InlineData(true, "Text.Tertiary", "Bg.Raised")]
     [InlineData(true, "Text.Tertiary", "Bg.RowHover")]
     [InlineData(true, "Text.Secondary", "Bg.RowHover")]
@@ -87,6 +89,8 @@ public sealed class PaletteFileTests
     [InlineData(false, "Danger", "Bg.Raised")]
     [InlineData(false, "On.Leather", "Leather")]
     [InlineData(false, "On.Leather.Badge", "Leather.Deep")]
+    [InlineData(false, "On.Session", "Session")]
+    [InlineData(false, "On.Session.Badge", "Session.Deep")]
     public void TextKeepsFourPointFiveToOne(bool dark, string text, string ground)
     {
         var palette = For(dark);

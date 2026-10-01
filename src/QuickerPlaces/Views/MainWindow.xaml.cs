@@ -1,11 +1,13 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuickerPlaces.Models;
+using QuickerPlaces.Mvvm;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
@@ -57,6 +59,7 @@ public partial class MainWindow : Window
         _themeManager = themeManager;
         RestoreWindowState(settings);
         UpdateActivityIndicator();
+        AddSessionShortcuts();
 
         if (workspaceLayout is null)
         {
@@ -108,6 +111,36 @@ public partial class MainWindow : Window
 
         // Tracked folders may have changed, and with them what the workspace lists.
         _workspaceView?.RequestReload();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+1 to Ctrl+Shift+9, then Ctrl+Shift+0, open the first ten sessions in the
+    /// order of the cards, as Ctrl+1 to Ctrl+9 open the favourites. Window-wide, so they
+    /// work whether or not the Sessions panel is shown.
+    /// </summary>
+    private void AddSessionShortcuts()
+    {
+        for (var position = 0; position < SessionStore.ShortcutCount; position++)
+        {
+            var index = position;
+            var key = index < 9 ? Key.D1 + index : Key.D0;
+            InputBindings.Add(new KeyBinding(new RelayCommand(() => OpenSessionAt(index)), key, ModifierKeys.Control | ModifierKeys.Shift));
+        }
+    }
+
+    /// <summary>Opens the session at a 0-based place in the order of the cards. A place with no session does nothing.</summary>
+    private void OpenSessionAt(int index)
+    {
+        if (_sessionStore.Sessions.ElementAtOrDefault(index) is not { } session)
+            return;
+
+        if (_workspaceView?.TryOpenInSessionsPanel(session.Id) == true)
+            return;
+
+        var outcome = new SessionLauncher(_sessionStore, new WindowsShell()).Open(session);
+        if (outcome.Summary is { } problem)
+            MessageForm.Show(problem, AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
+        _workspaceView?.NoteSessionOpened();
     }
 
     private void SessionsButton_Click(object sender, RoutedEventArgs e)

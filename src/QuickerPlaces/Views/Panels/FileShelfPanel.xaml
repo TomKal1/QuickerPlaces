@@ -155,7 +155,7 @@
                         <Button x:Name="DeleteSessionButton" Content="Delete…" Margin="0,0,8,0" Height="28"
                                 IsEnabled="{Binding HasSessionScope}" AutomationProperties.Name="Delete the session"
                                 ToolTip="Delete this session. Its files are not touched." Click="DeleteSession_Click" />
-                        <TextBlock Text="Choose View session files on a session card to edit or delete it."
+                        <TextBlock Text="Click a session card to open, edit or delete it."
                                    VerticalAlignment="Center" Foreground="{DynamicResource Text.Secondary}" FontSize="12.5">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">

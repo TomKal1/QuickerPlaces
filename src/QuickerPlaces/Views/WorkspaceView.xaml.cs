@@ -136,6 +136,27 @@ public partial class WorkspaceView : UserControl
         SearchBox.SelectAll();
     }
 
+    /// <summary>
+    /// Opens a session through the Sessions panel when it is on screen, as its Open
+    /// all would, so the panel shows what happened. False when it isn't shown, and
+    /// the caller opens the session itself.
+    /// </summary>
+    public bool TryOpenInSessionsPanel(string sessionId)
+    {
+        if (_sessionsPanel is not { IsVisible: true })
+            return false;
+
+        _sessionsPanel.RunSessionAction(SessionAction.OpenAll, sessionId);
+        return true;
+    }
+
+    /// <summary>After a session was opened without the Sessions panel: its Last opened, and so its place in the list, changed.</summary>
+    public void NoteSessionOpened()
+    {
+        _sessionsPanel?.Reload();
+        RequestReload();
+    }
+
     /// <summary>Reads the Library's sources again soon: after Recents' window closes, or anything else that changed them.</summary>
     public void RequestReload()
     {
@@ -859,11 +880,21 @@ public partial class WorkspaceView : UserControl
                 return _filesPanel;
 
             case PanelTypes.Sessions:
-                _sessionsPanel = new SessionsPanel();
-                _sessionsPanel.Attach(_sessions!, new WindowsShell(), _probe!);
-                _sessionsPanel.SessionsChanged += RequestReload;
-                _sessionsPanel.ViewFilesRequested += id => _filesPanel?.ShowSession(id);
-                return _sessionsPanel;
+                var sessionsPanel = _sessionsPanel = new SessionsPanel { AllowsNoSelection = true };
+                sessionsPanel.Attach(_sessions!, new WindowsShell(), _probe!);
+                sessionsPanel.SessionsChanged += RequestReload;
+                sessionsPanel.ViewFilesRequested += id => _filesPanel?.ShowSession(id);
+
+                // The chosen card is the session the File viewer shows, and the other way round:
+                // the viewer's chip (or leaving its Sessions tab) puts the card down.
+                sessionsPanel.SelectedSessionChanged += id => _filesPanel?.ScopeSession(id);
+                var library = _workspace!.Library;
+                library.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(LibraryViewModel.SessionScope))
+                        sessionsPanel.SelectSession(library.SessionScope);
+                };
+                return sessionsPanel;
 
             case PanelTypes.Places:
                 return new PlacesPanel { DataContext = _places, CollapsesWithWindow = false };

@@ -51,39 +51,58 @@
             </Style.Triggers>
         </Style>
 
-        <!-- A session's tags, shown small beside it: plain leather, like the favourite cards. -->
+        <!-- A session's tags, shown small on its card: a deeper blue than the card, as the number badge is. -->
         <DataTemplate x:Key="TagPill">
-            <Border Background="{DynamicResource Leather}" CornerRadius="4" Padding="7,1,7,2" Margin="0,0,4,3">
-                <TextBlock Text="{Binding}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource On.Leather}" />
+            <Border Background="{DynamicResource Session.Deep}" CornerRadius="4" Padding="7,1,7,2" Margin="0,0,4,3">
+                <TextBlock Text="{Binding}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource On.Session.Badge}" />
             </Border>
         </DataTemplate>
 
-        <!-- One saved session in the list: a card, selected in the highlight's soft wash. -->
+        <!-- The Ctrl+Shift+number badge on a session card: a favourite's badge, in the sessions' blue. -->
+        <Style x:Key="Border.SessionNumber" TargetType="Border" BasedOn="{StaticResource Border.FavouriteNumber}">
+            <Setter Property="Background" Value="{DynamicResource Session.Deep}" />
+            <Setter Property="Margin" Value="0,0,9,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--
+            One saved session in the list: a card made like a favourite's (the same
+            fill, shadow and sheen), in the sessions' steel blue instead of leather.
+            The chosen card turns the highlight colour and gets a ring, so it shows
+            even when the highlight is itself blue.
+        -->
         <Style x:Key="SessionCard" TargetType="ListBoxItem">
             <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
-            <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
-            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Border.Default}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="12,9" />
-            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="Background" Value="{DynamicResource Session}" />
+            <Setter Property="Foreground" Value="{DynamicResource On.Session}" />
+            <Setter Property="Padding" Value="8,7,12,7" />
+            <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="Card_PreviewMouseLeftButtonDown" />
+            <EventSetter Event="PreviewMouseMove" Handler="Card_PreviewMouseMove" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="CardBorder" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
-                            <ContentPresenter Margin="{TemplateBinding Padding}" />
-                        </Border>
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="Fill" Background="{TemplateBinding Background}" CornerRadius="6">
+                                <Border.Effect>
+                                    <DropShadowEffect Direction="270" ShadowDepth="1" BlurRadius="2" Opacity="0.22" Color="Black" />
+                                </Border.Effect>
+                            </Border>
+                            <Border CornerRadius="6" BorderThickness="0,1,0,0" BorderBrush="#38FFFFFF" />
+                            <Border x:Name="Sheen" CornerRadius="6" Background="#1AFFFFFF" Visibility="Collapsed" />
+                            <Border x:Name="Ring" CornerRadius="6" BorderThickness="2" BorderBrush="Transparent" />
+                            <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                <Setter TargetName="Sheen" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource Highlight.Soft}" />
-                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                <Setter TargetName="Fill" Property="Background" Value="{DynamicResource Highlight}" />
+                                <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource On.Highlight}" />
+                                <Setter Property="Foreground" Value="{DynamicResource On.Highlight}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,12 +121,20 @@
 
         <!-- The store's notice, and the one main action. -->
         <Grid Grid.Row="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
-                       TextWrapping="Wrap" Margin="0,0,0,10" Style="{StaticResource CollapsedWhenEmpty}" />
+                       TextWrapping="Wrap" Margin="0,0,0,10" VerticalAlignment="Center" Style="{StaticResource CollapsedWhenEmpty}" />
+            <!-- What the cards do, under the header so it has the panel's whole width. -->
+            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,0,10" TextWrapping="Wrap" Style="{StaticResource TextBlock.Hint}"
+                       Foreground="{DynamicResource Text.Tertiary}"
+                       Text="Drag cards to put them in order: the first ten open with Ctrl+Shift+1 to 9, then 0. Click a card to show its files; Esc clears it." />
             <Button Grid.Column="1" x:Name="SaveOpenButton"
                     Style="{StaticResource Button.Primary}" VerticalAlignment="Top" Margin="12,0,0,10"
                     IsEnabled="{Binding CanChange}"
@@ -207,6 +234,7 @@
                              AutomationProperties.Name="Saved sessions"
                              MouseDoubleClick="SessionsList_MouseDoubleClick"
                              KeyDown="SessionsList_KeyDown"
+                             AllowDrop="True" DragOver="SessionsList_DragOver" Drop="SessionsList_Drop"
                              ContextMenuOpening="SessionsList_ContextMenuOpening">
                         <!-- A card's menu (File viewer design §5). Right-click selects the card first, so it acts on the selected session. -->
                         <ListBox.ContextMenu>
@@ -221,19 +249,30 @@
                         </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <ItemsControl ItemsSource="{Binding Tags}" ItemTemplate="{StaticResource TagPill}"
-                                                  Margin="0,5,0,0" Focusable="False"
-                                                  Visibility="{Binding HasTags, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                    </ItemsControl>
-                                    <TextBlock Text="{Binding DetailText}" FontSize="12.5" Margin="0,4,0,0"
-                                               Foreground="{DynamicResource Text.Secondary}" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                                <!-- The badge first, as on a favourite: the card's place in the order is its Ctrl+Shift number. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource Border.SessionNumber}" ToolTip="{Binding ShortcutToolTip}"
+                                            Visibility="{Binding HasShortcut, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="{Binding ShortcutText}" FontSize="12" FontWeight="Bold"
+                                                   Foreground="{DynamicResource On.Session.Badge}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis" />
+                                        <ItemsControl ItemsSource="{Binding Tags}" ItemTemplate="{StaticResource TagPill}"
+                                                      Margin="0,4,0,0" Focusable="False"
+                                                      Visibility="{Binding HasTags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                        <TextBlock Text="{Binding DetailText}" FontSize="12" Margin="0,3,0,0" Opacity="0.85" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>

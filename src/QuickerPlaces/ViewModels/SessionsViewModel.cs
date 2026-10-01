@@ -34,17 +34,20 @@ public sealed class SessionsViewModel : ObservableObject
     private SessionRowViewModel? _selectedRow;
     private string? _statusMessage;
     private string? _errorMessage;
+    private bool _rebuilding;
 
     /// <param name="localZone">The zone dates are shown in; null for the machine's own. Tests pass a fixed one.</param>
-    public SessionsViewModel(SessionStore store, SessionLauncher launcher, TimeZoneInfo? localZone = null)
+    /// <param name="allowsNoSelection">See <see cref="AllowsNoSelection"/>; given here so the first card isn't selected before it is known.</param>
+    public SessionsViewModel(SessionStore store, SessionLauncher launcher, TimeZoneInfo? localZone = null, bool allowsNoSelection = false)
     {
         _store = store;
         _launcher = launcher;
         _localZone = localZone ?? TimeZoneInfo.Local;
+        AllowsNoSelection = allowsNoSelection;
         Reload(null);
     }
 
-    /// <summary>The sessions the search and tag let through, most recently used first.</summary>
+    /// <summary>The sessions the search and tag let through, in the saved order (dragged on the cards).</summary>
     public ObservableCollection<SessionRowViewModel> Rows { get; } = new();
 
     /// <summary>"All tags" and then every tag in use, for the filter.</summary>
@@ -93,11 +96,22 @@ public sealed class SessionsViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// True in the workspace, where the selected card filters the File viewer: no
+    /// card is selected until one is chosen, and Esc or Delete leaves none selected.
+    /// False (the default) keeps the first card selected, as the Sessions window does.
+    /// </summary>
+    public bool AllowsNoSelection { get; set; }
+
     public SessionRowViewModel? SelectedRow
     {
         get => _selectedRow;
         set
         {
+            // The list clears its selection while the cards are rebuilt: not a choice, so not kept.
+            if (_rebuilding && value is null)
+                return;
+
             if (!SetProperty(ref _selectedRow, value))
                 return;
 
@@ -172,8 +186,28 @@ public sealed class SessionsViewModel : ObservableObject
             StatusMessage = $"Deleted \"{row.Name}\".";
 
         Reload(null);
-        if (Rows.Count > 0)
+        if (Rows.Count > 0 && !AllowsNoSelection)
             SelectedRow = Rows[Math.Clamp(index, 0, Rows.Count - 1)];
+    }
+
+    /// <summary>
+    /// A card dragged onto another (or onto empty space, with a null target, for the
+    /// end): it takes that card's place in the saved order, so its Ctrl+Shift number
+    /// changes with it. Reloads the cards, keeping the selection.
+    /// </summary>
+    public void Move(SessionRowViewModel dragged, SessionRowViewModel? target)
+    {
+        if (ReferenceEquals(dragged, target) || dragged.Id == target?.Id)
+            return;
+
+        var result = _store.Move(dragged.Id, target?.Id);
+        ClearMessages();
+        if (!result.Saved)
+            ErrorMessage = result.UserMessage;
+        else if (_store.Find(dragged.Id)?.ShortcutDigit is { } digit)
+            StatusMessage = $"\"{dragged.Name}\" opens with Ctrl+Shift+{digit}.";
+
+        Reload(_selectedRow?.Id);
     }
 
     /// <summary>Rebuilds everything from the store, selecting <paramref name="selectId"/> if it is still listed.</summary>
@@ -251,11 +285,19 @@ public sealed class SessionsViewModel : ObservableObject
 
     private void ApplyFilter(string? selectId)
     {
-        Rows.Clear();
-        foreach (var session in _store.Sessions.Where(s => Matches(s, _searchText, _selectedTag)))
-            Rows.Add(new SessionRowViewModel(session, _localZone));
+        _rebuilding = true;
+        try
+        {
+            Rows.Clear();
+            foreach (var session in _store.Sessions.Where(s => Matches(s, _searchText, _selectedTag)))
+                Rows.Add(new SessionRowViewModel(session, _localZone));
+        }
+        finally
+        {
+            _rebuilding = false;
+        }
 
-        SelectedRow = Rows.FirstOrDefault(r => r.Id == selectId) ?? Rows.FirstOrDefault();
+        SelectedRow = Rows.FirstOrDefault(r => r.Id == selectId) ?? (AllowsNoSelection ? null : Rows.FirstOrDefault());
         OnPropertyChanged(nameof(ListPlaceholder));
         OnPropertyChanged(nameof(IsListEmpty));
     }
@@ -268,7 +310,7 @@ public sealed class SessionsViewModel : ObservableObject
             StatusMessage = $"Opened {FileCount(outcome.Launched.Count)} from \"{row.Name}\".";
         ErrorMessage = outcome.Summary;
 
-        // Last opened changed, and with it the order.
+        // Last opened changed, so the cards are read again.
         ApplyFilter(selectedId);
     }
 
@@ -300,7 +342,7 @@ public sealed class SessionRowViewModel
 
     public bool HasTags => Session.Tags.Count > 0;
 
-    /// <summary>"4 files · saved 28/09/2026 14:05 · opened 29/09/2026 09:12", in the user's own date format.</summary>
+    /// <summary>"4 files · saved 28/09/2026 · opened 29/09/2026", dates only, in the user's own date format.</summary>
     public string DetailText
     {
         get
@@ -310,8 +352,16 @@ public sealed class SessionRowViewModel
         }
     }
 
+    /// <summary>The number on the card's badge ("3" for Ctrl+Shift+3, "0" for the tenth), or null past the tenth card.</summary>
+    public string? ShortcutText => Session.ShortcutDigit?.ToString(CultureInfo.InvariantCulture);
+
+    public bool HasShortcut => Session.ShortcutDigit is not null;
+
+    /// <summary>"Ctrl+Shift+3 opens this session", or null past the tenth card.</summary>
+    public string? ShortcutToolTip => Session.ShortcutDigit is { } n ? $"Ctrl+Shift+{n} opens this session" : null;
+
     private string Local(DateTimeOffset instant)
-        => TimeZoneInfo.ConvertTime(instant, _localZone).DateTime.ToString("g", CultureInfo.CurrentCulture);
+        => TimeZoneInfo.ConvertTime(instant, _localZone).DateTime.ToString("d", CultureInfo.CurrentCulture);
 }
 
 /// <summary>One PDF of the selected session.</summary>

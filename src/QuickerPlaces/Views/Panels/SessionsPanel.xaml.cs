@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
@@ -33,17 +34,65 @@ public partial class SessionsPanel : UserControl
     /// <summary>Offers View session files on a card's menu. The workspace turns it on while a File viewer is shown.</summary>
     public bool ShowsViewFiles { get; set; }
 
+    /// <summary>
+    /// Raised with the id of the card selected, or null when none is, each time that
+    /// changes (not when the cards are rebuilt around the same selection). The
+    /// workspace shows the selected session's files in the File viewer.
+    /// </summary>
+    public event Action<string?>? SelectedSessionChanged;
+
+    private string? _notifiedId;
+
+    /// <summary>
+    /// True in the workspace: no card is selected until one is chosen, and Esc clears
+    /// the choice. Set before <see cref="Attach"/>.
+    /// </summary>
+    public bool AllowsNoSelection { get; set; }
+
     /// <summary>Connects the panel to the sessions store; until then it shows nothing.</summary>
     public void Attach(SessionStore store, IShell shell, WindowsOpenDocumentProbe probe)
     {
         _store = store;
         _probe = probe;
-        _viewModel = new SessionsViewModel(store, new SessionLauncher(store, shell));
+        _viewModel = new SessionsViewModel(store, new SessionLauncher(store, shell), allowsNoSelection: AllowsNoSelection);
+        _notifiedId = _viewModel.SelectedRow?.Id;
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(SessionsViewModel.SelectedRow))
+                return;
+
+            var id = _viewModel.SelectedRow?.Id;
+            if (id == _notifiedId)
+                return;
+
+            _notifiedId = id;
+            SelectedSessionChanged?.Invoke(id);
+        };
         DataContext = _viewModel;
+    }
+
+    /// <summary>Selects the card for <paramref name="sessionId"/>, or none for null: the File viewer's chip cleared the session it was showing.</summary>
+    public void SelectSession(string? sessionId)
+    {
+        if (_viewModel is null)
+            return;
+
+        if (sessionId is null)
+        {
+            if (AllowsNoSelection)
+                _viewModel.SelectedRow = null;
+        }
+        else
+        {
+            _viewModel.Select(sessionId);
+        }
     }
 
     /// <summary>Shows a session saved elsewhere (the File shelf's Save as session), selected, with how its write went.</summary>
     public void NoteSaved(string sessionId, string? persistenceMessage) => _viewModel?.NoteSaved(sessionId, persistenceMessage);
+
+    /// <summary>Reads the sessions again, keeping the selected one: after one was opened or changed elsewhere.</summary>
+    public void Reload() => _viewModel?.Reload(_viewModel.SelectedRow?.Id);
 
     /// <summary>Start where the work is: the list when there are sessions, Save open files when there are none.</summary>
     public void FocusStart()
@@ -221,13 +270,83 @@ public partial class SessionsPanel : UserControl
     /// <summary>Opens a card's menu on that card only: empty space has no session to act on.</summary>
     private void SessionsList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        if (_viewModel?.SelectedRow is null || (e.OriginalSource as FrameworkElement)?.DataContext is not SessionRowViewModel)
+        if (_viewModel is null || (e.OriginalSource as FrameworkElement)?.DataContext is not SessionRowViewModel clicked)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // The menu acts on the selected session, so the card it was opened on is selected first.
+        if (_viewModel.SelectedRow?.Id != clicked.Id)
+            _viewModel.SelectedRow = clicked;
+        if (_viewModel.SelectedRow is null)
         {
             e.Handled = true;
             return;
         }
 
         ViewFilesMenuItem.Visibility = ShowsViewFiles ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // -----------------------------------------------------------------
+    // Drag a card to put the sessions in order, as favourites are dragged
+    // (FavouritesPanel). A card's place in the order is its Ctrl+Shift
+    // number, so this is how a shortcut is given. A plain click never
+    // reaches DoDragDrop: only a press followed by a move past the system's
+    // drag distance starts one.
+    // -----------------------------------------------------------------
+
+    private Point? _dragStart;
+
+    private void Card_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        => _dragStart = e.GetPosition(null);
+
+    private void Card_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _dragStart is not { } start)
+            return;
+
+        if (sender is not ListBoxItem { DataContext: SessionRowViewModel row } item || _viewModel is not { CanChange: true })
+            return;
+
+        var current = e.GetPosition(null);
+        if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _dragStart = null;
+        DragDrop.DoDragDrop(item, new DataObject(typeof(SessionRowViewModel), row), DragDropEffects.Move);
+    }
+
+    private void SessionsList_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(SessionRowViewModel)) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void SessionsList_Drop(object sender, DragEventArgs e)
+    {
+        if (_viewModel is null || e.Data.GetData(typeof(SessionRowViewModel)) is not SessionRowViewModel dragged)
+            return;
+
+        // Onto another card, it takes that card's place; onto empty space, it goes last.
+        _viewModel.Move(dragged, CardAt(e.GetPosition(SessionsList)));
+        e.Handled = true;
+    }
+
+    /// <summary>The session whose card is at <paramref name="point"/> (inside the list), or null over empty space.</summary>
+    private SessionRowViewModel? CardAt(Point point)
+    {
+        var hit = VisualTreeHelper.HitTest(SessionsList, point)?.VisualHit;
+        while (hit is not null)
+        {
+            if (hit is FrameworkElement { DataContext: SessionRowViewModel row })
+                return row;
+
+            hit = VisualTreeHelper.GetParent(hit);
+        }
+
+        return null;
     }
 
     private void ViewFiles_Click(object sender, RoutedEventArgs e)
@@ -261,6 +380,12 @@ public partial class SessionsPanel : UserControl
         else if (e.Key == Key.Delete && _viewModel.CanEditSelection)
         {
             Delete_Click(sender, e);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && AllowsNoSelection && _viewModel.HasSelection)
+        {
+            // Esc puts the card down: nothing selected, so the File viewer shows every session again.
+            _viewModel.SelectedRow = null;
             e.Handled = true;
         }
     }

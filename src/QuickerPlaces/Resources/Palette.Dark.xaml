@@ -30,6 +30,10 @@
     <SolidColorBrush x:Key="Leather.Deep" Color="#FF7A4C2B" />
     <SolidColorBrush x:Key="On.Leather" Color="#FF26170D" />
     <SolidColorBrush x:Key="On.Leather.Badge" Color="#FFF6E7D6" />
+    <SolidColorBrush x:Key="Session" Color="#FF36679A" />
+    <SolidColorBrush x:Key="Session.Deep" Color="#FF234B75" />
+    <SolidColorBrush x:Key="On.Session" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="On.Session.Badge" Color="#FFE6F0FA" />
     <SolidColorBrush x:Key="Heat.0" Color="#FF1C211F" />
     <SolidColorBrush x:Key="Heat.1" Color="#FF3A2E24" />
     <SolidColorBrush x:Key="Heat.2" Color="#FF6A4930" />

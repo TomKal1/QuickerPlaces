@@ -57,6 +57,21 @@ public partial class FilesPanel : UserControl
         _library.ScopeToSession(sessionId);
     }
 
+    /// <summary>
+    /// A session card was chosen, or put down (null): the Sessions tab shows that
+    /// session's files, or every session's. Does nothing while the viewer isn't on screen.
+    /// </summary>
+    public void ScopeSession(string? sessionId)
+    {
+        if (!IsVisible || sessionId == _library.SessionScope)
+            return;
+
+        if (sessionId is null)
+            _library.ClearSessionScope();
+        else
+            ShowSession(sessionId);
+    }
+
     private void Tab_Checked(object sender, RoutedEventArgs e)
     {
         Tab = sender == RecentTab ? LibraryTab.Recent
