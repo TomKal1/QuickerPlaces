@@ -448,7 +448,7 @@ public partial class WorkspaceView : UserControl
 
             frame.Update(panel, _workspace.IsArranging, _workspace.IsColumns, _workspace.IsCustomising);
 
-            // Save open files shares the title's line, unless Hide or Arrange's controls are there.
+            // Save files shares the title's line, unless Hide or Arrange's controls are there.
             if (panel.Type == PanelTypes.Sessions && _sessionsPanel is not null)
                 _sessionsPanel.ActionInHeader = !_workspace.IsCustomising;
         }
@@ -924,7 +924,7 @@ public partial class WorkspaceView : UserControl
                 return _filesPanel;
 
             case PanelTypes.Sessions:
-                var sessionsPanel = _sessionsPanel = new SessionsPanel { AllowsNoSelection = true };
+                var sessionsPanel = _sessionsPanel = new SessionsPanel { AllowsNoSelection = true, ShowsSearch = false };
                 sessionsPanel.Attach(_sessions!, new WindowsShell(), _probe!);
                 sessionsPanel.SessionsChanged += RequestReload;
                 sessionsPanel.ViewFilesRequested += id => _filesPanel?.ShowSession(id);

@@ -506,7 +506,7 @@ public sealed class LibraryViewModelTests
         var vm = NewViewModel();
 
         vm.Tab = LibraryTab.Sessions;
-        Assert.Equal("No session files yet. Save open files as a session from the Sessions panel.", vm.EmptyText);
+        Assert.Equal("No session files yet. Save files as a session from the Sessions panel.", vm.EmptyText);
         vm.Tab = LibraryTab.Recent;
         Assert.Equal("Nothing recent yet. Track a folder above, or turn on Recent Files.", vm.EmptyText);
     }

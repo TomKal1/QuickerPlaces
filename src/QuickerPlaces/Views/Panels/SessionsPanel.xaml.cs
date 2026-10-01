@@ -94,10 +94,20 @@ public partial class SessionsPanel : UserControl
     /// <summary>Reads the sessions again, keeping the selected one: after one was opened or changed elsewhere.</summary>
     public void Reload() => _viewModel?.Reload(_viewModel.SelectedRow?.Id);
 
+    /// <summary>
+    /// False in the workspace, where the window's header box is the search: a
+    /// second box here would only repeat it. The Sessions window keeps its own.
+    /// </summary>
+    public bool ShowsSearch
+    {
+        get => SearchArea.Visibility == Visibility.Visible;
+        set => SearchArea.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private Panel? _headerSlot;
     private bool _actionInHeader;
 
-    /// <summary>Gives the panel the frame's title-line slot for Save open files; it stays in the panel until <see cref="ActionInHeader"/> is set.</summary>
+    /// <summary>Gives the panel the frame's title-line slot for Save files; it stays in the panel until <see cref="ActionInHeader"/> is set.</summary>
     public void AttachHeaderSlot(Panel slot)
     {
         _headerSlot = slot;
@@ -105,7 +115,7 @@ public partial class SessionsPanel : UserControl
     }
 
     /// <summary>
-    /// True puts Save open files on the frame's title line, level with the
+    /// True puts Save files on the frame's title line, level with the
     /// title (small enough not to make that line taller); false puts it back in
     /// the panel's first row, under the title. The workspace turns it off while
     /// the frame's own Hide and Arrange controls are shown, so they have the line.
@@ -145,7 +155,7 @@ public partial class SessionsPanel : UserControl
         target.Children.Add(SaveOpenButton);
     }
 
-    /// <summary>Start where the work is: the list when there are sessions, Save open files when there are none.</summary>
+    /// <summary>Start where the work is: the list when there are sessions, Save files when there are none.</summary>
     public void FocusStart()
     {
         if (_viewModel is { HasAnySessions: true })

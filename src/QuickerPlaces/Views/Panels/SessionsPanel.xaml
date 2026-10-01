@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--
         The Sessions panel (sessions plan §5; configurable canvas plan M2):
-        Save open files, the saved sessions with a search box and tag chips,
+        Save files, the saved sessions with a search box (unless ShowsSearch is
+        off) and tag chips,
         and the selected session's files with Open all, Edit and Delete.
         DataContext is a SessionsViewModel, set by Attach. The code-behind
         only asks before Delete and shows the Save Session dialog; after any
@@ -125,22 +126,29 @@
             (ActionInHeader), leaving this row to the notice alone.
         -->
         <Grid x:Name="ActionRow" Grid.Row="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
+            <!-- The shortcut tip, in the same quiet type as the Favourites panel's. -->
+            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Ctrl+Shift+1 to Ctrl+Shift+0 open them from the keyboard"
+                       Style="{StaticResource TextBlock.Hint}" Foreground="{DynamicResource Text.Tertiary}" Margin="0,0,0,8" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
                        TextWrapping="Wrap" Margin="0,0,0,10" VerticalAlignment="Center" Style="{StaticResource CollapsedWhenEmpty}" />
-            <Button Grid.Column="1" x:Name="SaveOpenButton"
+            <Button Grid.Row="1" Grid.Column="1" x:Name="SaveOpenButton"
                     Style="{StaticResource Button.Primary}" VerticalAlignment="Top" Margin="12,0,0,10"
                     IsEnabled="{Binding CanChange}"
                     ToolTip="Find the files open now, check the list, and save them as a session"
-                    AutomationProperties.Name="Save open files"
+                    AutomationProperties.Name="Save files"
                     Click="SaveOpen_Click">
                 <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
                     <!-- AccessText, not a TextBlock, so "_S" still gives Alt+S. -->
-                    <AccessText Text="_Save open files…" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    <AccessText Text="_Save files" Margin="7,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
         </Grid>
@@ -169,7 +177,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Search: the main window's search box. -->
-                <Border Grid.Row="0" Height="34" Margin="0,0,0,10" CornerRadius="6" BorderThickness="1"
+                <Border x:Name="SearchArea" Grid.Row="0" Height="34" Margin="0,0,0,10" CornerRadius="6" BorderThickness="1"
                         Padding="10,0,5,0" Background="{DynamicResource Bg.Sunken}">
                     <Border.Style>
                         <Style TargetType="Border">

@@ -21,7 +21,7 @@ namespace QuickerPlaces.ViewModels;
 public sealed class SessionsViewModel : ObservableObject
 {
     /// <summary>Shown in place of the list when nothing has been saved.</summary>
-    public const string EmptyMessage = "No sessions yet. Open the files you're working on, then choose Save open files.";
+    public const string EmptyMessage = "No sessions yet. Open the files you're working on, then choose Save files.";
 
     /// <summary>Shown in place of the list when the search or tag hides every session.</summary>
     public const string NoMatchesMessage = "No sessions match. Clear the search or choose All tags.";

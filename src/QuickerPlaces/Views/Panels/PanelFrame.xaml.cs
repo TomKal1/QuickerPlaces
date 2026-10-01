@@ -34,7 +34,7 @@ public partial class PanelFrame : UserControl
     /// <summary>
     /// Where a panel may put its main action on the title's line, right of the
     /// title and left of Hide and Arrange's controls (the Sessions panel's
-    /// Save open files). The panel moves it in and out as the header's other
+    /// Save files). The panel moves it in and out as the header's other
     /// controls come and go.
     /// </summary>
     public Panel HeaderSlot => HeaderActions;

@@ -556,7 +556,7 @@ public sealed class LibraryViewModel : ObservableObject
         get
         {
             if (Period is null && _tab == LibraryTab.Sessions && _snapshot.Sessions.All(s => s.Files.Count == 0))
-                return "No session files yet. Save open files as a session from the Sessions panel.";
+                return "No session files yet. Save files as a session from the Sessions panel.";
             if (Period is null && _tab == LibraryTab.Recent && _snapshot.Roots.Count == 0 && _snapshot.Files.Count == 0)
                 return "Nothing recent yet. Track a folder above, or turn on Recent Files.";
             var inPeriod = _result?.ItemsInPeriod ?? 0;
