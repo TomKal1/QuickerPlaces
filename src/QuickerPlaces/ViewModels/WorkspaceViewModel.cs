@@ -212,9 +212,10 @@ public sealed class WorkspaceViewModel : ObservableObject
         NotifyArrange();
     }
 
-    /// <summary>Done: keeps the arrangement and writes it once.</summary>
+    /// <summary>Done: keeps the arrangement and writes it once. The layout controls go away again.</summary>
     public void Done()
     {
+        EndCustomise();
         if (!IsArranging)
             return;
 
@@ -223,15 +224,70 @@ public sealed class WorkspaceViewModel : ObservableObject
         RebuildPanels();
     }
 
-    /// <summary>Revert: puts back the arrangement Arrange mode started with. Nothing is written.</summary>
+    /// <summary>Revert: puts back the arrangement Arrange mode started with. Nothing is written. The layout controls go away again.</summary>
     public void Revert()
     {
+        EndCustomise();
         if (!IsArranging)
             return;
 
         _layout.Revert();
         Status = "Put back the arrangement you started with.";
         RebuildPanels();
+    }
+
+    // ---------------------------------------------------------------
+    // Customise layout: the layout controls, kept out of the way
+    // ---------------------------------------------------------------
+
+    private bool _isCustomising;
+
+    /// <summary>
+    /// True while the layout controls are shown: the layout picker, Arrange, Add
+    /// panel, Reset to Desk and each panel's Hide. Otherwise the screen is Desk
+    /// with nothing to rearrange. Started by Customise layout… in the Options
+    /// menu; ended by Done, Revert, a save, Reset to Desk or the toolbar's Done.
+    /// Never saved: QuickerPlaces always starts plain.
+    /// </summary>
+    public bool IsCustomising => _isCustomising;
+
+    /// <summary>Shows the layout controls and starts Arrange mode, so the panels can be moved at once.</summary>
+    public void BeginCustomise()
+    {
+        if (_isCustomising)
+            return;
+
+        _isCustomising = true;
+        OnPropertyChanged(nameof(IsCustomising));
+        BeginArrange();
+    }
+
+    /// <summary>Hides the layout controls again. Changes made so far are not touched: Done and Revert decide those.</summary>
+    public void EndCustomise()
+    {
+        if (!_isCustomising)
+            return;
+
+        _isCustomising = false;
+        OnPropertyChanged(nameof(IsCustomising));
+    }
+
+    /// <summary>
+    /// Reset to Desk: the Desk layout as it comes, whatever layout and arrangement
+    /// were shown, and the layout controls away. An arrangement in progress is dropped.
+    /// Undo brings back the Desk panels that were changed.
+    /// </summary>
+    public void ResetToDesk()
+    {
+        if (Layouts.FirstOrDefault(l => l.Id == BuiltInLayouts.DeskId) is not { } desk)
+            return;
+
+        if (IsArranging)
+            Revert();
+        SelectedLayout = desk;
+        RestoreSaved();
+        EndCustomise();
+        Status = "Back to the Desk layout.";
     }
 
     /// <summary>Keyboard Move earlier: swaps with the shown panel before it, or above it in its column.</summary>
@@ -458,6 +514,7 @@ public sealed class WorkspaceViewModel : ObservableObject
         if (filters is not null)
             Library.ApplyQuery(_layout.Query);
         Report(persistence);
+        EndCustomise();
         Status = filters is null
             ? $"Saved “{ActiveLayoutName}” in My layouts."
             : $"Saved “{ActiveLayoutName}” in My layouts, with its filters.";
@@ -481,6 +538,7 @@ public sealed class WorkspaceViewModel : ObservableObject
         }
 
         Report(persistence);
+        EndCustomise();
         Status = hadFilters ? $"Saved changes to “{name}”, with the filters shown now." : $"Saved changes to “{name}”.";
         RebuildPanels();
     }

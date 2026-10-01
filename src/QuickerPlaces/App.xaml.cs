@@ -104,7 +104,7 @@ public partial class App : Application
 
         // The workspace (configurable canvas plan M3) only with --workspace
         // until M7 makes it the default; its layouts are read only then.
-        var workspaceLayout = options.Workspace ? new WorkspaceLayoutService(WorkspaceStore.CreateDefault()) : null;
+        var workspaceLayout = options.Workspace ? CreateWorkspaceLayout() : null;
         if (workspaceLayout is not null)
             DiagnosticLog.Info($"Showing the workspace ({workspaceLayout.ActiveName}).");
 
@@ -193,6 +193,21 @@ public partial class App : Application
                 if (!string.IsNullOrEmpty(e.Text))
                     e.Handled = true;
             }));
+
+    /// <summary>
+    /// The workspace's layouts. Someone starting for the first time (no layouts file
+    /// yet) begins on Desk, the layout the app is built around; the layout picker is
+    /// tucked away (Customise layout…), so the first screen has to be the right one.
+    /// After that the last layout shown is resumed, as before.
+    /// </summary>
+    private static WorkspaceLayoutService CreateWorkspaceLayout()
+    {
+        var store = WorkspaceStore.CreateDefault();
+        var layout = new WorkspaceLayoutService(store);
+        if (store.LoadOutcome == StoreLoadOutcome.NotPresent)
+            layout.Activate(BuiltInLayouts.DeskId);
+        return layout;
+    }
 
     /// <summary>
     /// Loops the RecoveryDialog until the store's load state is resolved

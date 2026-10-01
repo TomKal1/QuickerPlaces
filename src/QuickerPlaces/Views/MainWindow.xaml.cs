@@ -239,7 +239,9 @@ public partial class MainWindow : Window
         var saved = SettingsDialog.Show(this, _settings.GlobalHotkey,
             _settings.MinimizeToTray, _settings.StartWithWindows,
             ThemePreference.ParseTheme(_settings.Theme), ThemePreference.ParseHighlight(_settings.Highlight),
-            _themeManager.Apply, ApplySettingsChoice);
+            _themeManager.Apply, ApplySettingsChoice,
+            _workspaceView is null ? null : _workspaceView.ShowRecentFiles,
+            _workspaceView is null ? null : _workspaceView.BeginCustomise);
         if (saved is null)
         {
             // The app is exiting (tray Exit, session end) and closed this

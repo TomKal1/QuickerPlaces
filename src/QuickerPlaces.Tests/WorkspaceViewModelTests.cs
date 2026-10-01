@@ -371,6 +371,112 @@ public sealed class WorkspaceViewModelTests
     }
 
     // ---------------------------------------------------------------
+    // Customise layout: the layout controls, kept out of the way
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void TheLayoutControls_AreHiddenUntilCustomiseLayoutIsChosen()
+    {
+        var workspace = NewWorkspace();
+        Assert.False(workspace.IsCustomising);
+        Assert.False(workspace.IsArranging);
+
+        workspace.BeginCustomise();
+
+        Assert.True(workspace.IsCustomising);
+        Assert.True(workspace.IsArranging);
+    }
+
+    [Fact]
+    public void Done_Revert_AndASave_PutTheLayoutControlsAwayAgain()
+    {
+        var workspace = NewWorkspace();
+
+        workspace.BeginCustomise();
+        workspace.Done();
+        Assert.False(workspace.IsCustomising);
+        Assert.False(workspace.IsArranging);
+
+        workspace.BeginCustomise();
+        workspace.HidePanel("sessions");
+        workspace.Revert();
+        Assert.False(workspace.IsCustomising);
+        Assert.Equal(new[] { "activity", "shelf", "sessions" }, Types(workspace));
+
+        workspace.BeginCustomise();
+        Assert.True(workspace.SaveAsNew(workspace.NewSaveAs()));
+        Assert.False(workspace.IsCustomising);
+    }
+
+    [Fact]
+    public void PickingAnotherLayout_WhileCustomising_KeepsTheControls_ButEndsArranging()
+    {
+        var workspace = NewWorkspace();
+        workspace.BeginCustomise();
+
+        workspace.SelectedLayout = workspace.Layouts.Single(l => l.Id == BuiltInLayouts.DeskId);
+
+        Assert.True(workspace.IsCustomising);
+        Assert.False(workspace.IsArranging);
+        Assert.Equal("Desk", workspace.ActiveLayoutName);
+
+        // The toolbar's Done is how it ends from here.
+        workspace.Done();
+        Assert.False(workspace.IsCustomising);
+    }
+
+    [Fact]
+    public void ResetToDesk_ShowsDeskAsItComes_FromAnotherLayout_AndEndsCustomising()
+    {
+        var workspace = NewWorkspace();
+        workspace.BeginCustomise();
+        workspace.HidePanel("sessions");
+
+        workspace.ResetToDesk();
+
+        Assert.Equal(BuiltInLayouts.DeskId, workspace.SelectedLayout?.Id);
+        Assert.False(workspace.IsCustomising);
+        Assert.False(workspace.IsArranging);
+        Assert.False(workspace.IsModified);
+        Assert.Equal("Back to the Desk layout.", workspace.Status);
+    }
+
+    [Fact]
+    public void ResetToDesk_PutsBackPanelsHiddenOnDesk_AndOffersNothingWhenDeskIsUntouched()
+    {
+        var workspace = NewWorkspace();
+        workspace.SelectedLayout = workspace.Layouts.Single(l => l.Id == BuiltInLayouts.DeskId);
+        var all = Types(workspace);
+        workspace.HidePanel(workspace.Panels.First(p => p.Type == PanelTypes.Favourites).Id);
+        Assert.True(workspace.IsModified);
+
+        workspace.BeginCustomise();
+        workspace.ResetToDesk();
+        Assert.Equal(all, Types(workspace));
+        Assert.False(workspace.IsModified);
+
+        var writes = _layoutStorage.WriteCount;
+        workspace.ResetToDesk();
+        Assert.Equal(all, Types(workspace));
+        Assert.Equal(writes, _layoutStorage.WriteCount);
+    }
+
+    [Fact]
+    public void ResetToDesk_DropsAnArrangementInProgress()
+    {
+        var workspace = NewWorkspace();
+        workspace.SelectedLayout = workspace.Layouts.Single(l => l.Id == BuiltInLayouts.DeskId);
+        var all = Types(workspace);
+        workspace.BeginCustomise();
+        workspace.HidePanel(workspace.Panels.First(p => p.Type == PanelTypes.Sessions).Id);
+
+        workspace.ResetToDesk();
+
+        Assert.Equal(all, Types(workspace));
+        Assert.False(workspace.IsArranging);
+    }
+
+    // ---------------------------------------------------------------
     // Reflow (M4)
     // ---------------------------------------------------------------
 

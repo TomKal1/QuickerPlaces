@@ -4,7 +4,7 @@
     <!--
         The workspace (configurable canvas plan M3, M4), in the main window
         under the favourites: the layout picker, the one search box, Arrange,
-        Add panel and the Options menu on the toolbar (the search box takes
+        Add panel and nothing else on the toolbar (the search box takes
         a row of its own when they don't fit beside it); Arrange mode's bar
         with Undo, Restore, Revert and Done; a line about the saved layouts
         when something is wrong with them; the last action, announced to
@@ -36,7 +36,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar: layout, search, Arrange, Add panel, Options. -->
+        <!-- Toolbar: the layout controls (while customising), search, and the buttons. -->
         <Grid x:Name="Toolbar" Grid.Row="0" Margin="0,0,0,10" SizeChanged="Toolbar_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -49,6 +49,16 @@
             </Grid.RowDefinitions>
 
             <StackPanel x:Name="LayoutTools" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsCustomising}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
                 <TextBlock Text="LAYOUT" Style="{StaticResource TextBlock.Caps}" Margin="0,0,10,0" VerticalAlignment="Center" />
                 <!--
                     Not synchronized with the view's current item: the list is
@@ -123,7 +133,7 @@
                             <Style TargetType="TextBlock">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
+                                    <DataTrigger Binding="{Binding SearchText}" Value="">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -152,14 +162,34 @@
             </Border>
 
             <StackPanel x:Name="PanelTools" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- The layout controls (Customise layout… in Settings): Reset to Desk, Arrange, Add panel and Done. -->
+                <Button x:Name="ResetDeskButton" Click="ResetDesk_Click" Margin="0,0,8,0" AutomationProperties.Name="Reset to Desk"
+                        ToolTip="Show the Desk layout as it comes, with all its panels, and leave Customise">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCustomising}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <TextBlock Text="Reset to Desk" VerticalAlignment="Center" />
+                </Button>
                 <Button x:Name="ArrangeButton" Click="Arrange_Click" Margin="0,0,8,0" AutomationProperties.Name="Arrange panels"
                         ToolTip="Move panels, change their widths, hide or add them. Done keeps the changes; Revert puts back how it was.">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsArranging}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsCustomising}" Value="True" />
+                                        <Condition Binding="{Binding IsArranging}" Value="False" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </MultiDataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Button.Style>
@@ -171,6 +201,16 @@
                 <Button x:Name="AddPanelButton" Click="AddPanel_Click" Margin="0,0,8,0"
                         IsEnabled="{Binding CanAddPanel}" AutomationProperties.Name="Add panel"
                         ToolTip="Show a panel this layout doesn't: Saved places, or one you hid">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCustomising}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
                     <StackPanel Orientation="Horizontal">
                         <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
                         <TextBlock Text="Add panel" Margin="7,0,0,0" VerticalAlignment="Center" />
@@ -179,27 +219,24 @@
                         <ContextMenu x:Name="AddPanelMenu" Placement="Bottom" />
                     </Button.ContextMenu>
                 </Button>
-                <Button x:Name="OptionsButton" Style="{StaticResource Button.IconOnly}" Click="Options_Click"
-                        ToolTip="Options" AutomationProperties.Name="Options">
-                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Menu}" />
-                    <Button.ContextMenu>
-                        <ContextMenu Placement="Bottom" Opened="OptionsMenu_Opened">
-                            <MenuItem Header="Recent Files…" ToolTip="Record the PDF, Word and Excel files you open, and which" Click="RecentFiles_Click" />
-                            <Separator />
-                            <MenuItem Header="Recently Deleted" ToolTip="Places you removed in the last 7 days" Click="RecentlyDeleted_Click">
-                                <MenuItem.Icon>
-                                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Trash}" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="Places file" ToolTip="Open the folder containing places.json and select the file" Click="PlacesFile_Click">
-                                <MenuItem.Icon>
-                                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Folder}" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="Import places" Click="Import_Click" />
-                            <MenuItem x:Name="ExportMenuItem" Header="Export places" Click="Export_Click" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
+                <!-- While arranging, the bar below has Done; this one is for after another layout was picked, which ends the arranging. -->
+                <Button x:Name="CustomiseDoneButton" Click="Done_Click" Margin="0,0,8,0" Height="28"
+                        AutomationProperties.Name="Done customising" ToolTip="Hide the layout controls">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource Button.Primary}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsCustomising}" Value="True" />
+                                        <Condition Binding="{Binding IsArranging}" Value="False" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <TextBlock Text="Done" VerticalAlignment="Center" />
                 </Button>
             </StackPanel>
         </Grid>
@@ -319,7 +356,7 @@
             </ScrollViewer>
             <TextBlock x:Name="EmptyCanvasText" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource Text.Tertiary}" Margin="16,48,16,0"
-                       Text="No panels are shown. Use Add panel to put one back."
+                       Text="No panels are shown. Open Settings at the top right, choose Customise layout…, then Reset to Desk."
                        Visibility="Collapsed" />
         </Grid>
     </Grid>

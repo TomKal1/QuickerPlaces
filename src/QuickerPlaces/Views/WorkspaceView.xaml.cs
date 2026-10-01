@@ -234,6 +234,7 @@ public partial class WorkspaceView : UserControl
                 break;
 
             case nameof(WorkspaceViewModel.IsArranging):
+            case nameof(WorkspaceViewModel.IsCustomising):
                 UpdateFrames();
                 Dispatcher.BeginInvoke(DispatcherPriority.Background, FitToolbar);
                 break;
@@ -416,7 +417,7 @@ public partial class WorkspaceView : UserControl
         foreach (var panel in _workspace.Panels)
         {
             if (_frames.TryGetValue(panel.Id, out var frame))
-                frame.Update(panel, _workspace.IsArranging, _workspace.IsColumns);
+                frame.Update(panel, _workspace.IsArranging, _workspace.IsColumns, _workspace.IsCustomising);
         }
     }
 
@@ -716,17 +717,47 @@ public partial class WorkspaceView : UserControl
         Dispatcher.BeginInvoke(DispatcherPriority.Input, () => DoneButton.Focus());
     }
 
+    /// <summary>Customise layout… (in Settings): shows the layout controls and starts Arrange mode.</summary>
+    public void BeginCustomise()
+    {
+        if (_workspace is null)
+            return;
+
+        if (_places is { IsGridExpanded: false } places)
+            places.IsGridExpanded = true;
+        _workspace.BeginCustomise();
+
+        // Settings has closed: the keyboard goes to the bar's Done.
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => DoneButton.Focus());
+    }
+
+    /// <summary>Recent Files… (in Settings): which Office and PDF files are recorded.</summary>
+    public void ShowRecentFiles(Window owner)
+    {
+        if (_workspace is not null)
+            RecentFilesDialog.Show(owner, _workspace.Library);
+    }
+
+    private void ResetDesk_Click(object sender, RoutedEventArgs e)
+    {
+        _workspace?.ResetToDesk();
+        FocusOptions();
+    }
+
+    // The layout controls are gone after these, so the keyboard goes back to the search box.
     private void Done_Click(object sender, RoutedEventArgs e)
     {
         _workspace?.Done();
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => ArrangeButton.Focus());
+        FocusOptions();
     }
 
     private void Revert_Click(object sender, RoutedEventArgs e)
     {
         _workspace?.Revert();
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => ArrangeButton.Focus());
+        FocusOptions();
     }
+
+    private void FocusOptions() => Dispatcher.BeginInvoke(DispatcherPriority.Input, () => SearchBox.Focus());
 
     private void Restore_Click(object sender, RoutedEventArgs e) => _workspace?.RestoreSaved();
 
@@ -814,8 +845,8 @@ public partial class WorkspaceView : UserControl
         });
     }
 
-    /// <summary>After Save as new or Save changes, which leave Arrange mode, the keyboard goes back to the picker.</summary>
-    private void FocusLayoutPicker() => Dispatcher.BeginInvoke(DispatcherPriority.Input, () => LayoutPicker.Focus());
+    /// <summary>After Save as new or Save changes, which leave Arrange mode and hide the layout controls, the keyboard goes back to the search box.</summary>
+    private void FocusLayoutPicker() => FocusOptions();
 
     private void RestoreBackup_Click(object sender, RoutedEventArgs e) => _workspace?.RestoreBackup();
 
@@ -1055,30 +1086,6 @@ public partial class WorkspaceView : UserControl
         AddPanelMenu.PlacementTarget = AddPanelButton;
         AddPanelMenu.IsOpen = true;
     }
-
-    private void Options_Click(object sender, RoutedEventArgs e)
-    {
-        if (OptionsButton.ContextMenu is not { } menu) return;
-        menu.PlacementTarget = OptionsButton;
-        menu.IsOpen = true;
-    }
-
-    private void OptionsMenu_Opened(object sender, RoutedEventArgs e)
-        => ExportMenuItem.IsEnabled = _places?.ExportCommand.CanExecute(null) ?? false;
-
-    private void RecentFiles_Click(object sender, RoutedEventArgs e)
-    {
-        if (_workspace is not null && Window.GetWindow(this) is { } owner)
-            RecentFilesDialog.Show(owner, _workspace.Library);
-    }
-
-    private void RecentlyDeleted_Click(object sender, RoutedEventArgs e) => _places?.ShowRecentlyDeletedCommand.Execute(null);
-
-    private void PlacesFile_Click(object sender, RoutedEventArgs e) => _places?.OpenDataFolderCommand.Execute(null);
-
-    private void Import_Click(object sender, RoutedEventArgs e) => _places?.ImportCommand.Execute(null);
-
-    private void Export_Click(object sender, RoutedEventArgs e) => _places?.ExportCommand.Execute(null);
 
     private void RetryLayouts_Click(object sender, RoutedEventArgs e) => _workspace?.RetrySave();
 }

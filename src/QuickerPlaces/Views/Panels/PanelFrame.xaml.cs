@@ -26,7 +26,7 @@ public partial class PanelFrame : UserControl
         InitializeComponent();
         PanelId = panel.Id;
         ContentHost.Child = content;
-        Update(panel, arranging: false, columns: false);
+        Update(panel, arranging: false, columns: false, customising: false);
     }
 
     public string PanelId { get; }
@@ -62,13 +62,18 @@ public partial class PanelFrame : UserControl
         ResizeHandle.CancelDrag();
     }
 
-    /// <summary>Shows the panel's current place, whether Arrange mode's controls are shown, and whether the layout is in columns.</summary>
-    public void Update(WorkspacePanelViewModel panel, bool arranging, bool columns)
+    /// <summary>
+    /// Shows the panel's current place, whether Arrange mode's controls are shown,
+    /// whether the layout is in columns, and whether Hide is offered: only while the
+    /// layout is being customised, so a panel can't be closed by accident.
+    /// </summary>
+    public void Update(WorkspacePanelViewModel panel, bool arranging, bool columns, bool customising = false)
     {
         Panel = panel;
         var title = panel.Title;
         TitleText.Text = title.ToUpperInvariant();
         AutomationProperties.SetName(this, title);
+        HideButton.Visibility = customising ? Visibility.Visible : Visibility.Collapsed;
 
         var arrange = arranging ? Visibility.Visible : Visibility.Collapsed;
         ArrangeControls.Visibility = arrange;
