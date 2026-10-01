@@ -35,6 +35,11 @@
     <SolidColorBrush x:Key="Heat.3" Color="#FFB97F4D" />
     <SolidColorBrush x:Key="Heat.4" Color="#FF84512C" />
     <SolidColorBrush x:Key="Heat.Untracked" Color="#FFE2E5E4" />
+    <!-- The day number on each heat level of the month view (checked at 4.5:1 by PaletteFileTests); empty days use Text.Secondary. -->
+    <SolidColorBrush x:Key="Heat.Text.1" Color="#FF161A19" />
+    <SolidColorBrush x:Key="Heat.Text.2" Color="#FF161A19" />
+    <SolidColorBrush x:Key="Heat.Text.3" Color="#FF161A19" />
+    <SolidColorBrush x:Key="Heat.Text.4" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="Preset.Green" Color="#FF1F5C4D" />
     <SolidColorBrush x:Key="Preset.Blue" Color="#FF2F5D8A" />
     <SolidColorBrush x:Key="Preset.Red" Color="#FFA8322B" />

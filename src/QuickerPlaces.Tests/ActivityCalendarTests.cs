@@ -152,4 +152,14 @@ public sealed class ActivityCalendarTests
     [InlineData(1900.0, 600, false)] // wide: year
     public void ShowsMonthViewWhenThereIsNoStripOrThePanelIsTooNarrowForIt(double panelWidth, int stripWidth, bool expected)
         => Assert.Equal(expected, ActivityCalendar.ShowsMonthView(panelWidth, stripWidth));
+
+    [Fact]
+    public void ACellKnowsItsDayOfTheMonth()
+    {
+        var withDate = new ActivityCalendarCell(new DateOnly(2026, 9, 26), true, true, 2, "label");
+        var blank = new ActivityCalendarCell(null, false, false, 0, "");
+
+        Assert.Equal(26, withDate.DayNumber);
+        Assert.Null(blank.DayNumber);
+    }
 }

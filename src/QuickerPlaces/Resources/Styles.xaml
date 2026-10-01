@@ -959,6 +959,49 @@
             </DataTrigger>
         </Style.Triggers>
     </Style>
+    <!--
+        The month view's day: the same cell as Button.CalendarDay (size, heat,
+        today outline, selection) with the day of the month in it. The number
+        is Text.Secondary on empty days and Heat.Text.n on a heat level, since
+        the heats run light to dark in one theme and dark to light in the other.
+    -->
+    <Style x:Key="Button.CalendarDayNumbered" TargetType="Button" BasedOn="{StaticResource Button.CalendarDay}">
+        <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
+        <Setter Property="FontSize" Value="8" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2" />
+                        <TextBlock Text="{Binding DayNumber}" Foreground="{TemplateBinding Foreground}" FontSize="{TemplateBinding FontSize}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+                        <Border x:Name="TodayOutline" Margin="-1" BorderBrush="{DynamicResource Signal}"
+                                BorderThickness="1.5" CornerRadius="3" Visibility="Collapsed" IsHitTestVisible="False" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsToday}" Value="True">
+                            <Setter TargetName="TodayOutline" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Intensity}" Value="1">
+                <Setter Property="Foreground" Value="{DynamicResource Heat.Text.1}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Intensity}" Value="2">
+                <Setter Property="Foreground" Value="{DynamicResource Heat.Text.2}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Intensity}" Value="3">
+                <Setter Property="Foreground" Value="{DynamicResource Heat.Text.3}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Intensity}" Value="4">
+                <Setter Property="Foreground" Value="{DynamicResource Heat.Text.4}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
     <!-- A kind chip: Recents' tracked-folder pill (ListBoxItem.Chip), filled while it is the chosen kind. -->
     <Style x:Key="Button.KindChip" TargetType="Button">
         <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />

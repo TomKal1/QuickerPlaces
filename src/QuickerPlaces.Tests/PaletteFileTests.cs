@@ -91,6 +91,18 @@ public sealed class PaletteFileTests
     [InlineData(false, "On.Leather.Badge", "Leather.Deep")]
     [InlineData(false, "On.Session", "Session")]
     [InlineData(false, "On.Session.Badge", "Session.Deep")]
+    [InlineData(true, "Heat.Text.1", "Heat.1")]
+    [InlineData(true, "Heat.Text.2", "Heat.2")]
+    [InlineData(true, "Heat.Text.3", "Heat.3")]
+    [InlineData(true, "Heat.Text.4", "Heat.4")]
+    [InlineData(true, "Text.Secondary", "Heat.0")]
+    [InlineData(true, "Text.Secondary", "Heat.Untracked")]
+    [InlineData(false, "Heat.Text.1", "Heat.1")]
+    [InlineData(false, "Heat.Text.2", "Heat.2")]
+    [InlineData(false, "Heat.Text.3", "Heat.3")]
+    [InlineData(false, "Heat.Text.4", "Heat.4")]
+    [InlineData(false, "Text.Secondary", "Heat.0")]
+    [InlineData(false, "Text.Secondary", "Heat.Untracked")]
     public void TextKeepsFourPointFiveToOne(bool dark, string text, string ground)
     {
         var palette = For(dark);

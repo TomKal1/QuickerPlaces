@@ -222,4 +222,8 @@ public sealed record ActivityCalendarMonthMarker(int Month, string Label, int La
 public sealed record ActivityCalendarWeek(DateOnly StartsOn, IReadOnlyList<ActivityCalendarCell> Days);
 
 public sealed record ActivityCalendarCell(DateOnly? Date, bool IsInRange, bool IsTracked,
-    int Intensity, string Label, bool IsSelected = false, bool IsToday = false);
+    int Intensity, string Label, bool IsSelected = false, bool IsToday = false)
+{
+    /// <summary>The day of the month, for the month view's numbered cells; null for a blank cell.</summary>
+    public int? DayNumber => Date?.Day;
+}

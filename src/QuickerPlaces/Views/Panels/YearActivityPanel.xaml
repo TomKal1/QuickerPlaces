@@ -152,7 +152,7 @@
                             <ItemsControl ItemsSource="{Binding Days}" Focusable="False">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Button Style="{StaticResource Button.CalendarDay}" ToolTip="{Binding Label}"
+                                        <Button Style="{StaticResource Button.CalendarDayNumbered}" ToolTip="{Binding Label}"
                                                 AutomationProperties.Name="{Binding Label}" Click="CalendarDay_Click" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
