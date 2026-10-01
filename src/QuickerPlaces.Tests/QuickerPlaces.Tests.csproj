@@ -51,6 +51,7 @@
     <Compile Include="..\QuickerPlaces\Services\PlaceSort.cs" Link="Linked\Services\PlaceSort.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceTags.cs" Link="Linked\Services\PlaceTags.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
     <Compile Include="..\QuickerPlaces\Services\ValidationResult.cs" Link="Linked\Services\ValidationResult.cs" />
@@ -148,7 +149,7 @@
 
   <ItemGroup>
     <!--
-      Fixtures/places.v1.json, places.v2.json and places.v3.json are read via
+      Fixtures/places.v1.json, places.v2.json, places.v3.json and places.v4.json are read via
       AppContext.BaseDirectory at test time (not as embedded resources), so
       they need to land next to the test assembly in the output directory.
       Every test that reads them does so the same way — see
@@ -161,6 +162,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Fixtures\places.v3.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Fixtures\places.v4.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

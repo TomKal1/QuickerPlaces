@@ -21,7 +21,7 @@ namespace QuickerPlaces.Tests;
 /// the regression net for an accidental change to JsonOptions, to Place's
 /// property names, or to the migration.
 ///
-/// Fixtures/places.v1.json, places.v2.json and places.v3.json are frozen
+/// Fixtures/places.v1.json, places.v2.json, places.v3.json and places.v4.json are frozen
 /// once written — do not "fix" any of them to match a future schema change; a new fixture is
 /// added for that instead. Each test pins its fixture's content hash, so an
 /// edit fails here rather than quietly changing what is being proven.
@@ -241,18 +241,52 @@ public sealed class PlacesStoreFixtureTests
     /// list slots (D7), with this build's own formatting and property order
     /// (id first, lastOpenedAt only when set). Proves the fixture really is
     /// the shape this build writes, not merely one it can read. Phase 2's
-    /// version of this test used places.v2.json, which a v3 build migrates
-    /// and so can no longer write back unchanged.
+    /// version of this test used places.v2.json, and Phase 3's places.v3.json;
+    /// a v4 build migrates both, so neither can be written back unchanged.
     /// </summary>
     [Fact]
-    public void V3FixtureFile_IsWrittenBackExactly()
+    public void V4FixtureFile_IsWrittenBackExactly()
     {
-        var json = ReadFixture("places.v3.json");
+        var json = ReadFixture("places.v4.json");
         var storage = new FakePlacesStorage { ContentsToReturn = json };
         var service = new PlacesService(storage, new ManualTimeProvider(Utc(2026, 9, 25, 0, 0, 0)));
 
         Assert.True(service.RetrySave().Saved);
 
         Assert.Equal(json.Replace("\r\n", "\n").TrimEnd(), storage.LastWritten!.Replace("\r\n", "\n").TrimEnd());
+    }
+
+    /// <summary>
+    /// places.v3.json migrates to v4: each lastOpenedAt becomes the only entry in
+    /// Opens (older opens stay in OpenCount alone), and no place has tags or a note.
+    /// </summary>
+    [Fact]
+    public void V3FixtureFile_MigratesToV4_SeedingOpensFromLastOpened()
+    {
+        var storage = new FakePlacesStorage { ContentsToReturn = ReadFixture("places.v3.json") };
+        var service = new PlacesService(storage, new ManualTimeProvider(Utc(2026, 9, 25, 0, 0, 0)));
+
+        var all = service.Places.Concat(service.RecentlyDeleted).ToList();
+        Assert.Equal(5, all.Count);
+        foreach (var place in all)
+        {
+            Assert.Equal(place.LastOpenedAt is { } last ? new[] { last } : Array.Empty<DateTimeOffset>(), place.Opens);
+            Assert.Empty(place.Tags);
+            Assert.Null(place.Note);
+        }
+        Assert.Equal(12, all.Single(p => p.Alias == "Downloads").OpenCount);
+    }
+
+    /// <summary>places.v4.json loads with its opens, tags and note intact.</summary>
+    [Fact]
+    public void V4FixtureFile_LoadsOpensTagsAndNote()
+    {
+        var storage = new FakePlacesStorage { ContentsToReturn = ReadFixture("places.v4.json") };
+        var service = new PlacesService(storage, new ManualTimeProvider(Utc(2026, 9, 25, 0, 0, 0)));
+
+        var downloads = service.Places.Single(p => p.Alias == "Downloads");
+        Assert.Equal(new[] { Utc(2026, 9, 20, 7, 0, 0), Utc(2026, 9, 24, 21, 15, 0) }, downloads.Opens);
+        Assert.Equal(new[] { "inbox", "temp" }, downloads.Tags);
+        Assert.Equal("Where browser downloads land; clear monthly.", downloads.Note);
     }
 }

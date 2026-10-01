@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace QuickerPlaces.Models;
@@ -62,4 +63,29 @@ public sealed class Place
 
     /// <summary>How many times QuickerPlaces has launched this place and Windows accepted it (D24). Saturates at int.MaxValue.</summary>
     public int OpenCount { get; set; }
+
+    /// <summary>
+    /// The most recent opens counted in <see cref="OpenCount"/> (schema v4), in UTC,
+    /// oldest first, at most <see cref="MaxOpens"/>. Lets usage be asked by period
+    /// ("most opened this week"), which a lifetime count cannot answer. Written only
+    /// by PlacesService.RecordOpen. A v3 store migrates with just its LastOpenedAt
+    /// here, so OpenCount can be larger than this list: older opens were never timed.
+    /// </summary>
+    public List<DateTimeOffset> Opens { get; set; } = new();
+
+    /// <summary>The most opens <see cref="Opens"/> keeps; the oldest are dropped first. The same cap as Recent Files.</summary>
+    public const int MaxOpens = 500;
+
+    /// <summary>
+    /// The user's tags for this place (schema v4), in the order given. Trimmed, never
+    /// blank, unique ignoring case — normalised by PlacesService (PlaceTags.Normalise).
+    /// </summary>
+    public List<string> Tags { get; set; } = new();
+
+    /// <summary>
+    /// A free-text description of what this place is for (schema v4); null for none.
+    /// Not written to JSON while null. Trimmed, and never stored empty.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Note { get; set; }
 }

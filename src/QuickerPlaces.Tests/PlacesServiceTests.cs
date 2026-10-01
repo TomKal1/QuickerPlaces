@@ -716,7 +716,7 @@ public sealed class PlacesServiceTests : IDisposable
     {
         var exportFile = Path.Combine(_temp.Path, "export.json");
         File.WriteAllText(exportFile, """
-            { "schemaVersion": 4, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
+            { "schemaVersion": 5, "places": [ { "alias": "Wiki", "type": "url", "resource": "https://wiki.example.com" } ] }
             """);
 
         var (candidates, error) = NewService().GetImportCandidates(exportFile);

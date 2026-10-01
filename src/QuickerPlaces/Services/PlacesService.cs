@@ -91,8 +91,11 @@ public sealed class PlacesService
     /// successful save. Version 3 (Phase 3) added Id, LastOpenedAt and
     /// OpenCount; a version 2 store — or a version 1 store, after its own
     /// step — is migrated on by PlacesStoreMigration.MigrateV2ToV3 (D28).
+    /// Version 4 added Opens, Tags and Note, so usage can be asked by period
+    /// and a place carries its own description; every older store ends the
+    /// chain with PlacesStoreMigration.MigrateV3ToV4.
     /// </summary>
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     /// <summary>
     /// What happened the last time the store was loaded — see
@@ -364,7 +367,8 @@ public sealed class PlacesService
 
     /// <summary>
     /// Records one launch that Windows accepted (Phase 3 D24): LastOpenedAt
-    /// from the clock, OpenCount plus one (saturating), then saved at once
+    /// from the clock, OpenCount plus one (saturating), the time appended to
+    /// Opens (capped at Place.MaxOpens, oldest dropped), then saved at once
     /// (roadmap §4.12). Called only by PlaceLauncher, which alone decides
     /// that a launch counts. Does nothing, and writes nothing, for a place
     /// in Recently Deleted or no longer in the store. Refused while recovery
@@ -382,10 +386,56 @@ public sealed class PlacesService
         if (place.DeletedAt is not null || !_places.Contains(place))
             return PersistenceResult.Ok();
 
-        place.LastOpenedAt = _time.GetUtcNow().ToUniversalTime();
+        var now = _time.GetUtcNow().ToUniversalTime();
+        place.LastOpenedAt = now;
         if (place.OpenCount < int.MaxValue)
             place.OpenCount++;
+        place.Opens.Add(now);
+        if (place.Opens.Count > Place.MaxOpens)
+            place.Opens.RemoveRange(0, place.Opens.Count - Place.MaxOpens);
 
+        return Persist();
+    }
+
+    /// <summary>
+    /// Replaces a place's tags (schema v4), normalised by PlaceTags.Normalise, and
+    /// saves at once. Writes nothing when the normalised tags are unchanged. Works on
+    /// a place in Recently Deleted too, as Rename does not: tags are description, not
+    /// identity, and a restore brings them back. Refused while recovery is unresolved (D3).
+    /// </summary>
+    public PersistenceResult SetTags(Place place, IEnumerable<string?> tags)
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        if (!_places.Contains(place))
+            return PersistenceResult.Ok();
+
+        var normalised = PlaceTags.Normalise(tags);
+        if (normalised.SequenceEqual(place.Tags, StringComparer.Ordinal))
+            return PersistenceResult.Ok();
+
+        place.Tags = normalised;
+        return Persist();
+    }
+
+    /// <summary>
+    /// Sets or clears (null or blank) a place's note (schema v4), trimmed, and saves at
+    /// once. Writes nothing when unchanged. Refused while recovery is unresolved (D3).
+    /// </summary>
+    public PersistenceResult SetNote(Place place, string? note)
+    {
+        if (IsMutationBlocked(out var blocked))
+            return blocked;
+
+        if (!_places.Contains(place))
+            return PersistenceResult.Ok();
+
+        var normalised = PlaceTags.NormaliseNote(note);
+        if (string.Equals(normalised, place.Note, StringComparison.Ordinal))
+            return PersistenceResult.Ok();
+
+        place.Note = normalised;
         return Persist();
     }
 
@@ -794,6 +844,8 @@ public sealed class PlacesService
                 PlacesStoreMigration.MigrateV1ToV2(root, _time.LocalTimeZone, _time.GetUtcNow());
             if (version <= 2)
                 PlacesStoreMigration.MigrateV2ToV3(root);
+            if (version <= 3)
+                PlacesStoreMigration.MigrateV3ToV4(root);
 
             var store = root.Deserialize<PlacesStore>(JsonOptions);
             var incoming = (store?.Places ?? new List<Place>())
@@ -843,7 +895,7 @@ public sealed class PlacesService
     /// changed since the preview was shown) and silently skips any that no
     /// longer pass.
     ///
-    /// Keeps the candidate's DateAdded, LastOpenedAt and OpenCount, so an
+    /// Keeps the candidate's DateAdded, LastOpenedAt, OpenCount, Opens, Tags and Note, so an
     /// export/import round trip is lossless (roadmap §4.18, Phase 3 D33),
     /// normalised as the loader does: UTC, and a count of 0 or more. Keeps
     /// its Id too, unless it is empty or already held by any record in the
@@ -890,7 +942,10 @@ public sealed class PlacesService
                 FavouriteOrder = null,
                 DateAdded = candidate.DateAdded.ToUniversalTime(),
                 LastOpenedAt = candidate.LastOpenedAt?.ToUniversalTime(),
-                OpenCount = Math.Max(0, candidate.OpenCount)
+                OpenCount = Math.Max(0, candidate.OpenCount),
+                Opens = NormaliseOpens(candidate.Opens),
+                Tags = PlaceTags.Normalise(candidate.Tags),
+                Note = PlaceTags.NormaliseNote(candidate.Note)
             };
 
             _places.Add(place);
@@ -1014,6 +1069,15 @@ public sealed class PlacesService
                     $"{v3Report.StrayFieldsRemoved} stray usage value(s) removed.");
             }
 
+            if (version <= 3)
+            {
+                var v4Report = PlacesStoreMigration.MigrateV3ToV4(root);
+                DiagnosticLog.Info(
+                    $"Migrating places store at {_storage.StoreFilePath} from schemaVersion 3 to 4 in memory " +
+                    $"(written with the next successful save): {v4Report.Records} place(s); {v4Report.OpensSeeded} open history " +
+                    $"seeded from lastOpenedAt; {v4Report.StrayFieldsRemoved} stray value(s) removed.");
+            }
+
             var store = root.Deserialize<PlacesStore>(JsonOptions);
 
             // Both halves of this check matter. A document that is
@@ -1062,6 +1126,18 @@ public sealed class PlacesService
                     usageNormalised++;
                 }
 
+                // v4 lists: a hand-edited "null" binds over the initialiser,
+                // and any offset, order or length is put right here.
+                var opens = NormaliseOpens(place.Opens);
+                if (place.Opens is null || place.Opens.Count != opens.Count ||
+                    place.Opens.Where((o, i) => o.Offset != TimeSpan.Zero || o != opens[i]).Any())
+                {
+                    usageNormalised++;
+                }
+                place.Opens = opens;
+                place.Tags = PlaceTags.Normalise(place.Tags);
+                place.Note = PlaceTags.NormaliseNote(place.Note);
+
                 if (place.Id == Guid.Empty || !seenIds.Add(place.Id))
                 {
                     place.Id = NewUniqueId(seenIds);
@@ -1084,6 +1160,18 @@ public sealed class PlacesService
     }
 
     /// <summary>A fresh Guid not in <paramref name="taken"/>, which it is then added to.</summary>
+    /// <summary>Opens as stored: UTC, oldest first, at most Place.MaxOpens (the newest kept). A null list is empty.</summary>
+    private static List<DateTimeOffset> NormaliseOpens(IEnumerable<DateTimeOffset>? opens)
+    {
+        if (opens is null)
+            return new List<DateTimeOffset>();
+
+        var sorted = opens.Select(o => o.ToUniversalTime()).OrderBy(o => o).ToList();
+        return sorted.Count > Place.MaxOpens
+            ? sorted.GetRange(sorted.Count - Place.MaxOpens, Place.MaxOpens)
+            : sorted;
+    }
+
     private static Guid NewUniqueId(HashSet<Guid> taken)
     {
         Guid id;

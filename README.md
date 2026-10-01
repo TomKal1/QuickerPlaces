@@ -44,7 +44,7 @@ The tests (`src/QuickerPlaces.Tests`) cover the service layer and the UI-free vi
 
 ### Where your data lives
 
-- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit. The previous version is kept alongside it as `places.bak.json` on every save.
+- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit. The previous version is kept alongside it as `places.bak.json` on every save. Since schema v4, each place also keeps the times of its last 500 opens (`opens`), its own `tags`, and an optional `note`, ready for tools that ask about usage by period. These are stored and exported, but not yet shown or editable in the app. An older file is upgraded on the next save, with its last-opened time as the first entry in `opens`.
 - Your project sessions: `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside `places.json`, written on every change, with `sessions.bak.json` as the previous version.
 - Recent Files (once turned on): `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json`, local to this computer, never exported.
 - Window layout (size/position, whether the grid is collapsed), the global hotkey, and the theme and highlight colour: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`.
