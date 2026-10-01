@@ -142,4 +142,14 @@ public sealed class ActivityCalendarTests
             .Where(day => day.Date >= Today.AddDays(-3)).ToList();
         Assert.Equal(cells[0].Intensity, cells[1].Intensity);
     }
+
+    [Theory]
+    [InlineData(300.0, 0, true)]     // no strip yet, narrow: month
+    [InlineData(2000.0, 0, true)]    // no strip yet, wide: still month (nothing to show as a year)
+    [InlineData(300.0, 600, true)]   // strip loaded, panel narrower than strip plus chrome
+    [InlineData(663.0, 600, true)]   // just short of strip + 64
+    [InlineData(664.0, 600, false)]  // exactly strip + 64: year
+    [InlineData(1900.0, 600, false)] // wide: year
+    public void ShowsMonthViewWhenThereIsNoStripOrThePanelIsTooNarrowForIt(double panelWidth, int stripWidth, bool expected)
+        => Assert.Equal(expected, ActivityCalendar.ShowsMonthView(panelWidth, stripWidth));
 }

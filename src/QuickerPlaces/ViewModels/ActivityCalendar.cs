@@ -9,6 +9,18 @@ namespace QuickerPlaces.ViewModels;
 /// <summary>One year of day cells, laid out by culture-specific weeks.</summary>
 public static class ActivityCalendar
 {
+    /// <summary>Beyond the strip itself: the weekday labels, the panel's border and padding, and a little room.</summary>
+    public const double YearChrome = 64;
+
+    /// <summary>
+    /// True when the Year activity panel should show one month rather than the
+    /// whole year: when the strip hasn't been built yet (<paramref name="stripWidth"/>
+    /// is 0, so there is no year to show), or the panel is narrower than the
+    /// strip and its <see cref="YearChrome"/>.
+    /// </summary>
+    public static bool ShowsMonthView(double panelWidth, int stripWidth)
+        => stripWidth <= 0 || panelWidth < stripWidth + YearChrome;
+
     /// <summary>A January-to-December activity strip with aligned weeks and month markers, from folder totals.</summary>
     public static ActivityCalendarYearResult BuildYear(IReadOnlyDictionary<DateOnly, ActivityDayTotal> totals,
         DateOnly trackingStartedOn, DateOnly today, int year, CultureInfo culture,
