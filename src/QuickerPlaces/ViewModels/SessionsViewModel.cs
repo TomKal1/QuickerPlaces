@@ -352,12 +352,12 @@ public sealed class SessionRowViewModel
         }
     }
 
-    /// <summary>The number on the card's badge ("3" for Ctrl+Shift+3, "0" for the tenth), or null past the tenth card.</summary>
+    /// <summary>The number on the card's badge ("3" for Ctrl+Shift+3), or null past the ninth card.</summary>
     public string? ShortcutText => Session.ShortcutDigit?.ToString(CultureInfo.InvariantCulture);
 
     public bool HasShortcut => Session.ShortcutDigit is not null;
 
-    /// <summary>"Ctrl+Shift+3 opens this session", or null past the tenth card.</summary>
+    /// <summary>"Ctrl+Shift+3 opens this session", or null past the ninth card.</summary>
     public string? ShortcutToolTip => Session.ShortcutDigit is { } n ? $"Ctrl+Shift+{n} opens this session" : null;
 
     private string Local(DateTimeOffset instant)

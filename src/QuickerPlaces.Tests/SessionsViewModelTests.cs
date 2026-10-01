@@ -79,18 +79,18 @@ public sealed class SessionsViewModelTests
     }
 
     [Fact]
-    public void ACardsNumber_IsItsPlaceInTheOrder_NineThenZeroForTheTenth_AndNoneAfter()
+    public void ACardsNumber_IsItsPlaceInTheOrder_OneToNine_AndNoneAfter()
     {
         for (var i = 1; i <= 11; i++)
             Add($"Session {i:00}", Array.Empty<string>(), A101);
 
         var vm = NewViewModel();
 
-        Assert.Equal(new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", null }, vm.Rows.Select(r => r.ShortcutText));
-        Assert.Equal(new[] { true, true, true, true, true, true, true, true, true, true, false }, vm.Rows.Select(r => r.HasShortcut));
+        Assert.Equal(new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", null, null }, vm.Rows.Select(r => r.ShortcutText));
+        Assert.Equal(new[] { true, true, true, true, true, true, true, true, true, false, false }, vm.Rows.Select(r => r.HasShortcut));
         Assert.Equal("Ctrl+Shift+3 opens this session", vm.Rows[2].ShortcutToolTip);
-        Assert.Equal("Ctrl+Shift+0 opens this session", vm.Rows[9].ShortcutToolTip);
-        Assert.Null(vm.Rows[10].ShortcutToolTip);
+        Assert.Equal("Ctrl+Shift+9 opens this session", vm.Rows[8].ShortcutToolTip);
+        Assert.Null(vm.Rows[9].ShortcutToolTip);
     }
 
     private SessionsViewModel NoSelectionViewModel() => new(_store, new SessionLauncher(_store, _shell), TestZones.PlusTen, allowsNoSelection: true);

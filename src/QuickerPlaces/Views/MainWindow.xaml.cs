@@ -115,7 +115,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Ctrl+Shift+1 to Ctrl+Shift+9, then Ctrl+Shift+0, open the first ten sessions in the
+    /// Ctrl+Shift+1 to Ctrl+Shift+9 open the first nine sessions in the
     /// order of the cards, as Ctrl+1 to Ctrl+9 open the favourites. Window-wide, so they
     /// work whether or not the Sessions panel is shown.
     /// </summary>
@@ -124,7 +124,7 @@ public partial class MainWindow : Window
         for (var position = 0; position < SessionStore.ShortcutCount; position++)
         {
             var index = position;
-            var key = index < 9 ? Key.D1 + index : Key.D0;
+            var key = Key.D1 + index;
             InputBindings.Add(new KeyBinding(new RelayCommand(() => OpenSessionAt(index)), key, ModifierKeys.Control | ModifierKeys.Shift));
         }
     }

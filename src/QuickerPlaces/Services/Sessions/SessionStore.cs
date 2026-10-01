@@ -40,8 +40,8 @@ public sealed class SessionStore
     public const int MaxTagLength = 40;
     public const int MaxTags = 20;
 
-    /// <summary>How many sessions have a shortcut: the first ten, Ctrl+Shift+1 to 9 and 0 (favourites have Ctrl+1 to 9).</summary>
-    public const int ShortcutCount = 10;
+    /// <summary>How many sessions have a shortcut: the first nine, Ctrl+Shift+1 to 9, as favourites have Ctrl+1 to 9.</summary>
+    public const int ShortcutCount = 9;
 
     /// <summary>Days of reopen history kept per session, for the year view.</summary>
     public const int HistoryDays = 365;
@@ -127,7 +127,7 @@ public sealed class SessionStore
     /// <summary>
     /// Every saved session in the order the user keeps them (dragged on the cards;
     /// a new session goes last). The order is the order in sessions.json, and the
-    /// first ten sessions are the ones Ctrl+Shift+1 to 9 and 0 open.
+    /// first nine sessions are the ones Ctrl+Shift+1 to 9 open.
     /// </summary>
     public IReadOnlyList<SessionSnapshot> Sessions => _sessions.Select(Snapshot).ToList();
 
@@ -501,10 +501,10 @@ public sealed record SessionSnapshot(
 
     /// <summary>
     /// The digit of the Ctrl+Shift+digit that opens this session: 1 to 9 for the first
-    /// nine, 0 for the tenth, null for the rest. Where it sits in <see cref="Order"/>, as
+    /// nine, null for the rest. Where it sits in <see cref="Order"/>, as
     /// a favourite's number is where it sits in the bubbles.
     /// </summary>
-    public int? ShortcutDigit => Order < SessionStore.ShortcutCount ? (Order + 1) % 10 : null;
+    public int? ShortcutDigit => Order < SessionStore.ShortcutCount ? Order + 1 : null;
 }
 
 /// <summary>One day of sessions, for the year view: how many were saved, how many reopens, and their names.</summary>

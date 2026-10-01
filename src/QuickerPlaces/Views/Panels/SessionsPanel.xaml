@@ -135,7 +135,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <!-- The shortcut tip, in the same quiet type as the Favourites panel's. -->
-            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Ctrl+Shift+1 to Ctrl+Shift+0 open them from the keyboard"
+            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Ctrl+Shift+1 to Ctrl+Shift+9 open them from the keyboard"
                        Style="{StaticResource TextBlock.Hint}" Foreground="{DynamicResource Text.Tertiary}" Margin="0,0,0,8" />
             <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
                        TextWrapping="Wrap" Margin="0,0,0,10" VerticalAlignment="Center" Style="{StaticResource CollapsedWhenEmpty}" />

@@ -256,13 +256,14 @@ public sealed class SessionStoreTests
     }
 
     [Fact]
-    public void TheShortcutDigit_IsThePlaceInTheOrder_OneToNineThenZero_AndNoneAfterTheTenth()
+    public void TheShortcutDigit_IsThePlaceInTheOrder_OneToNine_AndNoneAfterTheNinth()
     {
         var store = NewStore();
         for (var i = 1; i <= 12; i++)
             Create(store, $"S{i:00}");
 
-        Assert.Equal(new int?[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, null, null }, store.Sessions.Select(s => s.ShortcutDigit));
+        Assert.Equal(9, SessionStore.ShortcutCount);
+        Assert.Equal(new int?[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, null, null, null }, store.Sessions.Select(s => s.ShortcutDigit));
     }
 
     [Fact]
