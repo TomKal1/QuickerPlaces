@@ -52,16 +52,19 @@ public static class BuiltInLayouts
 
     /// <summary>
     /// The user's sketch (Desk layout design) with the File viewer (File
-    /// viewer design §2): favourites and sessions in a left column; Files
-    /// (saved places, recents and session files as tabs) and the year calendar
-    /// in the main column. Version 2: version 1 had separate panels.
+    /// viewer design §2): favourites, sessions and the activity calendar down a
+    /// left column; Files (saved places, recents and session files as tabs)
+    /// alone in the main column, with all its height. Version 2: version 1 had
+    /// separate panels. Version 3: the calendar moved from the bottom of the
+    /// main column to the bottom of the left one (an arrangement already
+    /// personalised from version 2 is kept; Reset to Desk gives this one).
     /// </summary>
-    public static readonly BuiltInLayout Desk = new(DeskId, "Desk", 2, LayoutArrangements.Columns, new (string, int, string?)[]
+    public static readonly BuiltInLayout Desk = new(DeskId, "Desk", 3, LayoutArrangements.Columns, new (string, int, string?)[]
     {
         (PanelTypes.Favourites, PanelSpans.Third, PanelDocks.Left),
         (PanelTypes.Sessions, PanelSpans.Third, PanelDocks.Left),
+        (PanelTypes.Activity, PanelSpans.Third, PanelDocks.Left),
         (PanelTypes.Files, PanelSpans.Full, PanelDocks.Main),
-        (PanelTypes.Activity, PanelSpans.Full, PanelDocks.Main),
     });
 
     /// <summary>

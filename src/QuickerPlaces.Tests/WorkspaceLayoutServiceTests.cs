@@ -797,10 +797,10 @@ public sealed class WorkspaceLayoutServiceTests
         Ok(service.Activate(BuiltInLayouts.DeskId));
         service.BeginArrange();
 
-        Assert.True(service.SetDock(PanelTypes.Sessions, PanelDocks.Main));
-        Assert.True(service.SetDock(PanelTypes.Sessions, PanelDocks.Left));
+        Assert.True(service.SetDock(PanelTypes.Activity, PanelDocks.Main));
+        Assert.True(service.SetDock(PanelTypes.Activity, PanelDocks.Left));
 
-        Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions }, Column(service, PanelDocks.Left));
+        Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions, PanelTypes.Activity }, Column(service, PanelDocks.Left));
         Ok(service.Done());
         Assert.False(service.IsModified);
     }
@@ -812,7 +812,7 @@ public sealed class WorkspaceLayoutServiceTests
         Ok(service.Activate(BuiltInLayouts.DeskId));
         service.BeginArrange();
 
-        Assert.False(service.MoveLater(PanelTypes.Sessions));
+        Assert.False(service.MoveLater(PanelTypes.Activity));
 
         Assert.True(service.MoveLater(PanelTypes.Favourites));
         Assert.True(service.MoveEarlier(PanelTypes.Favourites));
@@ -887,8 +887,8 @@ public sealed class WorkspaceLayoutServiceTests
         var service = NewService(NewStorage());
 
         Ok(service.Activate(BuiltInLayouts.DeskId));
-        Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions }, Column(service, PanelDocks.Left));
-        Assert.Equal(new[] { PanelTypes.Files, PanelTypes.Activity }, Column(service, PanelDocks.Main));
+        Assert.Equal(new[] { PanelTypes.Favourites, PanelTypes.Sessions, PanelTypes.Activity }, Column(service, PanelDocks.Left));
+        Assert.Equal(new[] { PanelTypes.Files }, Column(service, PanelDocks.Main));
 
         Ok(service.Activate(BuiltInLayouts.DeskSeparateId));
         Assert.True(service.ActiveIsColumns);

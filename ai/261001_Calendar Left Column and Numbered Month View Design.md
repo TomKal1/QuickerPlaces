@@ -4,7 +4,7 @@ Date: 2026-10-01. Status: Draft for review. Builds on the [Desk layout design](2
 
 ## 1. Outcome
 
-- The built-in **Desk** keeps the Year activity calendar along the bottom of the main column, under Files. (Checked: Reset to Desk gives this. A calendar seen in the left column was a saved arrangement.)
+- ~~The built-in **Desk** keeps the Year activity calendar along the bottom of the main column, under Files.~~ **Superseded the same day at the user's request: Desk version 3 puts Activity at the bottom of the left column** (see BUILD_SUMMARY). The note about a saved arrangement still holds for anyone who personalised Desk from version 2.
 - The calendar can be **moved to the left column** with Arrange (Settings → Customise layout… → Arrange: the Column choice, or drag). Nothing new is added for the move itself.
 - In the left column, and anywhere else the panel is too narrow for the year, it shows the **month view**, with the **day number in each day's cell**.
 - A calendar saved in the left column shows the month view **on startup**, not only after being moved in the same session.

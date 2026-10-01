@@ -109,16 +109,20 @@ public partial class YearActivityPanel : UserControl
         // The controls' width on one line, whichever line they wrap to now:
         // it doesn't depend on where they are docked, so this settles at once.
         var controls = HeaderControls.Children.OfType<FrameworkElement>().Sum(c => c.DesiredSize.Width);
-        // The header spans the whole panel; a hidden title needs no room, and the
-        // controls then start at the left, over the buttons and the calendar.
-        var below = ActualWidth < controls + (ShowsTitle ? TitleRoom : 0);
-        var margin = below && ShowsTitle ? new Thickness(0, 6, 0, 0) : new Thickness(0);
-        var dock = below ? Dock.Bottom : ShowsTitle ? Dock.Right : Dock.Left;
-        if (DockPanel.GetDock(HeaderControls) == dock && HeaderControls.Margin == margin)
+        // The header spans the whole panel. With a title, the controls sit at its
+        // right, or under it when they don't fit; without one (the workspace's
+        // frame has the title), they are centred across the top, over the
+        // buttons and the calendar.
+        var below = ShowsTitle && ActualWidth < controls + TitleRoom;
+        var margin = below ? new Thickness(0, 6, 0, 0) : new Thickness(0);
+        var dock = !ShowsTitle ? Dock.Top : below ? Dock.Bottom : Dock.Right;
+        var alignment = ShowsTitle ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+        if (DockPanel.GetDock(HeaderControls) == dock && HeaderControls.Margin == margin && HeaderControls.HorizontalAlignment == alignment)
             return;
 
         DockPanel.SetDock(HeaderControls, dock);
         HeaderControls.Margin = margin;
+        HeaderControls.HorizontalAlignment = alignment;
     }
 
     private LibraryViewModel? ViewModel => DataContext as LibraryViewModel;

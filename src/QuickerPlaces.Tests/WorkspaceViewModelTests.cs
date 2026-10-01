@@ -840,9 +840,9 @@ public sealed class WorkspaceViewModelTests
 
         Assert.True(workspace.IsColumns);
         Assert.True(workspace.ShowsFavouritesPanel);
-        Assert.Equal(new[] { (PanelTypes.Favourites, PanelDock.Left, 0), (PanelTypes.Sessions, PanelDock.Left, 1) },
+        Assert.Equal(new[] { (PanelTypes.Favourites, PanelDock.Left, 0), (PanelTypes.Sessions, PanelDock.Left, 1), (PanelTypes.Activity, PanelDock.Left, 2) },
             workspace.Panels.Where(p => p.Dock == PanelDock.Left).Select(p => (p.Type, p.Dock, p.Row)));
-        Assert.Equal(new[] { PanelTypes.Files, PanelTypes.Activity },
+        Assert.Equal(new[] { PanelTypes.Files },
             workspace.Panels.Where(p => p.Dock == PanelDock.Main).Select(p => p.Type));
     }
 
@@ -852,9 +852,9 @@ public sealed class WorkspaceViewModelTests
         var workspace = NewWorkspace();
         workspace.SelectedLayout = workspace.Layouts.Single(l => l.Id == BuiltInLayouts.DeskId);
 
-        Assert.Equal(new[] { PanelTypes.Files, PanelTypes.Activity },
+        Assert.Equal(new[] { PanelTypes.Files },
             workspace.Panels.Where(p => p.Dock == PanelDock.Main).Select(p => p.Type));
-        Assert.Equal("Files", workspace.Panels.Single(p => p.Type == PanelTypes.Files).Title);
+        Assert.Equal("Files",workspace.Panels.Single(p => p.Type == PanelTypes.Files).Title);
         Assert.Contains(workspace.Layouts, l => l.Id == BuiltInLayouts.DeskSeparateId && l.Name == "Desk · separate panels");
     }
 }
