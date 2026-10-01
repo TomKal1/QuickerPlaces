@@ -8,6 +8,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.Versioning;
 
 namespace QuickerPlaces.Services.Documents;
 
@@ -38,6 +39,7 @@ namespace QuickerPlaces.Services.Documents;
 ///
 /// App-only: it calls Windows, so it is not linked into the test project.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsOpenDocumentProbe
 {
     /// <summary>Recent Items older than this are not suggested.</summary>

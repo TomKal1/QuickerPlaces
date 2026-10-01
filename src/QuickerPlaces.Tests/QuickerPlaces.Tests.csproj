@@ -141,6 +141,9 @@
     <Compile Include="..\QuickerPlaces\ViewModels\SaveLayoutViewModel.cs" Link="Linked\ViewModels\SaveLayoutViewModel.cs" />
     <Compile Include="..\QuickerPlaces\Services\InstanceGate.cs" Link="Linked\Services\InstanceGate.cs" />
     <Compile Include="..\QuickerPlaces\Services\Remote\*.cs" LinkBase="Linked\Services\Remote" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsHeldFiles.cs" Link="Linked\Services\Documents\WindowsHeldFiles.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsOpenDocumentProbe.cs" Link="Linked\Services\Documents\WindowsOpenDocumentProbe.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsRecentItems.cs" Link="Linked\Services\Documents\WindowsRecentItems.cs" />
     <!--
       The qp command line (src/QuickerPlaces.Cli): every file but Program.cs,
       whose Main would clash with the test host's.

@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.Versioning;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Remote;
 
 namespace QuickerPlaces.Cli;
@@ -32,14 +34,31 @@ public sealed class CliEnvironment
     /// </summary>
     public required Func<string?, OperationRequest, OperationReply> SendToApp { get; init; }
 
+    /// <summary>
+    /// Finds the PDF, Word and Excel files open now, the way the app's
+    /// Sessions screen does; null where that isn't possible (off Windows).
+    /// </summary>
+    public Func<OpenDocumentScan>? ScanOpenDocuments { get; init; }
+
     public static CliEnvironment ForThisMachine() => new()
     {
         Time = TimeProvider.System,
         Shell = new SystemShell(),
         IsAppRunning = InstanceGate.IsAppRunning,
         DefaultDataRoot = Environment.GetEnvironmentVariable(DataRootVariable),
-        SendToApp = (scope, request) => RemoteCommandClient.Send(RemoteProtocol.PipeName(scope), request, TimeSpan.FromSeconds(3))
+        SendToApp = (scope, request) => RemoteCommandClient.Send(RemoteProtocol.PipeName(scope), request, TimeSpan.FromSeconds(3)),
+        ScanOpenDocuments = OpenDocumentScanner()
     };
+
+    private static Func<OpenDocumentScan>? OpenDocumentScanner()
+    {
+        if (!OperatingSystem.IsWindows())
+            return null;
+        return ScanOnWindows;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static OpenDocumentScan ScanOnWindows() => new WindowsOpenDocumentProbe(new WindowsRecentItems()).ScanAsync().GetAwaiter().GetResult();
 
     private sealed class SystemShell : IShell
     {

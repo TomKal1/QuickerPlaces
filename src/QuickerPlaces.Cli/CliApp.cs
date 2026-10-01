@@ -153,6 +153,7 @@ public static class CliApp
         };
         commands.AddRange(PlaceCommands.All());
         commands.AddRange(ActivityCommands.All());
+        commands.AddRange(DocumentCommands.All());
         return commands;
     }
 
@@ -192,6 +193,7 @@ public static class CliApp
             [ErrorCodes.StoreUnavailable] = new { exitCode = ExitCodes.StoreUnavailable, meaning = "A store file is damaged, unreadable or from a newer version. details.outcome says which." },
             [ErrorCodes.SaveFailed] = new { exitCode = ExitCodes.StoreUnavailable, meaning = "The change was refused by the disk. Nothing was saved." },
             [ErrorCodes.OpenFailed] = new { exitCode = ExitCodes.OpenFailed, meaning = "The place couldn't be opened; details.status is missing or failed." },
+            [ErrorCodes.Unsupported] = new { exitCode = ExitCodes.Unsupported, meaning = "This command can't run on this system (finding open files needs Windows)." },
             [ErrorCodes.Internal] = new { exitCode = ExitCodes.Internal, meaning = "A bug. The message names the exception." }
         }
     };

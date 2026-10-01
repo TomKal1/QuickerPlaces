@@ -36,6 +36,7 @@ public static class ErrorCodes
     public const string StoreUnavailable = "store_unavailable";
     public const string SaveFailed = "save_failed";
     public const string OpenFailed = "open_failed";
+    public const string Unsupported = "unsupported";
     public const string Internal = "internal";
 }
 
@@ -50,6 +51,7 @@ public static class ExitCodes
     public const int AppRunning = 5;
     public const int StoreUnavailable = 6;
     public const int OpenFailed = 7;
+    public const int Unsupported = 8;
 
     public static int For(string code) => code switch
     {
@@ -59,6 +61,7 @@ public static class ExitCodes
         ErrorCodes.AppRunning => AppRunning,
         ErrorCodes.StoreUnavailable or ErrorCodes.SaveFailed => StoreUnavailable,
         ErrorCodes.OpenFailed => OpenFailed,
+        ErrorCodes.Unsupported => Unsupported,
         _ => Internal
     };
 }

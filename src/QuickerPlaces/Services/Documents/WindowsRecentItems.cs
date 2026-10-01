@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
+using System.Runtime.Versioning;
 
 namespace QuickerPlaces.Services.Documents;
 
@@ -26,6 +27,7 @@ namespace QuickerPlaces.Services.Documents;
 /// Items, a policy can turn it off, and only each document's latest open is
 /// kept there. App-only: it calls Windows.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsRecentItems
 {
     private readonly object _sync = new();

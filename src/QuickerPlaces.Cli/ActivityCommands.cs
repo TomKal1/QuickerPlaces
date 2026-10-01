@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.Cli;
@@ -21,6 +22,17 @@ public static class ActivityCommands
 
         new CommandSpec("sessions get", "One session in full, with its files and every reopen. <ref> is its name (any case) or id.", "<ref>", 1, 1,
             Array.Empty<OptionSpec>(), false, GetSession, new[] { "qp sessions get \"Henderson audit\"" }),
+
+        new CommandSpec("sessions open", "Open a session's files (all, or those named with --file) and record the reopen. Files that no longer exist are listed, not opened.", "<ref>", 1, 1,
+            new[]
+            {
+                new OptionSpec("file", "Open only this file of the session; may be repeated.", ValueName: "path", Repeatable: true),
+                new OptionSpec("dry-run", "Say what would open, without opening it.", IsFlag: true)
+            }, true, OpenSession, new[] { "qp sessions open \"Henderson audit\"" }),
+
+        new CommandSpec("activity days", "Day by day in a period, newest first: the places opened, sessions reopened, files opened and folders spent time in. Days with nothing are left out.", "no arguments", 0, 0,
+            Period.Options.Append(new OptionSpec("limit", "At most N of each kind per day (1-100; default 10).", ValueName: "n")).ToArray(),
+            false, Days, new[] { "qp activity days --period week", "qp activity days --days 1" }),
 
         new CommandSpec("files recent", "PDF, Word and Excel files opened in a period, most recent first (needs Recent Files turned on in the app).", "no arguments", 0, 0,
             Period.Options.Append(new OptionSpec("kind", "pdf, word and/or excel, comma-separated.", ValueName: "kinds", Repeatable: true)).Append(Limit).ToArray(),
@@ -47,18 +59,167 @@ public static class ActivityCommands
     }
 
     private static object GetSession(CliContext context, CliArgs args)
+        => new Dictionary<string, object?> { ["session"] = Session(ResolveSession(context, args.Positionals[0]), context, full: true) };
+
+    private static object OpenSession(CliContext context, CliArgs args)
+    {
+        var session = ResolveSession(context, args.Positionals[0]);
+        var chosen = session.Files.ToList();
+        if (args.Values("file").Count > 0)
+        {
+            var wanted = args.Values("file");
+            var unknown = wanted.Where(w => !session.Files.Any(f => DocumentPaths.Same(f, w))).ToList();
+            if (unknown.Count > 0)
+                throw CliError.Usage($"\"{unknown[0]}\" isn't one of this session's files. 'qp sessions get' lists them.");
+            chosen = session.Files.Where(f => wanted.Any(w => DocumentPaths.Same(f, w))).ToList();
+        }
+
+        var missing = chosen.Where(f => !context.Shell.FileExists(f)).ToList();
+        var result = new Dictionary<string, object?> { ["session"] = Session(session, context, full: false), ["missing"] = missing };
+        if (args.Flag("dry-run"))
+        {
+            result["wouldOpen"] = chosen.Except(missing).ToList();
+            result["recorded"] = false;
+            return result;
+        }
+
+        // SessionLauncher's steps, with the reopen recorded through Execute
+        // (by the app while it is open) instead of on a store held here.
+        var launched = new List<string>();
+        var failed = new List<Dictionary<string, object?>>();
+        foreach (var file in chosen.Except(missing))
+        {
+            try
+            {
+                context.Shell.Open(file);
+                launched.Add(file);
+            }
+            catch (Exception ex)
+            {
+                failed.Add(new Dictionary<string, object?> { ["path"] = file, ["message"] = ex.Message });
+            }
+        }
+
+        result["opened"] = launched;
+        result["failed"] = failed;
+        if (launched.Count == 0)
+            throw new CliError(ErrorCodes.OpenFailed, "None of the session's files could be opened.", new JsonObject
+            {
+                ["status"] = missing.Count == chosen.Count ? "missing" : "failed",
+                ["missing"] = new JsonArray(missing.Select(m => (JsonNode)m).ToArray())
+            });
+
+        try
+        {
+            context.Execute(StoreOperations.MarkSessionOpened, new JsonObject { ["id"] = session.Id });
+            result["recorded"] = true;
+        }
+        catch (CliError error)
+        {
+            result["recorded"] = false;
+            result["notRecordedReason"] = error.Code;
+        }
+        return result;
+    }
+
+    private static SessionSnapshot ResolveSession(CliContext context, string reference)
     {
         var store = context.ReadSessions();
         Available(store.LoadOutcome, "sessions.json");
-        var text = args.Positionals[0].Trim();
-        var session = store.Find(text)
+        var text = reference.Trim();
+        return store.Find(text)
             ?? store.Sessions.FirstOrDefault(s => string.Equals(s.Name, text, StringComparison.OrdinalIgnoreCase))
             ?? throw new CliError(ErrorCodes.NotFound, $"No session is called \"{text}\".", new JsonObject
             {
                 ["suggestions"] = new JsonArray(store.Sessions.Where(s => s.Name.Contains(text, StringComparison.OrdinalIgnoreCase)).Take(5).Select(s => (JsonNode)s.Name).ToArray())
             });
+    }
 
-        return new Dictionary<string, object?> { ["session"] = Session(session, context, full: true) };
+    /// <summary>
+    /// Everything recorded per local day. Each source keeps its own history:
+    /// place opens (last 500 per place), session reopens (365 days), file opens
+    /// (365 days) and folder detail (62 days), so an older day may show only some.
+    /// </summary>
+    private static object Days(CliContext context, CliArgs args)
+    {
+        var period = Period.Parse(args, context.Time);
+        var limit = args.Int("limit", 1, 100) ?? 10;
+        var time = context.Time;
+        var days = new SortedDictionary<DateOnly, DayBuilder>();
+        DayBuilder Day(DateOnly date) => days.TryGetValue(date, out var day) ? day : days[date] = new DayBuilder();
+
+        var placesService = context.ReadPlaces();
+        foreach (var place in placesService.Places.Concat(placesService.RecentlyDeleted))
+        {
+            foreach (var group in place.Opens.GroupBy(o => Period.LocalDate(o, time)).Where(g => period.Contains(g.Key)))
+                Day(group.Key).Places.Add((place, group.Count()));
+        }
+
+        var sessions = context.ReadSessions();
+        if (sessions.LoadOutcome is StoreLoadOutcome.Ok)
+        {
+            foreach (var session in sessions.Sessions)
+            {
+                foreach (var group in session.OpenedAt.GroupBy(o => Period.LocalDate(o, time)).Where(g => period.Contains(g.Key)))
+                    Day(group.Key).Sessions.Add((session, group.Count()));
+            }
+        }
+
+        var files = context.ReadRecentFiles();
+        if (files.LoadOutcome is StoreLoadOutcome.Ok)
+        {
+            foreach (var file in files.QueryHistory())
+            {
+                foreach (var group in file.Opens.GroupBy(o => Period.LocalDate(o, time)).Where(g => period.Contains(g.Key)))
+                    Day(group.Key).Files.Add((file.Path, file.Kind, group.Count()));
+            }
+        }
+
+        var activity = context.ReadActivity();
+        var placesByFolder = PlacesByFolder(context);
+        if (activity.LoadOutcome is StoreLoadOutcome.Ok)
+        {
+            foreach (var root in activity.Roots)
+            {
+                foreach (var folderDay in activity.QueryFolderDays(root.RootId) ?? Array.Empty<Services.Activity.FolderDay>())
+                {
+                    if (period.Contains(folderDay.Date))
+                        Day(folderDay.Date).Folders.AddRange(folderDay.Folders);
+                }
+            }
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["period"] = period.ToJson(),
+            ["days"] = days.Reverse().Select(d => new Dictionary<string, object?>
+            {
+                ["date"] = Json.Date(d.Key),
+                ["places"] = d.Value.Places.OrderByDescending(p => p.Opens).ThenBy(p => p.Place.Alias, StringComparer.CurrentCultureIgnoreCase).Take(limit)
+                    .Select(p => new Dictionary<string, object?> { ["id"] = p.Place.Id, ["alias"] = p.Place.Alias, ["opens"] = p.Opens }).ToList(),
+                ["sessions"] = d.Value.Sessions.OrderByDescending(s => s.Opens).Take(limit)
+                    .Select(s => new Dictionary<string, object?> { ["id"] = s.Session.Id, ["name"] = s.Session.Name, ["opens"] = s.Opens }).ToList(),
+                ["files"] = d.Value.Files.OrderByDescending(f => f.Opens).Take(limit)
+                    .Select(f => new Dictionary<string, object?> { ["path"] = f.Path, ["kind"] = Json.Enum(f.Kind), ["opens"] = f.Opens }).ToList(),
+                ["folders"] = d.Value.Folders.OrderByDescending(f => f.Time).Take(limit).Select(f => new Dictionary<string, object?>
+                {
+                    ["folder"] = f.Folder,
+                    ["seconds"] = (long)f.Time.TotalSeconds,
+                    ["visits"] = f.Visits,
+                    ["place"] = placesByFolder.TryGetValue(FolderKey(f.Folder), out var place)
+                        ? new Dictionary<string, object?> { ["id"] = place.Id, ["alias"] = place.Alias }
+                        : null
+                }).ToList()
+            }).ToList()
+        };
+    }
+
+    private sealed class DayBuilder
+    {
+        public List<(Place Place, int Opens)> Places { get; } = new();
+        public List<(SessionSnapshot Session, int Opens)> Sessions { get; } = new();
+        public List<(string Path, DocumentKind Kind, int Opens)> Files { get; } = new();
+        public List<Services.Activity.FolderActivity> Folders { get; } = new();
     }
 
     private static object RecentFiles(CliContext context, CliArgs args)

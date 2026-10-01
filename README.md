@@ -6,7 +6,7 @@ A lightweight Windows desktop utility for storing and quickly opening remembered
 
 ## Command line (`qp`)
 
-`src/QuickerPlaces.Cli` builds `qp`, a JSON-first command line over the same stores, for scripts and AI agents. It can list, search, rank by opens, open, add, tag and annotate places, and read sessions, recent files and recent folders. It refuses to write while the app is open. See [its README](src/QuickerPlaces.Cli/README.md).
+`src/QuickerPlaces.Cli` builds `qp`, a JSON-first command line over the same stores, for scripts and AI agents. It can list, search, rank, open, add, tag and annotate places; open sessions and save the files you have open as a new one; and report activity by day or period. While the app is open, its changes go through the app. See [its README](src/QuickerPlaces.Cli/README.md).
 
 ## What it does
 

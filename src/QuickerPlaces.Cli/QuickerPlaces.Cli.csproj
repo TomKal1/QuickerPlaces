@@ -59,6 +59,9 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsHeldFiles.cs" Link="Linked\Services\Documents\WindowsHeldFiles.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsOpenDocumentProbe.cs" Link="Linked\Services\Documents\WindowsOpenDocumentProbe.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsRecentItems.cs" Link="Linked\Services\Documents\WindowsRecentItems.cs" />
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\*.cs" LinkBase="Linked\Models\RecentFiles" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
   </ItemGroup>

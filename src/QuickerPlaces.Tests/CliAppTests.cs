@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Cli;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Tests.Fakes;
@@ -29,6 +30,7 @@ public sealed class CliAppTests : IDisposable
     private StoreOperations? _app;
     private PlacesService? _appPlaces;
     private bool _appAnswers = true;
+    private OpenDocumentScan? _openDocuments;
 
     public void Dispose() => _temp.Dispose();
 
@@ -47,7 +49,8 @@ public sealed class CliAppTests : IDisposable
         Time = _clock,
         Shell = _shell,
         IsAppRunning = _ => _app is not null,
-        SendToApp = (scope, request) => _appAnswers ? _app!.Execute(request, out _) : throw new TimeoutException()
+        SendToApp = (scope, request) => _appAnswers ? _app!.Execute(request, out _) : throw new TimeoutException(),
+        ScanOpenDocuments = _openDocuments is null ? null : () => _openDocuments
     };
 
     private (int Exit, JsonObject Json) Run(params string[] args)
@@ -308,5 +311,125 @@ public sealed class CliAppTests : IDisposable
 
         Assert.Equal(1, Ok("places", "top", "--period", "week")["places"]![0]!["opensInPeriod"]!.GetValue<int>());
         Assert.Equal(2, Ok("places", "top", "--days", "11")["places"]![0]!["opensInPeriod"]!.GetValue<int>());
+    }
+
+    private const string Report = @"C:\Clients\Acme\Audit\Report.pdf";
+    private const string Figures = @"C:\Clients\Acme\Audit\Figures.xlsx";
+
+    private void SaveAudit() => Ok("sessions", "save", "--name", "Acme audit", "--tags", "acme", "--file", Report, "--file", Figures);
+
+    [Fact]
+    public void SessionsSave_ThenGet()
+    {
+        SaveAudit();
+
+        var session = Ok("sessions", "get", "acme AUDIT")["session"]!;
+
+        Assert.Equal(2, session["files"]!.AsArray().Count);
+        Assert.Equal("acme", session["tags"]![0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void SessionsSave_ABadFile_IsInvalid()
+    {
+        Assert.Equal(ErrorCodes.Invalid, Error(ExitCodes.Invalid, "sessions", "save", "--name", "X", "--file", "notes.txt"));
+    }
+
+    [Fact]
+    public void SessionsSave_WhileTheAppIsRunning_IsSavedByTheApp()
+    {
+        StartApp();
+
+        SaveAudit();
+
+        Assert.Single(Ok("sessions", "list")["sessions"]!.AsArray());
+    }
+
+    [Fact]
+    public void SessionsOpen_OpensTheFilesThatExist_ListsTheRest_AndRecordsIt()
+    {
+        SaveAudit();
+        _shell.ExistingFiles.Add(Report);
+
+        var data = Ok("sessions", "open", "Acme audit");
+
+        Assert.Equal(new[] { Report }, _shell.Opened);
+        Assert.Equal(Figures, data["missing"]![0]!.GetValue<string>());
+        Assert.True(data["recorded"]!.GetValue<bool>());
+        Assert.Equal(1, Ok("sessions", "get", "Acme audit")["session"]!["openCount"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void SessionsOpen_WithNothingThere_IsOpenFailed_AndNotRecorded()
+    {
+        SaveAudit();
+
+        Assert.Equal(ErrorCodes.OpenFailed, Error(ExitCodes.OpenFailed, "sessions", "open", "Acme audit"));
+        Assert.Equal(0, Ok("sessions", "get", "Acme audit")["session"]!["openCount"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void SessionsOpen_OneFile_AndDryRun()
+    {
+        SaveAudit();
+        _shell.ExistingFiles.Add(Report);
+        _shell.ExistingFiles.Add(Figures);
+
+        Assert.Equal(2, Ok("sessions", "open", "Acme audit", "--dry-run")["wouldOpen"]!.AsArray().Count);
+        Assert.Empty(_shell.Opened);
+        Ok("sessions", "open", "Acme audit", "--file", Figures.ToUpperInvariant());
+        Assert.Equal(new[] { Figures }, _shell.Opened);
+        Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "sessions", "open", "Acme audit", "--file", @"C:\Other.pdf"));
+    }
+
+    [Fact]
+    public void FilesOpen_OffWindows_IsUnsupported()
+    {
+        Assert.Equal(ErrorCodes.Unsupported, Error(ExitCodes.Unsupported, "files", "open"));
+    }
+
+    [Fact]
+    public void FilesOpen_GroupsByFolder_NamesTheContainingPlace_AndSuggestsAName()
+    {
+        var acme = TestPaths.Folder("Acme");
+        Ok("places", "add", "--alias", "Acme Client", "--folder", acme);
+        var audit = Path.Combine(acme, "Audit");
+        _openDocuments = new OpenDocumentScan(new[]
+        {
+            new DocumentCandidate(Path.Combine(audit, "Report.pdf"), true, "open in Acrobat", null),
+            new DocumentCandidate(Path.Combine(audit, "Figures.xlsx"), true, "open in Excel", null),
+            new DocumentCandidate(Path.Combine(TestPaths.Folder("Elsewhere"), "Old.docx"), false, "opened recently", Now)
+        }, Array.Empty<string>());
+
+        var data = Ok("files", "open");
+
+        Assert.Equal(2, data["files"]!.AsArray().Count);
+        Assert.Equal("Acme Client", data["files"]![0]!["place"]!["alias"]!.GetValue<string>());
+        var folder = Assert.Single(data["folders"]!.AsArray())!;
+        Assert.Equal(2, folder["files"]!.GetValue<int>());
+        Assert.Equal("Acme Client 2026-09-25", data["suggestedName"]!.GetValue<string>());
+        Assert.Equal(3, Ok("files", "open", "--suggestions")["files"]!.AsArray().Count);
+    }
+
+    [Fact]
+    public void ActivityDays_ListsEachDaysOpens_NewestFirst()
+    {
+        AddWiki();
+        SaveAudit();
+        _shell.ExistingFiles.Add(Report);
+        Ok("places", "open", "Wiki");
+        _clock.Advance(TimeSpan.FromDays(1));
+        Ok("places", "open", "Wiki");
+        Ok("places", "open", "Wiki");
+        Ok("sessions", "open", "Acme audit");
+
+        var days = Ok("activity", "days", "--period", "week")["days"]!.AsArray();
+
+        Assert.Equal(2, days.Count);
+        Assert.Equal("2026-09-26", days[0]!["date"]!.GetValue<string>());
+        Assert.Equal(2, days[0]!["places"]![0]!["opens"]!.GetValue<int>());
+        Assert.Equal("Acme audit", days[0]!["sessions"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal(1, days[1]!["places"]![0]!["opens"]!.GetValue<int>());
+        Assert.Empty(days[1]!["sessions"]!.AsArray());
     }
 }

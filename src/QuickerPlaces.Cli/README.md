@@ -37,8 +37,12 @@ on Linux). Opening a place uses the system's default handler.
 | `places tag <ref>` | ✓ | `--set`, `--add`, `--remove` (comma-separated). |
 | `places note <ref>` | ✓ | `--text` or `--clear`. |
 | `sessions list` / `sessions get <ref>` | | Project sessions and their files. |
+| `sessions open <ref>` | ✓ | Opens the session's files (or `--file` ones) and records the reopen; lists missing files. |
+| `sessions save` | ✓ | `--name`, `--tags`, and `--file` once per file. |
+| `files open` | | PDF, Word and Excel files open now (Windows), with folders, containing places and a suggested name. |
 | `files recent` | | PDF, Word and Excel files opened in a period (Recent Files). |
 | `folders recent` | | Time spent per folder in a period (Recents), each linked to its saved place. |
+| `activity days` | | Day by day: places opened, sessions reopened, files opened, folders worked in. |
 
 `<ref>` is an alias (any case) or an id. Every command also takes
 `--data-root <folder>` (or the `QUICKERPLACES_DATA_ROOT` variable) to use
@@ -60,25 +64,43 @@ Times are ISO 8601 UTC. Period dates are local `yyyy-MM-dd`. Within an
 | 2 | `usage` | Bad command, option or value |
 | 3 | `not_found` | No such place or session; `details.suggestions` may help |
 | 4 | `invalid`, `ambiguous` | The change breaks a rule, or the reference matches several items |
-| 5 | `app_running` | QuickerPlaces is open, so writes are refused |
+| 5 | `app_running` | QuickerPlaces is open but didn't take the change; nothing was written |
 | 6 | `store_unavailable`, `save_failed` | A store is damaged, unreadable or from a newer version, or the disk refused the save |
-| 7 | `open_failed` | The place couldn't be opened (`details.status`: `missing` or `failed`) |
+| 7 | `open_failed` | The place or session couldn't be opened (`details.status`: `missing` or `failed`) |
+| 8 | `unsupported` | Not possible on this system (`files open` needs Windows) |
 | 1 | `internal` | A bug |
 
 ## Safety beside the app
 
-The app keeps places.json in memory and writes all of it on every change, so
-anything another process wrote would be overwritten. So:
+The app keeps its stores in memory and writes all of a store on every
+change, so nothing else may write those files while it runs. So:
 
 - **Reads always work** and never change a file. Stores are opened read-only.
   An older store is migrated in memory only, and a damaged one is reported,
   never set aside.
-- **Writes are refused (`app_running`) while QuickerPlaces is open** on the
-  same stores. `places open` still opens the place then, but doesn't record
-  the open (`"recorded": false, "notRecordedReason": "app_running"`).
-- A small race remains: starting the app while a write is in progress. Writes
-  take milliseconds, so this is accepted for now. Sending changes through the
-  running app is the planned fix.
+- **While QuickerPlaces is open, changes go through it.** qp sends each one
+  over a named pipe that only your Windows user can open. The app runs it on
+  the data it holds, saves it and shows it at once. `status` reports
+  `"changesGoTo": "app"`.
+- **While it is closed, qp writes the files itself**, using the same
+  operations (`Services/Remote/StoreOperations.cs`), so the rules are
+  identical either way.
+- If the app is open but doesn't answer (it is closing, or it is older than
+  qp), the change is refused with `app_running` and nothing is written.
+  `places open` and `sessions open` still open things then; they report
+  `"recorded": false`.
+
+## Example: save what's open as a session
+
+```
+qp files open                      # files, their folders and places, and a suggestedName
+qp sessions save --name "Acme audit 2026-10-01" --tags acme,audit \
+   --file "D:\Clients\Acme\Audit\Report.pdf" --file "D:\Clients\Acme\Audit\Figures.xlsx"
+```
+
+Finding open files is a best guess (window titles, files programs hold
+open, Windows' Recent Items), so an agent should show the list, and the
+name it chose, before saving.
 
 ## Notes for agent integrations
 
