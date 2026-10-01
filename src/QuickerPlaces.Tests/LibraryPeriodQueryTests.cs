@@ -315,7 +315,7 @@ public sealed class LibraryPeriodQueryTests
         Assert.NotEqual(0, resets);
         var budget = vm.Rows.Single(r => r.Name == "Budget.xlsx");
         Assert.Equal("Opened 2 times", budget.SourceText);
-        Assert.Equal(("2", "2 opens", "Recent"), (budget.OpensText, budget.OpensToolTip, budget.WhereFromText));
+        Assert.Equal(("2", "2 visits", "Recent"), (budget.VisitsText, budget.VisitsToolTip, budget.WhereFromText));
     }
 
     [Fact]

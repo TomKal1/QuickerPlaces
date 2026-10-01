@@ -353,16 +353,15 @@
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
                     <DataGridTextColumn x:Name="WhereFromColumn" Header="WHERE FROM" Binding="{Binding WhereFromText}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}" />
-                    <!-- The All tab's count, as Saved places' Opens: opens for a file, visits for a folder (the tooltip says which). -->
-                    <DataGridTextColumn x:Name="OpensColumn" Header="OPENS" Binding="{Binding OpensText}" Width="70" Visibility="Collapsed"
+                    <!-- Visits: a folder's visits or a file's opens, one number and one name on the All and Recent tabs, centred as Saved places' count is. -->
+                    <DataGridTextColumn x:Name="VisitsColumn" Header="VISITS" Binding="{Binding VisitsText}" Width="70"
                                         HeaderStyle="{StaticResource DataGridColumnHeader.Centered}">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource Cell.Centered}">
-                                <Setter Property="ToolTip" Value="{Binding OpensToolTip}" />
+                                <Setter Property="ToolTip" Value="{Binding VisitsToolTip}" />
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn x:Name="VisitsColumn" Header="VISITS" Binding="{Binding VisitsText}" Width="60" ElementStyle="{StaticResource Cell.Secondary}" />
                     <DataGridTextColumn x:Name="TimeColumn" Header="TIME" Binding="{Binding TimeText}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
                     <DataGridTextColumn x:Name="SessionsColumn" Header="SESSIONS" Binding="{Binding SessionsText}" Width="*" ElementStyle="{StaticResource Cell.Secondary}" Visibility="Collapsed" />
                     <DataGridTextColumn x:Name="TagsColumn" Header="TAGS" Binding="{Binding TagsText}" Width="*" ElementStyle="{StaticResource Cell.Text}" />

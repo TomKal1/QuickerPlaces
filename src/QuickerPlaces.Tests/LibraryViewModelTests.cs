@@ -325,7 +325,7 @@ public sealed class LibraryViewModelTests
     }
 
     [Fact]
-    public void TheOpensColumn_CountsVisitsForAFolderAndOpensForAFile_AndIsBlankWithNone()
+    public void TheVisitsColumn_CountsTheSameWayForAFolderAndAFile_AndIsBlankWithNone()
     {
         Seed();
 
@@ -334,27 +334,31 @@ public sealed class LibraryViewModelTests
         var budget = vm.Rows.Single(r => r.Name == "Budget.xlsx");
         var pdf = vm.Rows.Single(r => r.Name == "A-101.pdf");
 
-        Assert.Equal(("1", "1 visit"), (acme.OpensText, acme.OpensToolTip));
-        Assert.Matches(@"^\d+$", budget.OpensText);
-        Assert.Matches(@"^\d+ opens?$", budget.OpensToolTip);
-        Assert.Equal(("", ""), (pdf.OpensText, pdf.OpensToolTip));
+        Assert.Equal(("1", "1 visit"), (acme.VisitsText, acme.VisitsToolTip));
+        Assert.Matches(@"^\d+$", budget.VisitsText);
+        Assert.Matches(@"^\d+ visits?$", budget.VisitsToolTip);
+        Assert.Equal(("", ""), (pdf.VisitsText, pdf.VisitsToolTip));
     }
 
     [Fact]
-    public void OnlyTheAllTab_ShowsTheOpensColumn()
+    public void VisitsShowOnAllAndRecent_AndTimeOnlyOnRecent()
     {
         Seed();
         var vm = NewViewModel();
-        Assert.False(vm.ShowsOpens);
+        Assert.True(vm.ShowsVisits);
+        Assert.True(vm.ShowsTime);
 
         vm.Tab = LibraryTab.Recent;
-        Assert.False(vm.ShowsOpens);
+        Assert.True(vm.ShowsVisits);
+        Assert.True(vm.ShowsTime);
 
         vm.Tab = LibraryTab.Sessions;
-        Assert.False(vm.ShowsOpens);
+        Assert.False(vm.ShowsVisits);
+        Assert.False(vm.ShowsTime);
 
         vm.Tab = LibraryTab.All;
-        Assert.True(vm.ShowsOpens);
+        Assert.True(vm.ShowsVisits);
+        Assert.False(vm.ShowsTime);
     }
 
     [Fact]
@@ -399,7 +403,7 @@ public sealed class LibraryViewModelTests
     private static string[] Names(LibraryViewModel vm) => vm.Rows.Select(r => r.Name).OrderBy(n => n).ToArray();
 
     private static (bool Choice, bool WhereFrom, bool VisitsAndTime, bool Tags, bool Sessions, bool Tracked, bool Markers, bool Level) Columns(LibraryViewModel vm)
-        => (vm.ShowsSourceChoice, vm.ShowsWhereFrom, vm.ShowsVisitsAndTime, vm.ShowsTags, vm.ShowsSessions, vm.ShowsTrackedFolders, vm.ShowsSourceMarkers, vm.ShowsFolderLevel);
+        => (vm.ShowsSourceChoice, vm.ShowsWhereFrom, vm.ShowsTime, vm.ShowsTags, vm.ShowsSessions, vm.ShowsTrackedFolders, vm.ShowsSourceMarkers, vm.ShowsFolderLevel);
 
     [Fact]
     public void EachFileViewerTab_ChoosesItsSourceAndColumns_AndNoTabIsAsBefore()

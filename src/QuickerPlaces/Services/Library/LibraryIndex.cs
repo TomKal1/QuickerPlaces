@@ -128,7 +128,7 @@ public sealed record LibraryItem(
 
     /// <summary>
     /// "Saved place · In Tower B, Admin · Recent", for the Where from column: which
-    /// sources know the item. The count of opens or visits has its own Opens column.
+    /// sources know the item. The count of visits has its own Visits column.
     /// </summary>
     public string WhereFromText
     {

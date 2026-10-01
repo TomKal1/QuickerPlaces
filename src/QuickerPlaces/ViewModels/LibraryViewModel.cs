@@ -336,8 +336,8 @@ public sealed class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowsSourceChoice));
             OnPropertyChanged(nameof(ShowsTrackedFolders));
             OnPropertyChanged(nameof(ShowsWhereFrom));
-            OnPropertyChanged(nameof(ShowsOpens));
-            OnPropertyChanged(nameof(ShowsVisitsAndTime));
+            OnPropertyChanged(nameof(ShowsVisits));
+            OnPropertyChanged(nameof(ShowsTime));
             OnPropertyChanged(nameof(ShowsTags));
             OnPropertyChanged(nameof(ShowsSessions));
             OnPropertyChanged(nameof(ShowsSourceMarkers));
@@ -365,10 +365,11 @@ public sealed class LibraryViewModel : ObservableObject
 
     public bool ShowsWhereFrom => _tab is null or LibraryTab.All;
 
-    /// <summary>The Opens column: the All tab's count of opens (files) or visits (folders), as Saved places has Opens. Recent has Visits and Time.</summary>
-    public bool ShowsOpens => _tab == LibraryTab.All;
+    /// <summary>The Visits column, the same number wherever it shows: the All tab's and Recent's (and a Recents panel's, with no tab).</summary>
+    public bool ShowsVisits => _tab is null or LibraryTab.Recent or LibraryTab.All;
 
-    public bool ShowsVisitsAndTime => _tab is null or LibraryTab.Recent;
+    /// <summary>The Time column, for the folders Recents timed: Recent's, and a Recents panel's.</summary>
+    public bool ShowsTime => _tab is null or LibraryTab.Recent;
 
     public bool ShowsTags => _tab != LibraryTab.Recent;
 
@@ -1155,22 +1156,6 @@ public sealed class LibraryRowViewModel
     /// <summary>Which sources know the item, without the count: the Where from column.</summary>
     public string WhereFromText => Item.WhereFromText;
 
-    /// <summary>Opens (a file) or visits (a folder) in the period, as Saved places' Opens; "" when none were recorded.</summary>
-    public string OpensText => Item.RecentCount > 0 ? Item.RecentCount.ToString(_culture) : "";
-
-    /// <summary>"3 opens", "1 visit": says what the Opens number counts for this row; "" with none.</summary>
-    public string OpensToolTip
-    {
-        get
-        {
-            if (Item.RecentCount <= 0)
-                return "";
-
-            var noun = Item.Kind == LibraryKind.Folder ? "visit" : "open";
-            return Item.RecentCount == 1 ? $"1 {noun}" : $"{Item.RecentCount.ToString(_culture)} {noun}s";
-        }
-    }
-
     /// <summary>Sorts the Last used column; never-used rows last.</summary>
     public DateTimeOffset LastUsedSort => Item.LastUsedAt ?? DateTimeOffset.MinValue;
 
@@ -1178,8 +1163,19 @@ public sealed class LibraryRowViewModel
         ? TimeZoneInfo.ConvertTime(at, _zone).DateTime.ToString("g", _culture)
         : "";
 
-    /// <summary>Visits in the period, for a folder Recents recorded; "" otherwise (Desk layout design §4).</summary>
-    public string VisitsText => Item.Kind == LibraryKind.Folder && Item.RecentCount > 0 ? Item.RecentCount.ToString(_culture) : "";
+    /// <summary>
+    /// Visits in the period: a folder's (Recents) or a file's opens (Recent Files), counted
+    /// alike and called Visits everywhere; "" when none were recorded (Desk layout design §4).
+    /// </summary>
+    public string VisitsText => Item.RecentCount > 0 ? Item.RecentCount.ToString(_culture) : "";
+
+    /// <summary>"3 visits", "1 visit": the Visits cell's tooltip; "" with none.</summary>
+    public string VisitsToolTip => Item.RecentCount switch
+    {
+        <= 0 => "",
+        1 => "1 visit",
+        var count => $"{count.ToString(_culture)} visits",
+    };
 
     /// <summary>Time spent in the folder in the period (Recents); "" otherwise.</summary>
     public string TimeText => Item.Kind == LibraryKind.Folder && Item.RecentTime > TimeSpan.Zero ? ActivityFormat.Duration(Item.RecentTime) : "";
@@ -1206,7 +1202,7 @@ public sealed class LibraryRowViewModel
     /// <summary>True when <paramref name="other"/> is the same item, shown the same way in the same group.</summary>
     public bool Looks(LibraryRowViewModel other)
         => ResourceIdentity.Comparer.Equals(Item.Key, other.Item.Key) && GroupName == other.GroupName && Name == other.Name &&
-           SourceText == other.SourceText && OpensText == other.OpensText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
+           SourceText == other.SourceText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
            VisitsText == other.VisitsText && TimeText == other.TimeText && SessionsText == other.SessionsText &&
            ReferenceEquals(Item.Place, other.Item.Place);
 

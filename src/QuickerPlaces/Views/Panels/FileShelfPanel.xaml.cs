@@ -87,9 +87,8 @@ public partial class FileShelfPanel : UserControl
 
         SourceColumn.Visibility = Show(vm?.ShowsSourceMarkers == true);
         WhereFromColumn.Visibility = Show(vm?.ShowsWhereFrom != false);
-        OpensColumn.Visibility = Show(vm?.ShowsOpens == true);
-        VisitsColumn.Visibility = Show(vm?.ShowsVisitsAndTime != false);
-        TimeColumn.Visibility = VisitsColumn.Visibility;
+        VisitsColumn.Visibility = Show(vm?.ShowsVisits != false);
+        TimeColumn.Visibility = Show(vm?.ShowsTime != false);
         SessionsColumn.Visibility = Show(vm?.ShowsSessions == true);
         TagsColumn.Visibility = Show(vm?.ShowsTags != false);
     }

@@ -260,7 +260,7 @@
                     <!-- Formatted in the view model with the user's regional settings (D31). -->
                     <DataGridTextColumn Header="LAST OPENED" Binding="{Binding LastOpenedText}" SortMemberPath="LastOpened"
                                         Width="1.45*" MinWidth="128" MaxWidth="180" ElementStyle="{StaticResource Cell.Text}" />
-                    <DataGridTextColumn Header="OPENS" Binding="{Binding OpenCount}" SortMemberPath="Opens"
+                    <DataGridTextColumn Header="VISITS" Binding="{Binding OpenCount}" SortMemberPath="Opens"
                                         Width="0.6*" MinWidth="62" MaxWidth="90"
                                         HeaderStyle="{StaticResource DataGridColumnHeader.Centered}"
                                         ElementStyle="{StaticResource Cell.Centered}" />
