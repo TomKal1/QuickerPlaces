@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    qp: the QuickerPlaces command line, built first for AI agents (Odysseus,
+    Claude Code, scripts) and usable by people too. Every command prints one
+    JSON document on stdout and exits with a documented code; `qp describe`
+    prints the whole command catalogue for an agent to read.
+
+    Plain net10.0 like the tests, compiling the app's UI-free models and
+    services in directly (the links below) rather than referencing the WPF
+    project, so it builds and runs on any OS and reads the stores with
+    exactly the app's own rules: migrations, validation, retention.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>qp</AssemblyName>
+    <RootNamespace>QuickerPlaces.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\QuickerPlaces\AppInfo.cs" Link="Linked\AppInfo.cs" />
+    <Compile Include="..\QuickerPlaces\Models\PersistenceResult.cs" Link="Linked\Models\PersistenceResult.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Place.cs" Link="Linked\Models\Place.cs" />
+    <Compile Include="..\QuickerPlaces\Models\PlaceType.cs" Link="Linked\Models\PlaceType.cs" />
+    <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />
+    <Compile Include="..\QuickerPlaces\Models\StoreLoadOutcome.cs" Link="Linked\Models\StoreLoadOutcome.cs" />
+    <Compile Include="..\QuickerPlaces\Services\AppDataFolders.cs" Link="Linked\Services\AppDataFolders.cs" />
+    <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
+    <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
+    <Compile Include="..\QuickerPlaces\Services\InstanceGate.cs" Link="Linked\Services\InstanceGate.cs" />
+    <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
+    <Compile Include="..\QuickerPlaces\Services\JsonStoreLoader.cs" Link="Linked\Services\JsonStoreLoader.cs" />
+    <Compile Include="..\QuickerPlaces\Services\IShell.cs" Link="Linked\Services\IShell.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceLauncher.cs" Link="Linked\Services\PlaceLauncher.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceSearch.cs" Link="Linked\Services\PlaceSearch.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceTags.cs" Link="Linked\Services\PlaceTags.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
+    <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
+    <Compile Include="..\QuickerPlaces\Services\ValidationResult.cs" Link="Linked\Services\ValidationResult.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Activity\*.cs" LinkBase="Linked\Models\Activity" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityDayTotal.cs" Link="Linked\Services\Activity\ActivityDayTotal.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityInterval.cs" Link="Linked\Services\Activity\ActivityInterval.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityPeriod.cs" Link="Linked\Services\Activity\ActivityPeriod.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityRootSnapshot.cs" Link="Linked\Services\Activity\ActivityRootSnapshot.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\ActivityStore.cs" Link="Linked\Services\Activity\ActivityStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\FolderActivity.cs" Link="Linked\Services\Activity\FolderActivity.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\RootPathMatcher.cs" Link="Linked\Services\Activity\RootPathMatcher.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\TrackedFolderPaths.cs" Link="Linked\Services\Activity\TrackedFolderPaths.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Sessions\*.cs" LinkBase="Linked\Models\Sessions" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\DocumentKind.cs" Link="Linked\Services\Documents\DocumentKind.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Models\RecentFiles\*.cs" LinkBase="Linked\Models\RecentFiles" />
+    <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
+  </ItemGroup>
+
+</Project>

@@ -139,6 +139,12 @@
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionFileSet.cs" Link="Linked\Services\Sessions\SessionFileSet.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\WorkspaceViewModel.cs" Link="Linked\ViewModels\WorkspaceViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SaveLayoutViewModel.cs" Link="Linked\ViewModels\SaveLayoutViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\Services\InstanceGate.cs" Link="Linked\Services\InstanceGate.cs" />
+    <!--
+      The qp command line (src/QuickerPlaces.Cli): every file but Program.cs,
+      whose Main would clash with the test host's.
+    -->
+    <Compile Include="..\QuickerPlaces.Cli\*.cs" Exclude="..\QuickerPlaces.Cli\Program.cs" LinkBase="Linked\Cli" />
   </ItemGroup>
 
   <ItemGroup>
