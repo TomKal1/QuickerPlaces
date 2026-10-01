@@ -125,6 +125,26 @@ public sealed record LibraryItem(
             return string.Join(" · ", parts);
         }
     }
+
+    /// <summary>
+    /// "Saved place · In Tower B, Admin · Recent", for the Where from column: which
+    /// sources know the item. The count of opens or visits has its own Opens column.
+    /// </summary>
+    public string WhereFromText
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (IsSavedPlace)
+                parts.Add("Saved place");
+            if (IsInSession)
+                parts.Add($"In {string.Join(", ", Sessions)}");
+            if (IsRecent)
+                parts.Add("Recent");
+
+            return string.Join(" · ", parts);
+        }
+    }
 }
 
 /// <summary>

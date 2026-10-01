@@ -336,6 +336,7 @@ public sealed class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowsSourceChoice));
             OnPropertyChanged(nameof(ShowsTrackedFolders));
             OnPropertyChanged(nameof(ShowsWhereFrom));
+            OnPropertyChanged(nameof(ShowsOpens));
             OnPropertyChanged(nameof(ShowsVisitsAndTime));
             OnPropertyChanged(nameof(ShowsTags));
             OnPropertyChanged(nameof(ShowsSessions));
@@ -363,6 +364,9 @@ public sealed class LibraryViewModel : ObservableObject
     public bool ShowsTrackedFolders => _tab is null or LibraryTab.Recent;
 
     public bool ShowsWhereFrom => _tab is null or LibraryTab.All;
+
+    /// <summary>The Opens column: the All tab's count of opens (files) or visits (folders), as Saved places has Opens. Recent has Visits and Time.</summary>
+    public bool ShowsOpens => _tab == LibraryTab.All;
 
     public bool ShowsVisitsAndTime => _tab is null or LibraryTab.Recent;
 
@@ -1148,6 +1152,25 @@ public sealed class LibraryRowViewModel
     public string TagsText => string.Join(", ", Item.Tags);
     public string SourceText => Item.SourceText;
 
+    /// <summary>Which sources know the item, without the count: the Where from column.</summary>
+    public string WhereFromText => Item.WhereFromText;
+
+    /// <summary>Opens (a file) or visits (a folder) in the period, as Saved places' Opens; "" when none were recorded.</summary>
+    public string OpensText => Item.RecentCount > 0 ? Item.RecentCount.ToString(_culture) : "";
+
+    /// <summary>"3 opens", "1 visit": says what the Opens number counts for this row; "" with none.</summary>
+    public string OpensToolTip
+    {
+        get
+        {
+            if (Item.RecentCount <= 0)
+                return "";
+
+            var noun = Item.Kind == LibraryKind.Folder ? "visit" : "open";
+            return Item.RecentCount == 1 ? $"1 {noun}" : $"{Item.RecentCount.ToString(_culture)} {noun}s";
+        }
+    }
+
     /// <summary>Sorts the Last used column; never-used rows last.</summary>
     public DateTimeOffset LastUsedSort => Item.LastUsedAt ?? DateTimeOffset.MinValue;
 
@@ -1183,7 +1206,7 @@ public sealed class LibraryRowViewModel
     /// <summary>True when <paramref name="other"/> is the same item, shown the same way in the same group.</summary>
     public bool Looks(LibraryRowViewModel other)
         => ResourceIdentity.Comparer.Equals(Item.Key, other.Item.Key) && GroupName == other.GroupName && Name == other.Name &&
-           SourceText == other.SourceText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
+           SourceText == other.SourceText && OpensText == other.OpensText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
            VisitsText == other.VisitsText && TimeText == other.TimeText && SessionsText == other.SessionsText &&
            ReferenceEquals(Item.Place, other.Item.Place);
 

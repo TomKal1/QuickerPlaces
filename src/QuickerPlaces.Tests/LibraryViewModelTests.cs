@@ -325,6 +325,39 @@ public sealed class LibraryViewModelTests
     }
 
     [Fact]
+    public void TheOpensColumn_CountsVisitsForAFolderAndOpensForAFile_AndIsBlankWithNone()
+    {
+        Seed();
+
+        var vm = NewViewModel();
+        var acme = vm.Rows.Single(r => r.Name == "Acme");
+        var budget = vm.Rows.Single(r => r.Name == "Budget.xlsx");
+        var pdf = vm.Rows.Single(r => r.Name == "A-101.pdf");
+
+        Assert.Equal(("1", "1 visit"), (acme.OpensText, acme.OpensToolTip));
+        Assert.Matches(@"^\d+$", budget.OpensText);
+        Assert.Matches(@"^\d+ opens?$", budget.OpensToolTip);
+        Assert.Equal(("", ""), (pdf.OpensText, pdf.OpensToolTip));
+    }
+
+    [Fact]
+    public void OnlyTheAllTab_ShowsTheOpensColumn()
+    {
+        Seed();
+        var vm = NewViewModel();
+        Assert.False(vm.ShowsOpens);
+
+        vm.Tab = LibraryTab.Recent;
+        Assert.False(vm.ShowsOpens);
+
+        vm.Tab = LibraryTab.Sessions;
+        Assert.False(vm.ShowsOpens);
+
+        vm.Tab = LibraryTab.All;
+        Assert.True(vm.ShowsOpens);
+    }
+
+    [Fact]
     public void ATrackedFolderChip_ScopesTheList_AndAgainClearsIt()
     {
         Seed();

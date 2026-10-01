@@ -313,7 +313,9 @@ public sealed class LibraryPeriodQueryTests
         _recentFiles.Record(new[] { new RecentDocument(Excel, _time.UtcNow.AddMinutes(30)) }, _ => true);
         vm.Reload();
         Assert.NotEqual(0, resets);
-        Assert.Equal("Opened 2 times", vm.Rows.Single(r => r.Name == "Budget.xlsx").SourceText);
+        var budget = vm.Rows.Single(r => r.Name == "Budget.xlsx");
+        Assert.Equal("Opened 2 times", budget.SourceText);
+        Assert.Equal(("2", "2 opens", "Recent"), (budget.OpensText, budget.OpensToolTip, budget.WhereFromText));
     }
 
     [Fact]

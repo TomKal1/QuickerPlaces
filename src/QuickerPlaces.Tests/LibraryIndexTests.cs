@@ -54,6 +54,9 @@ public sealed class LibraryIndexTests
         Assert.Equal(3, item.RecentCount);
         Assert.Equal(T0.AddHours(2), item.LastUsedAt);
         Assert.Equal("Saved place · Visited 3 times", item.SourceText);
+
+        // The Where from column names the sources only; the count has its own Opens column.
+        Assert.Equal("Saved place · Recent", item.WhereFromText);
     }
 
     [Fact]
@@ -75,6 +78,7 @@ public sealed class LibraryIndexTests
         Assert.True(item.IsSaved);
         Assert.True(item.IsRecent);
         Assert.Equal("In Tower B, Review · Opened once", item.SourceText);
+        Assert.Equal("In Tower B, Review · Recent", item.WhereFromText);
         Assert.Equal(@"C:\Jobs", item.Folder);
     }
 
