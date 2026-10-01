@@ -146,7 +146,7 @@ public sealed class PlacesServiceSchemaV2Tests
     {
         using var dir = new TempDirectory();
         var path = dir.File("places.json");
-        File.WriteAllText(path, """{ "schemaVersion": 4, "places": [] }""");
+        File.WriteAllText(path, """{ "schemaVersion": 5, "places": [] }""");
         var originalBytes = File.ReadAllBytes(path);
 
         var service = new PlacesService(new FilePlacesStorage(dir.Path, "places.json"), Clock());

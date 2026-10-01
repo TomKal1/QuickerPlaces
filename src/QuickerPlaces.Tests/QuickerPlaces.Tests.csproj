@@ -51,6 +51,7 @@
     <Compile Include="..\QuickerPlaces\Services\PlaceSort.cs" Link="Linked\Services\PlaceSort.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesService.cs" Link="Linked\Services\PlacesService.cs" />
     <Compile Include="..\QuickerPlaces\Services\PlacesStoreMigration.cs" Link="Linked\Services\PlacesStoreMigration.cs" />
+    <Compile Include="..\QuickerPlaces\Services\PlaceTags.cs" Link="Linked\Services\PlaceTags.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentlyDeletedPolicy.cs" Link="Linked\Services\RecentlyDeletedPolicy.cs" />
     <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
     <Compile Include="..\QuickerPlaces\Services\ValidationResult.cs" Link="Linked\Services\ValidationResult.cs" />
@@ -138,6 +139,16 @@
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionFileSet.cs" Link="Linked\Services\Sessions\SessionFileSet.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\WorkspaceViewModel.cs" Link="Linked\ViewModels\WorkspaceViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SaveLayoutViewModel.cs" Link="Linked\ViewModels\SaveLayoutViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\Services\InstanceGate.cs" Link="Linked\Services\InstanceGate.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Remote\*.cs" LinkBase="Linked\Services\Remote" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsHeldFiles.cs" Link="Linked\Services\Documents\WindowsHeldFiles.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsOpenDocumentProbe.cs" Link="Linked\Services\Documents\WindowsOpenDocumentProbe.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Documents\WindowsRecentItems.cs" Link="Linked\Services\Documents\WindowsRecentItems.cs" />
+    <!--
+      The qp command line (src/QuickerPlaces.Cli): every file but Program.cs,
+      whose Main would clash with the test host's.
+    -->
+    <Compile Include="..\QuickerPlaces.Cli\*.cs" Exclude="..\QuickerPlaces.Cli\Program.cs" LinkBase="Linked\Cli" />
   </ItemGroup>
 
   <ItemGroup>
@@ -148,7 +159,7 @@
 
   <ItemGroup>
     <!--
-      Fixtures/places.v1.json, places.v2.json and places.v3.json are read via
+      Fixtures/places.v1.json, places.v2.json, places.v3.json and places.v4.json are read via
       AppContext.BaseDirectory at test time (not as embedded resources), so
       they need to land next to the test assembly in the output directory.
       Every test that reads them does so the same way — see
@@ -161,6 +172,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Fixtures\places.v3.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Fixtures\places.v4.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

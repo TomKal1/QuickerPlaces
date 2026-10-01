@@ -33,12 +33,14 @@ The planned release adds:
 | 1–3 | Phases 1, 2, 3: persistence, Recently Deleted, usage tracking and sorting | Done, on `main` |
 | 4th | Phase 9: opt-in root folder activity tracking ([detailed plan](260914_Folder%20Activity%20Tracking%20Plan.md)) | Done, on `main` (2026-09-27); some live checks not done, judged not needed (plan §9 step 8) |
 | Added | Project sessions (save the PDF, Word and Excel files open now as a tagged session), opt-in Recent Files (Recents for files), and the Library (everything together, by kind or tag, with a year strip) ([plan](260928_PDF%20Project%20Sessions%20Plan.md)) | Requested 2026-09-28 and built outside the phase order; builds and tests pass, not yet checked on Windows (its §9). Their files are not places, so Phase 4 is unchanged |
+| Added | Places schema v4 (open times, tags, note), `qp` command line for scripts and AI agents, and changes from qp routed through the running app ([CLI README](../src/QuickerPlaces.Cli/README.md)) | Requested 2026-10-01 and built outside the phase order; builds and tests pass, not yet checked on Windows ([future note](261001_AI%20Agent%20Integration%20Future%20Note.md), last section) |
 | **Next** | **Phase 4: general file support** | Planned; its detailed plan is written next |
 | Then | Phase 6: explicit multi-folder import | Planned |
 | Then | Phase 7: search and retrieval polish | Planned |
 | Then | Phase 8: distribution (publish profiles, clean-machine check) | Planned; must also check Phase 9's COM interop in a single-file build |
 | Then | Phase 5: user-defined file tabs, opening policies, Revit release selection | Planned; the largest phase, and the only one that depends on third-party software |
 | Last | Opening workshared Revit central models through WWTools (§4.21) | Direction settled, deferred to after Phase 9 |
+| Unscheduled | AI agents driving QuickerPlaces: an MCP wrapper over `qp`, for local or cloud models ([future note](261001_AI%20Agent%20Integration%20Future%20Note.md)) | Potential dev step, recorded 2026-10-01; not started |
 
 **Why Phase 9 moved up.** It was placed last because it is the only phase that watches in the background rather than acting on a command, and to keep it from competing for attention with the persistence work. That reasoning no longer applies: Phases 1 and 3, its only prerequisites, are done, and nothing in Phases 4 to 8 depends on it or is affected by it (it tracks folders only). Its value also grows with how long it has run, so starting it sooner means its Week and Month views fill sooner. The user ranks it above file support.
 

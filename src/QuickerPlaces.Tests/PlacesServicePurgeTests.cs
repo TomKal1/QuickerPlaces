@@ -76,7 +76,7 @@ public sealed class PlacesServicePurgeTests
     {
         using var dir = new TempDirectory();
         var path = dir.File("places.json");
-        File.WriteAllText(path, $$"""{ "schemaVersion": 4, "places": [ {{DeletedRecord("Expired", Now.AddDays(-30))}} ] }""");
+        File.WriteAllText(path, $$"""{ "schemaVersion": 5, "places": [ {{DeletedRecord("Expired", Now.AddDays(-30))}} ] }""");
 
         AssertNoPurgeReachesTheFile(dir, path, StoreLoadOutcome.WrittenByNewerVersion, holdOpen: false);
     }

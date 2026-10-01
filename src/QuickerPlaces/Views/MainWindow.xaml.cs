@@ -156,6 +156,15 @@ public partial class MainWindow : Window
         LibraryWindow.Show(this, library, _recentFilesHost, _activityHost, viewModel.NotePlaceOpened);
     }
 
+    /// <summary>Brings the window up to date after qp changed something through the app (App.xaml.cs, Services/Remote).</summary>
+    public void ApplyRemoteEffect(Services.Remote.OperationEffect effect)
+    {
+        if (DataContext is MainViewModel viewModel)
+            viewModel.NoteChangedElsewhere(effect.AddedPlace, effect.ChangedPlace, effect.Persistence);
+        if (effect.SessionsChanged)
+            _workspaceView?.NoteSessionOpened();
+    }
+
     public void UpdateActivityIndicator()
     {
         var count = _activityStore.EnabledRoots().Count;

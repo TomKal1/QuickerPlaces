@@ -26,8 +26,6 @@ namespace QuickerPlaces.Services;
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
-    private const string EventName = @"Local\" + AppInfo.Publisher + "." + AppInfo.Name + ".ShowWindow";
-
     private const int AsfwAny = -1;
 
     private readonly EventWaitHandle _showRequested;
@@ -51,7 +49,7 @@ public sealed class SingleInstance : IDisposable
     /// </param>
     public static SingleInstance? TryStart(string? scope = null)
     {
-        var name = scope is null ? EventName : $"{EventName}.{scope}";
+        var name = InstanceGate.EventName(scope);
         var showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, name, out var createdNew);
         if (createdNew)
             return new SingleInstance(showRequested);

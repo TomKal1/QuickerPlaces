@@ -19,6 +19,7 @@ public static class PlacesStoreMigration
 {
     private const int V2 = 2;
     private const int V3 = 3;
+    private const int V4 = 4;
 
     /// <summary>
     /// Rewrites a schemaVersion 1 document in place as schemaVersion 2 (D11). Throws
@@ -135,6 +136,58 @@ public static class PlacesStoreMigration
         return new MigrationV3Report(records, strayFields);
     }
 
+    /// <summary>
+    /// Rewrites a schemaVersion 3 document in place as schemaVersion 4: any stray
+    /// opens/tags/note removed (v3 never gave them a meaning), then each record's
+    /// lastOpenedAt, when it has one, seeded as the only entry in opens — the one
+    /// open v3 timed. Older opens stay counted in openCount only. Throws
+    /// JsonException for a shape it cannot migrate, as the earlier steps do.
+    /// </summary>
+    /// <param name="root">The whole parsed document. Only its "places" records and "schemaVersion" are touched.</param>
+    public static MigrationV4Report MigrateV3ToV4(JsonObject root)
+    {
+        var records = 0;
+        var strayFields = 0;
+        var seeded = 0;
+
+        switch (root["places"])
+        {
+            case null:
+                break;
+
+            case JsonArray places:
+                foreach (var entry in places)
+                {
+                    if (entry is null)
+                        continue;
+
+                    if (entry is not JsonObject record)
+                        throw new JsonException("A stored place is not a JSON object.");
+
+                    records++;
+
+                    foreach (var name in new[] { "opens", "tags", "note" })
+                    {
+                        if (record.Remove(name))
+                            strayFields++;
+                    }
+
+                    if (record["lastOpenedAt"] is JsonValue lastOpened)
+                    {
+                        record["opens"] = new JsonArray(lastOpened.DeepClone());
+                        seeded++;
+                    }
+                }
+                break;
+
+            default:
+                throw new JsonException("The stored place list is not a JSON array.");
+        }
+
+        root["schemaVersion"] = V4;
+        return new MigrationV4Report(records, strayFields, seeded);
+    }
+
     private enum DateKind
     {
         Exact,
@@ -213,3 +266,6 @@ public readonly record struct MigrationReport(int Records, int ExactOffsets, int
 /// <param name="Records">Non-null place records migrated, each given a fresh id.</param>
 /// <param name="StrayFieldsRemoved">lastOpenedAt/openCount properties found in v2 records and removed.</param>
 public readonly record struct MigrationV3Report(int Records, int StrayFieldsRemoved);
+
+/// <summary>What MigrateV3ToV4 did, for the load log: counts only (DiagnosticLog's privacy rule).</summary>
+public readonly record struct MigrationV4Report(int Records, int StrayFieldsRemoved, int OpensSeeded);

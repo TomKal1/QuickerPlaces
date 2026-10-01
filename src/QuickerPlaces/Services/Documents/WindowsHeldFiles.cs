@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using QuickerPlaces.Services;
+using System.Runtime.Versioning;
 
 namespace QuickerPlaces.Services.Documents;
 
@@ -56,6 +57,7 @@ namespace QuickerPlaces.Services.Documents;
 ///
 /// App-only: it calls Windows, so it is not linked into the test project.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public static class WindowsHeldFiles
 {
     /// <summary>

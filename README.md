@@ -4,6 +4,10 @@ A lightweight Windows desktop utility for storing and quickly opening remembered
 
 > **Status:** early build. The features (search, hotkey, undo, copy, settings and the rest) have had a hands-on pass on Windows. Phase 1 of the [roadmap](ai/260901_Professional%20Improvements%20Plan.md) (persistence reliability and recovery: failed saves are reported with a Retry banner, a damaged or unreadable store is handled safely, and only one instance runs at a time) is merged in, and so is Phase 2 (a seven-day Recently Deleted: Remove no longer asks, and removed places can be restored for a week). Both were checked by hand on Windows, apart from their failure paths, which were accepted as untested. So is Phase 3 (Last Opened and Opens columns, a remembered sort, and a clickable favourite star), which has been used on Windows. So is Phase 9: opt-in tracking of the folders you open in File Explorer, under **Recents**, with Week, Month and Day views, a year strip, and optional tray and sign-in coverage. It has been used on Windows; some of its live checks were judged not needed and are recorded as not done. So is a UI refresh (the Saab 900 look: Dark, Light and Match Windows themes, a choice of highlight colour, new fonts, icons and app icon), which has been tried on Windows; see [its hand-off](ai/260927_UI%20Refresh%20Handoff.md). **Project sessions**, **Recent Files** and the **Library** were added on 2026-09-28 at the user's request, outside the phase order ([plan](ai/260928_PDF%20Project%20Sessions%20Plan.md)), and restyled to the new look when the refresh was merged in; finding open files by the files programs hold open has been tried on Windows, the rest has not yet. Everything builds with no warnings and all 877 automated tests pass. Next is Phase 4, general file support. See `ai/BUILD_SUMMARY.md` for the checklists, and the roadmap's §1.1 for the order of work.
 
+## Command line (`qp`)
+
+`src/QuickerPlaces.Cli` builds `qp`, a JSON-first command line over the same stores, for scripts and AI agents. It can list, search, rank, open, add, tag and annotate places; open sessions and save the files you have open as a new one; and report activity by day or period. While the app is open, its changes go through the app. See [its README](src/QuickerPlaces.Cli/README.md).
+
 ## What it does
 
 - Save a folder or a link under a unique **name**, with validation that blocks duplicate names and duplicate folders or links before they're saved.
@@ -44,7 +48,7 @@ The tests (`src/QuickerPlaces.Tests`) cover the service layer and the UI-free vi
 
 ### Where your data lives
 
-- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit. The previous version is kept alongside it as `places.bak.json` on every save.
+- Your saved places: `%AppData%\QuickerPlaces\QuickerPlaces\places.json` — written through on every change (add, edit, favourite, reorder, remove), not just on exit. The previous version is kept alongside it as `places.bak.json` on every save. Since schema v4, each place also keeps the times of its last 500 opens (`opens`), its own `tags`, and an optional `note`, ready for tools that ask about usage by period. These are stored and exported, but not yet shown or editable in the app. An older file is upgraded on the next save, with its last-opened time as the first entry in `opens`.
 - Your project sessions: `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside `places.json`, written on every change, with `sessions.bak.json` as the previous version.
 - Recent Files (once turned on): `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json`, local to this computer, never exported.
 - Window layout (size/position, whether the grid is collapsed), the global hotkey, and the theme and highlight colour: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json`.

@@ -54,7 +54,7 @@ public sealed class PlacesServiceImportExportV3Tests : IDisposable
         Assert.Null(service.Export(service.Places.Concat(service.RecentlyDeleted), ExportFile));
 
         var written = JsonNode.Parse(File.ReadAllText(ExportFile))!;
-        Assert.Equal(3, written["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PlacesService.CurrentSchemaVersion, written["schemaVersion"]!.GetValue<int>());
         var records = written["places"]!.AsArray().Select(r => r!.AsObject()).ToList();
         Assert.Equal(new[] { "Opened", "Never" }, records.Select(r => r["alias"]!.GetValue<string>()));
         Assert.Equal(opened.Id, Guid.Parse(records[0]["id"]!.GetValue<string>()));

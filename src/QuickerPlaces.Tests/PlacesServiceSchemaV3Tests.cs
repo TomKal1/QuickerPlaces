@@ -80,7 +80,7 @@ public sealed class PlacesServiceSchemaV3Tests
         var second = new PlacesService(new FilePlacesStorage(dir.Path, "places.json"), Clock());
 
         Assert.Equal(before, second.Places.Concat(second.RecentlyDeleted).Select(p => (p.Alias, p.Id)));
-        Assert.Equal(3, JsonNode.Parse(File.ReadAllText(dir.File("places.json")))!["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(PlacesService.CurrentSchemaVersion, JsonNode.Parse(File.ReadAllText(dir.File("places.json")))!["schemaVersion"]!.GetValue<int>());
     }
 
     /// <summary>
