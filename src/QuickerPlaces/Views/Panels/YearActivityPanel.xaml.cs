@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,20 +16,52 @@ namespace QuickerPlaces.Views.Panels;
 /// </summary>
 public partial class YearActivityPanel : UserControl
 {
-    /// <summary>Beyond the strip itself: the weekday labels, the border and padding, and a little room.</summary>
-    private const double YearChrome = 64;
-
     /// <summary>The least room the title and caption keep beside the header's controls.</summary>
     private const double CaptionRoom = 220;
+
+    private LibraryViewModel? _watched;
 
     public YearActivityPanel()
     {
         InitializeComponent();
         SizeChanged += (_, _) => FitWidth();
-        Loaded += (_, _) => FitWidth();
+        Loaded += (_, _) =>
+        {
+            Watch(ViewModel);
+            FitWidth();
+        };
+        Unloaded += (_, _) => Watch(null);
+        DataContextChanged += (_, _) =>
+        {
+            if (IsLoaded)
+                Watch(ViewModel);
+            FitWidth();
+        };
 
         // The chip for a chosen period comes and goes, and the navigation changes with the view.
         HeaderControls.SizeChanged += (_, _) => FitHeader();
+    }
+
+    /// <summary>
+    /// Follows the view model's strip width: it is 0 until the activity data
+    /// has loaded, so a panel that starts narrow must choose again when it arrives.
+    /// </summary>
+    private void Watch(LibraryViewModel? viewModel)
+    {
+        if (ReferenceEquals(_watched, viewModel))
+            return;
+
+        if (_watched is not null)
+            _watched.PropertyChanged -= ViewModelPropertyChanged;
+        _watched = viewModel;
+        if (_watched is not null)
+            _watched.PropertyChanged += ViewModelPropertyChanged;
+    }
+
+    private void ViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LibraryViewModel.CalendarStripWidth))
+            FitWidth();
     }
 
     private void FitWidth()
@@ -36,7 +69,7 @@ public partial class YearActivityPanel : UserControl
         if (ActualWidth <= 0 || ViewModel is not { } vm)
             return;
 
-        var monthView = ActualWidth < vm.CalendarStripWidth + YearChrome;
+        var monthView = ActivityCalendar.ShowsMonthView(ActualWidth, vm.CalendarStripWidth);
         YearView.Visibility = monthView ? Visibility.Collapsed : Visibility.Visible;
         MonthView.Visibility = monthView ? Visibility.Visible : Visibility.Collapsed;
         YearNav.Visibility = monthView ? Visibility.Collapsed : Visibility.Visible;
