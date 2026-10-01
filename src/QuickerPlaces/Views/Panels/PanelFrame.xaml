@@ -45,6 +45,8 @@
                         <ComboBoxItem Content="Main column" Tag="main" />
                     </ComboBox>
                 </StackPanel>
+                <!-- A panel's main action, on the title's line while nothing else is there (HeaderSlot); the panel takes it back below the title while Hide or Arrange's controls are shown. -->
+                <StackPanel x:Name="HeaderActions" DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0" />
                 <Thumb x:Name="MoveHandle" DockPanel.Dock="Left" Width="18" Height="24" Margin="0,0,6,0" Cursor="SizeAll"
                        Visibility="Collapsed" Focusable="False"
                        DragStarted="MoveHandle_DragStarted" DragDelta="MoveHandle_DragDelta" DragCompleted="MoveHandle_DragCompleted">

@@ -94,6 +94,57 @@ public partial class SessionsPanel : UserControl
     /// <summary>Reads the sessions again, keeping the selected one: after one was opened or changed elsewhere.</summary>
     public void Reload() => _viewModel?.Reload(_viewModel.SelectedRow?.Id);
 
+    private Panel? _headerSlot;
+    private bool _actionInHeader;
+
+    /// <summary>Gives the panel the frame's title-line slot for Save open files; it stays in the panel until <see cref="ActionInHeader"/> is set.</summary>
+    public void AttachHeaderSlot(Panel slot)
+    {
+        _headerSlot = slot;
+        PlaceAction();
+    }
+
+    /// <summary>
+    /// True puts Save open files on the frame's title line, level with the
+    /// title (small enough not to make that line taller); false puts it back in
+    /// the panel's first row, under the title. The workspace turns it off while
+    /// the frame's own Hide and Arrange controls are shown, so they have the line.
+    /// </summary>
+    public bool ActionInHeader
+    {
+        get => _actionInHeader;
+        set
+        {
+            if (_actionInHeader == value)
+                return;
+
+            _actionInHeader = value;
+            PlaceAction();
+        }
+    }
+
+    private void PlaceAction()
+    {
+        var inHeader = _actionInHeader && _headerSlot is not null;
+        Panel target = inHeader ? _headerSlot! : ActionRow;
+        if (ReferenceEquals(SaveOpenButton.Parent, target))
+            return;
+
+        (SaveOpenButton.Parent as Panel)?.Children.Remove(SaveOpenButton);
+        if (inHeader)
+        {
+            SaveOpenButton.Height = 24;
+            SaveOpenButton.Margin = new Thickness(0);
+        }
+        else
+        {
+            SaveOpenButton.ClearValue(HeightProperty);
+            SaveOpenButton.Margin = new Thickness(12, 0, 0, 10);
+        }
+
+        target.Children.Add(SaveOpenButton);
+    }
+
     /// <summary>Start where the work is: the list when there are sessions, Save open files when there are none.</summary>
     public void FocusStart()
     {

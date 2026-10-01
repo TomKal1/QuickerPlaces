@@ -120,21 +120,17 @@
         </Grid.RowDefinitions>
 
         <!-- The store's notice, and the one main action. -->
-        <Grid Grid.Row="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <!--
+            In the workspace the button moves to the frame's title line
+            (ActionInHeader), leaving this row to the notice alone.
+        -->
+        <Grid x:Name="ActionRow" Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
                        TextWrapping="Wrap" Margin="0,0,0,10" VerticalAlignment="Center" Style="{StaticResource CollapsedWhenEmpty}" />
-            <!-- What the cards do, under the header so it has the panel's whole width. -->
-            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,0,10" TextWrapping="Wrap" Style="{StaticResource TextBlock.Hint}"
-                       Foreground="{DynamicResource Text.Tertiary}"
-                       Text="Drag cards to put them in order: the first ten open with Ctrl+Shift+1 to 9, then 0. Click a card to show its files; Esc clears it." />
             <Button Grid.Column="1" x:Name="SaveOpenButton"
                     Style="{StaticResource Button.Primary}" VerticalAlignment="Top" Margin="12,0,0,10"
                     IsEnabled="{Binding CanChange}"

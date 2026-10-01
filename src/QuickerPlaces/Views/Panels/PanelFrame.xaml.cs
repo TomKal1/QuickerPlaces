@@ -31,6 +31,14 @@ public partial class PanelFrame : UserControl
 
     public string PanelId { get; }
 
+    /// <summary>
+    /// Where a panel may put its main action on the title's line, right of the
+    /// title and left of Hide and Arrange's controls (the Sessions panel's
+    /// Save open files). The panel moves it in and out as the header's other
+    /// controls come and go.
+    /// </summary>
+    public Panel HeaderSlot => HeaderActions;
+
     /// <summary>The panel as last placed.</summary>
     public WorkspacePanelViewModel Panel { get; private set; } = null!;
 

@@ -443,14 +443,22 @@ public partial class WorkspaceView : UserControl
 
         foreach (var panel in _workspace.Panels)
         {
-            if (_frames.TryGetValue(panel.Id, out var frame))
-                frame.Update(panel, _workspace.IsArranging, _workspace.IsColumns, _workspace.IsCustomising);
+            if (!_frames.TryGetValue(panel.Id, out var frame))
+                continue;
+
+            frame.Update(panel, _workspace.IsArranging, _workspace.IsColumns, _workspace.IsCustomising);
+
+            // Save open files shares the title's line, unless Hide or Arrange's controls are there.
+            if (panel.Type == PanelTypes.Sessions && _sessionsPanel is not null)
+                _sessionsPanel.ActionInHeader = !_workspace.IsCustomising;
         }
     }
 
     private PanelFrame CreateFrame(WorkspacePanelViewModel panel)
     {
         var frame = new PanelFrame(panel, CreateContent(panel));
+        if (panel.Type == PanelTypes.Sessions)
+            _sessionsPanel?.AttachHeaderSlot(frame.HeaderSlot);
         frame.HideRequested += HidePanel;
         frame.MoveEarlierRequested += f => _workspace?.MoveEarlier(f.PanelId);
         frame.MoveLaterRequested += f => _workspace?.MoveLater(f.PanelId);
