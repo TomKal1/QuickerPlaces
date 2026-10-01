@@ -80,7 +80,7 @@ public sealed class LibraryPeriodQueryTests
         vm.SelectCalendarDate(Today.AddDays(-2));
 
         Assert.Equal((new DateOnly(2026, 9, 21), new DateOnly(2026, 9, 27)), vm.Period);
-        Assert.Equal("Used 21–27 Sep 2026", vm.PeriodText);
+        Assert.Equal("21–27 Sep 2026", vm.PeriodText);
         Assert.Equal(new[] { "A-101.pdf", "Budget.xlsx" }, Names(vm));
         Assert.All(vm.CalendarWeeks.SelectMany(w => w.Days).Where(d => d.Date is { } date && date >= vm.Period!.Value.From && date <= vm.Period!.Value.To),
             d => Assert.True(d.IsSelected));
@@ -102,7 +102,7 @@ public sealed class LibraryPeriodQueryTests
         Assert.True(vm.IsEmpty);
 
         vm.SelectCalendarDate(Today);
-        Assert.Equal("Used 1–30 Sep 2026", vm.PeriodText);
+        Assert.Equal("1–30 Sep 2026", vm.PeriodText);
         Assert.Equal(new[] { "A-101.pdf", "Budget.xlsx" }, Names(vm));
     }
 
@@ -175,7 +175,7 @@ public sealed class LibraryPeriodQueryTests
 
         vm.SetDateRule(DateRule.ThisWeek());
 
-        Assert.Equal("Used this week (21–27 Sep 2026)", vm.PeriodText);
+        Assert.Equal("This week (21–27 Sep 2026)", vm.PeriodText);
         Assert.Equal(DateRuleKind.ThisWeek, vm.CurrentQuery.Date.Kind);
         Assert.Null(vm.CurrentQuery.Date.From);
     }
@@ -386,7 +386,8 @@ public sealed class LibraryPeriodQueryTests
         Assert.All(days, d => Assert.Equal(9, d.Month));
         Assert.All(vm.CalendarMonthWeeks, w => Assert.Equal(DayOfWeek.Monday, w.StartsOn.DayOfWeek));
         Assert.True(vm.CalendarMonthWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today).IsToday);
-        Assert.False(vm.CanShowNextMonth);
+        Assert.True(vm.CanShowNextMonth);
+        Assert.Equal("September", vm.CalendarMonthName);
     }
 
     [Fact]
@@ -403,11 +404,15 @@ public sealed class LibraryPeriodQueryTests
     }
 
     [Fact]
-    public void TheMonthArrows_CrossIntoTheYearBefore_ButNotPastThisMonth()
+    public void TheMonthArrows_CrossYearsBothWays()
     {
         var vm = NewViewModel();
 
-        Assert.False(vm.ShowCalendarMonth(1));
+        Assert.True(vm.ShowCalendarMonth(1));
+        Assert.Equal((2026, 10), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.True(vm.CanShowNextMonth);
+
+        Assert.True(vm.ShowCalendarMonth(-1));
         for (var i = 0; i < 9; i++)
             Assert.True(vm.ShowCalendarMonth(-1));
 
@@ -420,7 +425,21 @@ public sealed class LibraryPeriodQueryTests
     }
 
     [Fact]
-    public void ChoosingThisYearAgain_NeverShowsAMonthStillToCome()
+    public void TheMonthArrows_StopAtDecember2100()
+    {
+        var vm = NewViewModel();
+
+        for (var i = 0; i < 12 * 74 + 3; i++)
+            Assert.True(vm.ShowCalendarMonth(1));
+
+        Assert.Equal((2100, 12), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.False(vm.CanShowNextMonth);
+        Assert.False(vm.ShowCalendarMonth(1));
+        Assert.Equal((2100, 12), (vm.CalendarYear, vm.CalendarMonth));
+    }
+
+    [Fact]
+    public void ChoosingAnotherYear_KeepsTheMonth()
     {
         var vm = NewViewModel();
         vm.SelectCalendarYear(2025);
@@ -429,10 +448,46 @@ public sealed class LibraryPeriodQueryTests
 
         vm.SelectCalendarYear(2026);
 
-        Assert.Equal(9, vm.CalendarMonth);
-        Assert.False(vm.CanShowNextMonth);
+        Assert.Equal((2026, 12), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.True(vm.CanShowNextMonth);
     }
 
+    [Fact]
+    public void TheYearCanBeChosenFrom2000To2100()
+    {
+        var vm = NewViewModel();
+
+        Assert.True(vm.SelectCalendarYear(2100));
+        Assert.Equal(2100, vm.CalendarYear);
+        Assert.False(vm.CanShowNextYear);
+        Assert.True(vm.CanShowPreviousYear);
+        Assert.False(vm.SelectCalendarYear(2101));
+        Assert.False(vm.SelectCalendarYear(2100));
+
+        Assert.True(vm.SelectCalendarYear(2000));
+        Assert.Equal(2000, vm.CalendarYear);
+        Assert.False(vm.CanShowPreviousYear);
+        Assert.True(vm.CanShowNextYear);
+        Assert.False(vm.SelectCalendarYear(1999));
+        Assert.Equal(2000, vm.CalendarYear);
+    }
+
+    [Fact]
+    public void AFutureYear_ShowsEveryDayAsAFutureDay()
+    {
+        var vm = NewViewModel();
+
+        Assert.True(vm.SelectCalendarYear(2030));
+
+        var cells = vm.CalendarWeeks.SelectMany(w => w.Days).Where(d => d.Date is not null).ToList();
+        Assert.Equal(365, cells.Count);
+        Assert.All(cells, d =>
+        {
+            Assert.Equal(-1, d.Intensity);
+            Assert.False(d.IsTracked);
+            Assert.EndsWith("— future day", d.Label);
+        });
+    }
 
     /// <summary>Holds background work until the test runs it, in whatever order it chooses.</summary>
     private sealed class QueuedWork : IBackgroundWork

@@ -212,7 +212,7 @@ public sealed class LibraryViewModelTests
 
         vm.SelectCalendarDate(yesterday);
         Assert.True(vm.IsEmpty);
-        Assert.Equal("Used on Thu 24 Sep 2026", vm.PeriodText);
+        Assert.Equal("Thu 24 Sep 2026", vm.PeriodText);
 
         vm.SelectCalendarDate(Today);
         Assert.Equal(new[] { "A-101.pdf", "Acme", "Budget.xlsx", "Report.docx" }, vm.Rows.Select(r => r.Name).OrderBy(n => n));

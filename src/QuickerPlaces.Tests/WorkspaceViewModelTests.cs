@@ -304,7 +304,7 @@ public sealed class WorkspaceViewModelTests
         Assert.Equal("Undo Resize Recents", workspace.UndoText);
         workspace.Undo();
         Assert.Equal(PanelSpans.TwoThirds, workspace.Panels.First(p => p.Type == "shelf").StoredSpan);
-        Assert.Equal("Undo Move Year activity", workspace.UndoText);
+        Assert.Equal("Undo Move Activity", workspace.UndoText);
         workspace.Undo();
         Assert.Equal(new[] { "activity", "shelf", "sessions" }, Types(workspace));
         Assert.True(workspace.IsArranging);

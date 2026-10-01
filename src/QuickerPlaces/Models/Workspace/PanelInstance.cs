@@ -110,7 +110,7 @@ public static class PanelTypes
     /// </summary>
     public static string DisplayName(string? type) => type switch
     {
-        Activity => "Year activity",
+        Activity => "Activity",
         Shelf => "Recents",
         Sessions => "Sessions",
         Places => "Saved places",

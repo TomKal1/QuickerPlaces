@@ -447,7 +447,7 @@ public sealed class LibraryViewModel : ObservableObject
 
     public bool HasPeriod => Period is not null;
 
-    /// <summary>"Used on Mon 28 Sep 2026", "Used 21–27 Sep 2026", "Used this week (…)": the chip that clears the period.</summary>
+    /// <summary>"Mon 28 Sep 2026", "21–27 Sep 2026", "This week (…)", "This month (…)": the chip that clears the period.</summary>
     public string PeriodText
     {
         get
@@ -457,9 +457,9 @@ public sealed class LibraryViewModel : ObservableObject
             var days = FormatDays(p.From, p.To, _culture);
             return _date.Kind switch
             {
-                DateRuleKind.ThisWeek => $"Used this week ({days})",
-                DateRuleKind.ThisMonth => $"Used this month ({days})",
-                _ => p.From == p.To ? $"Used on {days}" : $"Used {days}",
+                DateRuleKind.ThisWeek => $"This week ({days})",
+                DateRuleKind.ThisMonth => $"This month ({days})",
+                _ => days,
             };
         }
     }
@@ -589,7 +589,15 @@ public sealed class LibraryViewModel : ObservableObject
     public ObservableCollection<ActivityCalendarMonthMarker> CalendarMonthMarkers { get; } = new();
     public IReadOnlyList<string> CalendarWeekdayLabels { get; private set; } = Array.Empty<string>();
     public int CalendarStripWidth { get; private set; }
+    /// <summary>The earliest year the strip can show.</summary>
+    public const int FirstCalendarYear = 2000;
+
+    /// <summary>The latest year the strip can show.</summary>
+    public const int LastCalendarYear = 2100;
+
     public int CalendarYear => _calendarYear;
+    public bool CanShowPreviousYear => _calendarYear > FirstCalendarYear;
+    public bool CanShowNextYear => _calendarYear < LastCalendarYear;
     public string CalendarYearLabel => $"{_calendarYear}";
 
     /// <summary>What the strip counts for the current kind filter, as its caption: recorded activity, never "files used" (D5).</summary>
@@ -614,12 +622,12 @@ public sealed class LibraryViewModel : ObservableObject
 
     public bool SelectCalendarYear(int year)
     {
-        if (year < 2000 || year > Today().Year || year == _calendarYear)
+        if (year < FirstCalendarYear || year > LastCalendarYear || year == _calendarYear)
             return false;
         _calendarYear = year;
-        if (year == Today().Year && _calendarMonth > Today().Month)
-            _calendarMonth = Today().Month;
         OnPropertyChanged(nameof(CalendarYear));
+        OnPropertyChanged(nameof(CanShowPreviousYear));
+        OnPropertyChanged(nameof(CanShowNextYear));
         OnPropertyChanged(nameof(CalendarYearLabel));
         BuildCalendar();
         return true;
@@ -642,15 +650,18 @@ public sealed class LibraryViewModel : ObservableObject
 
     public string CalendarMonthLabel => new DateTime(_calendarYear, _calendarMonth, 1).ToString("MMMM yyyy", _culture);
 
-    public bool CanShowNextMonth => new DateOnly(_calendarYear, _calendarMonth, 1) < new DateOnly(Today().Year, Today().Month, 1);
+    /// <summary>The month's own name, "September", for a header that shows the year separately.</summary>
+    public string CalendarMonthName => new DateTime(_calendarYear, _calendarMonth, 1).ToString("MMMM", _culture);
 
-    public bool CanShowPreviousMonth => _calendarYear > 2000 || _calendarMonth > 1;
+    public bool CanShowNextMonth => new DateOnly(_calendarYear, _calendarMonth, 1) < new DateOnly(LastCalendarYear, 12, 1);
 
-    /// <summary>The month view's arrows: one month back or on, into the next or previous year when needed. Never past this month.</summary>
+    public bool CanShowPreviousMonth => _calendarYear > FirstCalendarYear || _calendarMonth > 1;
+
+    /// <summary>The month view's arrows: one month back or on, into the next or previous year when needed. Months still to come are allowed, from January 2000 to December 2100.</summary>
     public bool ShowCalendarMonth(int delta)
     {
         var first = new DateOnly(_calendarYear, _calendarMonth, 1).AddMonths(delta);
-        if (first.Year < 2000 || first > new DateOnly(Today().Year, Today().Month, 1))
+        if (first.Year < FirstCalendarYear || first.Year > LastCalendarYear)
             return false;
 
         var yearChanged = first.Year != _calendarYear;
@@ -660,6 +671,8 @@ public sealed class LibraryViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(CalendarYear));
             OnPropertyChanged(nameof(CalendarYearLabel));
+            OnPropertyChanged(nameof(CanShowPreviousYear));
+            OnPropertyChanged(nameof(CanShowNextYear));
             BuildCalendar();
         }
         else
@@ -1014,6 +1027,7 @@ public sealed class LibraryViewModel : ObservableObject
 
         OnPropertyChanged(nameof(CalendarMonth));
         OnPropertyChanged(nameof(CalendarMonthLabel));
+        OnPropertyChanged(nameof(CalendarMonthName));
         OnPropertyChanged(nameof(CanShowNextMonth));
         OnPropertyChanged(nameof(CanShowPreviousMonth));
     }
