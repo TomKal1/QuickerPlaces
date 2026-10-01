@@ -140,6 +140,7 @@
     <Compile Include="..\QuickerPlaces\ViewModels\WorkspaceViewModel.cs" Link="Linked\ViewModels\WorkspaceViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SaveLayoutViewModel.cs" Link="Linked\ViewModels\SaveLayoutViewModel.cs" />
     <Compile Include="..\QuickerPlaces\Services\InstanceGate.cs" Link="Linked\Services\InstanceGate.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Remote\*.cs" LinkBase="Linked\Services\Remote" />
     <!--
       The qp command line (src/QuickerPlaces.Cli): every file but Program.cs,
       whose Main would clash with the test host's.

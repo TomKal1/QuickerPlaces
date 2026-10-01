@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Remote;
 
 namespace QuickerPlaces.Cli;
 
@@ -24,12 +25,20 @@ public sealed class CliEnvironment
 
     public string? DefaultDataRoot { get; init; }
 
+    /// <summary>
+    /// Sends an operation to the running app on the stores of the given scope
+    /// (<see cref="AppDataFolders.InstanceScope"/>) and returns its reply. Throws
+    /// TimeoutException or IOException when no app answers.
+    /// </summary>
+    public required Func<string?, OperationRequest, OperationReply> SendToApp { get; init; }
+
     public static CliEnvironment ForThisMachine() => new()
     {
         Time = TimeProvider.System,
         Shell = new SystemShell(),
         IsAppRunning = InstanceGate.IsAppRunning,
-        DefaultDataRoot = Environment.GetEnvironmentVariable(DataRootVariable)
+        DefaultDataRoot = Environment.GetEnvironmentVariable(DataRootVariable),
+        SendToApp = (scope, request) => RemoteCommandClient.Send(RemoteProtocol.PipeName(scope), request, TimeSpan.FromSeconds(3))
     };
 
     private sealed class SystemShell : IShell

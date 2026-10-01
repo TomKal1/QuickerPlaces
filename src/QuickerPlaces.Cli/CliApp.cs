@@ -148,7 +148,7 @@ public static class CliApp
         {
             new("describe", "Describe every command, option, output envelope, error code and exit code, as JSON. Start here.", "no arguments", 0, 0,
                 Array.Empty<OptionSpec>(), false, (_, _) => Describe(), new[] { "qp describe --pretty" }),
-            new("status", "Where the stores are, whether each loads, and whether the app is running (which makes the CLI read-only).", "no arguments", 0, 0,
+            new("status", "Where the stores are, whether each loads, and whether the app is running (changes then go through it).", "no arguments", 0, 0,
                 Array.Empty<OptionSpec>(), false, (context, _) => Status(context), new[] { "qp status" })
         };
         commands.AddRange(PlaceCommands.All());
@@ -169,7 +169,7 @@ public static class CliApp
                 "stdout carries exactly one JSON document per run.",
                 "Times are ISO 8601 UTC; period dates are yyyy-MM-dd in the machine's time zone.",
                 "Fields are only ever added within an apiVersion; branch on error.code, not the message.",
-                "Commands that write refuse with app_running while QuickerPlaces is open; reads always work."
+                "Reads never change a file. Changes are saved by QuickerPlaces itself while it is open, else written to the files directly; either way they follow the app's rules."
             }
         },
         ["globalOptions"] = GlobalOptions.Select(OptionJson).ToList(),
@@ -188,7 +188,7 @@ public static class CliApp
             [ErrorCodes.NotFound] = new { exitCode = ExitCodes.NotFound, meaning = "No such place or session. details.suggestions may hold close matches." },
             [ErrorCodes.Ambiguous] = new { exitCode = ExitCodes.Invalid, meaning = "The reference matches several items. details.ids lists them; retry with an id." },
             [ErrorCodes.Invalid] = new { exitCode = ExitCodes.Invalid, meaning = "The change breaks a rule (duplicate alias or folder, bad path or link). The message says which." },
-            [ErrorCodes.AppRunning] = new { exitCode = ExitCodes.AppRunning, meaning = "QuickerPlaces is open, so changes are refused. Ask the user to close it, or only read." },
+            [ErrorCodes.AppRunning] = new { exitCode = ExitCodes.AppRunning, meaning = "QuickerPlaces is open but didn't take the change (closing, or an older version). Nothing was changed; retry, or ask the user to update or close it." },
             [ErrorCodes.StoreUnavailable] = new { exitCode = ExitCodes.StoreUnavailable, meaning = "A store file is damaged, unreadable or from a newer version. details.outcome says which." },
             [ErrorCodes.SaveFailed] = new { exitCode = ExitCodes.StoreUnavailable, meaning = "The change was refused by the disk. Nothing was saved." },
             [ErrorCodes.OpenFailed] = new { exitCode = ExitCodes.OpenFailed, meaning = "The place couldn't be opened; details.status is missing or failed." },
@@ -216,7 +216,7 @@ public static class CliApp
         {
             ["dataRoot"] = context.DataRoot,
             ["appRunning"] = appRunning,
-            ["writable"] = !appRunning,
+            ["changesGoTo"] = appRunning ? "app" : "files",
             ["stores"] = new[]
             {
                 StoreJson("places", context.PlacesFile.StoreFilePath, places.LoadOutcome, PlacesService.CurrentSchemaVersion,

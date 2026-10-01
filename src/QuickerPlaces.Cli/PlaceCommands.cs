@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Remote;
 
 namespace QuickerPlaces.Cli;
 
@@ -35,7 +36,7 @@ public static class PlaceCommands
         new CommandSpec("places top", "The places opened most in a period, from their timed opens.", "no arguments", 0, 0,
             Period.Options.Append(Limit).ToArray(), false, Top, new[] { "qp places top --period week --limit 5", "qp places top --days 3" }),
 
-        new CommandSpec("places open", "Open a place (folder in the file manager, link in the browser) and record the open. While the app is running the open is not recorded.", "<ref>", 1, 1,
+        new CommandSpec("places open", "Open a place (folder in the file manager, link in the browser) and record the open.", "<ref>", 1, 1,
             new[] { new OptionSpec("dry-run", "Resolve the place and say what would open, without opening it.", IsFlag: true) }, true, Open, new[] { "qp places open \"Tax 2026\"" }),
 
         new CommandSpec("places add", "Save a new place. Give --folder or --url, not both.", "no arguments", 0, 0, new[]
@@ -132,24 +133,17 @@ public static class PlaceCommands
 
     private static object Open(CliContext context, CliArgs args)
     {
-        var dryRun = args.Flag("dry-run");
-        var appRunning = context.AppRunning;
-
-        // While the app is running only it may write places.json, so the
-        // place is found read-only and launched without recording the open.
-        var service = dryRun || appRunning ? context.ReadPlaces() : context.WritePlaces();
-        var place = Resolve(service, args.Positionals[0], includeDeleted: false);
-
+        var place = Resolve(context.ReadPlaces(), args.Positionals[0], includeDeleted: false);
         var result = new Dictionary<string, object?> { ["place"] = Json.Place(place, context.Shell) };
-        if (dryRun)
+        if (args.Flag("dry-run"))
         {
             result["opened"] = false;
             result["recorded"] = false;
             return result;
         }
 
-        var outcome = appRunning ? LaunchOnly(place, context.Shell) : new PlaceLauncher(service, context.Shell).Open(place);
-
+        // Launched here, recorded through Execute — by the app when it is open.
+        var outcome = Launch(place, context.Shell);
         switch (outcome.Status)
         {
             case OpenStatus.Missing:
@@ -159,12 +153,18 @@ public static class PlaceCommands
         }
 
         result["opened"] = true;
-        result["recorded"] = !appRunning && outcome.Persistence.Saved;
-        if (appRunning)
-            result["notRecordedReason"] = ErrorCodes.AppRunning;
-        else if (!outcome.Persistence.Saved)
-            result["notRecordedReason"] = ErrorCodes.SaveFailed;
-        result["place"] = Json.Place(place, context.Shell);
+        try
+        {
+            context.Execute(StoreOperations.RecordPlaceOpen, new JsonObject { ["id"] = place.Id.ToString() });
+            result["recorded"] = true;
+            result["place"] = Json.Place(Resolve(context.ReadPlaces(), place.Id.ToString(), includeDeleted: false), context.Shell);
+        }
+        catch (CliError error)
+        {
+            // The place is open either way; only the record of it failed.
+            result["recorded"] = false;
+            result["notRecordedReason"] = error.Code;
+        }
         return result;
     }
 
@@ -173,23 +173,18 @@ public static class PlaceCommands
         var alias = args.Value("alias") ?? throw CliError.Usage("'places add' needs --alias.");
         var (type, resource) = (args.Value("folder"), args.Value("url")) switch
         {
-            ({ } folder, null) => (PlaceType.Folder, folder),
-            (null, { } url) => (PlaceType.Url, url),
+            ({ } folder, null) => ("folder", folder),
+            (null, { } url) => ("url", url),
             _ => throw CliError.Usage("'places add' needs exactly one of --folder or --url.")
         };
 
-        var service = context.WritePlaces();
-        var validation = service.TryAdd(alias, type, resource, out var place, out var persistence);
-        if (!validation.Success)
-            throw new CliError(ErrorCodes.Invalid, validation.ErrorMessage ?? "That place can't be saved.");
-        CliContext.EnsureSaved(persistence);
-
+        var request = new JsonObject { ["alias"] = alias, ["type"] = type, ["resource"] = resource };
         if (args.Values("tags").Count > 0)
-            CliContext.EnsureSaved(service.SetTags(place!, args.List("tags")));
+            request["tags"] = Array(args.List("tags"));
         if (args.Value("note") is { } note)
-            CliContext.EnsureSaved(service.SetNote(place!, note));
+            request["note"] = note;
 
-        return new Dictionary<string, object?> { ["place"] = Json.Place(place!, context.Shell) };
+        return Changed(context, context.Execute(StoreOperations.AddPlace, request));
     }
 
     private static object Tag(CliContext context, CliArgs args)
@@ -200,13 +195,10 @@ public static class PlaceCommands
         if (set is null && add.Count == 0 && remove.Count == 0)
             throw CliError.Usage("'places tag' needs --set, --add or --remove.");
 
-        var service = context.WritePlaces();
-        var place = Resolve(service, args.Positionals[0], args.Flag("deleted"));
-
+        var place = Resolve(context.ReadPlaces(), args.Positionals[0], args.Flag("deleted"));
         var tags = (set ?? place.Tags).Concat(add).Where(t => !remove.Contains(t.Trim(), StringComparer.OrdinalIgnoreCase));
-        CliContext.EnsureSaved(service.SetTags(place, tags));
 
-        return new Dictionary<string, object?> { ["place"] = Json.Place(place, context.Shell) };
+        return Changed(context, context.Execute(StoreOperations.SetPlaceTags, new JsonObject { ["id"] = place.Id.ToString(), ["tags"] = Array(tags) }));
     }
 
     private static object Note(CliContext context, CliArgs args)
@@ -215,11 +207,9 @@ public static class PlaceCommands
         if ((text is null) == !args.Flag("clear"))
             throw CliError.Usage("'places note' needs exactly one of --text or --clear.");
 
-        var service = context.WritePlaces();
-        var place = Resolve(service, args.Positionals[0], args.Flag("deleted"));
-        CliContext.EnsureSaved(service.SetNote(place, text));
+        var place = Resolve(context.ReadPlaces(), args.Positionals[0], args.Flag("deleted"));
 
-        return new Dictionary<string, object?> { ["place"] = Json.Place(place, context.Shell) };
+        return Changed(context, context.Execute(StoreOperations.SetPlaceNote, new JsonObject { ["id"] = place.Id.ToString(), ["note"] = text }));
     }
 
     /// <summary>
@@ -277,6 +267,16 @@ public static class PlaceCommands
         throw new CliError(ErrorCodes.NotFound, $"No place is called \"{text}\".", new JsonObject { ["suggestions"] = new JsonArray(suggestions) });
     }
 
+    /// <summary>The place an operation changed, read back from disk, where whichever side ran it has saved it.</summary>
+    private static object Changed(CliContext context, JsonObject data)
+    {
+        var id = data["id"]!.GetValue<string>();
+        var place = Resolve(context.ReadPlaces(), id, includeDeleted: true);
+        return new Dictionary<string, object?> { ["place"] = Json.Place(place, context.Shell) };
+    }
+
+    private static JsonArray Array(IEnumerable<string> values) => new(values.Select(v => (JsonNode)v).ToArray());
+
     private static Dictionary<string, object?> Page(IReadOnlyList<Place> places, CliArgs args, CliContext context)
     {
         var limit = args.Int("limit", 1, MaxLimit) ?? DefaultLimit;
@@ -287,8 +287,8 @@ public static class PlaceCommands
         };
     }
 
-    /// <summary>PlaceLauncher's checks and launch without its RecordOpen: what "open" does while the app owns places.json.</summary>
-    private static OpenOutcome LaunchOnly(Place place, IShell shell)
+    /// <summary>PlaceLauncher's checks and launch, without its RecordOpen: the open is recorded through Execute instead.</summary>
+    private static OpenOutcome Launch(Place place, IShell shell)
     {
         if (place.Type == PlaceType.Folder && !shell.DirectoryExists(place.Resource))
             return new OpenOutcome(OpenStatus.Missing, null, PersistenceResult.Ok());

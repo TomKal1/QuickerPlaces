@@ -404,6 +404,26 @@ public sealed class MainViewModel : ObservableObject
             PlacesView.Refresh();
     }
 
+    /// <summary>
+    /// qp changed the places through the app (Services/Remote): show it as if
+    /// it had happened here — a new row, or a changed one refreshed and
+    /// re-sorted — with the banner for a failed save and a status line saying
+    /// where the change came from.
+    /// </summary>
+    public void NoteChangedElsewhere(Place? added, Place? changed, PersistenceResult persistence)
+    {
+        if (added is not null)
+        {
+            NoteAddedPlace(added);
+            RefreshPersistenceState(persistence);
+            ShowStatus($"Added \"{added.Alias}\" from the command line.");
+        }
+        else if (changed is not null)
+        {
+            NotePlaceOpened(changed, persistence);
+        }
+    }
+
     private void RenameAlias(PlaceViewModel? place)
     {
         if (place is null)

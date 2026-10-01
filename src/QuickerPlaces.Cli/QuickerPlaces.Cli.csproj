@@ -32,6 +32,7 @@
     <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
     <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\InstanceGate.cs" Link="Linked\Services\InstanceGate.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Remote\*.cs" LinkBase="Linked\Services\Remote" />
     <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\JsonStoreLoader.cs" Link="Linked\Services\JsonStoreLoader.cs" />
     <Compile Include="..\QuickerPlaces\Services\IShell.cs" Link="Linked\Services\IShell.cs" />

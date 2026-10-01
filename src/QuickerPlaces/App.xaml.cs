@@ -6,6 +6,7 @@ using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
@@ -110,6 +111,20 @@ public partial class App : Application
 
         var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems,
             placesService, recentFilesStore, recentFilesHost, themeManager, workspaceLayout);
+        // qp, the command line, sends its changes here while the app is open
+        // (Services/Remote): they run on the UI thread against these same
+        // services, so they are saved by this copy and shown at once, rather
+        // than written beside it and overwritten by the next save.
+        var operations = new StoreOperations(() => placesService, () => sessionStore);
+        var remoteServer = new RemoteCommandServer(
+            RemoteProtocol.PipeName(AppDataFolders.InstanceScope(AppDataFolders.Root)),
+            request => Dispatcher.Invoke(() =>
+            {
+                var reply = operations.Execute(request, out var effect);
+                mainWindow.ApplyRemoteEffect(effect);
+                return reply;
+            }));
+
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))
@@ -142,6 +157,7 @@ public partial class App : Application
             sessionStore.RetrySave();
             // The workspace's waiting layout write, while its refresh still has hosts to let go of.
             mainWindow.CloseWorkspace();
+            remoteServer.Dispose();
             recentFilesHost.Dispose();
             activityHost.Dispose();
             themeManager.Dispose();
@@ -164,6 +180,7 @@ public partial class App : Application
         mainWindow.Show();
         activityHost.Start();
         recentFilesHost.Start();
+        remoteServer.Start();
 
         // A second launch attempt signals SingleInstance instead of
         // starting up (above); this is what the running instance does

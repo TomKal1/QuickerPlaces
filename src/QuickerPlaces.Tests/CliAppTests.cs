@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Cli;
+using QuickerPlaces.Services;
+using QuickerPlaces.Services.Remote;
+using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Tests.Fakes;
 using Xunit;
 
@@ -12,7 +15,9 @@ namespace QuickerPlaces.Tests;
 /// <summary>
 /// The qp command line end to end against a temporary data root: one JSON
 /// document per run, the envelope and exit codes, the read-only guarantee,
-/// and the refusal to write while the app is running.
+/// and changes routed through the app while it is running. The "app" here
+/// is what the real one is to qp: services held in memory over the same
+/// files, answering StoreOperations requests.
 /// </summary>
 public sealed class CliAppTests : IDisposable
 {
@@ -21,15 +26,33 @@ public sealed class CliAppTests : IDisposable
     private readonly TempDirectory _temp = new();
     private readonly FakeShell _shell = new();
     private readonly ManualTimeProvider _clock = new(Now, TestZones.PlusTen);
-    private bool _appRunning;
+    private StoreOperations? _app;
+    private PlacesService? _appPlaces;
+    private bool _appAnswers = true;
 
     public void Dispose() => _temp.Dispose();
 
     private string PlacesFile => Path.Combine(_temp.Path, "Roaming", "places.json");
 
+    /// <summary>"Starts" the app: loads the stores into memory, as the app does, and from now on qp sends it its changes.</summary>
+    private void StartApp()
+    {
+        _appPlaces = new PlacesService(new FilePlacesStorage(Path.Combine(_temp.Path, "Roaming"), "places.json"), _clock);
+        var sessions = new SessionStore(new FilePlacesStorage(Path.Combine(_temp.Path, "Roaming"), "sessions.json"), _clock);
+        _app = new StoreOperations(() => _appPlaces, () => sessions);
+    }
+
+    private CliEnvironment Environment() => new()
+    {
+        Time = _clock,
+        Shell = _shell,
+        IsAppRunning = _ => _app is not null,
+        SendToApp = (scope, request) => _appAnswers ? _app!.Execute(request, out _) : throw new TimeoutException()
+    };
+
     private (int Exit, JsonObject Json) Run(params string[] args)
     {
-        var environment = new CliEnvironment { Time = _clock, Shell = _shell, IsAppRunning = _ => _appRunning };
+        var environment = Environment();
         var output = new StringWriter();
         var exit = CliApp.Run(args.Append("--data-root").Append(_temp.Path).ToArray(), output, environment);
 
@@ -79,14 +102,14 @@ public sealed class CliAppTests : IDisposable
     {
         var data = Ok("status");
 
-        Assert.True(data["writable"]!.GetValue<bool>());
+        Assert.Equal("files", data["changesGoTo"]!.GetValue<string>());
         Assert.All(data["stores"]!.AsArray(), s => Assert.Equal("notPresent", s!["outcome"]!.GetValue<string>()));
     }
 
     [Fact]
     public void GlobalOptions_WorkBeforeTheCommandToo()
     {
-        var environment = new CliEnvironment { Time = _clock, Shell = _shell, IsAppRunning = _ => false };
+        var environment = Environment();
         var output = new StringWriter();
 
         var exit = CliApp.Run(new[] { "--data-root", _temp.Path, "--pretty", "status" }, output, environment);
@@ -117,16 +140,33 @@ public sealed class CliAppTests : IDisposable
     }
 
     [Fact]
-    public void Writes_AreRefusedWhileTheAppIsRunning_AndTheFileIsUntouched()
+    public void WhileTheAppIsRunning_ChangesGoThroughIt_AndItsNextSaveKeepsThem()
     {
         AddWiki();
+        StartApp();
+
+        Ok("places", "tag", "Wiki", "--add", "x");
+        Ok("places", "add", "--alias", "B", "--url", "https://b.example.com");
+
+        // The app holds both changes, so its own next save (here, a favourite
+        // toggled in its window) writes them back rather than over them.
+        Assert.Contains("x", _appPlaces!.Places.Single(p => p.Alias == "Wiki").Tags);
+        _appPlaces.ToggleFavourite(_appPlaces.Places.Single(p => p.Alias == "B"));
+        Assert.Equal(2, Ok("places", "list")["total"]!.GetValue<int>());
+        Assert.Contains("x", Ok("places", "get", "Wiki")["place"]!["tags"]!.AsArray().Select(t => t!.GetValue<string>()));
+        Assert.Equal("app", Ok("status")["changesGoTo"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void AnAppThatDoesNotAnswer_IsAppRunning_AndNothingIsWritten()
+    {
+        AddWiki();
+        StartApp();
+        _appAnswers = false;
         var before = File.ReadAllText(PlacesFile);
-        _appRunning = true;
 
         Assert.Equal(ErrorCodes.AppRunning, Error(ExitCodes.AppRunning, "places", "tag", "Wiki", "--add", "x"));
-        Assert.Equal(ErrorCodes.AppRunning, Error(ExitCodes.AppRunning, "places", "add", "--alias", "B", "--url", "https://b.example.com"));
         Assert.Equal(before, File.ReadAllText(PlacesFile));
-        Assert.False(Ok("status")["writable"]!.GetValue<bool>());
     }
 
     [Fact]
@@ -157,18 +197,27 @@ public sealed class CliAppTests : IDisposable
     }
 
     [Fact]
-    public void Open_WhileTheAppIsRunning_LaunchesWithoutRecording()
+    public void Open_WhileTheAppIsRunning_IsRecordedByTheApp()
     {
         AddWiki();
-        var before = File.ReadAllText(PlacesFile);
-        _appRunning = true;
+        StartApp();
+
+        Assert.True(Ok("places", "open", "Wiki")["recorded"]!.GetValue<bool>());
+        Assert.Equal(1, _appPlaces!.Places.Single().OpenCount);
+    }
+
+    [Fact]
+    public void Open_WhenTheAppDoesNotAnswer_StillOpens_ButIsNotRecorded()
+    {
+        AddWiki();
+        StartApp();
+        _appAnswers = false;
 
         var data = Ok("places", "open", "Wiki");
 
         Assert.False(data["recorded"]!.GetValue<bool>());
         Assert.Equal(ErrorCodes.AppRunning, data["notRecordedReason"]!.GetValue<string>());
         Assert.Single(_shell.Opened);
-        Assert.Equal(before, File.ReadAllText(PlacesFile));
     }
 
     [Fact]

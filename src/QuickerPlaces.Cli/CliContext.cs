@@ -1,18 +1,22 @@
 using System;
+using System.IO;
+using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.Cli;
 
 /// <summary>
 /// One run's view of the stores. Reads open each file read-only, so they are
-/// safe while the app is running. Writes (places only, for now) open
-/// places.json for real, and only when no QuickerPlaces window is running on
-/// it: the app holds the store in memory and writes all of it on every
-/// change, so anything written beside it would be overwritten.
+/// safe while the app is running. Every change is a StoreOperations request
+/// (<see cref="Execute"/>): run here on the files when the app is closed, or
+/// sent to the running app, which runs it on the services it holds and saves
+/// it itself. The app keeps the stores in memory and writes all of a store on
+/// every change, so writing beside it would be overwritten.
 /// </summary>
 public sealed class CliContext
 {
@@ -54,16 +58,45 @@ public sealed class CliContext
 
     public ActivityStore ReadActivity() => new(new ReadOnlyStorage(ActivityFile), Time);
 
-    /// <summary>places.json opened to change: refused while the app is running on it, or when it did not load cleanly.</summary>
-    public PlacesService WritePlaces()
+    /// <summary>
+    /// Runs one change and returns its data. With the app open the request goes
+    /// to it; an app that doesn't answer (closing, or a build from before qp)
+    /// is app_running. Afterwards read the stores again for the result: the
+    /// change is on disk by then, saved by whichever side ran it.
+    /// </summary>
+    public JsonObject Execute(string op, JsonObject args)
     {
+        var request = new OperationRequest(op, args);
+        OperationReply reply;
         if (AppRunning)
         {
-            throw new CliError(ErrorCodes.AppRunning,
-                "QuickerPlaces is running, so the CLI can't change your places: the app would overwrite the change. Close QuickerPlaces and try again.");
+            try
+            {
+                reply = Environment.SendToApp(AppDataFolders.InstanceScope(DataRoot), request);
+            }
+            catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+            {
+                throw new CliError(ErrorCodes.AppRunning,
+                    "QuickerPlaces is running but didn't take the change. Update QuickerPlaces to the same version as qp, or close it and try again.");
+            }
+        }
+        else
+        {
+            var places = new Lazy<PlacesService>(() => new PlacesService(PlacesFile, Time));
+            var sessions = new Lazy<SessionStore>(() =>
+            {
+                // Checked read-only first: a damaged sessions.json is set aside
+                // when opened for writing, and that is the app's call to make.
+                if (ReadSessions().LoadOutcome is not (StoreLoadOutcome.Ok or StoreLoadOutcome.NotPresent))
+                    throw new CliError(ErrorCodes.StoreUnavailable, "sessions.json can't be read. Open QuickerPlaces to check it.");
+                return new SessionStore(SessionsFile, Time);
+            });
+            reply = new StoreOperations(() => places.Value, () => sessions.Value).Execute(request, out _);
         }
 
-        return Usable(new PlacesService(PlacesFile, Time));
+        if (!reply.Ok)
+            throw new CliError(reply.Code ?? ErrorCodes.Internal, reply.Message ?? "The change was refused.", reply.Details);
+        return reply.Data ?? new JsonObject();
     }
 
     private static PlacesService Usable(PlacesService service)
@@ -79,10 +112,4 @@ public sealed class CliContext
         }, new() { ["outcome"] = Json.Enum(service.LoadOutcome) });
     }
 
-    /// <summary>Turns a failed save into the save_failed error; a saved one passes.</summary>
-    public static void EnsureSaved(PersistenceResult result)
-    {
-        if (!result.Saved)
-            throw new CliError(ErrorCodes.SaveFailed, result.UserMessage ?? "The change couldn't be saved.");
-    }
 }
