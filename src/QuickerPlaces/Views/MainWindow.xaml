@@ -93,6 +93,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Border Style="{StaticResource Border.Monogram}">
                 <TextBlock Text="{Binding Monogram}" FontSize="16" FontWeight="ExtraBold" Foreground="{DynamicResource On.Highlight}"
@@ -103,7 +104,9 @@
                 <TextBlock Text="{Binding SubHeaderText}" Foreground="{DynamicResource Text.Secondary}" Margin="0,2,0,0"
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- The workspace's search box, put here by code, so its panels start higher. -->
+            <ContentControl x:Name="HeaderSearchHost" Grid.Column="2" VerticalAlignment="Center" Focusable="False" IsTabStop="False" />
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="ActivityButton" Click="ActivityButton_Click" Style="{StaticResource Button.Primary}" Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal">
                         <Grid Width="16" Height="16">

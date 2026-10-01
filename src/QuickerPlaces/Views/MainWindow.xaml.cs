@@ -90,6 +90,7 @@ public partial class MainWindow : Window
         };
         ShowFavouritesStrip();
         MainContent.Content = _workspaceView;
+        HeaderSearchHost.Content = _workspaceView.TakeSearchArea();
         _focusSearch = _workspaceView.FocusSearch;
         LibraryButton.Visibility = Visibility.Collapsed;
         SessionsButton.Visibility = Visibility.Collapsed;

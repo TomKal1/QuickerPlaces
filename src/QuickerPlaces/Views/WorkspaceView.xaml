@@ -36,17 +36,27 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Toolbar: the layout controls (while customising), search, and the buttons. -->
-        <Grid x:Name="Toolbar" Grid.Row="0" Margin="0,0,0,10" SizeChanged="Toolbar_SizeChanged">
+        <!--
+            Toolbar: the layout controls, shown only while customising, when it
+            moves the panels down. The search box is not here: it sits in the
+            main window's header (TakeSearchArea), so the panels start higher.
+        -->
+        <Grid x:Name="Toolbar" Grid.Row="0" Margin="0,0,0,10">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCustomising}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
 
             <StackPanel x:Name="LayoutTools" Orientation="Horizontal" VerticalAlignment="Center">
                 <StackPanel.Style>

@@ -116,6 +116,8 @@ public partial class WorkspaceView : UserControl
         _networkDrives = networkDrives;
         _trackingChanged = trackingChanged;
         DataContext = workspace;
+        // The search box may be moved into the window's header, away from this view's DataContext.
+        SearchArea.DataContext = workspace;
 
         _refresh = new LibraryRefresh(Dispatcher, workspace.Library, recentFilesHost, activityHost);
         workspace.PanelsChanged += BuildCanvas;
@@ -127,6 +129,21 @@ public partial class WorkspaceView : UserControl
 
         ApplyExpanded();
         BuildCanvas();
+    }
+
+    /// <summary>
+    /// Hands the search box over to the window's header, so the panels start higher.
+    /// It stays this view's: its handlers and the workspace's search text are the same.
+    /// </summary>
+    public FrameworkElement TakeSearchArea()
+    {
+        (SearchArea.Parent as Panel)?.Children.Remove(SearchArea);
+        SearchArea.Margin = new Thickness(16, 0, 16, 0);
+        SearchArea.Width = 340;
+        SearchArea.MinWidth = 0;
+        SearchArea.MaxWidth = double.PositiveInfinity;
+        SearchArea.VerticalAlignment = VerticalAlignment.Center;
+        return SearchArea;
     }
 
     /// <summary>Focuses the search box and selects what is in it: Ctrl+F, the global hotkey, a second launch.</summary>
@@ -236,7 +253,6 @@ public partial class WorkspaceView : UserControl
             case nameof(WorkspaceViewModel.IsArranging):
             case nameof(WorkspaceViewModel.IsCustomising):
                 UpdateFrames();
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, FitToolbar);
                 break;
         }
     }
@@ -861,28 +877,6 @@ public partial class WorkspaceView : UserControl
             workspace.Undo();
             e.Handled = true;
         }
-    }
-
-    /// <summary>
-    /// The search box moves to a row of its own when the layout picker, the
-    /// box at its least width and the buttons don't fit on one line — with
-    /// large text, or a narrow window — so no button is pushed off the edge.
-    /// </summary>
-    private void Toolbar_SizeChanged(object sender, SizeChangedEventArgs e) => FitToolbar();
-
-    private void FitToolbar()
-    {
-        var margins = SearchArea.Margin.Left + SearchArea.Margin.Right;
-        var needed = LayoutTools.DesiredSize.Width + SearchArea.MinWidth + margins + PanelTools.DesiredSize.Width;
-        var ownRow = Toolbar.ActualWidth > 0 && Toolbar.ActualWidth < needed;
-        if (ownRow == (Grid.GetRow(SearchArea) == 1))
-            return;
-
-        Grid.SetRow(SearchArea, ownRow ? 1 : 0);
-        Grid.SetColumn(SearchArea, ownRow ? 0 : 1);
-        Grid.SetColumnSpan(SearchArea, ownRow ? 3 : 1);
-        SearchArea.Margin = ownRow ? new Thickness(0, 10, 0, 0) : new Thickness(16, 0, 8, 0);
-        SearchArea.MaxWidth = ownRow ? double.PositiveInfinity : 520;
     }
 
     private FrameworkElement CreateContent(WorkspacePanelViewModel panel)
