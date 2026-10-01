@@ -811,6 +811,14 @@ Checked on Windows 11 against scratch data with UI Automation and real mouse cli
 
 **Task 15 closed on 2026-09-29 at the user's call.** The checks listed under *Not exercised* were not run. They move to the Windows checks of the [File viewer design](260929_File%20Viewer%20Design.md), which changes Desk.
 
+## Calendar in the left column, with numbered days (2026-10-01)
+
+Design and plan: [261001_Calendar Left Column and Numbered Month View Design.md](261001_Calendar%20Left%20Column%20and%20Numbered%20Month%20View%20Design.md) and its Plan. The built-in Desk is unchanged (calendar along the bottom of the main column; Reset to Desk gives it back). The calendar moves to the left column with Arrange, as any panel does, and shows its month view there.
+
+- **Startup re-check** (9b1d547). `YearActivityPanel` now chooses year or month through `ActivityCalendar.ShowsMonthView` and chooses again whenever `CalendarStripWidth` changes, which is 0 until the activity data loads. **Not reproduced:** a build from before the change also opened a left-column calendar in the month view on test data, so this guards a race found by reading the code, not a bug seen to fail. If the year strip ever shows in a narrow column again, this is the first place to look.
+- **Numbered days** (526b3ff, one commit: `git revert 526b3ff` removes them and leaves the re-check). The month view's cells show the day of the month (`ActivityCalendarCell.DayNumber`, style `Button.CalendarDayNumbered`); the year strip does not. Number colours are per theme (`Heat.Text.1`–`4` in both palettes; empty days use `Text.Secondary`), each pair checked at 4.5:1 by `PaletteFileTests`.
+- **Checked on Windows** with `--workspace --data-root` on seeded activity, window pixels read back: Dark and Light, several heat levels, today's outline, a 30-day and a 31-day month, a calendar saved in the left column opening in the month view. Not checked: Match Windows, the selected-day outline with a number, narrowing and widening the window, and moving the calendar between columns in Arrange (Arrange was seen working in the user's own screenshot before the numbers).
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.
