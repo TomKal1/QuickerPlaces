@@ -12,8 +12,9 @@ namespace QuickerPlaces.Views.Panels;
 /// <summary>
 /// The Activity panel (configurable canvas plan M2): a thin view over the
 /// shared <see cref="LibraryViewModel"/> it gets as its DataContext. Hosted
-/// by the Library window and by the workspace (M3). The Day / Week / Month
-/// buttons sit in a column down the left; the title shows only while
+/// by the Library window and by the workspace (M3). The date row (period chip,
+/// arrows, year picker) runs across the top, with the Day / Week / Month
+/// buttons in a column below it on the left; the title shows only while
 /// <see cref="ShowsTitle"/> is set (the workspace's panel frame names the
 /// panel itself); a year button opens a list of years. Picks the year strip
 /// or, when the panel is too narrow for the year, the month view, and puts
@@ -57,7 +58,6 @@ public partial class YearActivityPanel : UserControl
 
         // The chip for a chosen period comes and goes, and the navigation changes with the view.
         HeaderControls.SizeChanged += (_, _) => FitHeader();
-        UnitGroup.SizeChanged += (_, _) => FitHeader();
     }
 
     private void ShowsTitleChanged()
@@ -109,14 +109,15 @@ public partial class YearActivityPanel : UserControl
         // The controls' width on one line, whichever line they wrap to now:
         // it doesn't depend on where they are docked, so this settles at once.
         var controls = HeaderControls.Children.OfType<FrameworkElement>().Sum(c => c.DesiredSize.Width);
-        // The unit buttons' column takes its width from the left, and a hidden title needs no room.
-        var available = ActualWidth - UnitGroup.ActualWidth;
-        var below = available < controls + (ShowsTitle ? TitleRoom : 0);
+        // The header spans the whole panel; a hidden title needs no room, and the
+        // controls then start at the left, over the buttons and the calendar.
+        var below = ActualWidth < controls + (ShowsTitle ? TitleRoom : 0);
         var margin = below && ShowsTitle ? new Thickness(0, 6, 0, 0) : new Thickness(0);
-        if (below == (DockPanel.GetDock(HeaderControls) == Dock.Bottom) && HeaderControls.Margin == margin)
+        var dock = below ? Dock.Bottom : ShowsTitle ? Dock.Right : Dock.Left;
+        if (DockPanel.GetDock(HeaderControls) == dock && HeaderControls.Margin == margin)
             return;
 
-        DockPanel.SetDock(HeaderControls, below ? Dock.Bottom : Dock.Right);
+        DockPanel.SetDock(HeaderControls, dock);
         HeaderControls.Margin = margin;
     }
 
