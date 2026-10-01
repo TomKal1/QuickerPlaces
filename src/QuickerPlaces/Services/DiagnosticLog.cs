@@ -102,8 +102,7 @@ public static class DiagnosticLog
         if (_directoryOverride is not null)
             return _directoryOverride;
 
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(root, AppInfo.Publisher, AppInfo.Name, "logs");
+        return Path.Combine(AppDataFolders.Local, "logs");
     }
 
     private static void Write(string level, string message, Exception? exception)

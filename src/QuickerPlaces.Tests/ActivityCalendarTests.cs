@@ -142,4 +142,24 @@ public sealed class ActivityCalendarTests
             .Where(day => day.Date >= Today.AddDays(-3)).ToList();
         Assert.Equal(cells[0].Intensity, cells[1].Intensity);
     }
+
+    [Theory]
+    [InlineData(300.0, 0, true)]     // no strip yet, narrow: month
+    [InlineData(2000.0, 0, true)]    // no strip yet, wide: still month (nothing to show as a year)
+    [InlineData(300.0, 600, true)]   // strip loaded, panel narrower than strip plus chrome
+    [InlineData(600 + ActivityCalendar.YearChrome - 1, 600, true)]   // just short of strip + chrome
+    [InlineData(600 + ActivityCalendar.YearChrome, 600, false)]      // exactly strip + chrome: year
+    [InlineData(1900.0, 600, false)] // wide: year
+    public void ShowsMonthViewWhenThereIsNoStripOrThePanelIsTooNarrowForIt(double panelWidth, int stripWidth, bool expected)
+        => Assert.Equal(expected, ActivityCalendar.ShowsMonthView(panelWidth, stripWidth));
+
+    [Fact]
+    public void ACellKnowsItsDayOfTheMonth()
+    {
+        var withDate = new ActivityCalendarCell(new DateOnly(2026, 9, 26), true, true, 2, "label");
+        var blank = new ActivityCalendarCell(null, false, false, 0, "");
+
+        Assert.Equal(26, withDate.DayNumber);
+        Assert.Null(blank.DayNumber);
+    }
 }

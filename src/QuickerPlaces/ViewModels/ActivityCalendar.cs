@@ -9,6 +9,18 @@ namespace QuickerPlaces.ViewModels;
 /// <summary>One year of day cells, laid out by culture-specific weeks.</summary>
 public static class ActivityCalendar
 {
+    /// <summary>Beyond the strip itself: the weekday labels, the panel's border and padding, a little room, plus the unit buttons' column.</summary>
+    public const double YearChrome = 150;
+
+    /// <summary>
+    /// True when the Year activity panel should show one month rather than the
+    /// whole year: when the strip hasn't been built yet (<paramref name="stripWidth"/>
+    /// is 0, so there is no year to show), or the panel is narrower than the
+    /// strip and its <see cref="YearChrome"/>.
+    /// </summary>
+    public static bool ShowsMonthView(double panelWidth, int stripWidth)
+        => stripWidth <= 0 || panelWidth < stripWidth + YearChrome;
+
     /// <summary>A January-to-December activity strip with aligned weeks and month markers, from folder totals.</summary>
     public static ActivityCalendarYearResult BuildYear(IReadOnlyDictionary<DateOnly, ActivityDayTotal> totals,
         DateOnly trackingStartedOn, DateOnly today, int year, CultureInfo culture,
@@ -70,6 +82,13 @@ public static class ActivityCalendar
                     }
 
                     days.TryGetValue(date, out var day);
+                    if (day is { Unknown: true })
+                    {
+                        cells[offset] = new ActivityCalendarCell(date, true, false, -1,
+                            $"{dateText} — {day.Summary}", isSelected, date == today);
+                        continue;
+                    }
+
                     var intensity = day is null || day.Weight <= 0 ? 0
                         : Math.Clamp((int)Math.Ceiling(4.0 * UpperRank(nonzero, day.Weight) / nonzero.Length), 1, 4);
                     var label = day is null || day.Weight <= 0
@@ -181,8 +200,13 @@ public static class ActivityCalendar
     }
 }
 
-/// <summary>One day for the year strip: how much happened (any unit; only the ranking matters) and what to say about it.</summary>
-public sealed record CalendarDay(double Weight, string Summary);
+/// <summary>
+/// One day for the year strip: how much happened (any unit; only the ranking
+/// matters) and what to say about it. An <paramref name="Unknown"/> day is
+/// shown as untracked with its summary as the reason: what happened that day
+/// can't be told for the current filter (configurable canvas plan D5).
+/// </summary>
+public sealed record CalendarDay(double Weight, string Summary, bool Unknown = false);
 
 public sealed record ActivityCalendarResult(IReadOnlyList<ActivityCalendarWeek> Weeks,
     IReadOnlyList<string> WeekdayLabels);
@@ -198,4 +222,8 @@ public sealed record ActivityCalendarMonthMarker(int Month, string Label, int La
 public sealed record ActivityCalendarWeek(DateOnly StartsOn, IReadOnlyList<ActivityCalendarCell> Days);
 
 public sealed record ActivityCalendarCell(DateOnly? Date, bool IsInRange, bool IsTracked,
-    int Intensity, string Label, bool IsSelected = false, bool IsToday = false);
+    int Intensity, string Label, bool IsSelected = false, bool IsToday = false)
+{
+    /// <summary>The day of the month, for the month view's numbered cells; null for a blank cell.</summary>
+    public int? DayNumber => Date?.Day;
+}

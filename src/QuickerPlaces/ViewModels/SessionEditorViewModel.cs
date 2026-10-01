@@ -28,6 +28,7 @@ public sealed class SessionEditorViewModel : ObservableObject
     private string? _scanSummary;
     private string? _errorMessage;
     private bool _isScanning;
+    private readonly bool _fromFileSet;
 
     /// <param name="editing">The session to edit, or null for a new one.</param>
     public SessionEditorViewModel(SessionStore store, SessionSnapshot? editing)
@@ -43,9 +44,27 @@ public sealed class SessionEditorViewModel : ObservableObject
         RefreshTagSuggestions();
     }
 
+    /// <summary>
+    /// A new session from the File shelf's documents (configurable canvas
+    /// plan M3): every file ticked, nothing scanned for until the user asks.
+    /// </summary>
+    public static SessionEditorViewModel ForFileSet(SessionStore store, SessionFileSet fileSet) => new(store, fileSet);
+
+    private SessionEditorViewModel(SessionStore store, SessionFileSet fileSet)
+        : this(store, editing: null)
+    {
+        _fromFileSet = true;
+        foreach (var file in fileSet.Files)
+            AddChoice(new SessionFileChoiceViewModel(file, "Listed on the File shelf", isIncluded: true));
+        _scanSummary = fileSet.Summary;
+    }
+
     public bool IsNew => _editing is null;
 
-    public string Title => IsNew ? "Save Open Files" : "Edit Session";
+    /// <summary>True for a new session of what is open now: the dialog looks for open files as soon as it opens.</summary>
+    public bool ScansOnOpen => IsNew && !_fromFileSet;
+
+    public string Title => !IsNew ? "Edit Session" : _fromFileSet ? "Save Files as Session" : "Save Open Files";
 
     public string Name
     {

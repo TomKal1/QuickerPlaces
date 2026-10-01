@@ -41,9 +41,7 @@ public class FilePlacesStorage : IPlacesStorage
     /// <summary>Builds a FilePlacesStorage over the real, roaming AppData location this app has always used for places.json.</summary>
     public static FilePlacesStorage ForDefaultLocation()
     {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var folder = Path.Combine(root, AppInfo.Publisher, AppInfo.Name);
-        return new FilePlacesStorage(folder, "places.json");
+        return new FilePlacesStorage(AppDataFolders.Roaming, "places.json");
     }
 
     public string StoreFilePath { get; }

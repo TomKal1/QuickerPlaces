@@ -55,6 +55,9 @@ public sealed class RecentFilesHost : IDisposable
         }
     }
 
+    /// <summary>Raised on the timer's thread after a pass recorded new opens, with how many: views showing Recent Files refresh on it.</summary>
+    public event Action<int>? Recorded;
+
     /// <summary>Reads Recent Items now, as when the Library window opens, so what was just opened shows at once.</summary>
     public void RecordNow() => Tick();
 
@@ -77,7 +80,10 @@ public sealed class RecentFilesHost : IDisposable
             var roots = _activityStore.EnabledRoots();
             var added = _store.Record(observations, path => RecentFilesStore.IsInScope(path, settings.Scope, roots));
             if (added > 0)
+            {
                 DiagnosticLog.Info($"Recent Files recorded {added} open(s).");
+                Recorded?.Invoke(added);
+            }
 
             if (DateTime.UtcNow - _lastFlushUtc >= FlushInterval)
             {

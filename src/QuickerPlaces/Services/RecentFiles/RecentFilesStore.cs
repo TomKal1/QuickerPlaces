@@ -111,9 +111,7 @@ public sealed class RecentFilesStore
     /// <summary>recent-files.json in %LocalAppData%, beside activity.json: machine-local, like folder tracking.</summary>
     public static RecentFilesStore CreateDefault()
     {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            AppInfo.Publisher, AppInfo.Name);
-        return new RecentFilesStore(new FilePlacesStorage(folder, "recent-files.json"), TimeProvider.System);
+        return new RecentFilesStore(new FilePlacesStorage(AppDataFolders.Local, "recent-files.json"), TimeProvider.System);
     }
 
     public StoreLoadOutcome LoadOutcome { get; }
@@ -305,6 +303,26 @@ public sealed class RecentFilesStore
         }
     }
 
+    /// <summary>
+    /// Every recorded file with each of its kept opens, oldest first: what
+    /// the Library reads to count opens per day for just the files that pass
+    /// its filters. Files of a kind that can't be told from the path are left out.
+    /// </summary>
+    public IReadOnlyList<RecentFileHistory> QueryHistory()
+    {
+        lock (_sync)
+        {
+            var rows = new List<RecentFileHistory>();
+            foreach (var record in _files.Values)
+            {
+                if (DocumentKinds.FromPath(record.Path) is { } kind && record.Opens.Count > 0)
+                    rows.Add(new RecentFileHistory(record.Path, kind, record.Opens.ToArray()));
+            }
+
+            return rows;
+        }
+    }
+
     /// <summary>Opens and distinct files per local day, of the given kinds (all when null), for the year view.</summary>
     public IReadOnlyDictionary<DateOnly, RecentFileDayTotal> QueryDayTotals(IReadOnlyCollection<DocumentKind>? kinds = null)
     {
@@ -436,3 +454,6 @@ public sealed record RecentFileSummary(string Path, DocumentKind Kind, int Opens
 
 /// <summary>One day's opens, for the year view.</summary>
 public sealed record RecentFileDayTotal(int Opens, int Files);
+
+/// <summary>One recorded file and every open of it that is kept, oldest first.</summary>
+public sealed record RecentFileHistory(string Path, DocumentKind Kind, IReadOnlyList<DateTimeOffset> Opens);

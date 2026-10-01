@@ -34,8 +34,9 @@ public partial class SessionEditorDialog : Window
         {
             NameBox.Focus();
 
-            // A new session starts from what is open now; an edit starts from what was saved.
-            if (_viewModel.IsNew)
+            // A new session starts from what is open now; an edit starts from
+            // what was saved, and one from the File shelf from what it listed.
+            if (_viewModel.ScansOnOpen)
                 await ScanAsync();
         };
     }

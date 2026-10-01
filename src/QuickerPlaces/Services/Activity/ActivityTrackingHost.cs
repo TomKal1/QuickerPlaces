@@ -36,9 +36,7 @@ public sealed class ActivityTrackingHost : IDisposable
     /// <summary>Constructs the host's store in machine-local activity.json.</summary>
     public static ActivityStore CreateStore()
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "QuickerPlaces", "QuickerPlaces");
-        return new ActivityStore(new FilePlacesStorage(directory, "activity.json"), TimeProvider.System);
+        return new ActivityStore(new FilePlacesStorage(AppDataFolders.Local, "activity.json"), TimeProvider.System);
     }
 
     public bool IsAvailable { get; }

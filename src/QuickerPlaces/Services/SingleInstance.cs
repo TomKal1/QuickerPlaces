@@ -44,9 +44,15 @@ public sealed class SingleInstance : IDisposable
     /// already running, in which case that copy has been asked to show
     /// itself and the caller should exit without touching the store.
     /// </summary>
-    public static SingleInstance? TryStart()
+    /// <param name="scope">
+    /// <see cref="AppDataFolders.InstanceScope"/>: null for the everyday
+    /// stores, otherwise a copy on test data (--data-root), which gets its own
+    /// gate so it runs beside the everyday copy.
+    /// </param>
+    public static SingleInstance? TryStart(string? scope = null)
     {
-        var showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, EventName, out var createdNew);
+        var name = scope is null ? EventName : $"{EventName}.{scope}";
+        var showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, name, out var createdNew);
         if (createdNew)
             return new SingleInstance(showRequested);
 

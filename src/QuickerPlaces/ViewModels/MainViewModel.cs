@@ -316,6 +316,13 @@ public sealed class MainViewModel : ObservableObject
 
     public string PlacesFilePath => _placesService.PlacesFilePath;
 
+    /// <summary>
+    /// Raised after anything that may have changed the saved places or their
+    /// use: an add, edit, removal, restore, import or open. The workspace
+    /// reads the Library again on it (configurable canvas plan M3).
+    /// </summary>
+    public event Action? PlacesChanged;
+
     private void AddPlace(PlaceType type)
     {
         // PlaceFormDialog discards the PersistenceResult from TryAdd
@@ -868,6 +875,10 @@ public sealed class MainViewModel : ObservableObject
     /// </summary>
     private void RefreshPersistenceState(PersistenceResult? result = null)
     {
+        // Every change to the places, and every open, ends here: the one
+        // point the workspace's Library can learn that what it lists moved.
+        PlacesChanged?.Invoke();
+
         HasUnsavedChanges = _placesService.HasUnsavedChanges;
 
         if (!HasUnsavedChanges)

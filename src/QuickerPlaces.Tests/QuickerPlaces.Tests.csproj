@@ -38,7 +38,10 @@
     <Compile Include="..\QuickerPlaces\Models\PlacesStore.cs" Link="Linked\Models\PlacesStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\StoreLoadOutcome.cs" Link="Linked\Models\StoreLoadOutcome.cs" />
     <Compile Include="..\QuickerPlaces\Services\AliasSuggestion.cs" Link="Linked\Services\AliasSuggestion.cs" />
+    <Compile Include="..\QuickerPlaces\Services\AppDataFolders.cs" Link="Linked\Services\AppDataFolders.cs" />
     <Compile Include="..\QuickerPlaces\Services\DiagnosticLog.cs" Link="Linked\Services\DiagnosticLog.cs" />
+    <Compile Include="..\QuickerPlaces\Services\StartupOptions.cs" Link="Linked\Services\StartupOptions.cs" />
+    <Compile Include="..\QuickerPlaces\Services\BackgroundWork.cs" Link="Linked\Services\BackgroundWork.cs" />
     <Compile Include="..\QuickerPlaces\Services\FilePlacesStorage.cs" Link="Linked\Services\FilePlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\IPlacesStorage.cs" Link="Linked\Services\IPlacesStorage.cs" />
     <Compile Include="..\QuickerPlaces\Services\JsonStoreLoader.cs" Link="Linked\Services\JsonStoreLoader.cs" />
@@ -81,6 +84,7 @@
     <Compile Include="..\QuickerPlaces\Services\Activity\StopwatchMonotonicClock.cs" Link="Linked\Services\Activity\StopwatchMonotonicClock.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackedRootConfig.cs" Link="Linked\Services\Activity\TrackedRootConfig.cs" />
     <Compile Include="..\QuickerPlaces\Services\Activity\TrackingSignal.cs" Link="Linked\Services\Activity\TrackingSignal.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\TrackedFolderPaths.cs" Link="Linked\Services\Activity\TrackedFolderPaths.cs" />
     <!--
       Project sessions and shared document code (ai/260928_PDF Project
       Sessions Plan.md): document kinds and paths, the open-document resolver, the launcher and the two view models. The
@@ -97,6 +101,9 @@
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
     <Compile Include="..\QuickerPlaces\Services\Library\LibraryIndex.cs" Link="Linked\Services\Library\LibraryIndex.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Library\ResourceIdentity.cs" Link="Linked\Services\Library\ResourceIdentity.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Library\LibrarySnapshot.cs" Link="Linked\Services\Library\LibrarySnapshot.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Library\LibraryQueryEngine.cs" Link="Linked\Services\Library\LibraryQueryEngine.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\LibraryViewModel.cs" Link="Linked\ViewModels\LibraryViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionsViewModel.cs" Link="Linked\ViewModels\SessionsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionEditorViewModel.cs" Link="Linked\ViewModels\SessionEditorViewModel.cs" />
@@ -113,6 +120,24 @@
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\ActivityViewModel.cs" Link="Linked\ViewModels\ActivityViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\ActivityCalendar.cs" Link="Linked\ViewModels\ActivityCalendar.cs" />
+    <!--
+      Configurable canvas (ai/260929_Configurable Canvas Implementation
+      Plan.md M1): the layout models, the built-in layouts, validation, the
+      layout store and the layout service. The WPF shell that shows them is
+      app-only.
+    -->
+    <Compile Include="..\QuickerPlaces\Models\Workspace\PanelInstance.cs" Link="Linked\Models\Workspace\PanelInstance.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Workspace\WorkspaceQuery.cs" Link="Linked\Models\Workspace\WorkspaceQuery.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Workspace\LayoutPreset.cs" Link="Linked\Models\Workspace\LayoutPreset.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Workspace\WorkspaceDocument.cs" Link="Linked\Models\Workspace\WorkspaceDocument.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\BuiltInLayouts.cs" Link="Linked\Services\Workspace\BuiltInLayouts.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceValidation.cs" Link="Linked\Services\Workspace\WorkspaceValidation.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceStore.cs" Link="Linked\Services\Workspace\WorkspaceStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceLayoutService.cs" Link="Linked\Services\Workspace\WorkspaceLayoutService.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Workspace\PanelLayoutEngine.cs" Link="Linked\Services\Workspace\PanelLayoutEngine.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\SessionFileSet.cs" Link="Linked\Services\Sessions\SessionFileSet.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\WorkspaceViewModel.cs" Link="Linked\ViewModels\WorkspaceViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\SaveLayoutViewModel.cs" Link="Linked\ViewModels\SaveLayoutViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>

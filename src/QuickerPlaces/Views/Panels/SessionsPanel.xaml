@@ -1,0 +1,378 @@
+<UserControl x:Class="QuickerPlaces.Views.Panels.SessionsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        The Sessions panel (sessions plan §5; configurable canvas plan M2):
+        Save files, the saved sessions with a search box (unless ShowsSearch is
+        off) and tag chips,
+        and the selected session's files with Open all, Edit and Delete.
+        DataContext is a SessionsViewModel, set by Attach. The code-behind
+        only asks before Delete and shows the Save Session dialog; after any
+        change it raises SessionsChanged so the Library can read them again.
+    -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <!-- A tag in the filter row: Recents' tracked-folder pill (ListBoxItem.Chip), filled while it is the chosen filter. -->
+        <Style x:Key="Button.TagChip" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
+            <Setter Property="Background" Value="{DynamicResource Bg.Raised}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="11,0" />
+            <Setter Property="Margin" Value="0,0,6,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Highlight.Soft}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                    <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- A session's tags, shown small on its card: a deeper blue than the card, as the number badge is. -->
+        <DataTemplate x:Key="TagPill">
+            <Border Background="{DynamicResource Session.Deep}" CornerRadius="4" Padding="7,1,7,2" Margin="0,0,4,3">
+                <TextBlock Text="{Binding}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource On.Session.Badge}" />
+            </Border>
+        </DataTemplate>
+
+        <!-- The Ctrl+Shift+number badge on a session card: a favourite's badge, in the sessions' blue. -->
+        <Style x:Key="Border.SessionNumber" TargetType="Border" BasedOn="{StaticResource Border.FavouriteNumber}">
+            <Setter Property="Background" Value="{DynamicResource Session.Deep}" />
+            <Setter Property="Margin" Value="0,0,9,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--
+            One saved session in the list: a card made like a favourite's (the same
+            fill, shadow and sheen), in the sessions' steel blue instead of leather.
+            The chosen card turns the highlight colour and gets a ring, so it shows
+            even when the highlight is itself blue.
+        -->
+        <Style x:Key="SessionCard" TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+            <Setter Property="Background" Value="{DynamicResource Session}" />
+            <Setter Property="Foreground" Value="{DynamicResource On.Session}" />
+            <Setter Property="Padding" Value="8,7,12,7" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="Card_PreviewMouseLeftButtonDown" />
+            <EventSetter Event="PreviewMouseMove" Handler="Card_PreviewMouseMove" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="Fill" Background="{TemplateBinding Background}" CornerRadius="6">
+                                <Border.Effect>
+                                    <DropShadowEffect Direction="270" ShadowDepth="1" BlurRadius="2" Opacity="0.22" Color="Black" />
+                                </Border.Effect>
+                            </Border>
+                            <Border CornerRadius="6" BorderThickness="0,1,0,0" BorderBrush="#38FFFFFF" />
+                            <Border x:Name="Sheen" CornerRadius="6" Background="#1AFFFFFF" Visibility="Collapsed" />
+                            <Border x:Name="Ring" CornerRadius="6" BorderThickness="2" BorderBrush="Transparent" />
+                            <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Sheen" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="{DynamicResource Highlight}" />
+                                <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource On.Highlight}" />
+                                <Setter Property="Foreground" Value="{DynamicResource On.Highlight}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- The store's notice, and the one main action. -->
+        <!--
+            In the workspace the button moves to the frame's title line
+            (ActionInHeader), leaving this row to the notice alone.
+        -->
+        <Grid x:Name="ActionRow" Grid.Row="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <!-- The shortcut tip, in the same quiet type as the Favourites panel's. -->
+            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Ctrl+Shift+1 to Ctrl+Shift+9 open them from the keyboard"
+                       Style="{StaticResource TextBlock.Hint}" Foreground="{DynamicResource Text.Tertiary}" Margin="0,0,0,8" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
+                       TextWrapping="Wrap" Margin="0,0,0,10" VerticalAlignment="Center" Style="{StaticResource CollapsedWhenEmpty}" />
+            <Button Grid.Row="1" Grid.Column="1" x:Name="SaveOpenButton"
+                    Style="{StaticResource Button.Primary}" VerticalAlignment="Top" Margin="12,0,0,10"
+                    IsEnabled="{Binding CanChange}"
+                    ToolTip="Find the files open now, check the list, and save them as a session"
+                    AutomationProperties.Name="Save files"
+                    Click="SaveOpen_Click">
+                <StackPanel Orientation="Horizontal">
+                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
+                    <!-- AccessText, not a TextBlock, so "_S" still gives Alt+S. -->
+                    <AccessText Text="_Save files" Margin="7,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!--
+            Side by side when there is room; stacked, the selected session
+            under the list, in a narrow panel (SizeChanged in the code-behind).
+        -->
+        <Grid x:Name="Body" Grid.Row="1" SizeChanged="Body_SizeChanged">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="ListColumn" Width="340" MinWidth="260" />
+                <ColumnDefinition x:Name="GapColumn" Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition x:Name="DetailsRow" Height="0" />
+            </Grid.RowDefinitions>
+
+            <!-- Left: search, tags, and the sessions. -->
+            <Grid x:Name="ListArea" Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Search: the main window's search box. -->
+                <Border x:Name="SearchArea" Grid.Row="0" Height="34" Margin="0,0,0,10" CornerRadius="6" BorderThickness="1"
+                        Padding="10,0,5,0" Background="{DynamicResource Bg.Sunken}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
+                            <Style.Triggers>
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Search}" Stroke="{DynamicResource Text.Tertiary}" />
+                        <TextBox x:Name="SearchBox" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource TextBox.Bare}"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search sessions"
+                                 ToolTip="Search by session name, tag or file name" PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                        <TextBlock Grid.Column="1" Text="Search by name, tag or file" IsHitTestVisible="False" Margin="8,0,0,0"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Border>
+
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding TagFilters}" Margin="0,0,0,4"
+                              AutomationProperties.Name="Filter by tag"
+                              Visibility="{Binding HasAnySessions, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource Button.TagChip}" Content="{Binding Label}"
+                                    Click="TagChip_Click" AutomationProperties.Name="{Binding Label}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Grid Grid.Row="2">
+                    <ListBox x:Name="SessionsList" ItemsSource="{Binding Rows}"
+                             SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                             ItemContainerStyle="{StaticResource SessionCard}"
+                             Background="Transparent" BorderThickness="0" Padding="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             AutomationProperties.Name="Saved sessions"
+                             MouseDoubleClick="SessionsList_MouseDoubleClick"
+                             KeyDown="SessionsList_KeyDown"
+                             AllowDrop="True" DragOver="SessionsList_DragOver" Drop="SessionsList_Drop"
+                             ContextMenuOpening="SessionsList_ContextMenuOpening">
+                        <!-- A card's menu (File viewer design §5). Right-click selects the card first, so it acts on the selected session. -->
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem x:Name="ViewFilesMenuItem" Header="View session files" FontWeight="Bold"
+                                          Click="ViewFiles_Click" Visibility="Collapsed" />
+                                <MenuItem Header="Open all" Click="OpenAll_Click" />
+                                <Separator />
+                                <MenuItem Header="Edit…" Click="Edit_Click" IsEnabled="{Binding CanEditSelection}" />
+                                <MenuItem Header="Delete…" Click="Delete_Click" IsEnabled="{Binding CanEditSelection}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <!-- The badge first, as on a favourite: the card's place in the order is its Ctrl+Shift number. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource Border.SessionNumber}" ToolTip="{Binding ShortcutToolTip}"
+                                            Visibility="{Binding HasShortcut, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="{Binding ShortcutText}" FontSize="12" FontWeight="Bold"
+                                                   Foreground="{DynamicResource On.Session.Badge}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis" />
+                                        <ItemsControl ItemsSource="{Binding Tags}" ItemTemplate="{StaticResource TagPill}"
+                                                      Margin="0,4,0,0" Focusable="False"
+                                                      Visibility="{Binding HasTags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                        <TextBlock Text="{Binding DetailText}" FontSize="12" Margin="0,3,0,0" Opacity="0.85" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock Text="{Binding ListPlaceholder}" IsHitTestVisible="False"
+                               HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,32,16,0"
+                               TextWrapping="Wrap" TextAlignment="Center"
+                               Foreground="{DynamicResource Text.Secondary}"
+                               Style="{StaticResource CollapsedWhenEmpty}" />
+                </Grid>
+            </Grid>
+
+            <!-- Right: the selected session. -->
+            <Border x:Name="DetailsArea" Grid.Column="2" Background="{DynamicResource Bg.Panel}" BorderBrush="{DynamicResource Border.Default}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <Grid>
+                    <Grid Visibility="{Binding HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Text="{Binding SelectedRow.Name}" Style="{StaticResource TextBlock.SectionTitle}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding SelectedRow.Tags}" ItemTemplate="{StaticResource TagPill}"
+                                      Margin="0,6,0,0" Focusable="False"
+                                      Visibility="{Binding SelectedRow.HasTags, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <TextBlock Grid.Row="2" Text="{Binding SelectedRow.DetailText}" Margin="0,6,0,12"
+                                   Foreground="{DynamicResource Text.Secondary}" TextWrapping="Wrap" />
+
+                        <DataGrid Grid.Row="3" x:Name="FilesGrid" ItemsSource="{Binding SelectedFiles}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                                  CanUserDeleteRows="False" SelectionMode="Single"
+                                  AutomationProperties.Name="Files in this session"
+                                  KeyboardNavigation.TabNavigation="Once"
+                                  MouseDoubleClick="FilesGrid_MouseDoubleClick" PreviewKeyDown="FilesGrid_PreviewKeyDown">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="FILE" SortMemberPath="FileName" Width="*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Document}" />
+                                                <TextBlock Text="{Binding FileName}" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="FOLDER" Binding="{Binding Folder}" Width="1.3*"
+                                                    ElementStyle="{StaticResource Cell.Path}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="_Open all" Style="{StaticResource Button.Primary}" Margin="0,0,8,0"
+                                    ToolTip="Open every file in this session (Enter)" Click="OpenAll_Click" />
+                            <Button Content="Open selected file" Margin="0,0,8,0"
+                                    ToolTip="Open just the file selected above (or double-click it)" Click="OpenFile_Click" />
+                            <Button Content="_Edit…" Margin="0,0,8,0" IsEnabled="{Binding CanEditSelection}"
+                                    ToolTip="Rename, retag, or add and remove files" Click="Edit_Click" />
+                            <Button Content="_Delete…" IsEnabled="{Binding CanEditSelection}"
+                                    ToolTip="Delete this session. Its files are not touched." Click="Delete_Click" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Choose a session to see its files." Foreground="{DynamicResource Text.Secondary}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSelection}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- What the last action did, then what went wrong with it. -->
+        <StackPanel Grid.Row="2" Margin="0,12,0,0">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}"
+                       TextWrapping="Wrap" Style="{StaticResource CollapsedWhenEmpty}" />
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}"
+                       TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
+        </StackPanel>
+
+    </Grid>
+</UserControl>

@@ -40,6 +40,9 @@ public sealed class SessionStore
     public const int MaxTagLength = 40;
     public const int MaxTags = 20;
 
+    /// <summary>How many sessions have a shortcut: the first nine, Ctrl+Shift+1 to 9, as favourites have Ctrl+1 to 9.</summary>
+    public const int ShortcutCount = 9;
+
     /// <summary>Days of reopen history kept per session, for the year view.</summary>
     public const int HistoryDays = 365;
 
@@ -99,9 +102,7 @@ public sealed class SessionStore
     /// <summary>Builds the store over sessions.json beside places.json, in roaming application data.</summary>
     public static SessionStore CreateDefault()
     {
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            AppInfo.Publisher, AppInfo.Name);
-        return new SessionStore(new FilePlacesStorage(folder, "sessions.json"), TimeProvider.System);
+        return new SessionStore(new FilePlacesStorage(AppDataFolders.Roaming, "sessions.json"), TimeProvider.System);
     }
 
     /// <summary>What happened when sessions.json was loaded (the same classification as places.json, Phase 1 D6).</summary>
@@ -123,15 +124,19 @@ public sealed class SessionStore
     /// <summary>True while a change in memory has not reached disk.</summary>
     public bool HasUnsavedChanges { get; private set; }
 
-    /// <summary>Every saved session, most recently used first (last opened or changed, whichever is later).</summary>
-    public IReadOnlyList<SessionSnapshot> Sessions
-        => _sessions.Select(Snapshot)
-            .OrderByDescending(s => s.LastUsedAt)
-            .ThenBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
+    /// <summary>
+    /// Every saved session in the order the user keeps them (dragged on the cards;
+    /// a new session goes last). The order is the order in sessions.json, and the
+    /// first nine sessions are the ones Ctrl+Shift+1 to 9 open.
+    /// </summary>
+    public IReadOnlyList<SessionSnapshot> Sessions => _sessions.Select(Snapshot).ToList();
 
     /// <summary>A saved session by id, or null.</summary>
-    public SessionSnapshot? Find(string id) => FindSession(id) is { } session ? Snapshot(session) : null;
+    public SessionSnapshot? Find(string id)
+    {
+        var index = _sessions.FindIndex(s => s.Id == id);
+        return index < 0 ? null : Snapshot(_sessions[index], index);
+    }
 
     /// <summary>Every tag in use, each once (first spelling wins), with how many sessions carry it, alphabetical.</summary>
     public IReadOnlyList<TagCount> Tags
@@ -177,7 +182,7 @@ public sealed class SessionStore
         _sessions.Add(session);
 
         persistence = SaveNow();
-        created = Snapshot(session);
+        created = Snapshot(session, _sessions.Count - 1);
         return ValidationResult.Ok();
     }
 
@@ -223,7 +228,35 @@ public sealed class SessionStore
         return SaveNow();
     }
 
-    /// <summary>Records that a session was just reopened, for its Last opened line and the list's order. An unknown id changes nothing.</summary>
+    /// <summary>
+    /// Moves a session to the place of <paramref name="targetId"/>, as a dragged
+    /// favourite takes the place it is dropped on: dragged up, it lands before that
+    /// session; dragged down, after it. A null or unknown target means the end. This
+    /// sets which session each Ctrl+Shift number opens, and is not an edit of the
+    /// session. Written at once; an unknown id, or a move that changes nothing, writes nothing.
+    /// </summary>
+    public PersistenceResult Move(string id, string? targetId)
+    {
+        if (!IsAvailable)
+            return PersistenceResult.Fail(Notice!);
+
+        var from = _sessions.FindIndex(s => s.Id == id);
+        if (from < 0)
+            return PersistenceResult.Ok();
+
+        var to = targetId is null ? _sessions.Count - 1 : _sessions.FindIndex(s => s.Id == targetId);
+        if (to < 0)
+            to = _sessions.Count - 1;
+        if (to == from)
+            return PersistenceResult.Ok();
+
+        var session = _sessions[from];
+        _sessions.RemoveAt(from);
+        _sessions.Insert(to, session);
+        return SaveNow();
+    }
+
+    /// <summary>Records that a session was just reopened, for its Last opened line. An unknown id changes nothing.</summary>
     public PersistenceResult MarkOpened(string id)
     {
         if (!IsAvailable)
@@ -446,9 +479,9 @@ public sealed class SessionStore
         return id;
     }
 
-    private static SessionSnapshot Snapshot(ProjectSession session)
+    private static SessionSnapshot Snapshot(ProjectSession session, int order)
         => new(session.Id, session.Name, session.Tags.ToArray(), session.Files.ToArray(),
-            session.CreatedAt, session.UpdatedAt, session.LastOpenedAt, session.OpenedAt.ToArray());
+            session.CreatedAt, session.UpdatedAt, session.LastOpenedAt, session.OpenedAt.ToArray(), order);
 }
 
 /// <summary>An immutable copy of one saved session, for the UI.</summary>
@@ -460,10 +493,18 @@ public sealed record SessionSnapshot(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset? LastOpenedAt,
-    IReadOnlyList<DateTimeOffset> OpenedAt)
+    IReadOnlyList<DateTimeOffset> OpenedAt,
+    int Order = 0)
 {
-    /// <summary>The later of when it was last reopened and last changed: what the list is ordered by.</summary>
+    /// <summary>The later of when it was last reopened and last changed.</summary>
     public DateTimeOffset LastUsedAt => LastOpenedAt is { } opened && opened > UpdatedAt ? opened : UpdatedAt;
+
+    /// <summary>
+    /// The digit of the Ctrl+Shift+digit that opens this session: 1 to 9 for the first
+    /// nine, null for the rest. Where it sits in <see cref="Order"/>, as
+    /// a favourite's number is where it sits in the bubbles.
+    /// </summary>
+    public int? ShortcutDigit => Order < SessionStore.ShortcutCount ? Order + 1 : null;
 }
 
 /// <summary>One day of sessions, for the year view: how many were saved, how many reopens, and their names.</summary>

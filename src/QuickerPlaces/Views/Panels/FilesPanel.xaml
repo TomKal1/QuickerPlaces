@@ -1,0 +1,54 @@
+<UserControl x:Class="QuickerPlaces.Views.Panels.FilesPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        The File viewer (File viewer design §3, §4): saved places, Recents and
+        session files as tabs over one place. The Saved places tab is the
+        places table; Recent, Sessions and All are the Library grid, whose tab
+        (LibraryViewModel.Tab) picks its source and columns. Both views are
+        made once and kept, so each keeps its selection and scroll.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--
+            The tab row: the tabs, and on the right the shown tab's own buttons (the
+            places' count and Options menu, or Track a folder and Save as session),
+            lifted out of the panels' headers so the table starts higher.
+        -->
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="File viewer tabs"
+                      HorizontalAlignment="Left" VerticalAlignment="Center">
+                <Border Style="{StaticResource Border.SegmentGroup}">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="SavedTab" Content="Saved places" IsChecked="True"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" Checked="Tab_Checked"
+                                     ToolTip="Your saved folders and links" />
+                        <RadioButton x:Name="RecentTab" Content="Recent"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="0" Checked="Tab_Checked"
+                                     ToolTip="Folders from Recents and files from Recent Files, with the tracked folders" />
+                        <RadioButton x:Name="SessionsTab" Content="Sessions"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="0" Checked="Tab_Checked"
+                                     ToolTip="Files in your sessions" />
+                        <RadioButton x:Name="AllTab" Content="All"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0" Checked="Tab_Checked"
+                                     ToolTip="Everything, with where each item comes from" />
+                    </StackPanel>
+                </Border>
+            </GroupBox>
+            <ContentControl x:Name="SavedToolbarHost" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Focusable="False" />
+            <ContentControl x:Name="LibraryToolbarHost" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Focusable="False"
+                            Visibility="Collapsed" />
+        </Grid>
+
+        <ContentControl x:Name="SavedHost" Grid.Row="1" Focusable="False" />
+        <ContentControl x:Name="LibraryHost" Grid.Row="1" Focusable="False" Visibility="Collapsed" />
+    </Grid>
+</UserControl>

@@ -14,106 +14,6 @@
             <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
             <Setter Property="FontSize" Value="12.5" />
         </Style>
-        <Style x:Key="Button.CalendarYear" TargetType="Button">
-            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
-            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="YearBackground" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                            <StackPanel Orientation="Horizontal">
-                                <ContentPresenter VerticalAlignment="Center" />
-                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.ChevronDown}" Margin="4,0,0,0" />
-                            </StackPanel>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="YearBackground" Property="Background" Value="{DynamicResource Highlight.Soft}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <!--
-            A day cell's focus ring: the shared ring's Signal stroke, hugging
-            the 12 px cell so it stays inside the 14 px pitch instead of
-            overlapping the neighbours.
-        -->
-        <Style x:Key="FocusVisual.CalendarDay">
-            <Setter Property="Control.Template">
-                <Setter.Value>
-                    <ControlTemplate>
-                        <Border Margin="-2" CornerRadius="3" BorderThickness="1.5"
-                                BorderBrush="{DynamicResource Signal}" SnapsToDevicePixels="True" />
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <!--
-            One day of the year strip. 12 px cells at a 14 px pitch, which
-            ActivityCalendar's strip width and month markers assume (UI
-            refresh U12). Leather heat: Heat.0 (none) to Heat.4 (most).
-        -->
-        <Style x:Key="Button.CalendarDay" TargetType="Button">
-            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual.CalendarDay}" />
-            <Setter Property="Width" Value="12" />
-            <Setter Property="Height" Value="12" />
-            <Setter Property="Margin" Value="1" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Border.Default}" />
-            <Setter Property="Background" Value="{DynamicResource Heat.0}" />
-            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Grid>
-                            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2" />
-                            <Border x:Name="TodayOutline" Margin="-1" BorderBrush="{DynamicResource Signal}"
-                                    BorderThickness="1.5" CornerRadius="3" Visibility="Collapsed" IsHitTestVisible="False" />
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <DataTrigger Binding="{Binding IsToday}" Value="True">
-                                <Setter TargetName="TodayOutline" Property="Visibility" Value="Visible" />
-                            </DataTrigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding Intensity}" Value="-1">
-                    <!-- Keeps the 1 px Border.Default outline: the fill alone nearly matches Bg.Panel in Dark. -->
-                    <Setter Property="Background" Value="{DynamicResource Heat.Untracked}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Intensity}" Value="1">
-                    <Setter Property="Background" Value="{DynamicResource Heat.1}" />
-                    <Setter Property="BorderThickness" Value="0" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Intensity}" Value="2">
-                    <Setter Property="Background" Value="{DynamicResource Heat.2}" />
-                    <Setter Property="BorderThickness" Value="0" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Intensity}" Value="3">
-                    <Setter Property="Background" Value="{DynamicResource Heat.3}" />
-                    <Setter Property="BorderThickness" Value="0" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Intensity}" Value="4">
-                    <Setter Property="Background" Value="{DynamicResource Heat.4}" />
-                    <Setter Property="BorderThickness" Value="0" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                    <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
-                    <Setter Property="BorderThickness" Value="2" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding IsInRange}" Value="False">
-                    <Setter Property="Visibility" Value="Hidden" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
         <!-- Week / Month / Day: compact buttons whose on-state fills Highlight. -->
         <Style x:Key="Button.Period" TargetType="Button" BasedOn="{StaticResource Button.Compact}" />
         <Style x:Key="TrackedFolderCard" TargetType="ListBoxItem" BasedOn="{StaticResource ListBoxItem.Chip}">
@@ -297,33 +197,8 @@
                                                          VirtualizingPanel.VirtualizationMode="Recycling"
                                                          PreviewMouseLeftButtonUp="CalendarYearList_PreviewMouseLeftButtonUp"
                                                          KeyDown="CalendarYearList_KeyDown"
+                                                         ItemContainerStyle="{StaticResource ListBoxItem.YearChoice}"
                                                          AutomationProperties.Name="Choose activity year">
-                                                    <ListBox.ItemContainerStyle>
-                                                        <Style TargetType="ListBoxItem">
-                                                            <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
-                                                            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
-                                                            <Setter Property="Padding" Value="10,5" />
-                                                            <Setter Property="Cursor" Value="Hand" />
-                                                            <Setter Property="Template">
-                                                                <Setter.Value>
-                                                                    <ControlTemplate TargetType="ListBoxItem">
-                                                                        <Border x:Name="YearItemBackground" Background="Transparent"
-                                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                                            <ContentPresenter />
-                                                                        </Border>
-                                                                        <ControlTemplate.Triggers>
-                                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                                <Setter TargetName="YearItemBackground" Property="Background" Value="{DynamicResource Bg.Panel}" />
-                                                                            </Trigger>
-                                                                            <Trigger Property="IsSelected" Value="True">
-                                                                                <Setter TargetName="YearItemBackground" Property="Background" Value="{DynamicResource Highlight.Soft}" />
-                                                                            </Trigger>
-                                                                        </ControlTemplate.Triggers>
-                                                                    </ControlTemplate>
-                                                                </Setter.Value>
-                                                            </Setter>
-                                                        </Style>
-                                                    </ListBox.ItemContainerStyle>
                                                 </ListBox>
                                             </StackPanel>
                                         </Border>
@@ -451,7 +326,10 @@
                               Checked="GroupByLevel_Changed" Unchecked="GroupByLevel_Changed"
                               ToolTip="Group recorded folders by depth below the tracked root. This only changes the display."
                               AutomationProperties.Name="Group activity by folder level" />
+                    <!-- Virtualized also while grouped by level, as the Library's shelf is: WPF otherwise builds every row. -->
                     <DataGrid x:Name="ActivityGrid" Grid.Row="4" ItemsSource="{Binding PeriodRows}"
+                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
                               AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                               SelectionMode="Single" Sorting="ActivityGrid_Sorting" RowHeight="38"
                               ColumnHeaderStyle="{StaticResource DataGridColumnHeader.Centered}">

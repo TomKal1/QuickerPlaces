@@ -561,6 +561,278 @@ On Windows: the app and the tests build with 0 warnings and 0 errors, and all 87
 - With Recent Files expanded, the Library's table has little height left at the default 780 px window height; this was so before the restyle too.
 - The Library's **Type** column stays, because PDF, Word and Excel share the document icon.
 
+## Configurable canvas: M0 and M1 (2026-09-29)
+
+The first two milestones of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md), on `ccr-6156d37a-mo223d`. No window changes yet: the app still opens the current main window.
+
+### What was built
+
+- **M0.** [`260929_Configurable Canvas M0 Baseline and Parity.md`](260929_Configurable%20Canvas%20M0%20Baseline%20and%20Parity.md): the baseline test result and a checklist of every command, shortcut and lifecycle behaviour the workspace must keep before M7 replaces the main window.
+- **Models** (`Models/Workspace/`). `PanelInstance` (id, type, span, hidden, view choices), `WorkspaceQuery` with a typed `DateRule`, `LayoutPreset`, `WorkingArrangement` and `WorkspaceDocument` with `StartupChoice`. Panel types, date rules and the startup mode are strings, and every class keeps unknown JSON properties, so a file from a newer build round-trips instead of failing (D6).
+- **`BuiltInLayouts`.** Activity Atlas, Project Canvas and Personal Desk with the plan's spans, each versioned. Only Activity Atlas is offered until Collections and Saved searches exist (M6).
+- **`WorkspaceValidation`.** Layout names (trimmed, 1–80 characters, unique ignoring case within My layouts), "… copy" names, and load-time repair that lists what it changed.
+- **`WorkspaceStore`.** `workspace-layouts.json` in `%LocalAppData%`, over `FilePlacesStorage`. An unreadable file or one from a newer version is left untouched and read-only, with the built-ins still usable; a damaged one is quarantined and, if `workspace-layouts.bak.json` can be read, the backup is offered rather than restored unasked.
+- **`WorkspaceLayoutService`.** Definition, working arrangement and Arrange draft kept apart; Arrange edits (move before, move earlier/later over visible panels, span, hide, add) change only the draft; Done writes once, Revert writes nothing; Save changes, Save as new (optionally with filters), Rename, Duplicate, Delete with fallback, startup choice, Restore saved/built-in layout, Undo; query changes wait for a debounced `FlushPending`.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Save as new while arranging | The draft goes to the new layout; the source layout keeps the arrangement it had when Arrange began | The edits were made to become the new layout; the source should not also silently change |
+| Save changes on a layout saved with filters | Its filters are replaced by the current query; a layout saved without filters stays without | Save changes saves what is shown, and never adds filters the user didn't ask to include (D3) |
+| Which query a layout shows | Its saved filters, or the defaults, when switched to; the query remembered in its working record only when resumed at startup | Filters must not leak between layouts (D3) |
+| Undo scope | A draft edit in Arrange mode, or the last Delete or Restore; any other lasting change ends the offer; a debounced query write does not | Undo should never reverse something the user didn't just do |
+| Switching layout mid-Arrange | Keeps the draft, as Done would | "Changing presets first preserves the current working arrangement" (D2) |
+| Unavailable built-ins in a file | Kept (with any working arrangement) but not offered; startup falls back to Activity Atlas | A later build can offer them again without losing the user's changes |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): the test project builds with 0 warnings and all 937 tests pass (877 before, 60 new in `WorkspaceLayoutServiceTests`, `WorkspaceStoreTests` and `WorkspaceQueryTests`). **Not done:** the Windows app build — the new files use no WPF types and the test project compiles them, but the Release build of `QuickerPlaces.csproj` has not been run.
+
+## Configurable canvas: M2 (2026-09-29)
+
+Milestone M2 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): one explicit query over the Library's sources for any period, with truthful coverage, and the Library and Sessions content as reusable panels. The main window is unchanged; the Library and Sessions windows now host the panels.
+
+### What was built
+
+- **`ResourceIdentity`** (`Services/Library/`). The Library's rules for "the same folder, link or document", moved out of `LibraryIndex` so the index, the shelf's selection and M6's collections share them. `LibraryItem.Key` exposes it.
+- **Store history reads.** `ActivityStore.QueryFolderDays` (kept per-day folder detail) and `DetailKeptFrom`; `RecentFilesStore.QueryHistory` (every kept open per file). `RecentFilesHost.Recorded` fires after a pass records opens.
+- **`LibrarySnapshot` and `LibraryQueryEngine`.** The four sources copied on the UI thread, then queried off it: items used in an inclusive period, recorded activity per day for the non-date filters over everything kept, a coverage line per source (Available, Partial, Unavailable, NotApplicable) and notes on what a period can't list.
+- **`LibraryViewModel`** on the engine. `CurrentQuery`/`ApplyQuery`/`QueryChanged` make it the workspace's one query (D4); Day/Week/Month selection, relative This week/This month, a Session tag filter, reasons for an empty list, coverage notes. Queries go through `IBackgroundWork` (inline in tests, `DispatcherBackgroundWork` in the app) and a result overtaken by a newer query is dropped. The selected row is kept by resource identity, and a refresh that changes nothing shown leaves the rows alone.
+- **Panels** (`Views/Panels/`). `YearActivityPanel` and `FileShelfPanel` share one `LibraryViewModel`; `SessionsPanel` carries everything the Sessions window did and raises `SessionsChanged`. `LibraryRefresh` reloads an open Library at most every 30 seconds on Recent Files or Recents activity, and unsubscribes on close. `LibraryWindow` and `SessionsWindow` are now thin wrappers.
+- **Shared styles.** The year strip's day cell and focus ring (identical copies in Recents and the Library), the kind chip, the row kind icon and `CollapsedWhenEmpty` live in `Styles.xaml`.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Which evidence a filter can narrow (D5) | File opens and session events always; folder visits only from Recents' kept 62-day folder detail. With a search or Saved, older days are marked unknown (shown as untracked squares with a reason), never as unfiltered totals | Day totals outlive the detail that says which folder was visited |
+| A session under a kind or tag filter | Its saves and reopens count when it holds a file passing the kind and search, and (for a tag) carries the tag itself; never under Recent | A PDF session's save said nothing about Excel, yet showed under Excel before |
+| Folder detail older than the kept window but not yet pruned | Ignored everywhere | What is listed shouldn't depend on when pruning last ran |
+| Where the shared styles live | `Styles.xaml`, not a new dictionary | Its `StaticResource` and `BasedOn` references (Icon.Row, Icons) already resolve there; a sibling dictionary can't rely on them |
+| Save open files in the Sessions window | Moved from beside the title into the panel's top row | The panel must carry its own main action into the workspace |
+| Live refresh cadence | At most one reload per 30 s while a Library view is open | Recents wakes every few seconds; recorded data changes far less often |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 970 tests pass (937 before M2; new: `LibraryQueryEngineTests`, `LibraryPeriodQueryTests`, and a changed Library strip test). The WPF app now builds on Linux too, with `-p:EnableWindowsTargeting=true`: Release, 0 warnings, 0 errors, XAML included. A script checked that every `StaticResource` key the changed windows and panels use is defined. **Not done:** running the app. On Windows, check: the Library and Sessions windows look and behave as before (Sessions' **Save open files…** now sits above the list); Day/Week/Month selection and the period chip; the Tag picker; coverage lines with Recents off and with a search; the list keeping its scroll position and selection while Recent Files records; Recents' strip unchanged.
+
+## Configurable canvas: M3 (2026-09-29)
+
+Milestone M3 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): Activity Atlas in the main window, behind a development switch. Without the switch the app opens exactly as before.
+
+### Trying it
+
+Start `QuickerPlaces.exe --workspace`. To keep your real data out of it, add `--data-root <folder>`: places, sessions, settings, tracking, layouts and the log then live under `<folder>\Roaming` and `<folder>\Local`. That copy has its own single-instance gate, so it runs beside your everyday copy, and it never changes the Windows startup entry. With `dotnet run`: `dotnet run --project src/QuickerPlaces -- --workspace --data-root C:\qp-test`.
+
+### What was built
+
+- **Startup switches.** `StartupOptions` parses `--tray`, `--workspace` and `--data-root`; `AppDataFolders` is now the one place every store, settings.json and the log get their folder.
+- **`WorkspaceViewModel`** (UI-free). Connects `WorkspaceLayoutService` to the shared `LibraryViewModel`: the layout's remembered query is applied at start and on a switch; the user's query changes go back to the service and are written after a 2-second pause and at close. Lists the shown panels, offers the built-ins that have working panels, and commits Add panel and Hide at once (Arrange mode is M4). A failed layout write shows a line with Retry.
+- **`PanelLayoutEngine`** (UI-free). Packs visible panels in order on twelve columns; a panel that doesn't fit starts the next row. M4 adds narrow-window reflow here.
+- **`PlacesPanel`.** The places list — count, search, Options, table, sorting, row shortcuts, context menu — moved out of `MainWindow`. List mode hosts it as before; the workspace shows it as the Saved places panel.
+- **`WorkspaceView`.** Toolbar: layout picker, one search box over the Library (Enter opens the top result, Down enters the shelf, Esc clears; Ctrl+F, the global hotkey and a second launch focus it), Add panel, Options (Recent Files…, Recently Deleted, Places file, Import, Export) and Hide panels. Canvas: each panel made once under a title with Hide, then moved when the layout changes, so selection and scroll survive. The year strip's row takes its own height; other rows share the rest.
+- **Refresh.** The Library reads again when places change (new `MainViewModel.PlacesChanged`), when a session is saved, edited or deleted, and after Recents closes; Recent Files is read when the workspace opens; `LibraryRefresh` keeps it current and is released at close, before the tracking hosts.
+- **Save as session.** The shelf's **Save as session…** takes its listed PDF, Word and Excel files (`SessionFileSet`: each once, folders and links counted and left out) into the usual review dialog (`SessionEditorViewModel.ForFileSet`), all ticked and without scanning; **Find open files** still works there. The Sessions panel then shows the new session selected.
+- **Shared pieces.** Recent Files' settings are a `RecentFilesSettings` control, used by the Library window and the new Recent Files dialog. The Sessions panel stacks the selected session under the list below 640 px wide. The shelf's filter row wraps.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Hide list (Ctrl+H) in the workspace (parity checklist) | Stays a window mode: it hides the panels and keeps the header, favourites and toolbar, as list mode keeps the list's header; a search brings the panels back | It is the compact launcher: favourites and the search box without the rest |
+| Search boxes | The toolbar box is the Library's search; the shelf hides its own there. Saved places and Sessions keep their local boxes | One query (D4); the other two search different things |
+| Add panel and Hide before Arrange mode | Each is one Arrange step, finished at once | Add panel is M3's; Hide is needed to take a panel away again. Undo, moving and resizing are M4 |
+| Saved places' width when added | Full width (was a third) | Its four-column table can't be read narrower, and M3 has no resize |
+| Library and Sessions buttons in workspace mode | Hidden | Their content is on the canvas; a second Library view would run a second query |
+| Save as session with no documents listed | A message saying why, nothing opened | An empty review would only lead to a refused save |
+| `--data-root` and Windows startup | Left alone | The test copy's settings would remove or repoint the real Run entry |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 1003 tests pass (970 before; new: `StartupOptionsTests`, `PanelLayoutEngineTests`, `SessionFileSetTests`, `WorkspaceViewModelTests`), and the Release build of the app has 0 warnings and 0 errors, XAML included. A script checked that every `StaticResource` key the new and changed XAML uses is defined. **Not done:** running the app. On Windows, check, with `--workspace --data-root <test folder>`:
+
+- The list mode without `--workspace` looks and behaves as before (the places list moved into a control): search keys, sorting and its arrow, row shortcuts, context menu, Hide list with the header staying, Options.
+- Activity Atlas: year strip across the top, shelf and Sessions below; choose a day, week or month and the shelf narrows; the period survives a restart.
+- The toolbar search: Enter opens the top shelf row, Down enters the shelf, Esc clears; Ctrl+F and the global hotkey focus it.
+- Add panel ▸ Saved places appears full width under the others; Hide on any panel, and Add panel bringing it back; an empty canvas.
+- Save as session… from a chosen week: the review lists the week's documents ticked, Save, and the Sessions panel shows it.
+- Opening a place from the favourites, the Saved places panel or the shelf updates the shelf's Last used; Recents' window, closed, updates the strip.
+- Recent Files… dialog; Recently Deleted, Import and Export from Options.
+- Hide panels (Ctrl+H) and typing to bring them back; window at 1000×650 and maximized; dark and light themes.
+- Closing writes the layout (`workspace-layouts.json` under the data root's Local folder).
+
+## Configurable canvas: M4 (2026-09-29)
+
+Milestone M4 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): Arrange mode and a canvas that fits the window. Still behind `--workspace`; try it as in M3 (`--workspace --data-root <test folder>`).
+
+Before M4, a loose end from M3: Recents' folder grid now stays virtualized while **Group by folder level** is on (`IsVirtualizingWhenGrouping`, as the Library's shelf got in M2), so a long period no longer builds every row at once.
+
+### What was built
+
+- **Reflow** (`PanelLayoutEngine`). Packing takes the canvas's width: a panel narrower than it can be read at (Year activity 280, File shelf 460, Sessions 300, Saved places 560, anything else 280 px) is shown at the next allowed span that is wide enough, or full width, and a row that such a panel leaves or joins is filled by stretching its last panel, so a narrow window stacks panels without holes. Stored spans and order never change and nothing is written. The engine also works out a drop (the panel the dragged one goes before, or none when it wouldn't move) and the span a dragged edge snaps to.
+- **Arrange mode** (`WorkspaceViewModel`). **Arrange** on the toolbar opens a bar: *Arranging Activity Atlas* with **Undo**, **Restore built-in layout** (or saved), **Revert** and **Done**. Each panel then shows a handle to drag it by, **Move earlier**/**Move later**, a width choice (a third, half, two thirds, full width), **Hide**, a dashed outline and an edge to drag for its width. Every edit changes the draft; Undo (and Ctrl+Z outside a text box) steps back one edit; Done writes once; Revert writes nothing. Add panel works in the draft too.
+- **Outside Arrange mode**, a panel's Hide and Add panel are single written steps with **Undo** beside the status line (the layout service's new `HideNow` and `AddPanelNow`). Undo leaves the search shown alone. Entering Arrange mode ends that offer.
+- **Dragging** (`WorkspaceView`, new `PanelFrame`). The handle shows a bar where the panel would go — above or below a full-width panel, beside any other — and nothing where it wouldn't move; the canvas scrolls when the pointer nears its top or bottom. The edge shows the nearest allowed width over the panel, named. A drop is one move, a released edge one width change, and **Esc** cancels either ("Cancelled. Nothing moved."). Nothing is written while dragging.
+- **Focus and announcements.** Frames are never taken off the canvas (a hidden panel's collapses), so moving or resizing keeps each panel's selection, scroll and focus; the arrows and width choice keep the focus through a move. After Hide the focus goes to Undo (or, arranging, Done); after Arrange to Done, after Done or Revert back to Arrange. The status line is a polite live region, raised on every change: "Moved Sessions before File shelf.", "File shelf is now half wide; shown full width until the window is wider."
+- **Fitting the window.** The canvas gets the window's height, or more when rows need it (shared rows at least 220 px, the year strip's row its own height), and then scrolls, so no panel is cut off at the bottom; shared rows still have a real height, so their lists stay virtualized. The toolbar's search box takes a row of its own when the picker, the box at its least width and the buttons don't fit on one line.
+- **Files First**, a second built-in layout, so the year strip isn't the only way in: the File shelf at two thirds with the activity calendar beside it in a third, where it shows the month view (still shaded by activity), and Sessions below. The calendar scrolls within its panel when a short window can't fit it. The calendar stays the way to choose a period; there is no separate date filter.
+- **The shelf shows the chosen period** ("Used 21–27 Sep 2026", with a button that clears it) whenever no Year activity panel is shown, so hiding the calendar never leaves the shelf narrowed by a period nobody can see (D4).
+- **Year activity's month view.** Where the panel is too narrow for the year strip, it shows one month at one and a half times the size, with month arrows in place of the year's; the header's controls go under its title and wrap. The month is the month of a period chosen in the year shown, so the outline carries over, and the arrows cross years but never pass this month (`LibraryViewModel.CalendarMonthWeeks`, `ShowCalendarMonth`). The Library window gets the same when narrow.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Hide and Add panel outside Arrange mode | Kept, as single steps with Undo | M3 offered them on the canvas; D1 asks Hide to offer Undo |
+| Undo offered before Arrange mode | Ends when Arrange begins | Undo in Arrange mode steps through the draft; reaching past it would change what Revert restores |
+| Closing the window while arranging | The draft is kept, as Done | The same as switching layout mid-arrange (D2); a close shouldn't lose visible work |
+| Minimum panel widths | Fixed per type in the engine, in device-independent pixels | Testable without WPF; DPI changes need nothing more, since WPF lays out in those pixels |
+| Reflow width | The scroll viewer's full width, not its viewport | A scroll bar appearing must not change the packing, or it could appear and vanish repeatedly |
+| Where a drop lands | Before or after the nearest panel: by height for a full-width panel, by width otherwise | Full-width panels stack, so above/below is what the pointer means there |
+| Resizing | Only by the right edge, snapped to 4, 6, 8 or 12 columns; the width choice is the keyboard's way | D1: snapping handles with labelled choices as the alternative |
+| Month view size | The strip's own cells at 1.5× | Same styles, heat and outlines as the year strip; days get bigger instead of smaller |
+| A layout without the big year strip | Files First: the calendar kept, beside the shelf in a third | The user: some people don't want to lead with the year, but time filtering belongs with the activity calendar, not in a separate control |
+| Year activity's minimum width | 280 px | The month view fits there, so Files First keeps the calendar beside the shelf even at the main window's least width |
+| The main window's minimum width | Left at 960 | Its header needs it in list mode; reflow still matters for narrow spans, large text and panels beside each other |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 1051 tests pass (1003 before; new: Files First, reflow, drop and snap cases in `PanelLayoutEngineTests`, one-step Hide/Add with Undo in `WorkspaceLayoutServiceTests`, Arrange mode, Undo and reflow in `WorkspaceViewModelTests`, the month view in `LibraryPeriodQueryTests`), and the Release build of the app has 0 warnings and 0 errors, XAML included. A script checked that every `StaticResource` key the new and changed XAML uses is defined. **Not done:** running the app; nothing here has been seen on screen. On Windows, with `--workspace --data-root <test folder>`, check:
+
+- **Arrange**, then drag the File shelf's handle above the year strip: a bar shows where it goes, and nothing shows over its own place. Drop it; Undo; drag again and press Esc mid-drag.
+- Drag Sessions' right edge: the preview snaps to a third, half, two thirds and full width and names each; release on a new width; Esc cancels.
+- From the keyboard only: Tab to a panel's arrows and width choice, move a panel both ways, change a width, Ctrl+Z, then Done. The focus should stay on the control you used.
+- Revert after several edits puts back the start, and `workspace-layouts.json` isn't written while arranging (its time doesn't change until Done).
+- Hide a panel outside Arrange mode, then Undo; Hide, search, Undo: the search stays.
+- Restore built-in layout after changes, then Undo.
+- Narrator: each move, width change, Hide and Undo is read out.
+- Set Sessions and Saved places to a third: Saved places shows wider; the width choice's tooltip says why. Maximize and restore the window: panels reflow and the stored widths come back when there's room.
+- In a 1000×650 window, add Saved places: the canvas scrolls rather than cutting the lower panels off; the lists inside still scroll on their own.
+- Choose **Files First**: the month view beside the shelf, Sessions below; at 1000×650 the calendar scrolls within its panel rather than being cut off. Choose a week, hide the calendar: the shelf shows "Used …" and clears it.
+- Set Year activity to a third or half: the month view, its arrows, the chosen week still outlined; the header's controls under the title. The Library window made narrow does the same.
+- 100/150/200% DPI and moving the window between monitors of different DPI; dark and light themes; the toolbar at 960 wide with large text: nothing is cut off.
+- Recents with Group by folder level on a long period: scrolls smoothly, and Add as place acts on the right row.
+
+## Configurable canvas: M5 (2026-09-29)
+
+Milestone M5 of [the configurable canvas plan](260929_Configurable%20Canvas%20Implementation%20Plan.md): the user's own layouts. This completes the plan's first delivery increment. Still behind `--workspace`; try it with `--workspace --data-root <test folder>`.
+
+### What was built
+
+- **The layout picker** groups **Built-in** (Activity Atlas, Files First) and **My layouts**, and says beside each name *Modified* (its arrangement differs from how it was saved), *Starts here* and *Filters*.
+- **The Layout menu** (the arrow beside the picker) names the layout shown: **Save changes to "…"** (own layouts only; a built-in says to save it as new), **Save as a new layout…**, **Rename…**, **Duplicate**, **Delete "…"**, **Restore built-in/saved layout**, and **Start QuickerPlaces with** ▸ *The layout I used last* or any layout. Arrange mode's bar also has **Save as new…** and, for own layouts, **Save changes**; both leave Arrange mode.
+- **The Save layout dialog** (`SaveLayoutDialog`, `SaveLayoutViewModel`): a name (suggested: "My Activity Atlas", or "Mine copy"; checked for length and for clashes within My layouts, with the reason under the box), and **Include the current filters**, off by default, with the filters in words ("Search "tower" · PDFs · Used 20–26 Sep 2026"). When the chosen period is exactly this week or this month it asks: *This week, whichever week it is* (the default) or *Always 20–26 Sep 2026*. Rename uses the same dialog, name only.
+- **Behaviour** (`WorkspaceViewModel`, over M1's layout service): Save as new shows the new layout, and its filters if kept; Save changes on a layout saved with filters keeps the filters shown now; Duplicate copies the layout as saved into My layouts and stays where it is; Delete shows Activity Atlas with its own filters, resets startup if it was the startup layout, and offers Undo (focus goes to it), which brings back the layout, its arrangement and its filters. Each action says what it did on the status line.
+- **Recovery.** A failed write keeps the change in memory with Retry (as before). A damaged layouts file with a readable backup now shows **Restore layouts** beside the warning; nothing is restored unasked.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Where layouts are managed | A menu on the layout shown, not a separate Manage layouts dialog | Every operation the plan lists is there in one click; switching to a layout first is how to act on another. A dialog can come later if people keep many layouts |
+| Delete | No confirmation; Undo instead, with the focus on it | D2 asks for Undo; deleting a layout never touches places, sessions or files |
+| Duplicate | Copies the layout as saved (not its unsaved changes) and doesn't switch to it | As M1's service defined it; "Save as new" is the way to keep what is shown |
+| Suggested name | "My Activity Atlas" from a built-in; "Mine copy" from one's own | A name to accept or overwrite, never one already used |
+| This week in the dialog | Offered only when the period is exactly the current week or month, and kept relative unless the user picks the fixed days | A week picked on the calendar is stored as its days; this asks which was meant (D3) |
+| Modified | Means the arrangement differs from the layout as saved; a changed search does not count | D2's indicator is about the arrangement; searches change constantly |
+
+### Verification status
+
+On Linux (.NET SDK 10.0.112): 1068 tests pass (1051 before; new: `SaveLayoutViewModelTests`, and in `WorkspaceViewModelTests` the M5 exit check — two personal layouts, switched between, a working change recovered after switching away and back, and a restart into the chosen startup layout with the built-ins untouched — plus Save changes, Rename, filters kept or not, This week staying relative a week later, Duplicate, Delete with Undo, startup choices and a failed save). The Release build of the app has 0 warnings and 0 errors, XAML included. **Not done:** running the app. On Windows, with `--workspace --data-root <test folder>`, check:
+
+- Save as a new layout from Activity Atlas without filters, then with a search and a week ticked in: the picker's groups and notes; switching between them brings each one's filters or none.
+- Pick this week on the calendar, Save as new with filters: the dialog offers *This week, whichever week it is*. Change the PC's date a week on (or wait) and restart: the layout shows the new week.
+- A name already used, a blank name and an 81-character one: the reason shows under the box and the dialog stays open.
+- Rename, Duplicate, Delete and Undo from the Layout menu; the focus lands on Undo after Delete.
+- Start QuickerPlaces with ▸ a layout; restart; then ▸ The layout I used last.
+- Save changes from the Arrange bar on an own layout; Save as new from it on a built-in.
+- Make `workspace-layouts.json` read-only: a save shows the warning with Retry; make it writable, Retry. Corrupt the file (with a `workspace-layouts.bak.json` beside it): the warning offers Restore layouts.
+- Keyboard: the picker's groups with the arrow keys, the Layout menu with Alt+Down or Enter, the dialog's radio buttons.
+
+### Fixes after the first Windows try (2026-09-29)
+
+- **No combo box opened with the mouse**, anywhere in the app: the layout picker, Arrange mode's width choice, the shelf's tag filter, Recents' roll-up. `ThemeManager` sets `ThemeMode`, whose Fluent `ToggleButton` style aligned the combo template's full-size toggle Left/Center, shrinking it to 0×0, so a click landed on the border beneath. The toggle now has `Style="{x:Null}"` (`Styles.xaml`). The keyboard and UI Automation had always worked, which is why tests and the probe missed it.
+- **Saved layouts didn't stay shown.** The picker's items come from a `CollectionViewSource`, and a selector over a non-default view follows its current item. Every layout change rebuilds the list, and the new view's current item is its first row, so after Save as new, Done or a switch the picker put back Activity Atlas. The layouts file had the new layout, but it wasn't shown. The picker is now `IsSynchronizedWithCurrentItem="False"`.
+- **The Hide panels button is gone** at the user's request: each panel's × hides it and Add panel brings it back. Ctrl+H still collapses the canvas.
+
+Checked on Windows 11 against a test data root with UI Automation and real mouse clicks: the picker and width choice open. Setting Sessions to Full width and then Save as new shows "My Activity Atlas". Switching to Activity Atlas and back brings its arrangement, `workspace-layouts.json` records it as active, and a restart resumes it. 1071 tests pass.
+
+## Desk layout, Favourites and Recents panels (2026-09-29)
+
+Built from [the Desk layout implementation plan](260929_Desk%20Layout%20Implementation%20Plan.md), to [the design](260929_Desk%20Layout%20and%20Recents%20Panel%20Design.md), on top of the configurable canvas (M1–M5). Still behind `--workspace`; try it with `--workspace --data-root <test folder>` and pick **Desk** in the layout picker.
+
+### What was built
+
+- **Columns layouts** (`bb4ab86`, `9e0c0c5`, `2855697`, `a5a5ecb`, `ba5a1ac`). A layout gains an optional `arrangement` (`"columns"`) and each panel an optional `dock` (`"left"` / `"main"`). `PanelLayoutEngine.PackColumns` places them and works out drops within and across columns; the row packer is untouched. `WorkspaceLayoutService` moves panels between and within columns, and `WorkspaceView` shows a columns layout as two stacks. In Arrange mode each panel has a **Column** choice and up/down arrows, and no resize edge. A window narrower than the two columns need shows one stack, main first.
+- **Desk** (`91fe5cf`). The built-in layout from the user's sketch: Favourites and Sessions on the left; Saved places, Recents and Year activity on the main side.
+- **Favourites panel** (`1c7b0f7`). The favourites strip becomes a reusable `FavouritesPanel`. The strip at the top of the window shows only while no Favourites panel does, so hiding the panel brings the strip back.
+- **Recents panel** (`f4e5aa9`, `18feb24`, `5ab5760`, `e7d7784`, `550ced1`, `7cfdefc`). The workspace's File shelf takes over the Recents window's features and is called **Recents**:
+  - `TrackedFolderPaths` (shared with the Library) works out the level below a tracked root, the innermost root and the level labels.
+  - Library rows carry a folder's Visits and Time and say which can be added as places; the Library and the shelf can narrow to one tracked folder, and group by **Folder level** (Root folder / Level 1 / Level 2).
+  - The shelf gains a tracked-folders strip (a chip per folder: click to scope, right-click for Stop/Resume tracking, Edit tracking settings, About folder, Delete), a tracking summary, Visits and Time columns and **Add as place…**.
+- **Header** (this commit). The Recents button is hidden in the workspace; the panel does what the Recents window did, and the tray still shows tracking.
+
+### Decisions made while building
+
+| Question | Decision | Why |
+|---|---|---|
+| Where the arrangement lives | On the layout, not on working arrangements | The rows-or-columns choice is saved and restored with the layout itself |
+| An empty column | Gives its width away | So the Column choice is how a panel reaches an empty column |
+| The favourites strip | Shows while no Favourites panel does | Favourites are never without a home; hiding the panel returns the strip |
+| The stored panel type | Stays `shelf` | Saved layouts keep loading; only the name shown changed to Recents |
+| The header's Recents tooltip | Says "tracking is off for every folder" where it said "paused" | The wording now matches the panel: no folder is being tracked |
+| Panel order in a columns layout | Kept canonical in `ApplyDraft`: left panels first, then main, stable | Without it, moving a panel to the other column and back left Desk reading "Modified" |
+| The shelf's activity data | It gets its own `ActivityViewModel` in the workspace | The panel's chips and summary follow tracking without depending on the Recents window |
+| Wording in the Library | The Library window keeps "File shelf", as the design says | Only the workspace panel is renamed. Session-save messages such as "…from the File shelf…" in `SessionFileSet.cs` and `SessionEditorViewModel.cs` were left unchanged |
+
+### Verification status
+
+1130 tests pass, and the app builds with 0 warnings and 0 errors, XAML included.
+
+Checked on Windows 11 against scratch data with UI Automation and real mouse clicks:
+
+- **Desk:** Favourites and Sessions on the left, Saved places, Recents (then still named File shelf) and Year activity on the main side. Measured maximized at 2576 wide: the left column is x=14, w=844; the main is x=858, w=1688.
+- **Favourites strip:** gone under Desk; hiding the Favourites panel brings the strip back, and Undo takes it away again.
+- **Column choice** by real click: Sessions to main, then back to left.
+- **Drag:** a real mouse drag of the shelf above Saved places; Undo and Done work.
+- **Narrow window** at 960: one stack, main first.
+- **Restart:** Desk persists.
+- **Column move** kept the shelf's selection and scroll offset (the design's risk).
+- **Recents panel:**
+  - The chips show and a click scopes the list.
+  - The chip menu has Stop/Resume, About and Edit.
+  - Visits and Time are filled.
+  - Folder level grouping gives Root folder / Level 1 / Level 2.
+  - Add as place… opens a prefilled dialog and adds the place.
+  - Track a folder updates the summary and the header tooltip.
+
+**Not exercised** (from the plan's Windows checks): Edit tracking settings, Delete tracked folder (and its confirmation), Retry save, dragging a Favourites card to reorder, Ctrl+1, the Library window in list mode (no tracked-folders strip or Add as place; Folder level grouping), and the dark and light themes (chips, Column choice and Favourites cards readable).
+
+**Task 15 closed on 2026-09-29 at the user's call.** The checks listed under *Not exercised* were not run. They move to the Windows checks of the [File viewer design](260929_File%20Viewer%20Design.md), which changes Desk.
+
+## Calendar in the left column, with numbered days (2026-10-01)
+
+Design and plan: [261001_Calendar Left Column and Numbered Month View Design.md](261001_Calendar%20Left%20Column%20and%20Numbered%20Month%20View%20Design.md) and its Plan. The built-in Desk first kept the calendar along the bottom of the main column; **later the same day the user made the left column the default** (Desk version 3, below). The calendar moves between columns with Arrange, as any panel does, and shows its month view in the left one.
+
+- **Startup re-check** (9b1d547). `YearActivityPanel` now chooses year or month through `ActivityCalendar.ShowsMonthView` and chooses again whenever `CalendarStripWidth` changes, which is 0 until the activity data loads. **Not reproduced:** a build from before the change also opened a left-column calendar in the month view on test data, so this guards a race found by reading the code, not a bug seen to fail. If the year strip ever shows in a narrow column again, this is the first place to look.
+- **Numbered days** (526b3ff, one commit: `git revert 526b3ff` removes them and leaves the re-check). The month view's cells show the day of the month (`ActivityCalendarCell.DayNumber`, style `Button.CalendarDayNumbered`); the year strip does not. Number colours are per theme (`Heat.Text.1`–`4` in both palettes; empty days use `Text.Secondary`), each pair checked at 4.5:1 by `PaletteFileTests`.
+- **Checked on Windows** with `--workspace --data-root` on seeded activity, window pixels read back: Dark and Light, several heat levels, today's outline, a 30-day and a 31-day month, a calendar saved in the left column opening in the month view. Not checked: Match Windows, the selected-day outline with a number, narrowing and widening the window, and moving the calendar between columns in Arrange (Arrange was seen working in the user's own screenshot before the numbers).
+
+**Activity panel tidy (same day, from the user's screenshots).**
+- **Named Activity** (b30b5d9): `PanelTypes.DisplayName(Activity)` is "Activity" (frame title, Add panel, Undo lines). The stored type id stays `activity`; the class is still `YearActivityPanel`.
+- **No repeated title or caption** (849baef): the workspace sets `ShowsTitle = false`, so only the frame's title shows; the Library window keeps an "ACTIVITY" label. The "Recorded activity: …" line is gone and survives as that label's tooltip.
+- **Period chip says what it covers**, without "Used" (b30b5d9: "Thu 24 Sep 2026", "21–27 Sep 2026", "This week (…)"). `SaveLayoutViewModel`'s own "Used …" filter text is unchanged.
+- **Layout:** the date row (chip, arrows, year picker) runs across the top; Day / Week / Month are a vertical column below it on the left, with the strip or month to their right, in both views. `ActivityCalendar.YearChrome` is 150 to allow for that column, so the year strip gives way to the month view about 86 px sooner.
+- **Year picker restored** (849baef, with b30b5d9): the year is a button that opens a list of years 2000–2100 (`LibraryViewModel.FirstCalendarYear` / `LastCalendarYear`); the year arrows stop at those ends, and the month arrows are no longer capped at the current month, so future years and months show as greyed "future day" cells. The month view's label is the month name plus the same year button. The picker's style and item style moved to `Styles.xaml` (`Button.CalendarYear`, `ListBoxItem.YearChoice`) and the legacy Recents window uses them too.
+- **Sessions: Save files on the title's line.** `PanelFrame` has a header slot (`HeaderSlot`); `SessionsPanel.ActionInHeader` moves its one button there, 24 px high so the title line keeps its height, and back to the panel's first row while the frame shows Hide or Arrange's controls (`WorkspaceView.UpdateFrames` sets it from `IsCustomising`). The button now reads "Save files" (was "Save open files…"; the empty-state and Sessions-tab messages follow). The long "Drag cards to put them in order…" hint is replaced by a one-line tip in the Favourites tip's style, "Ctrl+Shift+1 to Ctrl+Shift+9 open them from the keyboard" (the Sessions window gets it too). `SessionsPanel.ShowsSearch` is off in the workspace (the header box is the search); the Sessions window keeps its box. Checked in the real app, normal and Arrange mode.
+- **Recents buttons the same height.** "Save as session…" had no style (32 px, 14 px type) beside "Track a folder" (`Button.Compact`, 28 px, 13 px type); it now uses `Button.Compact` too. Both measured 28 px in the running app.
+- **Desk version 3: Activity in the left column** (`BuiltInLayouts.Desk`): Favourites, Sessions and Activity down the left, Files alone in the main column with its full height. An arrangement already personalised from version 2 is kept (`BuiltInVersion`); **Reset to Desk** gives the new one. "Desk · separate panels" is unchanged (calendar in the main column). The Desk tests in `WorkspaceViewModelTests` and `WorkspaceLayoutServiceTests` follow (the "move a panel across and back" and "last left panel can't move down" tests now use Activity, the last left panel).
+- **Date row centred.** With no title of its own (the workspace), `YearActivityPanel` docks the chip and arrows at the top and centres them across the panel; with a chosen period the chip wraps above the arrows, left-aligned within the centred block. Checked in the real app on a fresh data root (opens on the new Desk).
+- **Session shortcuts are Ctrl+Shift+1 to 9 only** (`SessionStore.ShortcutCount` 10 → 9, to match favourites' Ctrl+1 to 9): the tenth session no longer has Ctrl+Shift+0 or a badge, and `ShortcutDigit` is just the place in the order. Tests `TheShortcutDigit_…` and `ACardsNumber_…` follow. The Favourites panel's empty-state hint was also removed (the star is enough).
+- **One Visits column on All and Recent** (replaces the short-lived Opens column). `LibraryViewModel.ShowsVisits` (All, Recent, and a Recents panel with no tab) and `ShowsTime` (Recent / no tab; was `ShowsVisitsAndTime`). `VisitsText` is `RecentCount` for every row, so a folder's visits (Recents) and a file's opens (Recent Files) are counted alike and both called Visits; the tooltip (`VisitsToolTip`) says "3 visits" / "1 visit". The column is centred like Saved places' count. Recent's Visits used to be blank for files; it no longer is. "Where from" lists sources only, with "Recent" for recorded visits (`LibraryItem.WhereFromText`); `SourceText` (with the count) stays as the Source marker's tooltip. The Saved places table's header was renamed from OPENS to VISITS to match; **its number is still how often QuickerPlaces itself launched the place (`PlaceViewModel.OpenCount`), not Windows' or Recents' count**, so the two can differ for the same folder. What the Library's count is: opens Windows reported through Recent Items for files, Recents' visits for folders, in the chosen period. Checked in the real app with seeded recent files on All, Recent and Saved places. Note for testing: a day chosen on the calendar is saved with the layout's query and comes back on the next launch, which makes the list look empty.
+- **Checked on Windows** (scratch data root, Light theme): left column with the month view and picker; wide default Desk with the year strip and a chosen-day chip; picking a year from the list applied it (2095 shown with all days greyed). Not checked: the popup's own pixels (a popup is a separate window and was not captured), Dark theme for this layout, keyboard use of the list.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.

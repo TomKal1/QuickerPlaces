@@ -7,6 +7,7 @@ using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views;
 
@@ -27,7 +28,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Before anything reads or writes a file, the log included: with
+        // --data-root every store lives under that folder instead.
+        var options = StartupOptions.Parse(e.Args);
+        AppDataFolders.UseRoot(options.DataRoot);
+
         DiagnosticLog.Info($"{AppInfo.Name} starting.");
+        if (AppDataFolders.Root is { } dataRoot)
+            DiagnosticLog.Info($"Using the data folder given on the command line: {dataRoot}");
+        foreach (var problem in options.Problems)
+            DiagnosticLog.Warn($"Command line: {problem}");
 
         // Plan 5.6: the single-instance gate runs before any service is
         // constructed — before SettingsService, before PlacesService.
@@ -36,7 +46,7 @@ public partial class App : Application
         // anything PlacesService or SettingsService do themselves, only
         // by this method never reaching their constructors when this
         // isn't the first instance.
-        var singleInstance = SingleInstance.TryStart();
+        var singleInstance = SingleInstance.TryStart(AppDataFolders.InstanceScope(AppDataFolders.Root));
         if (singleInstance is null)
         {
             // TryStart has already signalled the running instance and
@@ -92,8 +102,14 @@ public partial class App : Application
         var recentFilesStore = RecentFilesStore.CreateDefault();
         var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
 
+        // The workspace (configurable canvas plan M3) only with --workspace
+        // until M7 makes it the default; its layouts are read only then.
+        var workspaceLayout = options.Workspace ? CreateWorkspaceLayout() : null;
+        if (workspaceLayout is not null)
+            DiagnosticLog.Info($"Showing the workspace ({workspaceLayout.ActiveName}).");
+
         var mainWindow = new MainWindow(mainViewModel, settings, settingsService, activityStore, activityHost, sessionStore, recentItems,
-            placesService, recentFilesStore, recentFilesHost, themeManager);
+            placesService, recentFilesStore, recentFilesHost, themeManager, workspaceLayout);
         var trayIcon = new TrayIcon(mainWindow, activityStore, activityHost, mainWindow.UpdateActivityIndicator);
         mainWindow.AttachTrayIcon(trayIcon);
         if (!StartupRegistration.TryApply(settings.StartWithWindows, out var startupError))
@@ -124,6 +140,8 @@ public partial class App : Application
 
             // A session change the Sessions window reported as unsaved gets one more try; a failure is logged there.
             sessionStore.RetrySave();
+            // The workspace's waiting layout write, while its refresh still has hosts to let go of.
+            mainWindow.CloseWorkspace();
             recentFilesHost.Dispose();
             activityHost.Dispose();
             themeManager.Dispose();
@@ -133,8 +151,7 @@ public partial class App : Application
             singleInstance.Dispose();
         };
 
-        if (settings.StartWithWindows && Array.Exists(e.Args,
-                arg => string.Equals(arg, "--tray", StringComparison.OrdinalIgnoreCase)))
+        if (settings.StartWithWindows && options.Tray)
         {
             var firstLoad = true;
             mainWindow.Loaded += (_, _) =>
@@ -176,6 +193,21 @@ public partial class App : Application
                 if (!string.IsNullOrEmpty(e.Text))
                     e.Handled = true;
             }));
+
+    /// <summary>
+    /// The workspace's layouts. Someone starting for the first time (no layouts file
+    /// yet) begins on Desk, the layout the app is built around; the layout picker is
+    /// tucked away (Customise layout…), so the first screen has to be the right one.
+    /// After that the last layout shown is resumed, as before.
+    /// </summary>
+    private static WorkspaceLayoutService CreateWorkspaceLayout()
+    {
+        var store = WorkspaceStore.CreateDefault();
+        var layout = new WorkspaceLayoutService(store);
+        if (store.LoadOutcome == StoreLoadOutcome.NotPresent)
+            layout.Activate(BuiltInLayouts.DeskId);
+        return layout;
+    }
 
     /// <summary>
     /// Loops the RecoveryDialog until the store's load state is resolved

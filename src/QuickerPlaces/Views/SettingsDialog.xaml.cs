@@ -24,11 +24,14 @@ public partial class SettingsDialog : Window
     private readonly Func<SettingsChoice, string?> _tryApply;
     private readonly Action<AppTheme, HighlightPreset> _preview;
     private readonly bool _ready;
+    private readonly Action<Window>? _showRecentFiles;
+    private readonly Action? _customiseLayout;
     private string _hotkeyText;
+    private bool _customiseRequested;
 
     private SettingsDialog(Window owner, string? currentHotkey, bool minimizeToTray, bool startWithWindows,
         AppTheme theme, HighlightPreset highlight, Action<AppTheme, HighlightPreset> preview,
-        Func<SettingsChoice, string?> tryApply)
+        Func<SettingsChoice, string?> tryApply, Action<Window>? showRecentFiles, Action? customiseLayout)
     {
         InitializeComponent();
 
@@ -39,6 +42,9 @@ public partial class SettingsDialog : Window
         MaxHeight = SystemParameters.WorkArea.Height;
         _tryApply = tryApply;
         _preview = preview;
+        _showRecentFiles = showRecentFiles;
+        _customiseLayout = customiseLayout;
+        WorkspaceSection.Visibility = showRecentFiles is null && customiseLayout is null ? Visibility.Collapsed : Visibility.Visible;
         _hotkeyText = HotkeyGesture.IsDisabled(currentHotkey) ? Disabled : currentHotkey!.Trim();
         ShowHotkey(_hotkeyText);
         MinimizeToTrayCheck.IsChecked = minimizeToTray;
@@ -63,13 +69,19 @@ public partial class SettingsDialog : Window
     /// <paramref name="tryApply"/> is called with the choices on Save and
     /// returns an error message, or null once applied. Returns the saved
     /// choices, or null if cancelled.
+    /// <paramref name="showRecentFiles"/> (given the dialog as owner) and
+    /// <paramref name="customiseLayout"/> are the workspace's own settings;
+    /// the layout one runs once this has saved and closed.
     /// </summary>
     public static SettingsChoice? Show(Window owner, string? currentHotkey, bool minimizeToTray, bool startWithWindows,
         AppTheme theme, HighlightPreset highlight, Action<AppTheme, HighlightPreset> preview,
-        Func<SettingsChoice, string?> tryApply)
+        Func<SettingsChoice, string?> tryApply, Action<Window>? showRecentFiles = null, Action? customiseLayout = null)
     {
-        var dialog = new SettingsDialog(owner, currentHotkey, minimizeToTray, startWithWindows, theme, highlight, preview, tryApply);
+        var dialog = new SettingsDialog(owner, currentHotkey, minimizeToTray, startWithWindows, theme, highlight, preview, tryApply,
+            showRecentFiles, customiseLayout);
         dialog.ShowDialog();
+        if (dialog.SavedSettings is not null && dialog._customiseRequested)
+            customiseLayout?.Invoke();
         return dialog.SavedSettings;
     }
 
@@ -167,7 +179,20 @@ public partial class SettingsDialog : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    private void SaveButton_Click(object sender, RoutedEventArgs e) => Save();
+
+    private void CustomiseLayout_Click(object sender, RoutedEventArgs e)
+    {
+        _customiseRequested = true;
+        Save();
+        // Saving failed (the error is shown): stay here.
+        if (SavedSettings is null)
+            _customiseRequested = false;
+    }
+
+    private void RecentFiles_Click(object sender, RoutedEventArgs e) => _showRecentFiles?.Invoke(this);
+
+    private void Save()
     {
         var choice = new SettingsChoice(_hotkeyText,
             MinimizeToTrayCheck.IsChecked == true, StartWithWindowsCheck.IsChecked == true,

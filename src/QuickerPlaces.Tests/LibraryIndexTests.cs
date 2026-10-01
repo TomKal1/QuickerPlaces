@@ -54,6 +54,9 @@ public sealed class LibraryIndexTests
         Assert.Equal(3, item.RecentCount);
         Assert.Equal(T0.AddHours(2), item.LastUsedAt);
         Assert.Equal("Saved place · Visited 3 times", item.SourceText);
+
+        // The Where from column names the sources only; the count has its own Opens column.
+        Assert.Equal("Saved place · Recent", item.WhereFromText);
     }
 
     [Fact]
@@ -75,6 +78,7 @@ public sealed class LibraryIndexTests
         Assert.True(item.IsSaved);
         Assert.True(item.IsRecent);
         Assert.Equal("In Tower B, Review · Opened once", item.SourceText);
+        Assert.Equal("In Tower B, Review · Recent", item.WhereFromText);
         Assert.Equal(@"C:\Jobs", item.Folder);
     }
 
@@ -99,5 +103,20 @@ public sealed class LibraryIndexTests
         var item = new LibraryItem(LibraryKind.Pdf, "Acme.pdf", @"C:\Jobs\Acme.pdf", null, new[] { "Tower B" }, new[] { "markups" }, 0, null);
 
         Assert.Equal(expected, LibraryIndex.Matches(item, search));
+    }
+
+    [Fact]
+    public void AFoldersTimeInRecents_IsKept_AndAFilesIsZero()
+    {
+        var items = LibraryIndex.Build(
+            Array.Empty<Place>(),
+            Array.Empty<SessionSnapshot>(),
+            new[] { new FolderActivity(@"C:\Jobs\Acme", TimeSpan.FromMinutes(25), 3, DateTimeOffset.UnixEpoch) },
+            new[] { new RecentFileSummary(@"C:\Jobs\Acme\Plan.pdf", DocumentKind.Pdf, 1, DateTimeOffset.UnixEpoch) });
+
+        Assert.Equal(TimeSpan.FromMinutes(25), items.Single(i => i.Kind == LibraryKind.Folder).RecentTime);
+        Assert.Equal(TimeSpan.Zero, items.Single(i => i.Kind == LibraryKind.Pdf).RecentTime);
+        Assert.Equal(@"C:\Jobs\Acme", items.Single(i => i.Kind == LibraryKind.Folder).TreePath);
+        Assert.Equal(@"C:\Jobs\Acme", items.Single(i => i.Kind == LibraryKind.Pdf).TreePath);
     }
 }

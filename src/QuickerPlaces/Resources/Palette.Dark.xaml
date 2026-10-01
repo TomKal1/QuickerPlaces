@@ -30,12 +30,21 @@
     <SolidColorBrush x:Key="Leather.Deep" Color="#FF7A4C2B" />
     <SolidColorBrush x:Key="On.Leather" Color="#FF26170D" />
     <SolidColorBrush x:Key="On.Leather.Badge" Color="#FFF6E7D6" />
+    <SolidColorBrush x:Key="Session" Color="#FF36679A" />
+    <SolidColorBrush x:Key="Session.Deep" Color="#FF234B75" />
+    <SolidColorBrush x:Key="On.Session" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="On.Session.Badge" Color="#FFE6F0FA" />
     <SolidColorBrush x:Key="Heat.0" Color="#FF1C211F" />
     <SolidColorBrush x:Key="Heat.1" Color="#FF3A2E24" />
     <SolidColorBrush x:Key="Heat.2" Color="#FF6A4930" />
     <SolidColorBrush x:Key="Heat.3" Color="#FFA06A40" />
     <SolidColorBrush x:Key="Heat.4" Color="#FFD9A068" />
     <SolidColorBrush x:Key="Heat.Untracked" Color="#FF191D1C" />
+    <!-- The day number on each heat level of the month view (checked at 4.5:1 by PaletteFileTests); empty days use Text.Secondary. -->
+    <SolidColorBrush x:Key="Heat.Text.1" Color="#FFEBE9E3" />
+    <SolidColorBrush x:Key="Heat.Text.2" Color="#FFEBE9E3" />
+    <SolidColorBrush x:Key="Heat.Text.3" Color="#FF000000" />
+    <SolidColorBrush x:Key="Heat.Text.4" Color="#FF26170D" />
     <SolidColorBrush x:Key="Preset.Green" Color="#FF2A7563" />
     <SolidColorBrush x:Key="Preset.Blue" Color="#FF36679A" />
     <SolidColorBrush x:Key="Preset.Red" Color="#FFB1372F" />

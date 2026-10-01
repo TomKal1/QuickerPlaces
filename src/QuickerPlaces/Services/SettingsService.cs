@@ -45,8 +45,7 @@ public sealed class SettingsService
 
     private static string DefaultSettingsFilePath()
     {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(root, AppInfo.Publisher, AppInfo.Name, "settings.json");
+        return Path.Combine(AppDataFolders.Local, "settings.json");
     }
 
     /// <summary>Full path to settings.json.</summary>

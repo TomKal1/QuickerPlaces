@@ -84,6 +84,9 @@ public sealed record LibraryItem(
     int RecentCount,
     DateTimeOffset? LastUsedAt)
 {
+    /// <summary>Who this item is, whichever source named it (<see cref="ResourceIdentity"/>): stable across refreshes.</summary>
+    public string Key => ResourceIdentity.Key(Kind, Location);
+
     public bool IsSavedPlace => Place is not null;
 
     public bool IsInSession => Sessions.Count > 0;
@@ -96,6 +99,12 @@ public sealed record LibraryItem(
 
     /// <summary>The folder a file or folder is in; "" for a link.</summary>
     public string Folder => Kind == LibraryKind.Link ? "" : DocumentPaths.Folder(Location);
+
+    /// <summary>Time spent in a folder in the period (Recents); zero for anything else.</summary>
+    public TimeSpan RecentTime { get; init; }
+
+    /// <summary>What places it among tracked folders: a folder itself, or the folder a file is in; "" for a link.</summary>
+    public string TreePath => Kind == LibraryKind.Folder ? Location : Folder;
 
     /// <summary>"Saved place · In Tower B, Admin · Opened 3 times", for the Where column.</summary>
     public string SourceText
@@ -116,6 +125,26 @@ public sealed record LibraryItem(
             return string.Join(" · ", parts);
         }
     }
+
+    /// <summary>
+    /// "Saved place · In Tower B, Admin · Recent", for the Where from column: which
+    /// sources know the item. The count of visits has its own Visits column.
+    /// </summary>
+    public string WhereFromText
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (IsSavedPlace)
+                parts.Add("Saved place");
+            if (IsInSession)
+                parts.Add($"In {string.Join(", ", Sessions)}");
+            if (IsRecent)
+                parts.Add("Recent");
+
+            return string.Join(" · ", parts);
+        }
+    }
 }
 
 /// <summary>
@@ -124,8 +153,7 @@ public sealed record LibraryItem(
 /// with separate switches; this only reads them. One row per thing: the
 /// same folder saved as a place and visited in Recents is one row, and a
 /// file in two sessions and in Recent Files is one row with both sessions'
-/// tags. Paths are compared ignoring case and separators; links exactly as
-/// saved, ignoring case.
+/// tags. What counts as the same thing is <see cref="ResourceIdentity"/>.
 ///
 /// Pure logic; UI-free and linked into the test project.
 /// </summary>
@@ -137,11 +165,11 @@ public static class LibraryIndex
         IEnumerable<FolderActivity> recentFolders,
         IEnumerable<RecentFileSummary> recentFiles)
     {
-        var items = new Dictionary<string, Builder>(StringComparer.OrdinalIgnoreCase);
+        var items = new Dictionary<string, Builder>(ResourceIdentity.Comparer);
 
         Builder Get(LibraryKind kind, string location)
         {
-            var key = $"{kind}|{Key(kind, location)}";
+            var key = ResourceIdentity.Key(kind, location);
             if (!items.TryGetValue(key, out var builder))
                 items[key] = builder = new Builder(kind, location);
             return builder;
@@ -171,6 +199,7 @@ public static class LibraryIndex
         {
             var item = Get(LibraryKind.Folder, folder.Folder);
             item.RecentCount += Math.Max(1, folder.Visits);
+            item.RecentTime += folder.Time;
             item.Use(folder.LastVisited);
         }
 
@@ -199,13 +228,6 @@ public static class LibraryIndex
             item.Sessions.Any(s => s.Contains(word, StringComparison.CurrentCultureIgnoreCase)));
     }
 
-    private static string Key(LibraryKind kind, string location) => kind switch
-    {
-        LibraryKind.Link => location.Trim(),
-        LibraryKind.Folder => RootPathMatcher.Normalize(location) ?? location.Trim(),
-        _ => DocumentPaths.Normalize(location) ?? location.Trim(),
-    };
-
     private sealed class Builder
     {
         private readonly List<string> _sessions = new();
@@ -221,6 +243,7 @@ public static class LibraryIndex
         public string Location { get; }
         public Place? Place { get; set; }
         public int RecentCount { get; set; }
+        public TimeSpan RecentTime { get; set; }
         public DateTimeOffset? LastUsedAt { get; private set; }
 
         public void Use(DateTimeOffset? at)
@@ -245,7 +268,10 @@ public static class LibraryIndex
             // A saved place keeps its location as saved; otherwise the first spelling seen.
             var location = Place?.Resource ?? Location;
             var name = Place?.Alias ?? (Kind == LibraryKind.Link ? location : DocumentPaths.FileName(location));
-            return new LibraryItem(Kind, name, location, Place, _sessions.ToArray(), _tags.ToArray(), RecentCount, LastUsedAt);
+            return new LibraryItem(Kind, name, location, Place, _sessions.ToArray(), _tags.ToArray(), RecentCount, LastUsedAt)
+            {
+                RecentTime = RecentTime,
+            };
         }
     }
 }

@@ -1,17 +1,21 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuickerPlaces.Models;
+using QuickerPlaces.Mvvm;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
+using QuickerPlaces.Views.Panels;
 
 namespace QuickerPlaces.Views;
 
@@ -33,12 +37,13 @@ public partial class MainWindow : Window
     private GlobalHotkey? _globalHotkey;
     private string? _globalHotkeyError;
     private WindowState _stateBeforeMinimize = WindowState.Normal;
-    private Point _bubbleDragStartPoint;
+    private readonly Action _focusSearch;
+    private readonly WorkspaceView? _workspaceView;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
         ActivityStore activityStore, ActivityTrackingHost activityHost, SessionStore sessionStore,
         WindowsRecentItems recentItems, PlacesService placesService, RecentFilesStore recentFilesStore, RecentFilesHost recentFilesHost,
-        ThemeManager themeManager)
+        ThemeManager themeManager, WorkspaceLayoutService? workspaceLayout = null)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -54,7 +59,47 @@ public partial class MainWindow : Window
         _themeManager = themeManager;
         RestoreWindowState(settings);
         UpdateActivityIndicator();
+        AddSessionShortcuts();
+
+        if (workspaceLayout is null)
+        {
+            var places = new PlacesPanel { CollapsesWithWindow = true };
+            MainContent.Content = places;
+            _focusSearch = places.FocusSearch;
+            return;
+        }
+
+        // The workspace (configurable canvas plan M3), with --workspace: one
+        // Library query shared by its panels, and the Library and Sessions
+        // windows' content in panels, so their buttons go.
+        var shell = new WindowsShell();
+        var library = new LibraryViewModel(placesService, sessionStore, activityStore, recentFilesStore,
+            new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+        _workspaceView = new WorkspaceView();
+        var workspace = new WorkspaceViewModel(workspaceLayout, library);
+        _workspaceView.Attach(workspace, viewModel, sessionStore,
+            new WindowsOpenDocumentProbe(recentItems), recentFilesHost, activityHost,
+            activityStore, new NetworkDriveResolver(), UpdateActivityIndicator);
+
+        // Desk shows favourites as a panel; the strip is for layouts that don't (Desk layout design §5).
+        void ShowFavouritesStrip() => FavouritesStrip.Visibility = workspace.ShowsFavouritesPanel ? Visibility.Collapsed : Visibility.Visible;
+        workspace.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WorkspaceViewModel.ShowsFavouritesPanel))
+                ShowFavouritesStrip();
+        };
+        ShowFavouritesStrip();
+        MainContent.Content = _workspaceView;
+        HeaderSearchHost.Content = _workspaceView.TakeSearchArea();
+        _focusSearch = _workspaceView.FocusSearch;
+        LibraryButton.Visibility = Visibility.Collapsed;
+        SessionsButton.Visibility = Visibility.Collapsed;
+        // The Recents panel does what the Recents window did (Desk layout design §6); the tray still shows tracking.
+        ActivityButton.Visibility = Visibility.Collapsed;
     }
+
+    /// <summary>At exit, before the tracking hosts go: writes the workspace's waiting changes and stops its refreshes.</summary>
+    public void CloseWorkspace() => _workspaceView?.Close();
 
     private void ActivityButton_Click(object sender, RoutedEventArgs e)
     {
@@ -64,6 +109,39 @@ public partial class MainWindow : Window
             (folder, owner) => viewModel.AddFolderFromActivity(folder, owner));
         window.ShowDialog();
         UpdateActivityIndicator();
+
+        // Tracked folders may have changed, and with them what the workspace lists.
+        _workspaceView?.RequestReload();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+1 to Ctrl+Shift+9 open the first nine sessions in the
+    /// order of the cards, as Ctrl+1 to Ctrl+9 open the favourites. Window-wide, so they
+    /// work whether or not the Sessions panel is shown.
+    /// </summary>
+    private void AddSessionShortcuts()
+    {
+        for (var position = 0; position < SessionStore.ShortcutCount; position++)
+        {
+            var index = position;
+            var key = Key.D1 + index;
+            InputBindings.Add(new KeyBinding(new RelayCommand(() => OpenSessionAt(index)), key, ModifierKeys.Control | ModifierKeys.Shift));
+        }
+    }
+
+    /// <summary>Opens the session at a 0-based place in the order of the cards. A place with no session does nothing.</summary>
+    private void OpenSessionAt(int index)
+    {
+        if (_sessionStore.Sessions.ElementAtOrDefault(index) is not { } session)
+            return;
+
+        if (_workspaceView?.TryOpenInSessionsPanel(session.Id) == true)
+            return;
+
+        var outcome = new SessionLauncher(_sessionStore, new WindowsShell()).Open(session);
+        if (outcome.Summary is { } problem)
+            MessageForm.Show(problem, AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
+        _workspaceView?.NoteSessionOpened();
     }
 
     private void SessionsButton_Click(object sender, RoutedEventArgs e)
@@ -74,25 +152,15 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel viewModel) return;
         var shell = new WindowsShell();
         var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
-            new PlaceLauncher(_placesService, shell), shell);
-        LibraryWindow.Show(this, library, _recentFilesHost, viewModel.NotePlaceOpened);
-    }
-
-    private void OptionsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (OptionsButton.ContextMenu is not { } menu) return;
-        menu.PlacementTarget = OptionsButton;
-        menu.IsOpen = true;
+            new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+        LibraryWindow.Show(this, library, _recentFilesHost, _activityHost, viewModel.NotePlaceOpened);
     }
 
     public void UpdateActivityIndicator()
     {
         var count = _activityStore.EnabledRoots().Count;
-        var text = count > 0 && _activityHost.IsPaused
-            ? "Recents — tracking paused"
-            : count > 0
-            ? $"Recents — tracking {count} {(count == 1 ? "folder" : "folders")}"
-            : _activityStore.Roots.Count > 0 ? "Recents — paused" : "Recents — no folders tracked";
+        var summary = ActivityFormat.TrackingSummary(count, _activityStore.Roots.Count, _activityHost.IsPaused);
+        var text = $"Recents — {char.ToLowerInvariant(summary[0])}{summary[1..]}";
         ActivityButton.ToolTip = text;
         AutomationProperties.SetName(ActivityButton, text);
         ActivityDot.Visibility = count > 0 && !_activityHost.IsPaused ? Visibility.Visible : Visibility.Collapsed;
@@ -172,7 +240,9 @@ public partial class MainWindow : Window
         var saved = SettingsDialog.Show(this, _settings.GlobalHotkey,
             _settings.MinimizeToTray, _settings.StartWithWindows,
             ThemePreference.ParseTheme(_settings.Theme), ThemePreference.ParseHighlight(_settings.Highlight),
-            _themeManager.Apply, ApplySettingsChoice);
+            _themeManager.Apply, ApplySettingsChoice,
+            _workspaceView is null ? null : _workspaceView.ShowRecentFiles,
+            _workspaceView is null ? null : _workspaceView.BeginCustomise);
         if (saved is null)
         {
             // The app is exiting (tray Exit, session end) and closed this
@@ -282,23 +352,11 @@ public partial class MainWindow : Window
             }
         }
 
-        SearchBox.Focus();
-        SearchBox.SelectAll();
+        _focusSearch();
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        // The remembered sort is already applied to the view (MainViewModel's
-        // constructor); this shows its arrow. Done once the grid is loaded, so
-        // nothing in its own start-up can clear the arrow afterwards. A
-        // remembered sort with no column to show it (Favourite, whose column
-        // became the star beside the alias) would be a sort nobody can see
-        // or undo, so it goes back to stored order instead.
-        if (DataContext is MainViewModel { CurrentSort: { } remembered } viewModel && !HasColumnFor(remembered.Key))
-            viewModel.ClearSort();
-
-        UpdateSortArrows();
-
         // Surfaced here (rather than from OnSourceInitialized, where the
         // error is found) so a loaded, on-screen window exists for
         // MessageForm to center on. A problem loading places.json never
@@ -373,115 +431,8 @@ public partial class MainWindow : Window
             viewModel.PersistToSettings();
     }
 
-    // -----------------------------------------------------------------
-    // Search box + keyboard shortcuts. Window-wide shortcuts are
-    // KeyBindings in MainWindow.xaml; these handlers cover the ones that
-    // depend on focus (the search box, the grid's selected row).
-    // -----------------------------------------------------------------
-
     /// <summary>Ctrl+F: jump to the search box, selecting any existing query so typing replaces it.</summary>
-    private void Find_Executed(object sender, ExecutedRoutedEventArgs e)
-    {
-        SearchBox.Focus();
-        SearchBox.SelectAll();
-    }
-
-    /// <summary>
-    /// Makes the search box a launcher: Enter opens the top result, Down
-    /// moves into the grid to pick a different one, and Esc clears the
-    /// search (or, if it's already empty, hands focus to the grid).
-    /// </summary>
-    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (DataContext is not MainViewModel viewModel)
-            return;
-
-        switch (e.Key)
-        {
-            case Key.Escape:
-                if (viewModel.IsSearching)
-                    viewModel.SearchText = string.Empty;
-                else
-                    FocusGridRow(PlacesGrid.SelectedIndex);
-                e.Handled = true;
-                break;
-
-            case Key.Enter:
-                if (PlacesGrid.Items.Count > 0 && PlacesGrid.Items[0] is PlaceViewModel top)
-                    viewModel.OpenCommand.Execute(top);
-                e.Handled = true;
-                break;
-
-            case Key.Down:
-                FocusGridRow(0);
-                e.Handled = true;
-                break;
-        }
-    }
-
-    /// <summary>Row shortcuts, acting on the selected row: Enter opens, F2 renames, Ctrl+E edits the path/URL, Ctrl+D toggles favourite, Ctrl+C copies the path/URL, Delete removes.</summary>
-    private void PlacesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (PlacesGrid.SelectedItem is not PlaceViewModel place || DataContext is not MainViewModel viewModel)
-            return;
-
-        var ctrl = Keyboard.Modifiers == ModifierKeys.Control;
-        var none = Keyboard.Modifiers == ModifierKeys.None;
-
-        var command = e.Key switch
-        {
-            Key.Enter when none => viewModel.OpenCommand,
-            Key.F2 when none => viewModel.RenameAliasCommand,
-            Key.E when ctrl => viewModel.EditResourceCommand,
-            Key.D when ctrl => viewModel.ToggleFavouriteCommand,
-            // Replaces DataGrid's own Ctrl+C, which copies every cell of the row.
-            Key.C when ctrl => viewModel.CopyResourceCommand,
-            Key.Delete when none => viewModel.RemoveCommand,
-            _ => null
-        };
-
-        if (command is null)
-            return;
-
-        // Handled first: DataGrid's own Enter handling would otherwise
-        // also move the selection down a row.
-        e.Handled = true;
-        var index = PlacesGrid.SelectedIndex;
-        command.Execute(place);
-
-        // Remove no longer opens a confirmation, so nothing hands the focus
-        // back: the focused row has just gone, and the next Delete or arrow
-        // key would go nowhere. Select and focus the row that took its place
-        // (the one before, if it was the last).
-        if (ReferenceEquals(command, viewModel.RemoveCommand) && !PlacesGrid.Items.Contains(place))
-        {
-            if (PlacesGrid.Items.Count > 0)
-                FocusGridRow(index);
-            else
-                PlacesGrid.Focus();
-        }
-    }
-
-    /// <summary>Selects and keyboard-focuses the grid row at <paramref name="index"/> (clamped; first row if nothing was selected).</summary>
-    private void FocusGridRow(int index)
-    {
-        if (PlacesGrid.Items.Count == 0)
-            return;
-
-        index = System.Math.Clamp(index, 0, PlacesGrid.Items.Count - 1);
-        var item = PlacesGrid.Items[index];
-        PlacesGrid.SelectedItem = item;
-        PlacesGrid.ScrollIntoView(item);
-
-        // Focusing the DataGrid itself only focuses the grid, not a row, so
-        // arrow keys wouldn't move from the selection. Focus the row's
-        // container once it has been generated.
-        PlacesGrid.UpdateLayout();
-        if (PlacesGrid.ItemContainerGenerator.ContainerFromIndex(index) is DataGridRow row)
-            row.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
-        else
-            PlacesGrid.Focus();
-    }
+    private void Find_Executed(object sender, ExecutedRoutedEventArgs e) => _focusSearch();
 
     // -----------------------------------------------------------------
     // Status bar pause (D19). The bar stays up while the pointer is over
@@ -509,161 +460,5 @@ public partial class MainWindow : Window
             viewModel.PauseStatusTimer();
         else
             viewModel.ResumeStatusTimer();
-    }
-
-    // -----------------------------------------------------------------
-    // Sorting (Phase 3 D29). The DataGrid's own sorting is replaced, not
-    // extended: it would set SortDescriptions, which can't express "never
-    // opened is oldest" or the alias tie-break, and each column's first
-    // direction is PlaceSort's to choose. Each column's SortMemberPath is its PlaceSortKey
-    // name, and nothing else reads it.
-    // -----------------------------------------------------------------
-
-    private void PlacesGrid_Sorting(object sender, DataGridSortingEventArgs e)
-    {
-        e.Handled = true;
-
-        if (DataContext is not MainViewModel viewModel ||
-            !Enum.TryParse<PlaceSortKey>(e.Column.SortMemberPath, out var key))
-            return;
-
-        viewModel.SortBy(key);
-        UpdateSortArrows();
-    }
-
-    private bool HasColumnFor(PlaceSortKey key)
-    {
-        foreach (var column in PlacesGrid.Columns)
-        {
-            if (Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var columnKey) && columnKey == key)
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>Shows the current sort's arrow on its column, and none on the others.</summary>
-    private void UpdateSortArrows()
-    {
-        var sort = (DataContext as MainViewModel)?.CurrentSort;
-
-        foreach (var column in PlacesGrid.Columns)
-        {
-            column.SortDirection = sort is { } active && Enum.TryParse<PlaceSortKey>(column.SortMemberPath, out var key) && key == active.Key
-                ? active.Direction
-                : null;
-        }
-    }
-
-    /// <summary>Double-click on a grid row = Open (SI §6.3), the same action as the row's top context-menu item.</summary>
-    private void Row_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        // A quick double-click on the row's favourite star is two toggles,
-        // not an open: the row raises MouseDoubleClick even though the star
-        // button handled both clicks.
-        if (IsInsideButton(e.OriginalSource as DependencyObject))
-            return;
-
-        if (sender is DataGridRow { Item: PlaceViewModel place } && DataContext is MainViewModel viewModel)
-            viewModel.OpenCommand.Execute(place);
-    }
-
-    private static bool IsInsideButton(DependencyObject? element)
-    {
-        for (var current = element; current is not null and not DataGridRow;
-             current = current is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
-        {
-            if (current is System.Windows.Controls.Primitives.ButtonBase)
-                return true;
-        }
-
-        return false;
-    }
-
-    // -----------------------------------------------------------------
-    // Favourite bubble drag-to-reorder (SI §6.4). A Button already
-    // consumes the mouse for its own Click, so reordering is driven from
-    // Preview* events: PreviewMouseLeftButtonDown records where the drag
-    // could start, PreviewMouseMove checks whether the pointer has moved
-    // past the OS drag threshold and — only then — starts a WPF drag/drop
-    // operation. A plain click (no meaningful movement) never reaches
-    // DoDragDrop, so it still fires the Button's own Click/Open normally.
-    // -----------------------------------------------------------------
-
-    private void Bubble_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        => _bubbleDragStartPoint = e.GetPosition(null);
-
-    private void Bubble_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed)
-            return;
-
-        if (sender is not Button { DataContext: PlaceViewModel place } button)
-            return;
-
-        var current = e.GetPosition(null);
-        var movedX = System.Math.Abs(current.X - _bubbleDragStartPoint.X);
-        var movedY = System.Math.Abs(current.Y - _bubbleDragStartPoint.Y);
-
-        if (movedX < SystemParameters.MinimumHorizontalDragDistance &&
-            movedY < SystemParameters.MinimumVerticalDragDistance)
-            return;
-
-        DragDrop.DoDragDrop(button, new DataObject(typeof(PlaceViewModel), place), DragDropEffects.Move);
-    }
-
-    private void FavouritesItemsControl_DragOver(object sender, DragEventArgs e)
-    {
-        e.Effects = e.Data.GetDataPresent(typeof(PlaceViewModel)) ? DragDropEffects.Move : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    private void FavouritesItemsControl_Drop(object sender, DragEventArgs e)
-    {
-        if (!e.Data.GetDataPresent(typeof(PlaceViewModel)))
-            return;
-
-        if (e.Data.GetData(typeof(PlaceViewModel)) is not PlaceViewModel dragged)
-            return;
-
-        if (DataContext is not MainViewModel viewModel)
-            return;
-
-        var dropPosition = e.GetPosition(FavouritesItemsControl);
-        var targetPlace = FindPlaceUnderPoint(dropPosition);
-
-        // Dropped back onto itself (a short wobble rather than a real
-        // move): leave it where it was. Only a drop on empty space — past
-        // the last bubble, or in a gap — means "move to the end".
-        if (ReferenceEquals(targetPlace, dragged))
-            return;
-
-        var items = viewModel.FavouritePlaces;
-        var targetIndex = targetPlace is not null
-            ? items.IndexOf(targetPlace)
-            : items.Count - 1;
-
-        viewModel.MoveFavourite(dragged, targetIndex);
-    }
-
-    /// <summary>
-    /// Walks up from whatever visual was hit at <paramref name="point"/>
-    /// (inside FavouritesItemsControl) until it finds an element whose
-    /// DataContext is a PlaceViewModel — i.e. which bubble, if any, the
-    /// drop landed on.
-    /// </summary>
-    private PlaceViewModel? FindPlaceUnderPoint(Point point)
-    {
-        var hit = VisualTreeHelper.HitTest(FavouritesItemsControl, point)?.VisualHit;
-
-        while (hit is not null)
-        {
-            if (hit is FrameworkElement { DataContext: PlaceViewModel place })
-                return place;
-
-            hit = VisualTreeHelper.GetParent(hit);
-        }
-
-        return null;
     }
 }

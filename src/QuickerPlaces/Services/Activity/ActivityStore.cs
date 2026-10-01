@@ -375,6 +375,28 @@ public sealed class ActivityStore
         }
     }
 
+    /// <summary>
+    /// A root's kept folder detail (up to <see cref="DetailDays"/> days), one
+    /// entry per day with activity, oldest first, or null for an unknown root.
+    /// What the Library reads to filter the year strip by folder: day totals
+    /// outlive this detail, so filtered heat before it is not known.
+    /// </summary>
+    public IReadOnlyList<FolderDay>? QueryFolderDays(string rootId)
+    {
+        lock (_sync)
+        {
+            return Find(rootId)?.Days
+                .OrderBy(d => d.Key)
+                .Select(d => new FolderDay(d.Key, d.Value.Folders
+                    .Select(f => new FolderActivity(f.Key, TimeSpan.FromMilliseconds(f.Value.Milliseconds), f.Value.Visits, f.Value.LastSeenAt))
+                    .ToList()))
+                .ToList();
+        }
+    }
+
+    /// <summary>The first local date whose folder detail is still kept.</summary>
+    public DateOnly DetailKeptFrom => Today().AddDays(-(DetailDays - 1));
+
     /// <summary>A root's stored day totals (up to 365 days), for the calendar (D20), or null for an unknown root.</summary>
     public IReadOnlyDictionary<DateOnly, ActivityDayTotal>? QueryDayTotals(string rootId)
     {

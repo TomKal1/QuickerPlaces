@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows;
+using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 
 namespace QuickerPlaces.Views;
@@ -16,9 +17,7 @@ public partial class AddRootDialog : Window
         InitializeComponent();
         Owner = owner;
         RootPathText.Text = path;
-        StorageText.Text = "Stored in " + Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "QuickerPlaces", "QuickerPlaces", "activity.json") + ".";
+        StorageText.Text = "Stored in " + Path.Combine(AppDataFolders.Local, "activity.json") + ".";
         _suggestedEquivalent = resolver.GetNetworkPath(path);
         if (_suggestedEquivalent is not null)
         {

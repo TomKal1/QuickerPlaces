@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Tests.Fakes;
@@ -45,10 +46,10 @@ public sealed class SessionsViewModelTests
     }
 
     [Fact]
-    public void Rows_AreMostRecentFirst_TheFirstIsSelected_AndItsFilesListed()
+    public void Rows_AreInTheSavedOrder_TheFirstIsSelected_AndItsFilesListed()
     {
-        Add("Tower A", new[] { "Tower A" }, Spec);
         Add("Tower B", new[] { "Tower B", "Markups" }, A101, A102);
+        Add("Tower A", new[] { "Tower A" }, Spec);
 
         var vm = NewViewModel();
 
@@ -58,6 +59,173 @@ public sealed class SessionsViewModelTests
         Assert.Equal(@"C:\Jobs\Tower B", vm.SelectedFiles[0].Folder);
         Assert.StartsWith("2 files · saved ", vm.SelectedRow.DetailText);
         Assert.Equal(new[] { "All tags", "Markups (1)", "Tower A (1)", "Tower B (1)" }, vm.TagFilters.Select(t => t.Label));
+    }
+
+    [Fact]
+    public void ACardsDetailLine_GivesDatesOnly_NoTimeOfDay()
+    {
+        _shell.ExistingFiles.Add(Spec);
+        var tower = Add("Tower A", Array.Empty<string>(), Spec);
+        var vm = NewViewModel();
+        vm.OpenSelected();
+
+        // The zone is ten hours ahead, so the date shown is the zone's, and no time follows it.
+        var zoned = TimeZoneInfo.ConvertTime(tower.UpdatedAt, TestZones.PlusTen).DateTime;
+        var saved = zoned.ToString("d", CultureInfo.CurrentCulture);
+        var detail = vm.Rows.Single().DetailText;
+
+        Assert.StartsWith($"1 file · saved {saved} · opened ", detail);
+        Assert.DoesNotContain(zoned.ToString("t", CultureInfo.CurrentCulture), detail);
+    }
+
+    [Fact]
+    public void ACardsNumber_IsItsPlaceInTheOrder_OneToNine_AndNoneAfter()
+    {
+        for (var i = 1; i <= 11; i++)
+            Add($"Session {i:00}", Array.Empty<string>(), A101);
+
+        var vm = NewViewModel();
+
+        Assert.Equal(new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", null, null }, vm.Rows.Select(r => r.ShortcutText));
+        Assert.Equal(new[] { true, true, true, true, true, true, true, true, true, false, false }, vm.Rows.Select(r => r.HasShortcut));
+        Assert.Equal("Ctrl+Shift+3 opens this session", vm.Rows[2].ShortcutToolTip);
+        Assert.Equal("Ctrl+Shift+9 opens this session", vm.Rows[8].ShortcutToolTip);
+        Assert.Null(vm.Rows[9].ShortcutToolTip);
+    }
+
+    private SessionsViewModel NoSelectionViewModel() => new(_store, new SessionLauncher(_store, _shell), TestZones.PlusTen, allowsNoSelection: true);
+
+    [Fact]
+    public void WhereNoSelectionIsAllowed_NoCardIsSelectedUntilOneIsChosen_AndAChoiceCanBePutDown()
+    {
+        Add("Tower A", Array.Empty<string>(), Spec);
+        Add("Tower B", Array.Empty<string>(), A101);
+
+        var vm = NoSelectionViewModel();
+
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.Null(vm.SelectedRow);
+        Assert.False(vm.HasSelection);
+
+        vm.SelectedRow = vm.Rows[1];
+        Assert.Equal("Tower B", vm.SelectedRow!.Name);
+
+        vm.SelectedRow = null;
+        Assert.False(vm.HasSelection);
+        Assert.Empty(vm.SelectedFiles);
+    }
+
+    [Fact]
+    public void ACardsSelection_SurvivesTheCardsBeingRebuilt_AndNoSelectionStaysNone()
+    {
+        Add("Tower A", Array.Empty<string>(), Spec);
+        Add("Tower B", Array.Empty<string>(), A101);
+        var vm = NoSelectionViewModel();
+
+        vm.SearchText = "tower";
+        Assert.Null(vm.SelectedRow);
+
+        vm.SelectedRow = vm.Rows.Single(r => r.Name == "Tower A");
+        vm.SearchText = "tower ";
+        Assert.Equal("Tower A", vm.SelectedRow!.Name);
+
+        // The list clears its own selection while it rebuilds; that is not the user putting the card down.
+        vm.Reload(vm.SelectedRow.Id);
+        Assert.Equal("Tower A", vm.SelectedRow!.Name);
+    }
+
+    [Fact]
+    public void Delete_WhereNoSelectionIsAllowed_LeavesNothingSelected()
+    {
+        Add("Tower A", Array.Empty<string>(), Spec);
+        Add("Tower B", Array.Empty<string>(), A101);
+        var vm = NoSelectionViewModel();
+        vm.SelectedRow = vm.Rows[0];
+
+        vm.DeleteSelected();
+
+        Assert.Single(vm.Rows);
+        Assert.Null(vm.SelectedRow);
+    }
+
+    private static string[] Names(SessionsViewModel vm) => vm.Rows.Select(r => r.Name).ToArray();
+
+    [Fact]
+    public void ADraggedCard_TakesTheDroppedOnCardsPlace_AndItsNumberWithIt()
+    {
+        Add("Tower A", Array.Empty<string>(), Spec);
+        Add("Tower B", Array.Empty<string>(), A101);
+        Add("Tower C", Array.Empty<string>(), A102);
+        var vm = NewViewModel();
+
+        // Down onto C: lands after it, as a dragged favourite does.
+        vm.Move(vm.Rows[0], vm.Rows[2]);
+        Assert.Equal(new[] { "Tower B", "Tower C", "Tower A" }, Names(vm));
+        Assert.Equal(new[] { "1", "2", "3" }, vm.Rows.Select(r => r.ShortcutText));
+        Assert.Equal("\"Tower A\" opens with Ctrl+Shift+3.", vm.StatusMessage);
+
+        // Up onto B: lands before it.
+        vm.Move(vm.Rows[2], vm.Rows[0]);
+        Assert.Equal(new[] { "Tower A", "Tower B", "Tower C" }, Names(vm));
+
+        // Onto empty space: last.
+        vm.Move(vm.Rows[0], null);
+        Assert.Equal(new[] { "Tower B", "Tower C", "Tower A" }, Names(vm));
+    }
+
+    [Fact]
+    public void TheOrderOfTheCards_IsKept_AndDroppingACardOnItselfChangesNothing()
+    {
+        Add("Tower A", Array.Empty<string>(), Spec);
+        Add("Tower B", Array.Empty<string>(), A101);
+        var vm = NewViewModel();
+
+        var writes = _storage.WriteCount;
+        vm.Move(vm.Rows[0], vm.Rows[0]);
+        Assert.Equal(writes, _storage.WriteCount);
+
+        vm.Move(vm.Rows[0], vm.Rows[1]);
+
+        Assert.Equal(new[] { "Tower B", "Tower A" }, Names(NewViewModel()));
+    }
+
+    [Fact]
+    public void ADraggedCard_KeepsTheSelection()
+    {
+        Add("Tower A", Array.Empty<string>(), Spec);
+        var b = Add("Tower B", Array.Empty<string>(), A101);
+        var vm = NoSelectionViewModel();
+        vm.SelectedRow = vm.Rows.Single(r => r.Id == b.Id);
+
+        vm.Move(vm.Rows[0], vm.Rows[1]);
+
+        Assert.Equal(b.Id, vm.SelectedRow!.Id);
+    }
+
+    [Fact]
+    public void Select_SelectsThatSession_AndClearsAFilterThatHidesIt()
+    {
+        Add("Tower A", new[] { "Tower A" }, Spec);
+        var towerB = Add("Tower B", new[] { "Tower B" }, A101);
+        var vm = NewViewModel();
+        vm.SelectedTag = "tower a";
+        Assert.DoesNotContain(vm.Rows, r => r.Id == towerB.Id);
+
+        Assert.True(vm.Select(towerB.Id));
+
+        Assert.Equal("Tower B", vm.SelectedRow!.Name);
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.Null(vm.SelectedTag);
+    }
+
+    [Fact]
+    public void Select_ReturnsFalse_ForASessionThatDoesNotExist()
+    {
+        Add("Tower A", new[] { "Tower A" }, Spec);
+        var vm = NewViewModel();
+
+        Assert.False(vm.Select("missing"));
+        Assert.Equal("Tower A", vm.SelectedRow!.Name);
     }
 
     [Fact]
@@ -153,8 +321,8 @@ public sealed class SessionsViewModelTests
     [Fact]
     public void DeleteSelected_RemovesIt_SelectsTheNext_AndDropsItsUnusedTags()
     {
-        Add("Tower A", new[] { "Admin" }, Spec);
         Add("Tower B", new[] { "Markups" }, A101);
+        Add("Tower A", new[] { "Admin" }, Spec);
         var vm = NewViewModel();
         Assert.Contains("\"Tower B\"", vm.DeleteConfirmation);
         Assert.Contains("Its files stay where they are.", vm.DeleteConfirmation);

@@ -236,22 +236,85 @@ public sealed class SessionStoreTests
     }
 
     [Fact]
-    public void Sessions_AreMostRecentlyUsedFirst_OpeningCounts()
+    public void Sessions_AreInTheSavedOrder_NewOnesLast_AndOpeningOneDoesNotMoveIt()
     {
         var time = new ManualTimeProvider();
         var store = NewStore(time: time);
         var older = Create(store, "Older");
         time.Advance(TimeSpan.FromMinutes(1));
         var newer = Create(store, "Newer", null, A102);
-        Assert.Equal(new[] { "Newer", "Older" }, store.Sessions.Select(s => s.Name));
+        Assert.Equal(new[] { "Older", "Newer" }, store.Sessions.Select(s => s.Name));
+        Assert.Equal(new[] { 0, 1 }, store.Sessions.Select(s => s.Order));
 
         time.Advance(TimeSpan.FromMinutes(1));
-        Assert.True(store.MarkOpened(older.Id).Saved);
+        Assert.True(store.MarkOpened(newer.Id).Saved);
 
         Assert.Equal(new[] { "Older", "Newer" }, store.Sessions.Select(s => s.Name));
-        Assert.Equal(time.UtcNow, store.Find(older.Id)!.LastOpenedAt);
-        Assert.Equal(time.UtcNow, store.Find(older.Id)!.LastUsedAt);
-        Assert.Null(store.Find(newer.Id)!.LastOpenedAt);
+        Assert.Equal(time.UtcNow, store.Find(newer.Id)!.LastOpenedAt);
+        Assert.Equal(time.UtcNow, store.Find(newer.Id)!.LastUsedAt);
+        Assert.Null(store.Find(older.Id)!.LastOpenedAt);
+    }
+
+    [Fact]
+    public void TheShortcutDigit_IsThePlaceInTheOrder_OneToNine_AndNoneAfterTheNinth()
+    {
+        var store = NewStore();
+        for (var i = 1; i <= 12; i++)
+            Create(store, $"S{i:00}");
+
+        Assert.Equal(9, SessionStore.ShortcutCount);
+        Assert.Equal(new int?[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, null, null, null }, store.Sessions.Select(s => s.ShortcutDigit));
+    }
+
+    [Fact]
+    public void Move_DownLandsAfterTheTarget_UpLandsBefore_NoTargetMeansLast_AndTheOrderIsSaved()
+    {
+        var storage = new FakePlacesStorage();
+        var store = NewStore(storage);
+        var a = Create(store, "A");
+        var b = Create(store, "B");
+        var c = Create(store, "C");
+        var d = Create(store, "D");
+        string[] Order(SessionStore s) => s.Sessions.Select(x => x.Name).ToArray();
+
+        Assert.True(store.Move(a.Id, c.Id).Saved);
+        Assert.Equal(new[] { "B", "C", "A", "D" }, Order(store));
+
+        Assert.True(store.Move(d.Id, b.Id).Saved);
+        Assert.Equal(new[] { "D", "B", "C", "A" }, Order(store));
+
+        Assert.True(store.Move(d.Id, null).Saved);
+        Assert.Equal(new[] { "B", "C", "A", "D" }, Order(store));
+
+        Assert.Equal(new[] { "B", "C", "A", "D" }, Order(NewStore(storage)));
+    }
+
+    [Fact]
+    public void Move_ToWhereItIs_OrOfAnUnknownSession_WritesNothing_AndMovingIsNotAnEdit()
+    {
+        var storage = new FakePlacesStorage();
+        var time = new ManualTimeProvider();
+        var store = NewStore(storage, time);
+        var a = Create(store, "A");
+        var b = Create(store, "B");
+        var writes = storage.WriteCount;
+        time.Advance(TimeSpan.FromHours(1));
+
+        Assert.True(store.Move(a.Id, a.Id).Saved);
+        Assert.True(store.Move("gone", b.Id).Saved);
+        Assert.Equal(writes, storage.WriteCount);
+
+        Assert.True(store.Move(a.Id, b.Id).Saved);
+        Assert.Equal(a.UpdatedAt, store.Find(a.Id)!.UpdatedAt);
+    }
+
+    [Fact]
+    public void Move_IsRefusedWhenTheStoreIsReadOnly()
+    {
+        var storage = new FakePlacesStorage { ContentsToReturn = @"{""schemaVersion"":99,""sessions"":[]}" };
+        var store = NewStore(storage);
+
+        Assert.False(store.Move("x", null).Saved);
     }
 
     [Fact]

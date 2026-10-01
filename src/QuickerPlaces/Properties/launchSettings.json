@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "QuickerPlaces (workspace)": {
+      "commandName": "Project",
+      "commandLineArgs": "--workspace"
+    },
+    "QuickerPlaces (places list)": {
+      "commandName": "Project"
+    }
+  }
+}

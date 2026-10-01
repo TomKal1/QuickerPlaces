@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:converters="clr-namespace:QuickerPlaces.Converters"
+        xmlns:panels="clr-namespace:QuickerPlaces.Views.Panels"
         mc:Ignorable="d"
         Title="{Binding AppName}"
         Height="650" Width="1000"
@@ -16,50 +17,6 @@
         <converters:BoolToGridLengthConverter x:Key="BoolToGridLengthConverter" />
         <converters:CollectionCountToVisibilityConverter x:Key="CollectionCountToVisibilityConverter" />
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-
-        <!--
-            Shared per-row / per-card context menu. A ContextMenu opens in its
-            own Popup, outside the tree it's attached to, so every binding
-            goes through PlacementTarget: Tag on the row or card is the
-            window's MainViewModel (the Command half), and
-            PlacementTarget.DataContext is the PlaceViewModel (the parameter).
-        -->
-        <ContextMenu x:Key="PlaceContextMenu">
-            <MenuItem Header="Open" FontWeight="Bold"
-                      Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Copy folder or link" InputGestureText="Ctrl+C"
-                      Command="{Binding PlacementTarget.Tag.CopyResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Rename" InputGestureText="F2"
-                      Command="{Binding PlacementTarget.Tag.RenameAliasCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Edit folder or link" InputGestureText="Ctrl+E"
-                      Command="{Binding PlacementTarget.Tag.EditResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Toggle favourite" InputGestureText="Ctrl+D"
-                      Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <Separator />
-            <!-- No confirmation (roadmap §4.8): the tooltip says where it goes and how to get it back. -->
-            <MenuItem Header="Remove" InputGestureText="Delete"
-                      ToolTip="Moves this place to Recently Deleted. Ctrl+Z puts it back, or restore it from Recently Deleted within 7 days."
-                      Command="{Binding PlacementTarget.Tag.RemoveCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-        </ContextMenu>
-
-        <!-- SI §6.4: a favourite card's own menu offers removal directly. -->
-        <ContextMenu x:Key="BubbleContextMenu">
-            <MenuItem Header="Open" FontWeight="Bold"
-                      Command="{Binding PlacementTarget.Tag.OpenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Copy folder or link"
-                      Command="{Binding PlacementTarget.Tag.CopyResourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Remove from favourites"
-                      Command="{Binding PlacementTarget.Tag.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-        </ContextMenu>
     </Window.Resources>
 
     <!--
@@ -89,18 +46,19 @@
 
     <Grid x:Name="RootGrid" Margin="20,18,20,16">
         <Grid.RowDefinitions>
-            <!-- 0: unsaved-changes banner; 1: header; 2: trim band; 3: favourites; 4: list header -->
-            <RowDefinition Height="Auto" />
+            <!-- 0: unsaved-changes banner; 1: header; 2: trim band; 3: favourites -->
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <!--
-                5: the places table. A RowDefinition has no DataContext of its
-                own, so the collapse binding goes through the root Grid by name.
+                4: the main content, all remaining height, or only what it
+                keeps showing while the list is hidden. A RowDefinition has no
+                DataContext of its own, so the binding goes through the root
+                Grid by name.
             -->
-            <RowDefinition Height="{Binding DataContext.IsGridExpanded, ElementName=RootGrid, Converter={StaticResource BoolToGridLengthConverter}}" />
-            <!-- 6: status bar; collapses when there's no message. -->
+            <RowDefinition Height="{Binding DataContext.IsGridExpanded, ElementName=RootGrid, Converter={StaticResource BoolToGridLengthConverter}, ConverterParameter=Auto}" />
+            <!-- 5: status bar; collapses when there's no message. -->
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -135,6 +93,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Border Style="{StaticResource Border.Monogram}">
                 <TextBlock Text="{Binding Monogram}" FontSize="16" FontWeight="ExtraBold" Foreground="{DynamicResource On.Highlight}"
@@ -145,7 +104,9 @@
                 <TextBlock Text="{Binding SubHeaderText}" Foreground="{DynamicResource Text.Secondary}" Margin="0,2,0,0"
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- The workspace's search box, put here by code, so its panels start higher. -->
+            <ContentControl x:Name="HeaderSearchHost" Grid.Column="2" VerticalAlignment="Center" Focusable="False" IsTabStop="False" />
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="ActivityButton" Click="ActivityButton_Click" Style="{StaticResource Button.Primary}" Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal">
                         <Grid Width="16" Height="16">
@@ -203,294 +164,19 @@
         <Control Grid.Row="2" Style="{StaticResource TrimBand}" Margin="-20,16,-20,14" />
 
         <!--
-            Favourites (SI §6.4): leather cards; click opens, drag reorders
-            (Bubble_PreviewMouseMove starts the drag, FavouritesItemsControl_Drop
-            calls MainViewModel.MoveFavourite).
+            Favourites (SI §6.4): the strip under the header. In the workspace
+            it shows only while the layout has no Favourites panel (Desk
+            layout design §5).
         -->
-        <StackPanel Grid.Row="3" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="FAVOURITES" Style="{StaticResource TextBlock.Caps}" />
-                <TextBlock Text="Ctrl+1 to Ctrl+9 open them from the keyboard" Style="{StaticResource TextBlock.Hint}"
-                           Foreground="{DynamicResource Text.Tertiary}" Margin="10,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-            <Grid Margin="0,8,0,0">
-                <TextBlock Text="Right-click a place below and choose &quot;Toggle favourite&quot; to pin it here."
-                           Foreground="{DynamicResource Text.Tertiary}" Margin="0,0,0,8"
-                           Visibility="{Binding FavouritePlaces.Count, Converter={StaticResource CollectionCountToVisibilityConverter}}" />
-                <ItemsControl x:Name="FavouritesItemsControl" ItemsSource="{Binding FavouritePlaces}"
-                              AllowDrop="True" DragOver="FavouritesItemsControl_DragOver" Drop="FavouritesItemsControl_Drop">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Button Style="{StaticResource Button.Favourite}"
-                                    ToolTip="{Binding ToolTipText}"
-                                    Tag="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext}"
-                                    ContextMenu="{StaticResource BubbleContextMenu}"
-                                    Command="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=DataContext.OpenCommand}"
-                                    CommandParameter="{Binding}"
-                                    AutomationProperties.Name="{Binding Alias}"
-                                    PreviewMouseLeftButtonDown="Bubble_PreviewMouseLeftButtonDown"
-                                    PreviewMouseMove="Bubble_PreviewMouseMove">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border>
-                                        <Border.Style>
-                                            <Style TargetType="Border" BasedOn="{StaticResource Border.FavouriteNumber}">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding FavouriteShortcut}" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <TextBlock Text="{Binding FavouriteShortcut}" FontSize="12" FontWeight="Bold"
-                                                   Foreground="{DynamicResource On.Leather.Badge}"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    </Border>
-                                    <Path Style="{StaticResource Icon.PlaceType}" />
-                                    <TextBlock Text="{Binding Alias}" Margin="7,0,0,0" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
-        </StackPanel>
+        <panels:FavouritesPanel x:Name="FavouritesStrip" Grid.Row="3" Margin="0,0,0,10" />
 
         <!--
-            List header: count, search, options, hide/show. The search box
-            stays while the list is collapsed; typing re-expands it.
+            The main content: the places list (PlacesPanel), or with the
+            workspace switch, the workspace (configurable canvas plan M3). Hide
+            list (Ctrl+H) collapses this row to what the content keeps
+            showing: the list's header, or the workspace's toolbar.
         -->
-        <Grid Grid.Row="4" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="ALL PLACES" Style="{StaticResource TextBlock.Caps}" />
-                <ContentControl Style="{StaticResource Badge.Count}" Content="{Binding PlaceCountText}" Margin="10,0,0,0" />
-            </StackPanel>
-
-            <Border Grid.Column="1" Margin="16,0,8,0" MaxWidth="360" MinWidth="220" HorizontalAlignment="Right"
-                    Height="34" CornerRadius="6" BorderThickness="1" Padding="10,0,5,0"
-                    Background="{DynamicResource Bg.Sunken}">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="BorderBrush" Value="{DynamicResource Border.Strong}" />
-                        <Style.Triggers>
-                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter Property="BorderBrush" Value="{DynamicResource Highlight.Text}" />
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Search}" Stroke="{DynamicResource Text.Tertiary}" />
-                    <TextBox x:Name="SearchBox" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource TextBox.Bare}"
-                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             PreviewKeyDown="SearchBox_PreviewKeyDown"
-                             AutomationProperties.Name="Search places"
-                             ToolTip="Search by name, folder or link (Ctrl+F). Enter opens the top result; Down moves into the list; Esc clears." />
-                    <!-- Placeholder: hit-test invisible so clicks land on the TextBox. -->
-                    <TextBlock Grid.Column="1" Text="Search by name, folder or link" IsHitTestVisible="False"
-                               Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Text.Length, ElementName=SearchBox}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                    <ContentControl Grid.Column="2" Content="Ctrl F" Margin="6,0,0,0">
-                        <ContentControl.Style>
-                            <Style TargetType="ContentControl" BasedOn="{StaticResource Kbd}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsSearching}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ContentControl.Style>
-                    </ContentControl>
-                    <Button Grid.Column="3" Style="{StaticResource Button.IconOnlyCompact}" Width="24" Height="24" Margin="4,0,0,0"
-                            Command="{Binding ClearSearchCommand}" ToolTip="Clear search (Esc)" AutomationProperties.Name="Clear search"
-                            Visibility="{Binding IsSearching, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <Viewbox Width="11" Height="11">
-                            <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Close}" />
-                        </Viewbox>
-                    </Button>
-                </Grid>
-            </Border>
-
-            <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <Button x:Name="OptionsButton" Style="{StaticResource Button.IconOnly}" Click="OptionsButton_Click" Margin="0,0,8,0"
-                        ToolTip="Options" AutomationProperties.Name="Options">
-                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Menu}" />
-                    <Button.ContextMenu>
-                        <ContextMenu Placement="Bottom">
-                            <MenuItem Header="Recently Deleted" ToolTip="Places you removed in the last 7 days"
-                                      Command="{Binding PlacementTarget.DataContext.ShowRecentlyDeletedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
-                                <MenuItem.Icon>
-                                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Trash}" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <Separator />
-                            <MenuItem Header="Places file" ToolTip="Open the folder containing places.json and select the file"
-                                      Command="{Binding PlacementTarget.DataContext.OpenDataFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
-                                <MenuItem.Icon>
-                                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Folder}" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="Import places"
-                                      Command="{Binding PlacementTarget.DataContext.ImportCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Export places"
-                                      Command="{Binding PlacementTarget.DataContext.ExportCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
-                <Button Command="{Binding ToggleGridCommand}" ToolTip="Hide or show the list (Ctrl+H)">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                            <Setter Property="Content" Value="Hide list" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsGridExpanded}" Value="False">
-                                    <Setter Property="Content" Value="Show list" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-            </StackPanel>
-        </Grid>
-
-        <!-- Places table (SI §6.3), collapsible through Row 5's bound height. -->
-        <Grid Grid.Row="5">
-            <DataGrid x:Name="PlacesGrid"
-                      ItemsSource="{Binding PlacesView}"
-                      AutoGenerateColumns="False"
-                      IsReadOnly="True"
-                      CanUserAddRows="False"
-                      SelectionMode="Single"
-                      PreviewKeyDown="PlacesGrid_PreviewKeyDown"
-                      Sorting="PlacesGrid_Sorting">
-                <DataGrid.RowStyle>
-                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-                        <Setter Property="Tag" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext}" />
-                        <Setter Property="ContextMenu" Value="{StaticResource PlaceContextMenu}" />
-                        <EventSetter Event="MouseDoubleClick" Handler="Row_MouseDoubleClick" />
-                    </Style>
-                </DataGrid.RowStyle>
-                <DataGrid.Columns>
-                    <!--
-                        Every SortMemberPath is a PlaceSortKey name read by
-                        PlacesGrid_Sorting (Phase 3 D29). No Type column: the
-                        icon shows it, and a remembered Type sort is dropped
-                        (PlaceSort.ForPlacesGrid). Widths are proportional with
-                        minimums for the 700 px window.
-
-                        Name: type icon, name (15 px), and the star straight
-                        after it. The star is Signal on a favourite, always; on
-                        any other place an outline appears only on the hovered
-                        or selected row. Not focusable; Ctrl+D is the keyboard
-                        route.
-                    -->
-                    <DataGridTemplateColumn Header="NAME" SortMemberPath="Alias" Width="2.4*" MinWidth="140">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <DockPanel VerticalAlignment="Center">
-                                    <Path DockPanel.Dock="Left" Style="{StaticResource Icon.RowPlaceType}" />
-                                    <DockPanel HorizontalAlignment="Left">
-                                        <Button DockPanel.Dock="Right" Margin="4,0,0,0"
-                                                Command="{Binding DataContext.ToggleFavouriteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                CommandParameter="{Binding}"
-                                                ToolTip="{Binding FavouriteToolTip}"
-                                                AutomationProperties.Name="{Binding FavouriteToolTip}">
-                                            <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource Button.GridIcon}">
-                                                    <Setter Property="Visibility" Value="Hidden" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsFavourite}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                            <Path Data="{StaticResource Icon.Star}">
-                                                <Path.Style>
-                                                    <!-- Later triggers win: a favourite stays Signal whether hovered or selected. -->
-                                                    <Style TargetType="Path" BasedOn="{StaticResource Icon}">
-                                                        <Setter Property="Stroke" Value="{DynamicResource Text.Tertiary}" />
-                                                        <Setter Property="Fill" Value="Transparent" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
-                                                                <Setter Property="Stroke" Value="{DynamicResource On.Highlight}" />
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
-                                                                <Setter Property="Stroke" Value="{DynamicResource Text.Primary}" />
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsFavourite}" Value="True">
-                                                                <Setter Property="Stroke" Value="{DynamicResource Signal}" />
-                                                                <Setter Property="Fill" Value="{DynamicResource Signal}" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Path.Style>
-                                            </Path>
-                                        </Button>
-                                        <TextBlock Text="{Binding Alias}" FontSize="15" FontWeight="Medium"
-                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                    </DockPanel>
-                                </DockPanel>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="FOLDER OR LINK" Binding="{Binding Resource}" SortMemberPath="Destination"
-                                        Width="3*" MinWidth="160" ElementStyle="{StaticResource Cell.Path}" />
-                    <!-- Formatted in the view model with the user's regional settings (D31). -->
-                    <DataGridTextColumn Header="LAST OPENED" Binding="{Binding LastOpenedText}" SortMemberPath="LastOpened"
-                                        Width="1.45*" MinWidth="128" MaxWidth="180" ElementStyle="{StaticResource Cell.Text}" />
-                    <DataGridTextColumn Header="OPENS" Binding="{Binding OpenCount}" SortMemberPath="Opens"
-                                        Width="0.6*" MinWidth="62" MaxWidth="90"
-                                        HeaderStyle="{StaticResource DataGridColumnHeader.Centered}"
-                                        ElementStyle="{StaticResource Cell.Centered}" />
-                </DataGrid.Columns>
-            </DataGrid>
-
-            <!-- Explains an empty table: nothing saved yet, or nothing matches the search. -->
-            <TextBlock Text="{Binding EmptyGridMessage}" IsHitTestVisible="False"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,48,16,0"
-                       TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource Text.Tertiary}">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding EmptyGridMessage}" Value="{x:Null}">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
-        </Grid>
+        <ContentControl x:Name="MainContent" Grid.Row="4" Focusable="False" IsTabStop="False" />
 
         <!--
             Status bar: a short confirmation after Remove (with Undo), Undo,
@@ -498,7 +184,7 @@
             after any other (D19); held open while the pointer or keyboard
             focus is inside it. Never takes focus.
         -->
-        <Border x:Name="StatusBar" Grid.Row="6" Margin="0,10,0,0" Height="38" Padding="14,0,5,0" CornerRadius="8"
+        <Border x:Name="StatusBar" Grid.Row="5" Margin="0,10,0,0" Height="38" Padding="14,0,5,0" CornerRadius="8"
                 Background="{DynamicResource Bg.Raised}" BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
                 Focusable="False"
                 MouseEnter="StatusBar_MouseEnter"
