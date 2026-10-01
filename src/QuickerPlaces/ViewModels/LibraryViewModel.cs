@@ -101,6 +101,7 @@ public sealed class LibraryViewModel : ObservableObject
     private int _calendarYear;
     private int _calendarMonth;
     private ActivityCalendarYearResult? _lastYear;
+    private CalendarSource? _builtFrom;
     private string? _selectedKey;
     private LibraryRowViewModel? _selectedRow;
     private string? _statusMessage;
@@ -889,7 +890,10 @@ public sealed class LibraryViewModel : ObservableObject
                 return;
             _result = result;
             BuildRows();
-            BuildCalendar();
+
+            // The strip is hundreds of cells: tearing it down on every keystroke made typing stall, and most searches leave the year's activity as it was.
+            if (!CalendarIsCurrent(result))
+                BuildCalendar();
             OnPropertyChanged(nameof(CalendarCaption));
             OnPropertyChanged(nameof(Coverage));
             OnPropertyChanged(nameof(CoverageNotes));
@@ -962,6 +966,19 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(EmptyText));
     }
 
+    /// <summary>True when the strip on screen was built from what <paramref name="result"/> and the current period and year would build: nothing in it would change.</summary>
+    private bool CalendarIsCurrent(LibraryQueryResult result)
+    {
+        if (_builtFrom is not { } built)
+            return false;
+
+        return built.Year == _calendarYear && built.Today == Today() && built.Period == Period &&
+               built.TrackingStartedOn == result.TrackingStartedOn && SameHeat(built.Heat, result.Heat);
+    }
+
+    private static bool SameHeat(IReadOnlyDictionary<DateOnly, HeatDay> a, IReadOnlyDictionary<DateOnly, HeatDay> b)
+        => ReferenceEquals(a, b) || (a.Count == b.Count && a.All(day => b.TryGetValue(day.Key, out var other) && day.Value == other));
+
     private void BuildCalendar()
     {
         var result = _result;
@@ -970,6 +987,7 @@ public sealed class LibraryViewModel : ObservableObject
         var period = Period;
         var year = ActivityCalendar.BuildYear(days, result?.TrackingStartedOn ?? Today(), Today(), _calendarYear, _culture,
             period?.From, period?.To);
+        _builtFrom = result is null ? null : new CalendarSource(heat, result.TrackingStartedOn, Today(), period, _calendarYear);
 
         CalendarWeeks.Clear();
         foreach (var week in year.Weeks)
@@ -1080,6 +1098,10 @@ public sealed class LibraryViewModel : ObservableObject
 
     private DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone).DateTime);
 }
+
+/// <summary>What the year strip was last built from, so a refresh that changes none of it leaves the strip alone.</summary>
+internal sealed record CalendarSource(IReadOnlyDictionary<DateOnly, HeatDay> Heat, DateOnly TrackingStartedOn, DateOnly Today,
+    (DateOnly From, DateOnly To)? Period, int Year);
 
 /// <summary>One Library row: an item, and the group it is shown in.</summary>
 public sealed class LibraryRowViewModel

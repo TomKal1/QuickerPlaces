@@ -15,14 +15,18 @@ public partial class FilesPanel : UserControl
 {
     private readonly LibraryViewModel _library;
     private readonly FileShelfPanel _shelf;
+    private readonly PlacesPanel _places;
 
     public FilesPanel(PlacesPanel places, FileShelfPanel shelf, LibraryViewModel library)
     {
         _library = library;
         _shelf = shelf;
+        _places = places;
         InitializeComponent();
         SavedHost.Content = places;
         LibraryHost.Content = shelf;
+        SavedToolbarHost.Content = places.TakeToolbar();
+        LibraryToolbarHost.Content = shelf.TakeToolbar();
         shelf.SessionActionRequested += (action, id) => SessionActionRequested?.Invoke(action, id);
         IsVisibleChanged += (_, _) => ApplyTab();
         ApplyTab();
@@ -30,6 +34,15 @@ public partial class FilesPanel : UserControl
 
     /// <summary>The tab chosen: null for Saved places, otherwise the Library's tab. Kept while the app runs, not stored (File viewer design §3).</summary>
     public LibraryTab? Tab { get; private set; }
+
+    /// <summary>True while the Saved places table is the tab on screen, so the header's search keys act on it, not on the hidden Library grid.</summary>
+    public bool ShowsSavedPlaces => IsVisible && Tab is null;
+
+    /// <summary>Opens the first saved place the search leaves. False when there is none.</summary>
+    public bool OpenTopSavedPlace() => _places.OpenTopResult();
+
+    /// <summary>Moves keyboard focus into the Saved places table.</summary>
+    public void FocusSavedPlaces() => _places.FocusList();
 
     /// <summary>
     /// Whether the Sessions tab offers Open all, Edit and Delete: the workspace turns
@@ -89,11 +102,13 @@ public partial class FilesPanel : UserControl
     private void ApplyTab()
     {
         // The first tab is checked while the XAML loads, before the hosts exist.
-        if (SavedHost is null || LibraryHost is null)
+        if (SavedHost is null || LibraryHost is null || SavedToolbarHost is null || LibraryToolbarHost is null)
             return;
 
         SavedHost.Visibility = Tab is null ? Visibility.Visible : Visibility.Collapsed;
         LibraryHost.Visibility = Tab is null ? Visibility.Collapsed : Visibility.Visible;
+        SavedToolbarHost.Visibility = SavedHost.Visibility;
+        LibraryToolbarHost.Visibility = LibraryHost.Visibility;
         _library.Tab = IsVisible ? Tab ?? LibraryTab.All : null;
         _shelf.ShowsSessionActions = _offersSessionActions && Tab == LibraryTab.Sessions;
     }

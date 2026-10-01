@@ -149,6 +149,37 @@ public sealed class LibraryViewModelTests
     }
 
     [Fact]
+    public void TypingASearch_ThatLeavesTheYearsActivityAsItWas_DoesNotRebuildTheYearStrip()
+    {
+        // Rebuilding the strip's hundreds of cells on every keystroke is what made typing stall.
+        Seed();
+        var vm = NewViewModel();
+        vm.SearchText = "Acm";
+        var rebuilt = 0;
+        vm.CalendarWeeks.CollectionChanged += (_, _) => rebuilt++;
+        var monthRebuilt = 0;
+        vm.CalendarMonthWeeks.CollectionChanged += (_, _) => monthRebuilt++;
+
+        vm.SearchText = "Acme";
+
+        Assert.Equal(0, rebuilt);
+        Assert.Equal(0, monthRebuilt);
+    }
+
+    [Fact]
+    public void TypingASearch_ThatChangesTheYearsActivity_StillRebuildsTheYearStrip()
+    {
+        Seed();
+        var vm = NewViewModel();
+        Assert.EndsWith("1 folder visit · 1 file opened · 1 session saved",
+            vm.CalendarWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today).Label);
+
+        vm.SearchText = "Budget";
+
+        Assert.EndsWith("1 file opened", vm.CalendarWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today).Label);
+    }
+
+    [Fact]
     public void TheYearStrip_CountsFolderVisitsFileOpensAndSessions_AndFollowsTheKindChip()
     {
         Seed();

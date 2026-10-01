@@ -127,6 +127,9 @@ public partial class WorkspaceView : UserControl
         places.PlacesChanged += RequestReload;
         places.PropertyChanged += Places_PropertyChanged;
 
+        // The header's box is the one search: the Saved places table filters by it too, so a layout's remembered text applies there from the start.
+        places.SearchText = workspace.SearchText;
+
         ApplyExpanded();
         BuildCanvas();
     }
@@ -245,6 +248,11 @@ public partial class WorkspaceView : UserControl
                 places.IsGridExpanded = true;
                 break;
 
+            // The header's box searches the Saved places table as well as the Library (the setters ignore an unchanged value, so this can't loop).
+            case nameof(WorkspaceViewModel.SearchText) when _workspace is { } workspace && _places is { } saved:
+                saved.SearchText = workspace.SearchText;
+                break;
+
             case nameof(WorkspaceViewModel.Status):
                 // After the binding has updated the text: then a screen reader reads the new line.
                 Dispatcher.BeginInvoke(DispatcherPriority.Background, AnnounceStatus);
@@ -270,6 +278,9 @@ public partial class WorkspaceView : UserControl
     {
         if (e.PropertyName == nameof(MainViewModel.IsGridExpanded))
             ApplyExpanded();
+        // The Saved places panel's own box, an added place that the search would hide, and Esc clear the header's text too.
+        else if (e.PropertyName == nameof(MainViewModel.SearchText) && _workspace is { } workspace && _places is { } saved)
+            workspace.SearchText = saved.SearchText;
     }
 
     private void ApplyExpanded()
@@ -900,7 +911,7 @@ public partial class WorkspaceView : UserControl
 
             case PanelTypes.Files:
                 // The File viewer (File viewer design §3): Saved places and Recents as tabs, with Sessions and All.
-                _filesPanel = new FilesPanel(new PlacesPanel { DataContext = _places, CollapsesWithWindow = false }, CreateShelf(), _workspace!.Library);
+                _filesPanel = new FilesPanel(new PlacesPanel { DataContext = _places, CollapsesWithWindow = false, ShowsSearch = false }, CreateShelf(), _workspace!.Library);
                 _filesPanel.SessionActionRequested += (action, id) => _sessionsPanel?.RunSessionAction(action, id);
                 return _filesPanel;
 
@@ -922,7 +933,7 @@ public partial class WorkspaceView : UserControl
                 return sessionsPanel;
 
             case PanelTypes.Places:
-                return new PlacesPanel { DataContext = _places, CollapsesWithWindow = false };
+                return new PlacesPanel { DataContext = _places, CollapsesWithWindow = false, ShowsSearch = false };
 
             case PanelTypes.Favourites:
                 // Stacked one to a row, so a long list scrolls in its panel.
@@ -1029,19 +1040,29 @@ public partial class WorkspaceView : UserControl
             case Key.Escape:
                 if (_workspace.IsSearching)
                     _workspace.SearchText = "";
+                else if (_filesPanel is { ShowsSavedPlaces: true } savedEsc)
+                    savedEsc.FocusSavedPlaces();
                 else
                     ShownShelf?.FocusList();
                 e.Handled = true;
                 break;
 
             case Key.Enter:
-                if (_workspace.Library.Rows.FirstOrDefault() is { } top)
+                // The tab on screen decides what "top result" means: the Saved places table's first row, or the Library's.
+                if (_filesPanel is { ShowsSavedPlaces: true } savedEnter)
+                    savedEnter.OpenTopSavedPlace();
+                else if (_workspace.Library.Rows.FirstOrDefault() is { } top)
                     _workspace.Library.Open(top);
                 e.Handled = true;
                 break;
 
             case Key.Down:
-                if (ShownShelf is { } shelf)
+                if (_filesPanel is { ShowsSavedPlaces: true } savedDown)
+                {
+                    savedDown.FocusSavedPlaces();
+                    e.Handled = true;
+                }
+                else if (ShownShelf is { } shelf)
                 {
                     shelf.FocusList();
                     e.Handled = true;

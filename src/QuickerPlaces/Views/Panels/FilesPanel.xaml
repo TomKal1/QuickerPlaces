@@ -14,25 +14,39 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="File viewer tabs"
-                  HorizontalAlignment="Left" Margin="0,0,0,12">
-            <Border Style="{StaticResource Border.SegmentGroup}">
-                <StackPanel Orientation="Horizontal">
-                    <RadioButton x:Name="SavedTab" Content="Saved places" IsChecked="True"
-                                 Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" Checked="Tab_Checked"
-                                 ToolTip="Your saved folders and links" />
-                    <RadioButton x:Name="RecentTab" Content="Recent"
-                                 Style="{StaticResource RadioButton.Segment}" Tag="0" Checked="Tab_Checked"
-                                 ToolTip="Folders from Recents and files from Recent Files, with the tracked folders" />
-                    <RadioButton x:Name="SessionsTab" Content="Sessions"
-                                 Style="{StaticResource RadioButton.Segment}" Tag="0" Checked="Tab_Checked"
-                                 ToolTip="Files in your sessions" />
-                    <RadioButton x:Name="AllTab" Content="All"
-                                 Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0" Checked="Tab_Checked"
-                                 ToolTip="Everything, with where each item comes from" />
-                </StackPanel>
-            </Border>
-        </GroupBox>
+        <!--
+            The tab row: the tabs, and on the right the shown tab's own buttons (the
+            places' count and Options menu, or Track a folder and Save as session),
+            lifted out of the panels' headers so the table starts higher.
+        -->
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <GroupBox Style="{StaticResource GroupBox.Unstyled}" AutomationProperties.Name="File viewer tabs"
+                      HorizontalAlignment="Left" VerticalAlignment="Center">
+                <Border Style="{StaticResource Border.SegmentGroup}">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="SavedTab" Content="Saved places" IsChecked="True"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="5,0,0,5" Checked="Tab_Checked"
+                                     ToolTip="Your saved folders and links" />
+                        <RadioButton x:Name="RecentTab" Content="Recent"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="0" Checked="Tab_Checked"
+                                     ToolTip="Folders from Recents and files from Recent Files, with the tracked folders" />
+                        <RadioButton x:Name="SessionsTab" Content="Sessions"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="0" Checked="Tab_Checked"
+                                     ToolTip="Files in your sessions" />
+                        <RadioButton x:Name="AllTab" Content="All"
+                                     Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0" Checked="Tab_Checked"
+                                     ToolTip="Everything, with where each item comes from" />
+                    </StackPanel>
+                </Border>
+            </GroupBox>
+            <ContentControl x:Name="SavedToolbarHost" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Focusable="False" />
+            <ContentControl x:Name="LibraryToolbarHost" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Focusable="False"
+                            Visibility="Collapsed" />
+        </Grid>
 
         <ContentControl x:Name="SavedHost" Grid.Row="1" Focusable="False" />
         <ContentControl x:Name="LibraryHost" Grid.Row="1" Focusable="False" Visibility="Collapsed" />

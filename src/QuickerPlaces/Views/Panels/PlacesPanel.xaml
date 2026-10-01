@@ -55,18 +55,18 @@
             List header: count, search, options, hide/show. The search box
             stays while the list is collapsed; typing re-expands it.
         -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
+        <Grid x:Name="HeaderArea" Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel x:Name="CountArea" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="ALL PLACES" Style="{StaticResource TextBlock.Caps}" />
                 <ContentControl Style="{StaticResource Badge.Count}" Content="{Binding PlaceCountText}" Margin="10,0,0,0" />
             </StackPanel>
 
-            <Border Grid.Column="1" Margin="16,0,8,0" MaxWidth="360" MinWidth="220" HorizontalAlignment="Right"
+            <Border x:Name="SearchArea" Grid.Column="1" Margin="16,0,8,0" MaxWidth="360" MinWidth="220" HorizontalAlignment="Right"
                     Height="34" CornerRadius="6" BorderThickness="1" Padding="10,0,5,0"
                     Background="{DynamicResource Bg.Sunken}">
                 <Border.Style>
@@ -127,7 +127,7 @@
                 </Grid>
             </Border>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <StackPanel x:Name="ButtonsArea" Grid.Column="2" Orientation="Horizontal">
                 <Button x:Name="OptionsButton" Style="{StaticResource Button.IconOnly}" Click="OptionsButton_Click" Margin="0,0,8,0"
                         ToolTip="Options" AutomationProperties.Name="Options">
                     <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Menu}" />

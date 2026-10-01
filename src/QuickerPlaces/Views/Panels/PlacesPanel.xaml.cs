@@ -43,6 +43,39 @@ public partial class PlacesPanel : UserControl
         }
     }
 
+    /// <summary>
+    /// False in the workspace, where the window's header box is the search and
+    /// filters this table too: a second box here would only repeat it.
+    /// </summary>
+    public bool ShowsSearch
+    {
+        get => SearchArea.Visibility == Visibility.Visible;
+        set => SearchArea.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Lifts the place count and the Options menu out of this panel's header, for
+    /// a host to show on its own row (the File viewer's tab row), and collapses
+    /// the header so the table starts higher. Meant for a panel whose search box
+    /// is hidden: with it shown, the header stays as it was and this returns null.
+    /// The returned bar takes this panel's DataContext, so its bindings and menu still work.
+    /// </summary>
+    public FrameworkElement? TakeToolbar()
+    {
+        if (ShowsSearch || HeaderArea.Visibility != Visibility.Visible)
+            return null;
+
+        HeaderArea.Children.Remove(CountArea);
+        HeaderArea.Children.Remove(ButtonsArea);
+        CountArea.Margin = new Thickness(0, 0, 12, 0);
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        bar.Children.Add(CountArea);
+        bar.Children.Add(ButtonsArea);
+        bar.SetBinding(DataContextProperty, new Binding(nameof(DataContext)) { Source = this });
+        HeaderArea.Visibility = Visibility.Collapsed;
+        return bar;
+    }
+
     private MainViewModel? ViewModel => DataContext as MainViewModel;
 
     /// <summary>Focuses the search box and selects what is in it, so typing replaces it.</summary>
@@ -174,6 +207,19 @@ public partial class PlacesPanel : UserControl
                 PlacesGrid.Focus();
         }
     }
+
+    /// <summary>Opens the first place listed, as Enter does in this panel's own search box. False when the search leaves none.</summary>
+    public bool OpenTopResult()
+    {
+        if (ViewModel is not { } viewModel || PlacesGrid.Items.Count == 0 || PlacesGrid.Items[0] is not PlaceViewModel top)
+            return false;
+
+        viewModel.OpenCommand.Execute(top);
+        return true;
+    }
+
+    /// <summary>Moves keyboard focus into the table, to the selected row, or the first.</summary>
+    public void FocusList() => FocusGridRow(Math.Max(0, PlacesGrid.SelectedIndex));
 
     /// <summary>Selects and keyboard-focuses the grid row at <paramref name="index"/> (clamped; first row if nothing was selected).</summary>
     private void FocusGridRow(int index)

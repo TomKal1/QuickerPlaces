@@ -30,6 +30,7 @@ public partial class FileShelfPanel : UserControl
                 now.PropertyChanged += ViewModel_PropertyChanged;
             UpdateColumns();
             UpdateSessionBar();
+            UpdateTrackFolderButton();
         };
     }
 
@@ -39,6 +40,39 @@ public partial class FileShelfPanel : UserControl
             UpdateColumns();
         else if (e.PropertyName == nameof(LibraryViewModel.HasSessionScope))
             UpdateSessionBar();
+        else if (e.PropertyName == nameof(LibraryViewModel.ShowsTrackedFolders))
+            UpdateTrackFolderButton();
+    }
+
+    private bool _toolbarTaken;
+
+    /// <summary>
+    /// Lifts Track a folder and Save as session out of this panel, for a host to
+    /// show on its own row (the File viewer's tab row). In the panel, Track a folder
+    /// is part of the tracked folders strip; out of it, it shows while the strip
+    /// would (<see cref="UpdateTrackFolderButton"/>).
+    /// </summary>
+    public FrameworkElement TakeToolbar()
+    {
+        _toolbarTaken = true;
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var button in new[] { TrackFolderButton, SaveAsSessionButton })
+        {
+            (button.Parent as Panel)?.Children.Remove(button);
+            button.Margin = new Thickness(8, 0, 0, 0);
+            bar.Children.Add(button);
+        }
+
+        bar.SetBinding(DataContextProperty, new System.Windows.Data.Binding(nameof(DataContext)) { Source = this });
+        UpdateTrackFolderButton();
+        return bar;
+    }
+
+    /// <summary>Taken out of the strip, Track a folder is shown exactly while the strip is: tracking attached, and a tab (or none) that shows the tracked folders.</summary>
+    private void UpdateTrackFolderButton()
+    {
+        if (_toolbarTaken)
+            TrackFolderButton.Visibility = ShowsTracking && ViewModel?.ShowsTrackedFolders != false ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -179,6 +213,7 @@ public partial class FileShelfPanel : UserControl
             Converter = new BooleanToVisibilityConverter(),
         });
         TrackingArea.Visibility = Visibility.Visible;
+        UpdateTrackFolderButton();
         UpdateTracking();
     }
 
