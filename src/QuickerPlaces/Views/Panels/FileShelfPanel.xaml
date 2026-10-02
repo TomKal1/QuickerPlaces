@@ -318,6 +318,7 @@
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Open" FontWeight="Bold" Click="OpenMenu_Click" />
+                        <MenuItem x:Name="OpenLocationMenuItem" Header="Open file location" Click="OpenLocation_Click" />
                         <MenuItem Header="Copy path or link" Click="CopyMenu_Click" />
                         <MenuItem x:Name="AddAsPlaceMenuItem" Header="Add as place…" Click="AddAsPlace_Click" Visibility="Collapsed" />
                         <Separator />

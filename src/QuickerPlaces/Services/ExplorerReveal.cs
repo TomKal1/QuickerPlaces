@@ -34,7 +34,7 @@ public static class ExplorerReveal
             // save) opens an unrelated default folder, so open the
             // containing folder itself instead when the file is missing.
             var folder = System.IO.Path.GetDirectoryName(path);
-            var startInfo = !System.IO.File.Exists(path) && System.IO.Directory.Exists(folder)
+            var startInfo = !System.IO.File.Exists(path) && !System.IO.Directory.Exists(path) && System.IO.Directory.Exists(folder)
                 ? new ProcessStartInfo(folder) { UseShellExecute = true }
                 : new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"");
 

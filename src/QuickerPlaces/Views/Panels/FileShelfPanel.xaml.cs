@@ -333,12 +333,21 @@ public partial class FileShelfPanel : UserControl
 
         ForgetMenuItem.IsEnabled = SelectedRow.CanForget;
         AddAsPlaceMenuItem.Visibility = ShowsTracking && SelectedRow.CanAddAsPlace ? Visibility.Visible : Visibility.Collapsed;
+        // A link has no folder to show.
+        OpenLocationMenuItem.Visibility = SelectedRow.Item.Kind == LibraryKind.Link ? Visibility.Collapsed : Visibility.Visible;
         var count = RowsGrid.SelectedItems.Count;
         SaveSelectionMenuItem.Header = count > 1 ? $"Save {count} selected as session…" : "Save as session…";
         SaveSelectionMenuItem.Visibility = SaveSelectionSeparator.Visibility = ShowsSaveAsSession ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OpenMenu_Click(object sender, RoutedEventArgs e) => ViewModel?.Open(SelectedRow);
+
+    /// <summary>Shows the item in Explorer, selected in its folder (a folder's own parent, for a folder).</summary>
+    private void OpenLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedRow is { } row && row.Item.Kind != LibraryKind.Link)
+            ExplorerReveal.Reveal(row.Location);
+    }
 
     private void CopyMenu_Click(object sender, RoutedEventArgs e)
     {
