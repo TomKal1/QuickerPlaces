@@ -98,6 +98,11 @@ public partial class YearActivityPanel : UserControl
         MonthView.Visibility = monthView ? Visibility.Visible : Visibility.Collapsed;
         YearNav.Visibility = monthView ? Visibility.Collapsed : Visibility.Visible;
         MonthNav.Visibility = monthView ? Visibility.Visible : Visibility.Collapsed;
+        // The month view stacks the period chip over the navigation, each centred.
+        HeaderControls.Orientation = monthView ? Orientation.Vertical : Orientation.Horizontal;
+        PeriodChip.HorizontalAlignment = monthView ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        PeriodChip.Margin = monthView ? new Thickness(0, 0, 0, 6) : new Thickness(0, 0, 10, 0);
+        MonthNav.HorizontalAlignment = HorizontalAlignment.Center;
         FitHeader();
     }
 
@@ -116,7 +121,8 @@ public partial class YearActivityPanel : UserControl
         var below = ShowsTitle && ActualWidth < controls + TitleRoom;
         var margin = below ? new Thickness(0, 6, 0, 0) : new Thickness(0);
         var dock = !ShowsTitle ? Dock.Top : below ? Dock.Bottom : Dock.Right;
-        var alignment = ShowsTitle ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+        // The month view centres them too, over its narrower calendar.
+        var alignment = ShowsTitle && MonthView.Visibility != Visibility.Visible ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
         if (DockPanel.GetDock(HeaderControls) == dock && HeaderControls.Margin == margin && HeaderControls.HorizontalAlignment == alignment)
             return;
 
