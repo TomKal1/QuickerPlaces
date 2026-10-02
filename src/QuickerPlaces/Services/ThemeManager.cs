@@ -68,6 +68,11 @@ public sealed class ThemeManager : IDisposable
         SetBrush("Highlight.Text", colors.Text);
         SetBrush("Highlight.Soft", colors.Soft);
         SetBrush("On.Highlight", colors.OnFill);
+        // Session cards (and their rail bubbles) take the highlight colour too.
+        SetBrush("Session", colors.Fill);
+        SetBrush("Session.Deep", colors.Hover);
+        SetBrush("On.Session", colors.OnFill);
+        SetBrush("On.Session.Badge", colors.OnFill);
         _applied = (dark, colors);
     }
 
