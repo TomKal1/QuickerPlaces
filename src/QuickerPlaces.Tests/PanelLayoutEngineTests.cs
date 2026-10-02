@@ -240,8 +240,8 @@ public sealed class PanelLayoutEngineTests
     [Fact]
     public void ANarrowWindow_StacksTheColumns_MainFirst_FullWidth()
     {
-        // 700 less the card-wide left column leaves Saved places (560) too little.
-        var placed = PanelLayoutEngine.PackColumns(Desk, 700);
+        // Even with the left column folded to a rail, 600 leaves Saved places (560) too little.
+        var placed = PanelLayoutEngine.PackColumns(Desk, 600);
 
         Assert.Equal(new[] { "places@0:0+12/None", "shelf@1:0+12/None", "activity@2:0+12/None", "sessions@3:0+12/None" },
             placed.Select(DescribeDocked));
@@ -267,8 +267,17 @@ public sealed class PanelLayoutEngineTests
     public void Columns_StackOnlyWhenTheMainColumnGetsTooLittle_NotTheLeft()
     {
         // The left column takes 352, so Saved places (560) needs the canvas to be 352 + 12 + 560 = 924.
-        Assert.Equal(PanelDock.None, PanelLayoutEngine.PackColumns(Desk, 923).First().Dock);
+        Assert.Equal(PanelDock.None, PanelLayoutEngine.PackColumns(Desk, 923, allowRail: false).First().Dock);
         Assert.Equal(PanelDock.Left, PanelLayoutEngine.PackColumns(Desk, 924).First().Dock);
+    }
+
+    [Fact]
+    public void ANarrowWindow_FoldsTheLeftColumnToARail_WhileTheMainColumnFits()
+    {
+        // The rail takes 48 + 12, so Saved places (560) fits down to 620.
+        Assert.Equal(PanelDock.Rail, PanelLayoutEngine.PackColumns(Desk, 923).First(p => p.PanelId == "sessions").Dock);
+        Assert.Equal(PanelDock.Main, PanelLayoutEngine.PackColumns(Desk, 620).First(p => p.PanelId == "places").Dock);
+        Assert.Equal(PanelDock.None, PanelLayoutEngine.PackColumns(Desk, 619).First().Dock);
     }
 
     [Fact]

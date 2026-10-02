@@ -447,7 +447,7 @@ public sealed class WorkspaceViewModel : ObservableObject
     }
 
     private IReadOnlyList<PanelPlacement> Pack()
-        => IsColumns ? PanelLayoutEngine.PackColumns(_layout.Panels, _width) : PanelLayoutEngine.Pack(_layout.Panels, _width);
+        => IsColumns ? PanelLayoutEngine.PackColumns(_layout.Panels, _width, allowRail: !IsArranging) : PanelLayoutEngine.Pack(_layout.Panels, _width);
 
     /// <summary>A panel of a columns layout, whose arrows move it within its own column.</summary>
     private static WorkspacePanelViewModel ColumnPanel(PanelPlacement placement, IReadOnlyList<PanelInstance> visible)

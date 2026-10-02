@@ -87,6 +87,9 @@ public static class PanelLayoutEngine
     /// <summary>The width of one card in the left column of a columns layout: a session card, or a favourite, one to a row.</summary>
     public const double CardWidth = 340;
 
+    /// <summary>The width of a columns layout's left column folded to a rail of numbered bubbles, gap not included.</summary>
+    public const double RailWidth = 48;
+
     /// <summary>
     /// How wide a columns layout's left column is, gap included: one card wide,
     /// or as wide as the widest panel docked there needs, so it is never cut off.
@@ -102,11 +105,14 @@ public static class PanelLayoutEngine
     /// only say which column a panel is in, and whether it shares the canvas
     /// (4 and 8) or has it alone (12): the view sizes the left column in
     /// pixels. When a panel can't be read at its column's width
-    /// (<see cref="MinimumWidth"/>), the columns stack instead, main first,
-    /// every panel full width and <see cref="PanelDock.None"/>: presentation
-    /// only, as reflow is. Stored docks never change here.
+    /// (<see cref="MinimumWidth"/>), the left column folds to a rail
+    /// <see cref="RailWidth"/> wide, its panels <see cref="PanelDock.Rail"/>,
+    /// if the main column then fits (and <paramref name="allowRail"/>: Arrange
+    /// needs the panels). Failing that the columns stack, main first, every
+    /// panel full width and <see cref="PanelDock.None"/>: presentation only, as
+    /// reflow is. Stored docks never change here.
     /// </summary>
-    public static IReadOnlyList<PanelPlacement> PackColumns(IEnumerable<PanelInstance> panels, double width)
+    public static IReadOnlyList<PanelPlacement> PackColumns(IEnumerable<PanelInstance> panels, double width, bool allowRail = true)
     {
         var shown = panels.Where(p => !p.Hidden).ToList();
         var left = shown.Where(p => PanelDocks.IsLeft(p.Dock)).ToList();
@@ -118,6 +124,14 @@ public static class PanelLayoutEngine
         var mainWidth = left.Count == 0 ? PanelWidth(PanelSpans.Full, width) : main.Count == 0 ? 0 : width - LeftColumnWidth(left.Select(p => p.Type)) - Gap;
         var fits = left.All(p => leftWidth >= MinimumWidth(p.Type)) &&
                    main.All(p => mainWidth >= MinimumWidth(p.Type));
+        if (!fits && allowRail && left.Count > 0 && main.Count > 0 &&
+            main.All(p => width - RailWidth - Gap >= MinimumWidth(p.Type)))
+        {
+            return left.Select((p, row) => new PanelPlacement(p.Id, p.Type, row, 0, PanelSpans.Third, PanelSpans.Third, PanelDock.Rail))
+                .Concat(main.Select((p, row) => new PanelPlacement(p.Id, p.Type, row, PanelSpans.Third, PanelSpans.TwoThirds, PanelSpans.TwoThirds, PanelDock.Main)))
+                .ToList();
+        }
+
         if (!fits)
         {
             return main.Concat(left)
@@ -265,6 +279,9 @@ public enum PanelDock
     None,
     Left,
     Main,
+
+    /// <summary>In the left column, folded to a rail: the panel itself isn't shown.</summary>
+    Rail,
 }
 
 /// <summary>Where a panel dropped in a columns layout goes: into <see cref="Dock"/>, just before <see cref="BeforePanelId"/> in the stored order, or last.</summary>

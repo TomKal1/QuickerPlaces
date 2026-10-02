@@ -77,6 +77,7 @@ public partial class MainWindow : Window
             new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
         _workspaceView = new WorkspaceView();
         var workspace = new WorkspaceViewModel(workspaceLayout, library);
+        _workspaceView.SessionShortcutRequested += OpenSessionAt;
         _workspaceView.Attach(workspace, viewModel, sessionStore,
             new WindowsOpenDocumentProbe(recentItems), recentFilesHost, activityHost,
             activityStore, new NetworkDriveResolver(), UpdateActivityIndicator);
