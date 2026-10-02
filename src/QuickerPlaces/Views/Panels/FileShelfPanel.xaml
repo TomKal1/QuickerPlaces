@@ -368,7 +368,30 @@
                     <DataGridTextColumn x:Name="TimeColumn" Header="TIME" Binding="{Binding TimeText}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
                     <DataGridTextColumn x:Name="SessionsColumn" Header="SESSIONS" Binding="{Binding SessionsText}" Width="*" ElementStyle="{StaticResource Cell.Secondary}" Visibility="Collapsed" />
                     <DataGridTextColumn x:Name="TagsColumn" Header="TAGS" Binding="{Binding TagsText}" Width="*" ElementStyle="{StaticResource Cell.Text}" />
-                    <DataGridTextColumn Header="FOLDER" Binding="{Binding Folder}" Width="2*" ElementStyle="{StaticResource Cell.Path}" />
+                    <!-- The folder glyph opens the folder in Explorer, with the item selected. -->
+                    <DataGridTemplateColumn Header="FOLDER" Width="2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel>
+                                    <Button x:Name="OpenFolderButton" DockPanel.Dock="Left" Style="{StaticResource Button.IconOnlyCompact}"
+                                            Width="22" Height="22" Margin="0,0,4,0" VerticalAlignment="Center" Focusable="False"
+                                            ToolTip="Open file location" AutomationProperties.Name="Open file location"
+                                            Click="OpenFolderButton_Click">
+                                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Folder}" />
+                                    </Button>
+                                    <TextBlock Text="{Binding Folder}" Style="{StaticResource Cell.Path}" />
+                                </DockPanel>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Folder}" Value="">
+                                        <Setter TargetName="OpenFolderButton" Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Item.Kind}" Value="Link">
+                                        <Setter TargetName="OpenFolderButton" Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="LAST USED" Binding="{Binding LastUsedText}" Width="140" ElementStyle="{StaticResource Cell.Secondary}" />
                 </DataGrid.Columns>
             </DataGrid>

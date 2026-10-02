@@ -349,6 +349,13 @@ public partial class FileShelfPanel : UserControl
             ExplorerReveal.Reveal(row.Location);
     }
 
+    /// <summary>The folder glyph beside a row's path: the same as Open file location, for that row.</summary>
+    private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is LibraryRowViewModel row && row.Item.Kind != LibraryKind.Link)
+            ExplorerReveal.Reveal(row.Location);
+    }
+
     private void CopyMenu_Click(object sender, RoutedEventArgs e)
     {
         if (SelectedRow is not { } row)
