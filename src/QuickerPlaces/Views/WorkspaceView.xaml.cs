@@ -1112,6 +1112,7 @@ public partial class WorkspaceView : UserControl
     {
         var shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false, ShowsSaveAsSession = true };
         shelf.SaveAsSessionRequested += SaveShelfAsSession;
+        shelf.SaveSelectionAsSessionRequested += items => SaveAsSession(SessionFileSet.From(items));
         shelf.AddAsPlaceRequested += AddAsPlace;
         var activity = new ActivityViewModel(_activityStore!, () =>
         {
@@ -1134,10 +1135,16 @@ public partial class WorkspaceView : UserControl
     /// </summary>
     private void SaveShelfAsSession()
     {
-        if (_workspace is null || _sessions is null || _probe is null || Window.GetWindow(this) is not { } owner)
+        if (_workspace is not null)
+            SaveAsSession(_workspace.ListedFileSet());
+    }
+
+    /// <summary>Saves the files of a set as a new session, through the usual review dialog.</summary>
+    private void SaveAsSession(SessionFileSet fileSet)
+    {
+        if (_sessions is null || _probe is null || Window.GetWindow(this) is not { } owner)
             return;
 
-        var fileSet = _workspace.ListedFileSet();
         if (fileSet.IsEmpty)
         {
             MessageForm.Show(SessionFileSet.NothingToSave, AppInfo.Name, owner: owner);

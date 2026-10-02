@@ -285,7 +285,7 @@
                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
-                      CanUserSortColumns="False" SelectionMode="Single"
+                      CanUserSortColumns="False" SelectionMode="Extended"
                       AutomationProperties.Name="Library items" KeyboardNavigation.TabNavigation="Once"
                       MouseDoubleClick="RowsGrid_MouseDoubleClick" PreviewKeyDown="RowsGrid_PreviewKeyDown"
                       ContextMenuOpening="RowsGrid_ContextMenuOpening">
@@ -322,6 +322,8 @@
                         <MenuItem x:Name="AddAsPlaceMenuItem" Header="Add as place…" Click="AddAsPlace_Click" Visibility="Collapsed" />
                         <Separator />
                         <MenuItem x:Name="ForgetMenuItem" Header="Remove from Recent Files" Click="ForgetMenu_Click" />
+                        <Separator x:Name="SaveSelectionSeparator" />
+                        <MenuItem x:Name="SaveSelectionMenuItem" Header="Save as session…" Click="SaveSelection_Click" />
                     </ContextMenu>
                 </DataGrid.ContextMenu>
                 <DataGrid.Columns>
