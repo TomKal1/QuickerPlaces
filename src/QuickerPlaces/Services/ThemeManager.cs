@@ -73,6 +73,20 @@ public sealed class ThemeManager : IDisposable
         SetBrush("Session.Deep", colors.Hover);
         SetBrush("On.Session", colors.OnFill);
         SetBrush("On.Session.Badge", colors.OnFill);
+        // Favourite cards are leather, which a Cognac highlight would blend into: with it they turn red.
+        if (highlight == HighlightPreset.Cognac)
+        {
+            var red = HighlightPalette.For(HighlightPreset.Red, dark, null);
+            SetBrush("Leather", red.Fill);
+            SetBrush("Leather.Deep", red.Hover);
+            SetBrush("On.Leather", red.OnFill);
+            SetBrush("On.Leather.Badge", red.OnFill);
+        }
+        else
+        {
+            foreach (var key in new[] { "Leather", "Leather.Deep", "On.Leather", "On.Leather.Badge" })
+                _app.Resources.Remove(key);
+        }
         _applied = (dark, colors);
     }
 
