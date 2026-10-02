@@ -67,8 +67,10 @@ public partial class WorkspaceView : UserControl
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         Focusable = false,
-        Margin = new Thickness(6),
+        Margin = new Thickness(0, 6, 0, 6),
     };
+    /// <summary>Folds the left column to the rail; in the column's top right corner while it is unfolded.</summary>
+    private Button? _foldButton;
     private readonly DispatcherTimer _flushTimer;
     private WorkspaceViewModel? _workspace;
     private MainViewModel? _places;
@@ -329,6 +331,7 @@ public partial class WorkspaceView : UserControl
 
         var railed = panels.Any(p => p.Dock == PanelDock.Rail);
         ShowRail(railed);
+        ShowFoldButton(columns && !railed && panels.Any(p => p.Dock == PanelDock.Left) && panels.Any(p => p.Dock == PanelDock.Main));
         if (railed)
         {
             SetCanvasColumns(PanelLayoutEngine.RailWidth + PanelLayoutEngine.Gap);
@@ -429,6 +432,9 @@ public partial class WorkspaceView : UserControl
             return;
 
         _rail.Children.Clear();
+        // Unfolding a rail the window's width folded would only stack the columns, so it offers that only when the user folded it.
+        if (_workspace is { IsLeftFolded: true })
+            _rail.Children.Add(FoldButton(fold: false));
         var favourites = _places?.FavouritePlaces.Take(9).ToList() ?? new List<PlaceViewModel>();
         for (var i = 0; i < favourites.Count; i++)
         {
@@ -448,13 +454,51 @@ public partial class WorkspaceView : UserControl
         }
     }
 
+    private void ShowFoldButton(bool show)
+    {
+        if (_foldButton is null)
+        {
+            _foldButton = FoldButton(fold: true);
+            _foldButton.HorizontalAlignment = HorizontalAlignment.Right;
+            _foldButton.VerticalAlignment = VerticalAlignment.Top;
+            _foldButton.Margin = new Thickness(0, 8, PanelLayoutEngine.Gap + 6, 0);
+            Panel.SetZIndex(_foldButton, 1);
+            PanelCanvas.Children.Add(_foldButton);
+        }
+
+        Grid.SetColumn(_foldButton, 0);
+        _foldButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>The chevron that folds the left column to its rail, or (on the rail) unfolds it.</summary>
+    private Button FoldButton(bool fold)
+    {
+        var button = new Button
+        {
+            Style = (Style)Application.Current.FindResource("Button.IconOnlyCompact"),
+            Width = 24,
+            Height = 24,
+            Margin = new Thickness(0, 0, 0, 6),
+            ToolTip = fold ? "Fold this column to numbered bubbles" : "Show the full column",
+            Content = new System.Windows.Shapes.Path
+            {
+                Style = (Style)Application.Current.FindResource("Icon"),
+                Data = (System.Windows.Media.Geometry)Application.Current.FindResource(fold ? "Icon.ChevronLeft" : "Icon.ChevronRight"),
+            },
+        };
+        AutomationProperties.SetName(button, fold ? "Fold the left column" : "Unfold the left column");
+        button.Click += (_, _) => _workspace?.ToggleLeftFolded();
+        return button;
+    }
+
     private static Button RailBubble(string number, string name, string toolTip, Action open, bool session = false)
     {
         var button = new Button
         {
             Content = number,
-            Width = 32,
-            Height = 32,
+            Width = 26,
+            Height = 26,
+            FontSize = 12,
             Margin = new Thickness(0, 0, 0, 6),
             Padding = new Thickness(0),
             FontWeight = FontWeights.SemiBold,

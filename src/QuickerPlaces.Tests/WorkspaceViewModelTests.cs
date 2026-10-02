@@ -809,7 +809,7 @@ public sealed class WorkspaceViewModelTests
     {
         var workspace = NewColumnsWorkspace();
 
-        workspace.Reflow(600);
+        workspace.Reflow(590);
 
         Assert.All(workspace.Panels, p => Assert.Equal((PanelDock.None, 12), (p.Dock, p.Span)));
         Assert.Equal(new[] { "places", "shelf", "sessions" }, workspace.Panels.Select(p => p.Id));

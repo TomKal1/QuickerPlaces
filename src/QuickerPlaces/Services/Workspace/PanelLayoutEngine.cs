@@ -88,7 +88,7 @@ public static class PanelLayoutEngine
     public const double CardWidth = 340;
 
     /// <summary>The width of a columns layout's left column folded to a rail of numbered bubbles, gap not included.</summary>
-    public const double RailWidth = 48;
+    public const double RailWidth = 32;
 
     /// <summary>
     /// How wide a columns layout's left column is, gap included: one card wide,
@@ -108,11 +108,12 @@ public static class PanelLayoutEngine
     /// (<see cref="MinimumWidth"/>), the left column folds to a rail
     /// <see cref="RailWidth"/> wide, its panels <see cref="PanelDock.Rail"/>,
     /// if the main column then fits (and <paramref name="allowRail"/>: Arrange
-    /// needs the panels). Failing that the columns stack, main first, every
+    /// needs the panels), or at any width when <paramref name="foldLeft"/>
+    /// (the user folded it). Failing that the columns stack, main first, every
     /// panel full width and <see cref="PanelDock.None"/>: presentation only, as
     /// reflow is. Stored docks never change here.
     /// </summary>
-    public static IReadOnlyList<PanelPlacement> PackColumns(IEnumerable<PanelInstance> panels, double width, bool allowRail = true)
+    public static IReadOnlyList<PanelPlacement> PackColumns(IEnumerable<PanelInstance> panels, double width, bool allowRail = true, bool foldLeft = false)
     {
         var shown = panels.Where(p => !p.Hidden).ToList();
         var left = shown.Where(p => PanelDocks.IsLeft(p.Dock)).ToList();
@@ -124,7 +125,7 @@ public static class PanelLayoutEngine
         var mainWidth = left.Count == 0 ? PanelWidth(PanelSpans.Full, width) : main.Count == 0 ? 0 : width - LeftColumnWidth(left.Select(p => p.Type)) - Gap;
         var fits = left.All(p => leftWidth >= MinimumWidth(p.Type)) &&
                    main.All(p => mainWidth >= MinimumWidth(p.Type));
-        if (!fits && allowRail && left.Count > 0 && main.Count > 0 &&
+        if ((!fits || foldLeft) && allowRail && left.Count > 0 && main.Count > 0 &&
             main.All(p => width - RailWidth - Gap >= MinimumWidth(p.Type)))
         {
             return left.Select((p, row) => new PanelPlacement(p.Id, p.Type, row, 0, PanelSpans.Third, PanelSpans.Third, PanelDock.Rail))

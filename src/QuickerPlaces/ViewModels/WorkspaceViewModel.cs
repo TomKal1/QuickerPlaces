@@ -125,6 +125,16 @@ public sealed class WorkspaceViewModel : ObservableObject
     /// </summary>
     public bool ShowsFavouritesPanel => _panels.Any(p => p.Type == PanelTypes.Favourites);
 
+    /// <summary>Whether the user folded a columns layout's left column to its rail, at any width. For this run only.</summary>
+    public bool IsLeftFolded { get; private set; }
+
+    /// <summary>Folds the left column to its rail, or unfolds it.</summary>
+    public void ToggleLeftFolded()
+    {
+        IsLeftFolded = !IsLeftFolded;
+        RebuildPanels();
+    }
+
     /// <summary>
     /// The canvas's width in device-independent pixels: panels too narrow
     /// there are shown wider, so they stack (D1). Presentation only; nothing
@@ -447,7 +457,7 @@ public sealed class WorkspaceViewModel : ObservableObject
     }
 
     private IReadOnlyList<PanelPlacement> Pack()
-        => IsColumns ? PanelLayoutEngine.PackColumns(_layout.Panels, _width, allowRail: !IsArranging) : PanelLayoutEngine.Pack(_layout.Panels, _width);
+        => IsColumns ? PanelLayoutEngine.PackColumns(_layout.Panels, _width, allowRail: !IsArranging, foldLeft: IsLeftFolded) : PanelLayoutEngine.Pack(_layout.Panels, _width);
 
     /// <summary>A panel of a columns layout, whose arrows move it within its own column.</summary>
     private static WorkspacePanelViewModel ColumnPanel(PanelPlacement placement, IReadOnlyList<PanelInstance> visible)
