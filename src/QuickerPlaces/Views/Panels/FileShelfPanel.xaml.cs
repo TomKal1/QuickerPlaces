@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Windows;
@@ -8,6 +9,7 @@ using Microsoft.Win32;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.ViewModels;
+using QuickerPlaces.Services.Library;
 
 namespace QuickerPlaces.Views.Panels;
 
@@ -171,6 +173,12 @@ public partial class FileShelfPanel : UserControl
 
     private void SaveAsSession_Click(object sender, RoutedEventArgs e) => SaveAsSessionRequested?.Invoke();
 
+    /// <summary>Raised by the rows' Save as session: the selected rows' items (Ctrl+click and Shift+click pick several); the host leaves out folders and links.</summary>
+    public event Action<IReadOnlyList<LibraryItem>>? SaveSelectionAsSessionRequested;
+
+    private void SaveSelection_Click(object sender, RoutedEventArgs e)
+        => SaveSelectionAsSessionRequested?.Invoke(RowsGrid.SelectedItems.OfType<LibraryRowViewModel>().Select(r => r.Item).ToList());
+
     /// <summary>Selects the first row, or keeps the selected one, and focuses the list: Down from a search box.</summary>
     public void FocusList()
     {
@@ -325,9 +333,28 @@ public partial class FileShelfPanel : UserControl
 
         ForgetMenuItem.IsEnabled = SelectedRow.CanForget;
         AddAsPlaceMenuItem.Visibility = ShowsTracking && SelectedRow.CanAddAsPlace ? Visibility.Visible : Visibility.Collapsed;
+        // A link has no folder to show.
+        OpenLocationMenuItem.Visibility = SelectedRow.Item.Kind == LibraryKind.Link ? Visibility.Collapsed : Visibility.Visible;
+        var count = RowsGrid.SelectedItems.Count;
+        SaveSelectionMenuItem.Header = count > 1 ? $"Save {count} selected as session…" : "Save as session…";
+        SaveSelectionMenuItem.Visibility = SaveSelectionSeparator.Visibility = ShowsSaveAsSession ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OpenMenu_Click(object sender, RoutedEventArgs e) => ViewModel?.Open(SelectedRow);
+
+    /// <summary>Shows the item in Explorer, selected in its folder (a folder's own parent, for a folder).</summary>
+    private void OpenLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedRow is { } row && row.Item.Kind != LibraryKind.Link)
+            ExplorerReveal.Reveal(row.Location);
+    }
+
+    /// <summary>The folder glyph beside a row's path: the same as Open file location, for that row.</summary>
+    private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is LibraryRowViewModel row && row.Item.Kind != LibraryKind.Link)
+            ExplorerReveal.Reveal(row.Location);
+    }
 
     private void CopyMenu_Click(object sender, RoutedEventArgs e)
     {

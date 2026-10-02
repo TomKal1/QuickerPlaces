@@ -242,6 +242,38 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- A numbered bubble on the folded left column's rail, filled like its card: a favourite leather, a session blue. -->
+    <Style x:Key="Button.RailFavourite" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
+        <Setter Property="Background" Value="{DynamicResource Leather.Deep}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Leather.Deep}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1.5" CornerRadius="13">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.85" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.7" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="Button.RailSession" TargetType="Button" BasedOn="{StaticResource Button.RailFavourite}">
+        <Setter Property="Background" Value="{DynamicResource Session}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Session}" />
+        <Setter Property="Foreground" Value="{DynamicResource On.Session}" />
+    </Style>
+
     <!-- The Ctrl+number badge on a favourite card. -->
     <Style x:Key="Border.FavouriteNumber" TargetType="Border">
         <Setter Property="Width" Value="22" />

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -59,6 +60,17 @@ public partial class WorkspaceView : UserControl
     /// <summary>A columns layout's two stacks, placed on the canvas across their columns (Desk layout design §2).</summary>
     private readonly Grid _leftStack = new();
     private readonly Grid _mainStack = new();
+    /// <summary>The left column folded to a rail when the window is too narrow for it: numbered bubbles for the favourites and sessions.</summary>
+    private readonly StackPanel _rail = new() { HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly ScrollViewer _railScroller = new()
+    {
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        Focusable = false,
+        Margin = new Thickness(0, 6, 0, 6),
+    };
+    /// <summary>Folds the left column to the rail; in the column's top right corner while it is unfolded.</summary>
+    private Button? _foldButton;
     private readonly DispatcherTimer _flushTimer;
     private WorkspaceViewModel? _workspace;
     private MainViewModel? _places;
@@ -170,10 +182,14 @@ public partial class WorkspaceView : UserControl
         return true;
     }
 
+    /// <summary>A session bubble on the rail was clicked: the 0-based place of the session, as Ctrl+Shift+number gives.</summary>
+    public event Action<int>? SessionShortcutRequested;
+
     /// <summary>After a session was opened without the Sessions panel: its Last opened, and so its place in the list, changed.</summary>
     public void NoteSessionOpened()
     {
         _sessionsPanel?.Reload();
+        FillRail();
         RequestReload();
     }
 
@@ -313,7 +329,16 @@ public partial class WorkspaceView : UserControl
         _leftStack.RowDefinitions.Clear();
         _mainStack.RowDefinitions.Clear();
 
-        if (columns)
+        var railed = panels.Any(p => p.Dock == PanelDock.Rail);
+        ShowRail(railed);
+        ShowFoldButton(columns && !railed && panels.Any(p => p.Dock == PanelDock.Left) && panels.Any(p => p.Dock == PanelDock.Main));
+        if (railed)
+        {
+            SetCanvasColumns(PanelLayoutEngine.RailWidth + PanelLayoutEngine.Gap);
+            _leftStack.Visibility = Visibility.Collapsed;
+            PlaceStack(_mainStack, panels.Where(p => p.Dock == PanelDock.Main).ToList(), 1);
+        }
+        else if (columns)
         {
             var left = panels.Where(p => p.Dock == PanelDock.Left).ToList();
             var main = panels.Where(p => p.Dock == PanelDock.Main).ToList();
@@ -341,14 +366,14 @@ public partial class WorkspaceView : UserControl
 
             Reparent(frame, panel.Dock switch
             {
-                PanelDock.Left => _leftStack,
+                PanelDock.Left or PanelDock.Rail => _leftStack,
                 PanelDock.Main => _mainStack,
                 _ => PanelCanvas,
             });
             Grid.SetRow(frame, panel.Row);
             Grid.SetColumn(frame, columns ? 0 : panel.Column);
             Grid.SetColumnSpan(frame, columns ? 1 : panel.Span);
-            frame.Visibility = Visibility.Visible;
+            frame.Visibility = panel.Dock == PanelDock.Rail ? Visibility.Collapsed : Visibility.Visible;
             shown.Add(panel.Id);
         }
 
@@ -365,7 +390,7 @@ public partial class WorkspaceView : UserControl
         }
 
         UpdateFrames();
-        var noCalendar = _workspace.Panels.All(p => p.Type != PanelTypes.Activity);
+        var noCalendar = _workspace.Panels.All(p => p.Type != PanelTypes.Activity || p.Dock == PanelDock.Rail);
         foreach (var shelf in _shelves)
             shelf.ShowsPeriod = noCalendar;
         if (_sessionsPanel is not null)
@@ -379,6 +404,110 @@ public partial class WorkspaceView : UserControl
             _filesPanel.OffersSessionActions = _workspace.Panels.Any(p => p.Type == PanelTypes.Sessions);
         EmptyCanvasText.Visibility = _workspace.HasPanels ? Visibility.Collapsed : Visibility.Visible;
         FitCanvasHeight();
+    }
+
+    /// <summary>Shows or hides the rail in the canvas's first column, filling it afresh when shown.</summary>
+    private void ShowRail(bool show)
+    {
+        if (_railScroller.Parent is null)
+        {
+            _railScroller.Content = _rail;
+            // Sessions don't say when they change, so the bubbles are read again whenever the pointer comes to them.
+            _railScroller.MouseEnter += (_, _) => FillRail();
+            PanelCanvas.Children.Add(_railScroller);
+            if (_places is not null)
+                _places.FavouritePlaces.CollectionChanged += (_, _) => FillRail();
+        }
+
+        Grid.SetColumn(_railScroller, 0);
+        _railScroller.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (show)
+            FillRail();
+    }
+
+    /// <summary>The rail's bubbles: a favourite's Ctrl+number, then a session's Ctrl+Shift+number, each opening it on a click.</summary>
+    private void FillRail()
+    {
+        if (_railScroller.Visibility != Visibility.Visible)
+            return;
+
+        _rail.Children.Clear();
+        // Unfolding a rail the window's width folded would only stack the columns, so it offers that only when the user folded it.
+        if (_workspace is { IsLeftFolded: true })
+            _rail.Children.Add(FoldButton(fold: false));
+        var favourites = _places?.FavouritePlaces.Take(9).ToList() ?? new List<PlaceViewModel>();
+        for (var i = 0; i < favourites.Count; i++)
+        {
+            var index = i;
+            _rail.Children.Add(RailBubble((i + 1).ToString(CultureInfo.InvariantCulture), favourites[i].Alias,
+                $"{favourites[i].Alias} (Ctrl+{i + 1})", () => _places?.OpenFavouriteAtCommand.Execute(index)));
+        }
+
+        var sessions = _sessions?.Sessions.Take(SessionStore.ShortcutCount).ToList() ?? new List<SessionSnapshot>();
+        if (favourites.Count > 0 && sessions.Count > 0)
+            _rail.Children.Add(new Separator { Margin = new Thickness(4, 6, 4, 6) });
+        for (var i = 0; i < sessions.Count; i++)
+        {
+            var index = i;
+            _rail.Children.Add(RailBubble((i + 1).ToString(CultureInfo.InvariantCulture), sessions[i].Name,
+                $"Session: {sessions[i].Name} (Ctrl+Shift+{i + 1})", () => SessionShortcutRequested?.Invoke(index), session: true));
+        }
+    }
+
+    private void ShowFoldButton(bool show)
+    {
+        if (_foldButton is null)
+        {
+            _foldButton = FoldButton(fold: true);
+            _foldButton.HorizontalAlignment = HorizontalAlignment.Right;
+            _foldButton.VerticalAlignment = VerticalAlignment.Top;
+            _foldButton.Margin = new Thickness(0, 8, PanelLayoutEngine.Gap + 6, 0);
+            Panel.SetZIndex(_foldButton, 1);
+            PanelCanvas.Children.Add(_foldButton);
+        }
+
+        Grid.SetColumn(_foldButton, 0);
+        _foldButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>The chevron that folds the left column to its rail, or (on the rail) unfolds it.</summary>
+    private Button FoldButton(bool fold)
+    {
+        var button = new Button
+        {
+            Style = (Style)Application.Current.FindResource("Button.IconOnlyCompact"),
+            Width = 24,
+            Height = 24,
+            Margin = new Thickness(0, 0, 0, 6),
+            ToolTip = fold ? "Fold this column to numbered bubbles" : "Show the full column",
+            Content = new System.Windows.Shapes.Path
+            {
+                Style = (Style)Application.Current.FindResource("Icon"),
+                Data = (System.Windows.Media.Geometry)Application.Current.FindResource(fold ? "Icon.ChevronLeft" : "Icon.ChevronRight"),
+            },
+        };
+        AutomationProperties.SetName(button, fold ? "Fold the left column" : "Unfold the left column");
+        button.Click += (_, _) => _workspace?.ToggleLeftFolded();
+        return button;
+    }
+
+    private static Button RailBubble(string number, string name, string toolTip, Action open, bool session = false)
+    {
+        var button = new Button
+        {
+            Content = number,
+            Width = 26,
+            Height = 26,
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 6),
+            Padding = new Thickness(0),
+            FontWeight = FontWeights.SemiBold,
+            ToolTip = toolTip,
+            Style = (Style)Application.Current.FindResource(session ? "Button.RailSession" : "Button.RailFavourite"),
+        };
+        AutomationProperties.SetName(button, session ? $"Open session {name}" : $"Open {name}");
+        button.Click += (_, _) => open();
+        return button;
     }
 
     private static RowDefinition RowFor(bool fitsContent) => fitsContent
@@ -983,6 +1112,7 @@ public partial class WorkspaceView : UserControl
     {
         var shelf = new FileShelfPanel { DataContext = _workspace!.Library, ShowsSearch = false, ShowsSaveAsSession = true };
         shelf.SaveAsSessionRequested += SaveShelfAsSession;
+        shelf.SaveSelectionAsSessionRequested += items => SaveAsSession(SessionFileSet.From(items));
         shelf.AddAsPlaceRequested += AddAsPlace;
         var activity = new ActivityViewModel(_activityStore!, () =>
         {
@@ -1005,10 +1135,16 @@ public partial class WorkspaceView : UserControl
     /// </summary>
     private void SaveShelfAsSession()
     {
-        if (_workspace is null || _sessions is null || _probe is null || Window.GetWindow(this) is not { } owner)
+        if (_workspace is not null)
+            SaveAsSession(_workspace.ListedFileSet());
+    }
+
+    /// <summary>Saves the files of a set as a new session, through the usual review dialog.</summary>
+    private void SaveAsSession(SessionFileSet fileSet)
+    {
+        if (_sessions is null || _probe is null || Window.GetWindow(this) is not { } owner)
             return;
 
-        var fileSet = _workspace.ListedFileSet();
         if (fileSet.IsEmpty)
         {
             MessageForm.Show(SessionFileSet.NothingToSave, AppInfo.Name, owner: owner);
