@@ -116,6 +116,63 @@ Before a production fix:
 3. Only then author a focused failing regression test and implement a small candidate. Keep current generation rejection and UI-free boundaries. Measure it against the saved **uninstrumented current-commit baseline**, with equivalent instrumentation/workload, at least five counterbalanced sustained pairs and separate real-input confirmation.
 4. Advance idle/capacity/retention investigation after this review: ordinary settled measurements, 30–60-minute/open-close workloads and separate induced-GC/root diagnostics. No memory conclusions from this timing cohort.
 
+## 2026-10-03 follow-up — validation and manual-capture readiness
+
+Priority 1 remains **open**. On this machine, branch is `perf/input-render-diagnosis`, HEAD `5926986d10e28eefb3a5085fdaa07d8a6d13622f` (the diagnosis documentation commit), with a clean initial worktree. The local remote-tracking ref is two commits ahead; no pull/merge was performed. Application source under `src/` is unchanged from `fab00f8`. No production/test/CI/CD changes, staging or commits were made in this follow-up.
+
+Fresh validation, outside profiling: **1,267 passed, zero failed/skipped; Release build zero warnings/errors**. A new uninstrumented build archive is `.a5c/input-render/readiness-261003/baseline-bin/`, DLL SHA-256 `9f37e83699ee9810ccbf2dd9b297b37874966fd8952445674f2cea7d3715e214`. Its revision/runtime metadata and logs are in `readiness-261003/validation.json`, `build.log` and `tests.log`. This is a fresh current-HEAD before archive; the earlier baseline and all first-iteration binaries remain intact and hash-verified. The new hash is not evidence of a production performance change.
+
+The manual harness was audited and hardened locally, **not executed as a capture**:
+
+- Requires a fresh child output under `.a5c/input-render/`, explicit `-OperatorPresent` and console confirmation before starting any application or ETW session. No UIA, injected input or programmatic clipboard access. Only the operator performs keyboard/paste/tab actions.
+- Checks diagnostic/fixture hashes, corpus counts and disabled tracking/startup/hotkey/tray settings. A successful `-ValidateOnly` invocation creates no output directory, app or ETW session.
+- Static fixture audit on **2026-10-03** confirms 120 places/12 favourites, 12 sessions/120 paths, 60 recent files and 12,000/480/10,800 open timestamps. No recent opens would be pruned by the current 365-day local-date rule, and no file exceeds the 500-open cap. This is **not loaded-query or visible-heat verification**. The October 2 anchor is preserved; any new capture is a separate dated cohort and must not be pooled with `capture-2`. The operator must inspect October 2 heat, not assume today's cell has activity.
+- Records PID/HWND, QPC launch/action-end boundaries, date/environment/provenance and operator-reported counts, heat and deviations. Manual coarse boundaries/observations are not latency measurements or automated correctness assertions.
+
+A source audit found an input-marker blind spot: the old diagnostic `PreviewKeyDown` listener was registered after `InitializeComponent`, while the XAML-bound search handler sets `Handled` for Esc. That later listener can miss the clear key. A **separate** copied project, `.a5c/input-render/diagnostic-manual-src/`, moves the key marker to the start of that existing handler and adds a `DataObject.Pasting` marker without reading or altering clipboard data. It changes no handler behavior. The prior diagnostic source/binary are untouched. The new diagnostic Release build succeeds with zero warnings/errors; DLL SHA-256 `c28a6312ca31358a46fadd5a264fbe418ac015e800e94bb636727f936674f32f`. Patch, build log, hash and the previous harness are saved in `readiness-261003/`. These added markers have unquantified overhead; their receipt/order still needs runtime confirmation in the operator trace.
+
+**Remaining blockers are unchanged:** no physical-input capture has run; there is no causal final-render/scan-out confirmation, new inner-span CPU/allocation attribution, candidate optimization, retention/endurance or startup result. WPF/custom ETW plus these markers can support input/query/layout diagnosis, but the harness does not collect DWM frame attribution. Use Visual Studio WPF Application Timeline or richer WPF/DWM review for the final-render gate; do not publish first-following-render intervals as input-to-pixel latency. Diagnostics tools, WPR, DWM provider registration and Visual Studio are present locally; this follow-up has not revalidated capture permissions or started those tools.
+
+Scoped Babysitter run `01M4136TMADPY5YCKM47HPAMXN` journaled readiness work and initially stopped at the operator gate. That readiness gate was fulfilled after Thomas executed/stopped the captures; the readiness run is completed, not proof that priority 1 is closed. No historical completed run was resumed.
+
+### Later on October 3 — operator captures inspected
+
+Thomas ran two isolated manual captures. Earlier "not run" statements above describe readiness before these attempts. `manual-261003-1/` is a partial typing-only pilot. `manual-261003-2/` is a usable **single-cycle exploratory trace with workload deviations**, not the repeated acceptance cohort. Both ETLs decode with zero reported lost events; original artifacts are preserved, with decoded events, event summaries and `review-1.md` added inside each directory. The second app exited cleanly at 15:28:06 UTC; its process and capture session are stopped.
+
+The second trace confirms character-by-character `Project 001`, Ctrl+A/Ctrl+V and a paste event, then Esc preceding the empty-query setter. Later typing and a second Esc are also present. However, the paste included the console's expected-count annotation: **`no-match-baseline (0)`**. Later typed text was **`no match baseline`** with spaces. These are exploratory variants, not exact matches for the prescribed queries. Multiple empty-query refreshes are recorded, but the markers do not identify the named tab sequence. Visible counts and October 2 heat restoration remain unverified. Operator observations contain `1`; Thomas reports one cycle with variable pauses. Pauses between actions do not invalidate within-action diagnostic spans, but this workload cannot be pooled with prior cohorts.
+
+Single-action elapsed spans, milliseconds:
+
+| Action | Receipt marker → Library apply end | Background query | Query end → apply start | Year presentation |
+|---|---:|---:|---:|---:|
+| Paste `no-match-baseline (0)` | 364.52 | 1.25 | 342.39 | 10.26 |
+| First Esc clear | 154.12 | 32.66 | 92.80 | 18.69 |
+| Typed prefix `no` | 39.37 | 1.59 | 1.74 | 10.51 |
+| Second Esc clear | 101.53 | 27.78 | 58.41 | 10.15 |
+
+Receipt means a WPF diagnostic paste/key/text marker, not hardware receipt; completion means the Library callback, **not final pixels**. Instrumentation overhead remains unquantified. The paste shows a substantial query-end→application gap without UIA, whose cause is not established; do not attribute it to human pauses, dispatcher priority alone or the calendar span. At typed prefix `no`, Saved filtering took 13.45 ms and BuildRows 9.61 ms; later empty-result typing skipped calendar rebuilding. The interior CPU/allocation and scheduling causes still require attribution. No physical-input before/after regression verdict, causal final-render confirmation, optimization or memory claim follows from this single trace.
+
+### Scheduling follow-up — existing trace, no new capture
+
+Thomas requested investigation of the scheduling gap. `DispatcherBackgroundWork.cs:18–28` runs the query through `Task.Run`, then a thread-pool `ContinueWith(..., TaskScheduler.Default)`, then `_dispatcher.BeginInvoke`. The selected overload defaults to **Normal**, not Background/Idle; there is no deliberate delay in this path. Priority does not preempt an already executing dispatcher operation. Query-end→apply-start still includes continuation execution and enqueue/dispatcher timing because those intermediate markers were not recorded.
+
+Same-thread QPC interval analysis places **342.1699 ms of the paste's 342.3848 ms gap (99.94%) inside an in-progress WPF layout span on UI thread 12156**. Its callback starts **0.2149 ms after `WClientLayoutEnd`**. The layout's total elapsed span is **343.2770 ms**; **341.5262 ms occurs after its last recorded `WClientArrangeEnd`**. The later year-presentation mutation is a separate ~10.26 ms span, not the cause of that preceding interval.
+
+| Action | Query-end → apply-start | UI-thread layout overlap | Gap outside layout |
+|---|---:|---:|---:|
+| Paste `no-match-baseline (0)` | 342.38 ms | 342.17 ms | 0.21 ms |
+| First Esc clear | 92.80 ms | 91.96 ms | 0.84 ms |
+| Typed prefix `no` | 1.74 ms | 1.59 ms | 0.16 ms |
+| Second Esc clear | 58.41 ms | 57.65 ms | 0.77 ms |
+
+All **19 completed generations with gaps ≥20 ms** in this one process have **96.68–99.94%** same-thread layout overlap. Ordinary early `Project...` typing is mostly overlapping measure/arrange, whereas the paste and several clears have long post-arrange tails. These are within-process action observations, not independent repeats. Interval overlap is **not active CPU attribution or proof the continuation had already enqueued the callback**; concurrent GC, blocking waits or OS descheduling remain possible.
+
+The installed WPF manifest and public upstream **v10.0.12** source show that the outer layout span also encloses SizeChanged, LayoutUpdated, automation-peer event processing and font/buffer-cache resets. Subspan events for the first three are **Verbose (level 5)**, but this capture used WPF **level 4**, so they cannot be recovered by further decoding. The version-tagged source reference is not a captured stack. There are no CPU stacks, runtime GC or context-switch events to attribute the 341.53 ms tail. Application size handlers and WPF automation processing are candidates, **not established causes**; lack of UIA harness input does not prove absence of automation peers or other accessibility clients.
+
+**Conclusion:** investigate the in-progress UI-thread layout/post-layout span before changing scheduling. There is no evidence-supported dispatcher-priority fix. A focused next diagnostic needs verbose WPF subspans, continuation/enqueue/callback markers and GC/CPU/thread-time evidence under explicit permissions/scope. Repeating the same level-4 capture with stricter human pacing would still miss those facts. Causal final-render and historical-build comparison remain open.
+
+Artifacts: `.a5c/input-render/scheduling-261003/` contains `report.md`, `scheduling-analysis.json`, focused raw `paste-gap-events.jsonl`, upstream source snapshots and `analyze_scheduling.py`. **Nine interval/pairing self-tests and three explicit real-trace gap invariants pass**; all 826 layout/890 measure/890 arrange/940 render-handler spans pair with zero unmatched boundaries. Original-artifact hashes are recorded and checked by `--verify-only`. No app launch, new trace, production/test/CI/CD change, staging or commit was performed for this analysis. Scoped run: `01M416MX49H87SDW12P7Q8FRPW`.
+
 ## Evidence and replay
 
 Local-only evidence/tooling under `.a5c/input-render/` is not tracked and will not exist in a fresh clone:
@@ -141,8 +198,12 @@ python .a5c/input-render/analyze.py C:/QuickerPlaces/.a5c/input-render/capture-r
 Operator-driven capture (interactive; do not run as unattended automation):
 
 ```powershell
+# Preflight only: no app, ETW session or output directory.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .a5c/input-render/manual-capture.ps1 `
-  -OutputDirectory C:/QuickerPlaces/.a5c/input-render/manual-1
+  -OutputDirectory C:/QuickerPlaces/.a5c/input-render/manual-next-1 -ValidateOnly
+# Run in an interactive local console ONLY when the operator is ready.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .a5c/input-render/manual-capture.ps1 `
+  -OutputDirectory C:/QuickerPlaces/.a5c/input-render/manual-next-1 -OperatorPresent
 ```
 
 The manual cohort is not compatible with the automated analyzer's four-run action schema; retain/decode its ETL and review actual input/query/layout/render events separately. Revalidate dated history and binary/harness hashes before replay. No profiling/build/test concurrency, production forced GC or normal-store reuse.
