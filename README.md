@@ -38,6 +38,10 @@ dotnet build QuickerPlaces.sln
 dotnet run --project QuickerPlaces
 ```
 
+### Performance assessment
+
+See the [Windows memory and responsiveness baseline](ai/261002_Performance%20Baseline.md) for workloads, environment, repeated measurements and limitations, and [performance optimization](ai/261002_Performance%20Optimization.md) for subsequent changes and measured comparisons.
+
 ### Running the tests
 
 ```
