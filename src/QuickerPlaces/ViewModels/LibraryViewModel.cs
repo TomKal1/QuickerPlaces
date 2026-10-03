@@ -925,10 +925,12 @@ public sealed class LibraryViewModel : ObservableObject
     {
         var passing = _result?.Items ?? Array.Empty<LibraryItem>();
         var selected = _selectedKind;
-        KindFilters.Clear();
-        KindFilters.Add(new LibraryKindFilter(null, $"All ({passing.Count})", selected is null));
-        foreach (var kind in LibraryKinds.All)
-            KindFilters.Add(new LibraryKindFilter(kind, $"{kind.PluralLabel()} ({passing.Count(i => i.Kind == kind)})", selected == kind));
+        UpdateKindFilter(0, null, $"All ({passing.Count})", selected is null);
+        for (var index = 0; index < LibraryKinds.All.Count; index++)
+        {
+            var kind = LibraryKinds.All[index];
+            UpdateKindFilter(index + 1, kind, $"{kind.PluralLabel()} ({passing.Count(i => i.Kind == kind)})", selected == kind);
+        }
 
         var shown = passing.Where(i => selected is null || i.Kind == selected).ToList();
         var rows = new List<LibraryRowViewModel>();
@@ -984,6 +986,14 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(EmptyText));
     }
 
+    private void UpdateKindFilter(int index, LibraryKind? kind, string label, bool selected)
+    {
+        if (index == KindFilters.Count)
+            KindFilters.Add(new LibraryKindFilter(kind, label, selected));
+        else if (KindFilters[index].Kind != kind || KindFilters[index].Label != label || KindFilters[index].IsSelected != selected)
+            KindFilters[index] = new LibraryKindFilter(kind, label, selected);
+    }
+
     /// <summary>True when the strip on screen was built from what <paramref name="result"/> and the current period and year would build: nothing in it would change.</summary>
     private bool CalendarIsCurrent(LibraryQueryResult result)
     {
@@ -1007,28 +1017,57 @@ public sealed class LibraryViewModel : ObservableObject
             period?.From, period?.To);
         _builtFrom = result is null ? null : new CalendarSource(heat, result.TrackingStartedOn, Today(), period, _calendarYear);
 
-        CalendarWeeks.Clear();
-        foreach (var week in year.Weeks)
-            CalendarWeeks.Add(week);
-        CalendarMonthMarkers.Clear();
-        foreach (var marker in year.MonthMarkers)
-            CalendarMonthMarkers.Add(marker);
-        CalendarWeekdayLabels = year.WeekdayLabels;
-        CalendarStripWidth = year.StripWidth;
-        OnPropertyChanged(nameof(CalendarWeekdayLabels));
-        OnPropertyChanged(nameof(CalendarStripWidth));
+        UpdateCalendarWeeks(CalendarWeeks, year.Weeks);
+        UpdateCalendarItems(CalendarMonthMarkers, year.MonthMarkers);
+        if (!CalendarWeekdayLabels.SequenceEqual(year.WeekdayLabels))
+        {
+            CalendarWeekdayLabels = year.WeekdayLabels;
+            OnPropertyChanged(nameof(CalendarWeekdayLabels));
+        }
+        if (CalendarStripWidth != year.StripWidth)
+        {
+            CalendarStripWidth = year.StripWidth;
+            OnPropertyChanged(nameof(CalendarStripWidth));
+        }
         _lastYear = year;
         BuildMonth(year);
     }
 
+    // The builder stays immutable. Only the UI-thread presentation has observable
+    // day lists, so changing heat or selection does not discard unchanged visuals.
+    private static void UpdateCalendarWeeks(ObservableCollection<ActivityCalendarWeek> weeks, IReadOnlyList<ActivityCalendarWeek> next)
+    {
+        for (var index = 0; index < next.Count; index++)
+        {
+            var week = next[index];
+            if (index == weeks.Count)
+                weeks.Add(week with { Days = new ObservableCollection<ActivityCalendarCell>(week.Days) });
+            else if (weeks[index].StartsOn != week.StartsOn || weeks[index].Days is not ObservableCollection<ActivityCalendarCell> days)
+                weeks[index] = week with { Days = new ObservableCollection<ActivityCalendarCell>(week.Days) };
+            else
+                UpdateCalendarItems(days, week.Days);
+        }
+        while (weeks.Count > next.Count)
+            weeks.RemoveAt(weeks.Count - 1);
+    }
+
+    private static void UpdateCalendarItems<T>(ObservableCollection<T> items, IReadOnlyList<T> next)
+    {
+        for (var index = 0; index < next.Count; index++)
+        {
+            if (index == items.Count)
+                items.Add(next[index]);
+            else if (!EqualityComparer<T>.Default.Equals(items[index], next[index]))
+                items[index] = next[index];
+        }
+        while (items.Count > next.Count)
+            items.RemoveAt(items.Count - 1);
+    }
+
     private void BuildMonth(ActivityCalendarYearResult? year)
     {
-        CalendarMonthWeeks.Clear();
-        if (year?.Months.FirstOrDefault(m => m.Month == _calendarMonth) is { } month)
-        {
-            foreach (var week in month.Weeks)
-                CalendarMonthWeeks.Add(week);
-        }
+        var month = year?.Months.FirstOrDefault(m => m.Month == _calendarMonth);
+        UpdateCalendarWeeks(CalendarMonthWeeks, month?.Weeks ?? Array.Empty<ActivityCalendarWeek>());
 
         OnPropertyChanged(nameof(CalendarMonth));
         OnPropertyChanged(nameof(CalendarMonthLabel));

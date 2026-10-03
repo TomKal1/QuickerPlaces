@@ -145,8 +145,8 @@ public static class LibraryQueryEngine
         var items = inPeriod.Where(i => Passes(i, filter, ignoreKind: true)).ToList();
 
         // Every item known across all kept history, to tie heat evidence to items.
-        var everything = LibraryIndex.Build(data.Places, data.Sessions, FoldersIn(data, null), FilesIn(data, null))
-            .ToDictionary(i => i.Key, ResourceIdentity.Comparer);
+        var allItems = period is null ? inPeriod : LibraryIndex.Build(data.Places, data.Sessions, FoldersIn(data, null), FilesIn(data, null));
+        var everything = allItems.ToDictionary(i => i.Key, ResourceIdentity.Comparer);
 
         var heat = new Dictionary<DateOnly, HeatDay>();
         var starts = new List<DateOnly>();
@@ -211,9 +211,18 @@ public static class LibraryQueryEngine
     {
         foreach (var file in data.Files)
         {
-            var opens = file.Opens.Where(o => In(data.LocalDate(o), period)).ToList();
-            if (opens.Count > 0)
-                yield return new RecentFileSummary(file.Path, file.Kind, opens.Count, opens.Max());
+            var count = 0;
+            var last = DateTimeOffset.MinValue;
+            foreach (var open in file.Opens)
+            {
+                if (period is not null && !In(data.LocalDate(open), period))
+                    continue;
+                count++;
+                if (open > last)
+                    last = open;
+            }
+            if (count > 0)
+                yield return new RecentFileSummary(file.Path, file.Kind, count, last);
         }
     }
 
