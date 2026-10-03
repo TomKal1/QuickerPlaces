@@ -430,3 +430,9 @@ FodyWeavers.xsd
 
 # QuickerPlaces: local verification build copies (not source)
 _verify_bin/
+
+# --- babysitter managed ---
+.a5c/creds.env
+.a5c/creds.env.tmp.*
+# --- end babysitter managed ---
+/.a5c
