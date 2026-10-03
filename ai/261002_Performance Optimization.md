@@ -2,7 +2,7 @@
 
 ## Status
 
-First scoped iteration completed on 2026-10-02 after Thomas authorized work on the [initial Windows memory and responsiveness baseline](261002_Performance%20Baseline.md). Changes are on `perf/memory-responsiveness-baseline`; no commits, staging or CI/CD changes. Existing onboarding/`.gitignore` changes were left alone. Nothing in the Pi agent folder was changed or committed.
+First scoped iteration completed on 2026-10-02 after Thomas authorized work on the [initial Windows memory and responsiveness baseline](261002_Performance%20Baseline.md). The agent made no commits, staging or CI/CD changes; Thomas subsequently committed the first iteration as `fab00f8` on `perf/memory-responsiveness-baseline`. Existing onboarding/`.gitignore` changes were left alone during implementation. Nothing in the Pi agent folder was changed or committed.
 
 **Retained result:** the combined calendar-presentation and query changes reduce allocation, GC pauses, sustained process memory and aggregate UI Automation interaction times in five matched pairs. **Trade-offs:** initial idle private memory rises about 3.9 MiB, and no-match search completion becomes slower. This is not an across-the-board memory/latency improvement or a leak fix. The optional memory goal and idle/no-regression aspiration are not met; review those trade-offs before merging.
 
@@ -185,6 +185,12 @@ Remaining recommended paths:
 5. **Startup:** obtain first meaningful rendered/interactive UI and reboot-cold measurements before proposing deferred initialization. Single-instance/store recovery guarantees remain unchanged.
 
 No CI/CD integration is needed. No further broad refactor, cache or startup change is justified by this first iteration alone.
+
+## Diagnosis follow-up — not a second optimization
+
+See [Input Render Diagnosis](261002_Input%20Render%20Diagnosis.md). On `perf/input-render-diagnosis`, the current commit was freshly built/tested and archived as the next uninstrumented before binary. Repeated WPF ETW captures with separate copied-source instrumentation identify synchronous year-presentation mutation as the main measured no-match callback span and confirm that callback/UIA-read ordering can change completion times under the same build.
+
+These are diagnostic cohorts with different pacing and instrumentation, **not new before/after gains**. Physical typing/paste without UIA, causal render attribution and inner-span CPU/allocation attribution remain gates before a narrow fix. No production implementation, idle/retention improvement or startup change was made. The first-iteration tables above remain unchanged.
 
 ## Evidence and replay
 
