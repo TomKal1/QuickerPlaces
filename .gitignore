@@ -430,3 +430,4 @@ FodyWeavers.xsd
 
 # QuickerPlaces: local verification build copies (not source)
 _verify_bin/
+/.a5c
