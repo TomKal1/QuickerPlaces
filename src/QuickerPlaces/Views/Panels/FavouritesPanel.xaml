@@ -32,8 +32,10 @@
                        Foreground="{DynamicResource Text.Tertiary}" VerticalAlignment="Center" />
         </WrapPanel>
         <Grid Margin="0,8,0,0">
+            <AdornerDecorator>
             <ItemsControl x:Name="FavouritesItemsControl" ItemsSource="{Binding FavouritePlaces}" AutomationProperties.Name="Favourites"
-                          AllowDrop="True" DragOver="FavouritesItemsControl_DragOver" Drop="FavouritesItemsControl_Drop">
+                          AllowDrop="True" DragOver="FavouritesItemsControl_DragOver" DragLeave="FavouritesItemsControl_DragLeave" Drop="FavouritesItemsControl_Drop"
+                          Background="Transparent">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel Orientation="Horizontal" />
@@ -72,6 +74,7 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+            </AdornerDecorator>
         </Grid>
     </StackPanel>
 </UserControl>

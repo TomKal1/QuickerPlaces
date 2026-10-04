@@ -151,6 +151,34 @@ public sealed class SessionsViewModelTests
     private static string[] Names(SessionsViewModel vm) => vm.Rows.Select(r => r.Name).ToArray();
 
     [Fact]
+    public void ExplicitDropSlots_WorkInAFilteredList_AndKeepTheSelectedCardAndFilter()
+    {
+        Add("A", new[] { "Visible" }, A101);
+        Add("B", new[] { "Hidden" }, A101);
+        var c = Add("C", new[] { "Visible" }, A102);
+        Add("D", new[] { "Visible" }, Spec);
+        var vm = NewViewModel();
+        vm.SelectedTag = "Visible";
+        vm.SelectedRow = vm.Rows.Single(r => r.Id == c.Id);
+
+        vm.Move(vm.Rows.Single(r => r.Name == "D"), vm.SelectedRow, after: false);
+
+        Assert.Equal(new[] { "A", "D", "C" }, Names(vm));
+        Assert.Equal(new[] { "A", "B", "D", "C" }, _store.Sessions.Select(s => s.Name));
+        Assert.Equal(c.Id, vm.SelectedRow!.Id);
+        Assert.Equal("Visible", vm.SelectedTag);
+
+        vm.Move(vm.Rows.Single(r => r.Name == "A"), vm.SelectedRow, after: true);
+
+        Assert.Equal(new[] { "D", "C", "A" }, Names(vm));
+        Assert.Equal(new[] { "B", "D", "C", "A" }, _store.Sessions.Select(s => s.Name));
+        Assert.Equal(new[] { "2", "3", "4" }, vm.Rows.Select(r => r.ShortcutText));
+        Assert.Equal(c.Id, vm.SelectedRow!.Id);
+        Assert.Equal("Visible", vm.SelectedTag);
+        Assert.Equal(new[] { "B", "D", "C", "A" }, Names(NewViewModel()));
+    }
+
+    [Fact]
     public void ADraggedCard_TakesTheDroppedOnCardsPlace_AndItsNumberWithIt()
     {
         Add("Tower A", Array.Empty<string>(), Spec);

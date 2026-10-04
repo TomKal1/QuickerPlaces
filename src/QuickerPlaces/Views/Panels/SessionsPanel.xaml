@@ -230,6 +230,7 @@
                 </ItemsControl>
 
                 <Grid Grid.Row="2">
+                    <AdornerDecorator>
                     <ListBox x:Name="SessionsList" ItemsSource="{Binding Rows}"
                              SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                              ItemContainerStyle="{StaticResource SessionCard}"
@@ -238,7 +239,7 @@
                              AutomationProperties.Name="Saved sessions"
                              MouseDoubleClick="SessionsList_MouseDoubleClick"
                              KeyDown="SessionsList_KeyDown"
-                             AllowDrop="True" DragOver="SessionsList_DragOver" Drop="SessionsList_Drop"
+                             AllowDrop="True" DragOver="SessionsList_DragOver" DragLeave="SessionsList_DragLeave" Drop="SessionsList_Drop"
                              ContextMenuOpening="SessionsList_ContextMenuOpening">
                         <!-- A card's menu (File viewer design §5). Right-click selects the card first, so it acts on the selected session. -->
                         <ListBox.ContextMenu>
@@ -280,6 +281,7 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+                    </AdornerDecorator>
 
                     <TextBlock Text="{Binding ListPlaceholder}" IsHitTestVisible="False"
                                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,32,16,0"

@@ -72,7 +72,7 @@ The ✕ button beside the box also clears it. Searching only filters the grid; y
 Any place can be a favourite. Click the star after its name in the grid (it appears when you point at the row), or press **Ctrl+D** with the row selected, or choose **Toggle favourite** from its right-click menu. An orange star means it's a favourite, and it gets a card in the row above the grid. Clicking the orange star, or **Remove from favourites** on the card's own right-click menu, takes it off again.
 
 - **Click a card** to open that place — identical to double-clicking its row.
-- **Drag a card** left or right to reorder the row. The order you leave them in is remembered.
+- **Drag a card** to reorder favourites. The dragged card dims and a highlighted insertion marker shows where it will land. Use the upper/lower half of a stacked card, or the left/right half of a card in a row, to place it before/after that card. Release to save the new order, or press **Esc** to cancel.
 - **Right-click a card** for a shortcut menu: **Open**, **Copy folder or link**, or **Remove from favourites** — you don't need to go back to the grid just to unpin something.
 - **Hover over a card** to see where it points.
 - **Ctrl+1** to **Ctrl+9** open the first nine cards, numbered in their left-to-right order.
@@ -128,6 +128,8 @@ A **session** is a named, tagged set of files you had open together — the draw
 - **Delete…** deletes the session after asking. Only the session goes; its files stay where they are.
 
 Opening a session doesn't count as opening a place: Last Opened and Opens in the main grid are unaffected, and a session's files never appear there.
+
+Drag a session card to reorder it. The card dims while you drag, and a highlighted insertion marker shows its destination. Hover over the upper or lower half of another card to insert before or after it. Dropping saves the order and updates the **Ctrl+Shift+1…9** shortcuts; **Esc** cancels the drag.
 
 Sessions are saved in `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside your places, the moment you save, edit, reopen or delete one. They aren't part of **Export places**. If a save fails, the Sessions window says so in red; the change is kept and tried again with the next change and when QuickerPlaces closes.
 

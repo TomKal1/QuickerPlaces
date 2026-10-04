@@ -31,6 +31,36 @@ public sealed class SessionStoreTests
         return created!;
     }
 
+    [Theory]
+    [InlineData("A", "C", false, "B,A,C,D", true)]
+    [InlineData("A", "C", true, "B,C,A,D", true)]
+    [InlineData("D", "B", false, "A,D,B,C", true)]
+    [InlineData("D", "B", true, "A,B,D,C", true)]
+    [InlineData("B", "A", true, "A,B,C,D", false)]
+    [InlineData("B", "C", false, "A,B,C,D", false)]
+    [InlineData("B", "B", false, "A,B,C,D", false)]
+    [InlineData("B", "B", true, "A,B,C,D", false)]
+    public void ExplicitDropSlots_InsertBeforeOrAfterAndSkipUnchangedMoves(string dragged, string target, bool after,
+        string expectedOrder, bool changed)
+    {
+        var storage = new FakePlacesStorage();
+        var store = NewStore(storage);
+        foreach (var name in new[] { "A", "B", "C", "D" })
+            Create(store, name);
+        var from = store.Sessions.Single(s => s.Name == dragged);
+        var to = store.Sessions.Single(s => s.Name == target);
+        var writes = storage.WriteCount;
+        var updatedAt = from.UpdatedAt;
+
+        Assert.True(store.Move(from.Id, to.Id, after).Saved);
+
+        Assert.Equal(expectedOrder.Split(','), store.Sessions.Select(s => s.Name));
+        Assert.Equal(writes + (changed ? 1 : 0), storage.WriteCount);
+        Assert.Equal(expectedOrder.Split(','), NewStore(storage).Sessions.Select(s => s.Name));
+        Assert.Equal(updatedAt, store.Find(from.Id)!.UpdatedAt);
+        Assert.Equal(new int?[] { 1, 2, 3, 4 }, store.Sessions.Select(s => s.ShortcutDigit));
+    }
+
     [Fact]
     public void ANewSession_IsSavedAtOnce_AndLoadsBack()
     {
