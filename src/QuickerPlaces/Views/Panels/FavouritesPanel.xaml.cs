@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using QuickerPlaces.ViewModels;
 
 namespace QuickerPlaces.Views.Panels;
@@ -12,9 +11,15 @@ namespace QuickerPlaces.Views.Panels;
 /// </summary>
 public partial class FavouritesPanel : UserControl
 {
-    private Point _bubbleDragStartPoint;
+    private Point? _bubbleDragStartPoint;
+    private readonly CardDropPreview<PlaceViewModel> _dropPreview;
 
-    public FavouritesPanel() => InitializeComponent();
+    public FavouritesPanel()
+    {
+        InitializeComponent();
+        _dropPreview = new CardDropPreview<PlaceViewModel>(FavouritesItemsControl);
+        Unloaded += (_, _) => _dropPreview.Clear();
+    }
 
     /// <summary>False in a workspace panel, whose frame already shows the title.</summary>
     public bool ShowsTitle
@@ -61,75 +66,55 @@ public partial class FavouritesPanel : UserControl
 
     private void Bubble_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed)
+        if (e.LeftButton != MouseButtonState.Pressed || _bubbleDragStartPoint is not { } start)
             return;
 
         if (sender is not Button { DataContext: PlaceViewModel place } button)
             return;
 
         var current = e.GetPosition(null);
-        var movedX = System.Math.Abs(current.X - _bubbleDragStartPoint.X);
-        var movedY = System.Math.Abs(current.Y - _bubbleDragStartPoint.Y);
+        var movedX = System.Math.Abs(current.X - start.X);
+        var movedY = System.Math.Abs(current.Y - start.Y);
 
         if (movedX < SystemParameters.MinimumHorizontalDragDistance &&
             movedY < SystemParameters.MinimumVerticalDragDistance)
             return;
 
-        DragDrop.DoDragDrop(button, new DataObject(typeof(PlaceViewModel), place), DragDropEffects.Move);
+        _bubbleDragStartPoint = null;
+        _dropPreview.Drag(button, place);
     }
 
     private void FavouritesItemsControl_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(typeof(PlaceViewModel)) ? DragDropEffects.Move : DragDropEffects.None;
+        if (e.Data.GetData(typeof(PlaceViewModel)) is PlaceViewModel dragged &&
+            DataContext is MainViewModel vm && vm.FavouritePlaces.Contains(dragged))
+        {
+            _dropPreview.Update(e.GetPosition(FavouritesItemsControl), dragged, Stacked);
+            e.Effects = DragDropEffects.Move;
+        }
+        else
+        {
+            _dropPreview.Clear();
+            e.Effects = DragDropEffects.None;
+        }
         e.Handled = true;
+    }
+
+    private void FavouritesItemsControl_DragLeave(object sender, DragEventArgs e)
+    {
+        if (!_dropPreview.Contains(e.GetPosition(FavouritesItemsControl)))
+            _dropPreview.Clear();
     }
 
     private void FavouritesItemsControl_Drop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(typeof(PlaceViewModel)))
-            return;
-
-        if (e.Data.GetData(typeof(PlaceViewModel)) is not PlaceViewModel dragged)
-            return;
-
-        if (DataContext is not MainViewModel viewModel)
-            return;
-
-        var dropPosition = e.GetPosition(FavouritesItemsControl);
-        var targetPlace = FindPlaceUnderPoint(dropPosition);
-
-        // Dropped back onto itself (a short wobble rather than a real
-        // move): leave it where it was. Only a drop on empty space — past
-        // the last bubble, or in a gap — means "move to the end".
-        if (ReferenceEquals(targetPlace, dragged))
-            return;
-
-        var items = viewModel.FavouritePlaces;
-        var targetIndex = targetPlace is not null
-            ? items.IndexOf(targetPlace)
-            : items.Count - 1;
-
-        viewModel.MoveFavourite(dragged, targetIndex);
-    }
-
-    /// <summary>
-    /// Walks up from whatever visual was hit at <paramref name="point"/>
-    /// (inside FavouritesItemsControl) until it finds an element whose
-    /// DataContext is a PlaceViewModel — i.e. which bubble, if any, the
-    /// drop landed on.
-    /// </summary>
-    private PlaceViewModel? FindPlaceUnderPoint(Point point)
-    {
-        var hit = VisualTreeHelper.HitTest(FavouritesItemsControl, point)?.VisualHit;
-
-        while (hit is not null)
+        _dropPreview.Clear();
+        if (DataContext is MainViewModel viewModel &&
+            e.Data.GetData(typeof(PlaceViewModel)) is PlaceViewModel dragged &&
+            _dropPreview.FindTarget(e.GetPosition(FavouritesItemsControl), dragged, Stacked) is { } target)
         {
-            if (hit is FrameworkElement { DataContext: PlaceViewModel place })
-                return place;
-
-            hit = VisualTreeHelper.GetParent(hit);
+            viewModel.MoveFavourite(dragged, target.TargetIndex);
         }
-
-        return null;
+        e.Handled = true;
     }
 }

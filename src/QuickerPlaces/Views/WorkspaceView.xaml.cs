@@ -390,9 +390,6 @@ public partial class WorkspaceView : UserControl
         }
 
         UpdateFrames();
-        var noCalendar = _workspace.Panels.All(p => p.Type != PanelTypes.Activity || p.Dock == PanelDock.Rail);
-        foreach (var shelf in _shelves)
-            shelf.ShowsPeriod = noCalendar;
         if (_sessionsPanel is not null)
         {
             // With a File viewer, its Sessions tab lists the files, so the cards need not (File viewer design §5).
@@ -1173,7 +1170,7 @@ public partial class WorkspaceView : UserControl
     // Search box: a launcher, as the places list's is
     // -----------------------------------------------------------------
 
-    /// <summary>Enter opens the top result, Down moves into the File shelf, Esc clears the search (or, when empty, moves to the shelf).</summary>
+    /// <summary>Enter opens the top result, Down moves into the File shelf, Esc clears the date first, then the search (or, when empty, moves to the shelf).</summary>
     private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (_workspace is null)
@@ -1182,7 +1179,9 @@ public partial class WorkspaceView : UserControl
         switch (e.Key)
         {
             case Key.Escape:
-                if (_workspace.IsSearching)
+                if (_workspace.Library.HasPeriod)
+                    _workspace.Library.ClearPeriod();
+                else if (_workspace.IsSearching)
                     _workspace.SearchText = "";
                 else if (_filesPanel is { ShowsSavedPlaces: true } savedEsc)
                     savedEsc.FocusSavedPlaces();

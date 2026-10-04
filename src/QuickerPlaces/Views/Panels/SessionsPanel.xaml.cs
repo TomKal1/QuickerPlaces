@@ -22,8 +22,14 @@ public partial class SessionsPanel : UserControl
     private SessionStore? _store;
     private WindowsOpenDocumentProbe? _probe;
     private SessionsViewModel? _viewModel;
+    private readonly CardDropPreview<SessionRowViewModel> _dropPreview;
 
-    public SessionsPanel() => InitializeComponent();
+    public SessionsPanel()
+    {
+        InitializeComponent();
+        _dropPreview = new CardDropPreview<SessionRowViewModel>(SessionsList);
+        Unloaded += (_, _) => _dropPreview.Clear();
+    }
 
     /// <summary>Raised after a session was saved, edited or deleted here, so views of the Library can read the sessions again.</summary>
     public event Action? SessionsChanged;
@@ -376,38 +382,41 @@ public partial class SessionsPanel : UserControl
             return;
 
         _dragStart = null;
-        DragDrop.DoDragDrop(item, new DataObject(typeof(SessionRowViewModel), row), DragDropEffects.Move);
+        _dropPreview.Drag(item, row);
     }
 
     private void SessionsList_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(typeof(SessionRowViewModel)) ? DragDropEffects.Move : DragDropEffects.None;
+        if (_viewModel is { CanChange: true } vm &&
+            e.Data.GetData(typeof(SessionRowViewModel)) is SessionRowViewModel dragged && vm.Rows.Contains(dragged))
+        {
+            _dropPreview.Update(e.GetPosition(SessionsList), dragged, vertical: true);
+            e.Effects = DragDropEffects.Move;
+        }
+        else
+        {
+            _dropPreview.Clear();
+            e.Effects = DragDropEffects.None;
+        }
         e.Handled = true;
+    }
+
+    private void SessionsList_DragLeave(object sender, DragEventArgs e)
+    {
+        if (!_dropPreview.Contains(e.GetPosition(SessionsList)))
+            _dropPreview.Clear();
     }
 
     private void SessionsList_Drop(object sender, DragEventArgs e)
     {
-        if (_viewModel is null || e.Data.GetData(typeof(SessionRowViewModel)) is not SessionRowViewModel dragged)
-            return;
-
-        // Onto another card, it takes that card's place; onto empty space, it goes last.
-        _viewModel.Move(dragged, CardAt(e.GetPosition(SessionsList)));
-        e.Handled = true;
-    }
-
-    /// <summary>The session whose card is at <paramref name="point"/> (inside the list), or null over empty space.</summary>
-    private SessionRowViewModel? CardAt(Point point)
-    {
-        var hit = VisualTreeHelper.HitTest(SessionsList, point)?.VisualHit;
-        while (hit is not null)
+        _dropPreview.Clear();
+        if (_viewModel is { CanChange: true } &&
+            e.Data.GetData(typeof(SessionRowViewModel)) is SessionRowViewModel dragged &&
+            _dropPreview.FindTarget(e.GetPosition(SessionsList), dragged, vertical: true) is { } target)
         {
-            if (hit is FrameworkElement { DataContext: SessionRowViewModel row })
-                return row;
-
-            hit = VisualTreeHelper.GetParent(hit);
+            _viewModel.Move(dragged, target.Item, target.After);
         }
-
-        return null;
+        e.Handled = true;
     }
 
     private void ViewFiles_Click(object sender, RoutedEventArgs e)

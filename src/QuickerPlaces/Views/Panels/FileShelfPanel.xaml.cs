@@ -149,16 +149,6 @@ public partial class FileShelfPanel : UserControl
         set => SearchArea.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>
-    /// Shows the chosen period, with a button that clears it: the workspace
-    /// turns this on while no Year activity panel is shown (D4).
-    /// </summary>
-    public bool ShowsPeriod
-    {
-        get => PeriodArea.Visibility == Visibility.Visible;
-        set => PeriodArea.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-    }
-
     private void ClearPeriod_Click(object sender, RoutedEventArgs e) => ViewModel?.ClearPeriod();
 
     /// <summary>Shows Save as session, which raises <see cref="SaveAsSessionRequested"/>: the workspace saves the listed files (M3).</summary>
@@ -381,9 +371,14 @@ public partial class FileShelfPanel : UserControl
         if (ViewModel is not { } vm)
             return;
 
-        if (e.Key == Key.Escape && vm.SearchText.Length > 0)
+        if (e.Key == Key.Escape && vm.HasPeriod)
         {
-            // Esc clears the search first; only an empty box lets it reach the window.
+            vm.ClearPeriod();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && vm.SearchText.Length > 0)
+        {
+            // With no date filter, retain the search box's usual Esc behavior.
             vm.SearchText = "";
             e.Handled = true;
         }

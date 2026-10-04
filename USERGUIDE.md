@@ -72,7 +72,7 @@ The ✕ button beside the box also clears it. Searching only filters the grid; y
 Any place can be a favourite. Click the star after its name in the grid (it appears when you point at the row), or press **Ctrl+D** with the row selected, or choose **Toggle favourite** from its right-click menu. An orange star means it's a favourite, and it gets a card in the row above the grid. Clicking the orange star, or **Remove from favourites** on the card's own right-click menu, takes it off again.
 
 - **Click a card** to open that place — identical to double-clicking its row.
-- **Drag a card** left or right to reorder the row. The order you leave them in is remembered.
+- **Drag a card** to reorder favourites. The dragged card dims and a highlighted insertion marker shows where it will land. Use the upper/lower half of a stacked card, or the left/right half of a card in a row, to place it before/after that card. Release to save the new order, or press **Esc** to cancel.
 - **Right-click a card** for a shortcut menu: **Open**, **Copy folder or link**, or **Remove from favourites** — you don't need to go back to the grid just to unpin something.
 - **Hover over a card** to see where it points.
 - **Ctrl+1** to **Ctrl+9** open the first nine cards, numbered in their left-to-right order.
@@ -129,6 +129,8 @@ A **session** is a named, tagged set of files you had open together — the draw
 
 Opening a session doesn't count as opening a place: Last Opened and Opens in the main grid are unaffected, and a session's files never appear there.
 
+Drag a session card to reorder it. The card dims while you drag, and a highlighted insertion marker shows its destination. Hover over the upper or lower half of another card to insert before or after it. Dropping saves the order and updates the **Ctrl+Shift+1…9** shortcuts; **Esc** cancels the drag.
+
 Sessions are saved in `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside your places, the moment you save, edit, reopen or delete one. They aren't part of **Export places**. If a save fails, the Sessions window says so in red; the change is kept and tried again with the next change and when QuickerPlaces closes.
 
 ## Recent Files
@@ -153,7 +155,8 @@ The **Library** (in the header) shows everything QuickerPlaces knows about in on
 - **Group by Type or Tag** — by tag, each session tag gets its own group, a file with two tags appears under both, and anything untagged (including places, which don't have tags) is under **No tag**.
 - **Tag** narrows to files in sessions with one tag; **Any tag** shows everything again.
 - **Search** matches names, paths, tags and session names.
-- **The year strip** at the top shades each day by the activity QuickerPlaces recorded — folder visits, files opened, and sessions saved or reopened — for the kind, Show, Tag and Search choices below it. It is a count of those records, not of files used: reopening a session counts once, not once per file. Choose **Day**, **Week** or **Month** beside the year, then click a day to list only what was used that day, week or month; click the same period again, or the **×** beside it, to see everything. Choosing a period changes the list, not the shading. Links keep no history, only when each was last opened.
+- **The location pin button below D/W/M** selects the current local day, week or month according to the active **D/W/M** choice and returns the calendar to it. Its tooltip says **Jump to Today**, **Jump to This week**, or **Jump to This month**. Other filters stay in place; clicking it again keeps the selection. Week and month use the current period even when a saved layout is reopened later.
+- **The year strip** at the top shades each day by the activity QuickerPlaces recorded — folder visits, files opened, and sessions saved or reopened — for the kind, Show, Tag and Search choices below it. It is a count of those records, not of files used: reopening a session counts once, not once per file. Choose **Day**, **Week** or **Month** beside the year, then click a day to list only what was used that day, week or month. A highlighted **Date filter active** bar above the results shows the selected period. Press **Esc**, click **Clear date filter**, click the same period again, or use the **×** beside it to show all dates while keeping the other filters. With focus in the calendar, **Up/Down** moves one day and **Left/Right** one week in Day mode; in Week or Month mode, every arrow moves one whole period. The calendar follows the selection across months and years. Choosing a period changes the list, not the shading. Links keep no history, only when each was last opened.
 - **What the strip can't count** is said under it rather than shown as an empty day. Recents remembers which folders you visited for 62 days (and how many visits per day for a year), so while you search or show only Saved, older days show as outlined squares whose tooltip says the folder visits for that filter are no longer known. If Recents tracks no folders, or Recent Files is off or was off for a while, a line says so.
 - **An empty list says why:** the period is still to come, nothing was being recorded yet, or nothing was recorded then. A line under the list says what a period can't include — a saved place shows in a period only if that's when you last opened it, and folders visited more than 62 days ago can't be listed.
 
@@ -220,7 +223,9 @@ If you only want the favourite cards visible, click **Hide list**. The grid coll
 | **Ctrl+1** … **Ctrl+9** | Open favourite card 1–9 |
 | **Enter** (in search box) | Open the top result |
 | **Down** (in search box) | Move into the grid |
-| **Esc** (in search box) | Clear the search, or move into the grid if it's already empty |
+| **Esc** (with a date filter active) | Clear the date filter, keeping the other filters |
+| **Esc** (in search box, with no date filter) | Clear the search, or move into the grid if it's already empty |
+| **Arrow keys** (in the Library or workspace calendar) | Day mode: Up/Down moves a day, Left/Right a week; Week/Month mode: move a whole period |
 
 These act on the selected grid row, when the grid has keyboard focus:
 

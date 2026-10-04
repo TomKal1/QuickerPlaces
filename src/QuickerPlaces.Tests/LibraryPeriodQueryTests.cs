@@ -70,6 +70,244 @@ public sealed class LibraryPeriodQueryTests
 
     private static string[] Names(LibraryViewModel vm) => vm.Rows.Select(r => r.Name).OrderBy(n => n).ToArray();
 
+    [Theory]
+    [InlineData(CalendarSelectionUnit.Day, "Today", DateRuleKind.Range, "2026-09-25", "2026-09-25")]
+    [InlineData(CalendarSelectionUnit.Week, "This week", DateRuleKind.ThisWeek, "2026-09-21", "2026-09-27")]
+    [InlineData(CalendarSelectionUnit.Month, "This month", DateRuleKind.ThisMonth, "2026-09-01", "2026-09-30")]
+    public void JumpToCurrentPeriod_SelectsTheCurrentUnit_AndPreservesOtherFilters(CalendarSelectionUnit unit,
+        string label, DateRuleKind kind, string from, string to)
+    {
+        Seed();
+        var vm = NewViewModel();
+        vm.SelectionUnit = unit;
+        vm.SearchText = "budget";
+        vm.SelectedKind = LibraryKind.Excel;
+        vm.Source = LibrarySourceFilter.Recent;
+        vm.SelectCalendarDate(new DateOnly(2024, 3, 15));
+        vm.SelectCalendarYear(2024);
+        var expected = vm.CurrentQuery;
+        expected.Date = kind switch
+        {
+            DateRuleKind.ThisWeek => DateRule.ThisWeek(),
+            DateRuleKind.ThisMonth => DateRule.ThisMonth(),
+            _ => DateRule.Between(Today, Today),
+        };
+        var changes = 0;
+        vm.QueryChanged += () => changes++;
+
+        vm.SelectCurrentPeriod();
+
+        Assert.Equal(label, vm.CurrentPeriodButtonText);
+        Assert.Equal(unit, vm.SelectionUnit);
+        Assert.Equal((DateOnly.Parse(from), DateOnly.Parse(to)), vm.Period);
+        Assert.Equal((2026, 9), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.True(vm.CurrentQuery.SameAs(expected));
+        Assert.Equal(unit == CalendarSelectionUnit.Day ? Array.Empty<string>() : new[] { "Budget.xlsx" }, Names(vm));
+        Assert.True(vm.CalendarMonthWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today).IsSelected);
+        Assert.Equal(1, changes);
+    }
+
+    [Theory]
+    [InlineData(CalendarSelectionUnit.Day)]
+    [InlineData(CalendarSelectionUnit.Week)]
+    [InlineData(CalendarSelectionUnit.Month)]
+    public void JumpToCurrentPeriod_AgainRestoresTheCalendarWithoutClearingTheSelection(CalendarSelectionUnit unit)
+    {
+        var vm = NewViewModel();
+        vm.SelectionUnit = unit;
+        vm.SelectCurrentPeriod();
+        var query = vm.CurrentQuery;
+        vm.ShowCalendarMonth(-1);
+        vm.SelectCalendarYear(2023);
+        var changes = 0;
+        vm.QueryChanged += () => changes++;
+
+        vm.SelectCurrentPeriod();
+
+        Assert.True(vm.HasPeriod);
+        Assert.True(query.SameAs(vm.CurrentQuery));
+        Assert.Equal((2026, 9), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.True(vm.CalendarMonthWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today).IsSelected);
+        Assert.Equal(0, changes);
+        vm.ShowCalendarMonth(-1);
+        vm.SelectCurrentPeriod();
+        Assert.Equal((2026, 9), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.Equal(0, changes);
+    }
+
+    [Fact]
+    public void JumpToThisWeek_KeepsTodayVisibleWhenTheWeekStartsInThePreviousYear()
+    {
+        _time.UtcNow = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var vm = NewViewModel();
+        vm.SelectionUnit = CalendarSelectionUnit.Week;
+
+        vm.SelectCurrentPeriod();
+
+        Assert.Equal((new DateOnly(2026, 12, 28), new DateOnly(2027, 1, 3)), vm.Period);
+        Assert.Equal((2027, 1), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.True(vm.CalendarMonthWeeks.SelectMany(w => w.Days).Single(d => d.Date == new DateOnly(2027, 1, 1)).IsSelected);
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: true));
+        vm.SelectionUnit = CalendarSelectionUnit.Day;
+        Assert.Equal((new DateOnly(2027, 1, 8), new DateOnly(2027, 1, 8)), vm.Period);
+    }
+
+    [Fact]
+    public void JumpToToday_UsesTheLocalDate_AndTheButtonLabelFollowsTheUnit()
+    {
+        // Local UTC+10 is already Friday while UTC is still Thursday.
+        _time.UtcNow = new DateTimeOffset(2026, 9, 24, 18, 0, 0, TimeSpan.Zero);
+        var vm = NewViewModel();
+        var labels = new System.Collections.Generic.List<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.CurrentPeriodButtonText))
+                labels.Add(vm.CurrentPeriodButtonText);
+        };
+
+        vm.SelectCurrentPeriod();
+        Assert.Equal((Today, Today), vm.Period);
+        vm.SelectionUnit = CalendarSelectionUnit.Week;
+        vm.SelectionUnit = CalendarSelectionUnit.Month;
+        vm.SelectionUnit = CalendarSelectionUnit.Day;
+        Assert.Equal(new[] { "This week", "This month", "Today" }, labels);
+    }
+
+    [Theory]
+    [InlineData(CalendarSelectionUnit.Day, -1, false, "2026-09-29", "2026-09-29")]
+    [InlineData(CalendarSelectionUnit.Day, 1, false, "2026-10-01", "2026-10-01")]
+    [InlineData(CalendarSelectionUnit.Day, -1, true, "2026-09-23", "2026-09-23")]
+    [InlineData(CalendarSelectionUnit.Day, 1, true, "2026-10-07", "2026-10-07")]
+    [InlineData(CalendarSelectionUnit.Week, -1, false, "2026-09-21", "2026-09-27")]
+    [InlineData(CalendarSelectionUnit.Week, 1, false, "2026-10-05", "2026-10-11")]
+    [InlineData(CalendarSelectionUnit.Week, -1, true, "2026-09-21", "2026-09-27")]
+    [InlineData(CalendarSelectionUnit.Week, 1, true, "2026-10-05", "2026-10-11")]
+    [InlineData(CalendarSelectionUnit.Month, -1, false, "2026-08-01", "2026-08-31")]
+    [InlineData(CalendarSelectionUnit.Month, 1, false, "2026-10-01", "2026-10-31")]
+    [InlineData(CalendarSelectionUnit.Month, -1, true, "2026-08-01", "2026-08-31")]
+    [InlineData(CalendarSelectionUnit.Month, 1, true, "2026-10-01", "2026-10-31")]
+    public void CalendarArrows_MoveByTheSelectedUnit(CalendarSelectionUnit unit, int direction, bool horizontal, string from, string to)
+    {
+        var vm = NewViewModel();
+        vm.SelectionUnit = unit;
+        vm.SelectCalendarDate(new DateOnly(2026, 9, 30));
+        var changes = 0;
+        vm.QueryChanged += () => changes++;
+
+        Assert.True(vm.MoveCalendarSelection(direction, horizontal));
+
+        Assert.Equal((DateOnly.Parse(from), DateOnly.Parse(to)), vm.Period);
+        Assert.Equal(DateOnly.Parse(from).Month, vm.CalendarMonth);
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public void CalendarArrows_FollowTheSelectionAcrossYears_AndKeepTheMovedDayWhenChangingUnits()
+    {
+        var vm = NewViewModel();
+        vm.SelectCalendarDate(new DateOnly(2026, 12, 31));
+
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: false));
+        Assert.Equal((2027, 1), (vm.CalendarYear, vm.CalendarMonth));
+        Assert.Equal((new DateOnly(2027, 1, 1), new DateOnly(2027, 1, 1)), vm.Period);
+        Assert.True(vm.CalendarMonthWeeks.SelectMany(w => w.Days).Single(d => d.Date == new DateOnly(2027, 1, 1)).IsSelected);
+
+        vm.SelectionUnit = CalendarSelectionUnit.Month;
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: true));
+        vm.SelectionUnit = CalendarSelectionUnit.Day;
+        Assert.Equal((new DateOnly(2027, 2, 1), new DateOnly(2027, 2, 1)), vm.Period);
+    }
+
+    [Fact]
+    public void CalendarArrows_HandleLeapDaysAndMonthEnds()
+    {
+        var vm = NewViewModel();
+        vm.SelectCalendarDate(new DateOnly(2028, 2, 28));
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: false));
+        Assert.Equal((new DateOnly(2028, 2, 29), new DateOnly(2028, 2, 29)), vm.Period);
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: false));
+        Assert.Equal((2028, 3), (vm.CalendarYear, vm.CalendarMonth));
+
+        vm.SelectCalendarDate(new DateOnly(2028, 1, 31));
+        vm.SelectionUnit = CalendarSelectionUnit.Month;
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: true));
+        Assert.Equal((new DateOnly(2028, 2, 1), new DateOnly(2028, 2, 29)), vm.Period);
+        vm.SelectionUnit = CalendarSelectionUnit.Day;
+        Assert.Equal((new DateOnly(2028, 2, 29), new DateOnly(2028, 2, 29)), vm.Period);
+    }
+
+    [Fact]
+    public void CalendarArrows_CanStartFromAFocusedDay_OrTodayAfterClearing()
+    {
+        var vm = NewViewModel();
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: false, new DateOnly(2025, 12, 31)));
+        Assert.Equal((new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 1)), vm.Period);
+
+        vm.ClearPeriod();
+        Assert.True(vm.MoveCalendarSelection(-1, horizontal: false));
+        Assert.Equal((Today.AddDays(-1), Today.AddDays(-1)), vm.Period);
+    }
+
+    [Fact]
+    public void CalendarArrows_UseTheCurrentSavedOrRelativePeriod_InsteadOfAStaleClickedDay()
+    {
+        var vm = NewViewModel();
+        vm.SelectCalendarDate(new DateOnly(2026, 8, 15));
+        vm.ApplyQuery(new WorkspaceQuery { Date = DateRule.Between(new DateOnly(2026, 9, 30), new DateOnly(2026, 9, 30)) });
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: false));
+        Assert.Equal((new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 1)), vm.Period);
+
+        vm.SelectionUnit = CalendarSelectionUnit.Week;
+        vm.SetDateRule(DateRule.ThisWeek());
+        Assert.True(vm.MoveCalendarSelection(1, horizontal: false));
+        Assert.Equal((new DateOnly(2026, 9, 28), new DateOnly(2026, 10, 4)), vm.Period);
+        Assert.Equal(DateRuleKind.Range, vm.Date.Kind);
+    }
+
+    [Theory]
+    [InlineData("2000-01-01", -1)]
+    [InlineData("2100-12-31", 1)]
+    public void CalendarArrows_StopAtTheSupportedYearsWithoutChangingTheQuery(string date, int direction)
+    {
+        var vm = NewViewModel();
+        vm.SelectCalendarDate(DateOnly.Parse(date));
+        var query = vm.CurrentQuery;
+        var changes = 0;
+        vm.QueryChanged += () => changes++;
+
+        Assert.False(vm.MoveCalendarSelection(direction, horizontal: false));
+        Assert.False(vm.MoveCalendarSelection(direction, horizontal: true));
+        Assert.False(vm.MoveCalendarSelection(0, horizontal: false));
+        Assert.True(query.SameAs(vm.CurrentQuery));
+        Assert.Equal(0, changes);
+    }
+
+    [Fact]
+    public void ClearingTheDate_RestoresMatchingRows_AndPreservesOtherFilters()
+    {
+        Seed();
+        var vm = NewViewModel();
+        vm.SearchText = "budget";
+        vm.SelectedKind = LibraryKind.Excel;
+        vm.Source = LibrarySourceFilter.Recent;
+        vm.SelectCalendarDate(Today);
+        Assert.Empty(vm.Rows);
+        var expected = vm.CurrentQuery;
+        expected.Date = DateRule.All();
+        var changes = 0;
+        vm.QueryChanged += () => changes++;
+
+        vm.ClearPeriod();
+
+        Assert.False(vm.HasPeriod);
+        Assert.Equal("", vm.PeriodText);
+        Assert.True(expected.SameAs(vm.CurrentQuery));
+        Assert.Equal(new[] { "Budget.xlsx" }, Names(vm));
+        Assert.Equal(1, changes);
+        vm.ClearPeriod();
+        Assert.Equal(1, changes);
+    }
+
     [Fact]
     public void AWeek_IsChosenFromAnyDayInIt_UsingTheCulturesWeek()
     {

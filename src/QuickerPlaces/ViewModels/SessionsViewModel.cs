@@ -193,14 +193,15 @@ public sealed class SessionsViewModel : ObservableObject
     /// <summary>
     /// A card dragged onto another (or onto empty space, with a null target, for the
     /// end): it takes that card's place in the saved order, so its Ctrl+Shift number
-    /// changes with it. Reloads the cards, keeping the selection.
+    /// changes with it. An explicit before/after choice follows the drop preview.
+    /// Reloads the cards, keeping the selection.
     /// </summary>
-    public void Move(SessionRowViewModel dragged, SessionRowViewModel? target)
+    public void Move(SessionRowViewModel dragged, SessionRowViewModel? target, bool? after = null)
     {
         if (ReferenceEquals(dragged, target) || dragged.Id == target?.Id)
             return;
 
-        var result = _store.Move(dragged.Id, target?.Id);
+        var result = _store.Move(dragged.Id, target?.Id, after);
         ClearMessages();
         if (!result.Saved)
             ErrorMessage = result.UserMessage;

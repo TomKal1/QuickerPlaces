@@ -231,11 +231,13 @@ public sealed class SessionStore
     /// <summary>
     /// Moves a session to the place of <paramref name="targetId"/>, as a dragged
     /// favourite takes the place it is dropped on: dragged up, it lands before that
-    /// session; dragged down, after it. A null or unknown target means the end. This
-    /// sets which session each Ctrl+Shift number opens, and is not an edit of the
-    /// session. Written at once; an unknown id, or a move that changes nothing, writes nothing.
+    /// session; dragged down, after it. A null or unknown target means the end.
+    /// When <paramref name="after"/> is supplied, insert explicitly before or
+    /// after the target to match the card's drop preview. This sets which session
+    /// each Ctrl+Shift number opens, and is not an edit of the session. Written at
+    /// once; an unknown id, or a move that changes nothing, writes nothing.
     /// </summary>
-    public PersistenceResult Move(string id, string? targetId)
+    public PersistenceResult Move(string id, string? targetId, bool? after = null)
     {
         if (!IsAvailable)
             return PersistenceResult.Fail(Notice!);
@@ -245,6 +247,13 @@ public sealed class SessionStore
             return PersistenceResult.Ok();
 
         var to = targetId is null ? _sessions.Count - 1 : _sessions.FindIndex(s => s.Id == targetId);
+        if (to >= 0 && targetId is not null && after is { } insertAfter)
+        {
+            // Translate the preview's before/after slot to the index after
+            // removing the dragged card, including filtered session lists.
+            var insertion = to + (insertAfter ? 1 : 0);
+            to = insertion - (from < insertion ? 1 : 0);
+        }
         if (to < 0)
             to = _sessions.Count - 1;
         if (to == from)

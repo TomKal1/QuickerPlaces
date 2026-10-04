@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using QuickerPlaces.Models;
+using QuickerPlaces.Mvvm;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.RecentFiles;
@@ -32,6 +34,7 @@ public partial class LibraryWindow : Window
         _viewModel = viewModel;
         _recentFilesHost = recentFilesHost;
         DataContext = viewModel;
+        InputBindings.Add(new KeyBinding(new RelayCommand(viewModel.ClearPeriod, () => viewModel.HasPeriod), Key.Escape, ModifierKeys.None));
         _refresh = new LibraryRefresh(Dispatcher, viewModel, recentFilesHost, activityHost);
         Closed += (_, _) => _refresh.Dispose();
 

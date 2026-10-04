@@ -32,6 +32,10 @@
 
         <!-- Filters: kind chips, saved or recent, grouping, search. -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -106,24 +110,6 @@
                             <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" VerticalAlignment="Center" />
                         </DockPanel>
                     </StackPanel>
-                </Border>
-                <!--
-                    The chosen period, which clears it: shown when no Year activity
-                    panel is (ShowsPeriod), so the shelf is never narrowed by a
-                    period nobody can see (D4).
-                -->
-                <Border x:Name="PeriodArea" Visibility="Collapsed" HorizontalAlignment="Left">
-                    <Border Background="{DynamicResource Highlight.Soft}" CornerRadius="14" Height="28" Padding="12,0,3,0" Margin="0,0,0,8"
-                            Visibility="{Binding HasPeriod, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding PeriodText}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <Button Style="{StaticResource Button.IconOnlyCompact}" Width="22" Height="22" Margin="6,0,0,0"
-                                    ToolTip="Show everything again" AutomationProperties.Name="Clear the period"
-                                    Click="ClearPeriod_Click">
-                                <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Close}" />
-                            </Button>
-                        </StackPanel>
-                    </Border>
                 </Border>
                 <!--
                     The Sessions tab's session bar (File viewer design §5): a session
@@ -277,6 +263,24 @@
                     </Grid>
                 </Border>
             </StackPanel>
+            <!-- Keep the active date filter beside its results, even when the calendar is visible. -->
+            <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,0" Padding="12,8"
+                    Background="{DynamicResource Highlight.Soft}" BorderBrush="{DynamicResource Highlight.Text}"
+                    BorderThickness="3,0,0,0" CornerRadius="4"
+                    Visibility="{Binding HasPeriod, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <DockPanel LastChildFill="True">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource Button.Compact}" VerticalAlignment="Center" Margin="12,0,0,0"
+                            Content="Clear date filter (Esc)" AutomationProperties.Name="Clear date filter"
+                            ToolTip="Esc: show all dates; keep the other list filters" Click="ClearPeriod_Click" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite">
+                            <Run Text="Date filter active: " /><Run Text="{Binding PeriodText, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Text="The list is limited to this period."
+                                   Foreground="{DynamicResource Text.Secondary}" FontSize="12.5" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
         </Grid>
 
         <Grid Grid.Row="1">
