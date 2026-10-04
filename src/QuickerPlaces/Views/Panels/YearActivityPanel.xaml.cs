@@ -86,6 +86,8 @@ public partial class YearActivityPanel : UserControl
     {
         if (e.PropertyName == nameof(LibraryViewModel.CalendarStripWidth))
             FitWidth();
+        else if (e.PropertyName == nameof(LibraryViewModel.CalendarMonth))
+            RevealSelectedPeriod();
     }
 
     private void FitWidth()
@@ -136,10 +138,60 @@ public partial class YearActivityPanel : UserControl
     private void CalendarDay_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is ActivityCalendarCell { Date: { } date, IsInRange: true })
+        {
+            // Keep focus on a stable element while refreshed cells are replaced.
+            Focus();
             ViewModel?.SelectCalendarDate(date);
+        }
     }
 
+    private void Calendar_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None || YearPopup.IsOpen || ViewModel is not { } vm)
+            return;
+
+        if (e.Key == Key.Escape && vm.HasPeriod)
+        {
+            vm.ClearPeriod();
+            e.Handled = true;
+            return;
+        }
+
+        var direction = e.Key switch
+        {
+            Key.Left or Key.Up => -1,
+            Key.Right or Key.Down => 1,
+            _ => 0,
+        };
+        if (direction == 0)
+            return;
+
+        var focusedDate = (Keyboard.FocusedElement as FrameworkElement)?.DataContext is ActivityCalendarCell cell ? cell.Date : null;
+        Focus();
+        vm.MoveCalendarSelection(direction, e.Key is Key.Left or Key.Right, focusedDate);
+        // At the calendar limits, an arrow must not switch the Day/Week/Month radios.
+        e.Handled = true;
+    }
+
+    private void RevealSelectedPeriod()
+        => Dispatcher.InvokeAsync(() =>
+        {
+            if (YearView.Visibility != Visibility.Visible || ViewModel is not { Period: { } period } vm)
+                return;
+            var date = period.From.Year == vm.CalendarYear ? period.From : period.To;
+            var index = vm.CalendarWeeks.ToList().FindIndex(w => date >= w.StartsOn && date < w.StartsOn.AddDays(7));
+            if (index >= 0)
+                CalendarScroll.ScrollToHorizontalOffset(Math.Max(0, index * 14 - CalendarScroll.ViewportWidth / 2));
+        }, DispatcherPriority.Loaded);
+
     private void ClearPeriod_Click(object sender, RoutedEventArgs e) => ViewModel?.ClearPeriod();
+
+    private void CurrentPeriod_Click(object sender, RoutedEventArgs e)
+    {
+        Focus();
+        ViewModel?.SelectCurrentPeriod();
+        RevealSelectedPeriod();
+    }
 
     private void PreviousYear_Click(object sender, RoutedEventArgs e)
     {

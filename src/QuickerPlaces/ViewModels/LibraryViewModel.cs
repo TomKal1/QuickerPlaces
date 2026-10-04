@@ -486,6 +486,7 @@ public sealed class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(IsUnitDay));
             OnPropertyChanged(nameof(IsUnitWeek));
             OnPropertyChanged(nameof(IsUnitMonth));
+            OnPropertyChanged(nameof(CurrentPeriodButtonText));
 
             if (_date.Kind != DateRuleKind.Range || Period is not { } period)
                 return;
@@ -499,6 +500,32 @@ public sealed class LibraryViewModel : ObservableObject
     public bool IsUnitWeek { get => _selectionUnit == CalendarSelectionUnit.Week; set { if (value) SelectionUnit = CalendarSelectionUnit.Week; } }
     public bool IsUnitMonth { get => _selectionUnit == CalendarSelectionUnit.Month; set { if (value) SelectionUnit = CalendarSelectionUnit.Month; } }
 
+    public string CurrentPeriodButtonText => _selectionUnit switch
+    {
+        CalendarSelectionUnit.Week => "This week",
+        CalendarSelectionUnit.Month => "This month",
+        _ => "Today",
+    };
+
+    /// <summary>Selects the current local day, week or month and returns the calendar to today. Repeating it keeps the selection.</summary>
+    public void SelectCurrentPeriod()
+    {
+        var today = Today();
+        _clickedDate = today;
+        _calendarMonth = today.Month;
+        SelectCalendarYear(today.Year);
+        SetDateRule(_selectionUnit switch
+        {
+            CalendarSelectionUnit.Week => DateRule.ThisWeek(),
+            CalendarSelectionUnit.Month => DateRule.ThisMonth(),
+            _ => DateRule.Between(today, today),
+        });
+        // A week can begin in the previous month; keep today visible. Also
+        // restore the month after browsing away without changing the filter.
+        _calendarMonth = today.Month;
+        BuildMonth(_lastYear);
+    }
+
     /// <summary>
     /// Chooses the day, week or month (<see cref="SelectionUnit"/>) holding
     /// <paramref name="date"/>; choosing exactly the current period again
@@ -510,6 +537,40 @@ public sealed class LibraryViewModel : ObservableObject
         var (from, to) = PeriodAround(date);
         _clickedDate = date;
         SetDateRule(Period == (from, to) && _date.Kind == DateRuleKind.Range ? DateRule.All() : DateRule.Between(from, to));
+    }
+
+    /// <summary>
+    /// Moves through the calendar's day-down, week-across layout. Week and
+    /// Month selections move by whole periods. A focused day can anchor the
+    /// first move; otherwise use the selected day, the period's start, or today.
+    /// </summary>
+    public bool MoveCalendarSelection(int direction, bool horizontal, DateOnly? focusedDate = null)
+    {
+        if (direction is not (-1 or 1))
+            return false;
+
+        var period = Period;
+        var anchor = focusedDate ?? (period is { } p && _clickedDate is { } clicked && clicked >= p.From && clicked <= p.To
+            ? clicked : period?.From ?? Today());
+        if (anchor.Year < FirstCalendarYear || anchor.Year > LastCalendarYear)
+            return false;
+
+        var next = _selectionUnit switch
+        {
+            CalendarSelectionUnit.Month => anchor.AddMonths(direction),
+            CalendarSelectionUnit.Week => anchor.AddDays(direction * 7),
+            _ => anchor.AddDays(direction * (horizontal ? 7 : 1)),
+        };
+        if (next.Year < FirstCalendarYear || next.Year > LastCalendarYear)
+            return false;
+
+        var (from, to) = PeriodAround(next);
+        _clickedDate = next;
+        _calendarMonth = next.Month;
+        SelectCalendarYear(next.Year);
+        // Unlike clicking a selected period, navigation always keeps a selection.
+        SetDateRule(DateRule.Between(from, to));
+        return true;
     }
 
     /// <summary>The day, week or month (<see cref="SelectionUnit"/>) holding <paramref name="date"/>.</summary>

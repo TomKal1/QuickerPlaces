@@ -153,7 +153,8 @@ The **Library** (in the header) shows everything QuickerPlaces knows about in on
 - **Group by Type or Tag** — by tag, each session tag gets its own group, a file with two tags appears under both, and anything untagged (including places, which don't have tags) is under **No tag**.
 - **Tag** narrows to files in sessions with one tag; **Any tag** shows everything again.
 - **Search** matches names, paths, tags and session names.
-- **The year strip** at the top shades each day by the activity QuickerPlaces recorded — folder visits, files opened, and sessions saved or reopened — for the kind, Show, Tag and Search choices below it. It is a count of those records, not of files used: reopening a session counts once, not once per file. Choose **Day**, **Week** or **Month** beside the year, then click a day to list only what was used that day, week or month; click the same period again, or the **×** beside it, to see everything. Choosing a period changes the list, not the shading. Links keep no history, only when each was last opened.
+- **The location pin button below D/W/M** selects the current local day, week or month according to the active **D/W/M** choice and returns the calendar to it. Its tooltip says **Jump to Today**, **Jump to This week**, or **Jump to This month**. Other filters stay in place; clicking it again keeps the selection. Week and month use the current period even when a saved layout is reopened later.
+- **The year strip** at the top shades each day by the activity QuickerPlaces recorded — folder visits, files opened, and sessions saved or reopened — for the kind, Show, Tag and Search choices below it. It is a count of those records, not of files used: reopening a session counts once, not once per file. Choose **Day**, **Week** or **Month** beside the year, then click a day to list only what was used that day, week or month. A highlighted **Date filter active** bar above the results shows the selected period. Press **Esc**, click **Clear date filter**, click the same period again, or use the **×** beside it to show all dates while keeping the other filters. With focus in the calendar, **Up/Down** moves one day and **Left/Right** one week in Day mode; in Week or Month mode, every arrow moves one whole period. The calendar follows the selection across months and years. Choosing a period changes the list, not the shading. Links keep no history, only when each was last opened.
 - **What the strip can't count** is said under it rather than shown as an empty day. Recents remembers which folders you visited for 62 days (and how many visits per day for a year), so while you search or show only Saved, older days show as outlined squares whose tooltip says the folder visits for that filter are no longer known. If Recents tracks no folders, or Recent Files is off or was off for a while, a line says so.
 - **An empty list says why:** the period is still to come, nothing was being recorded yet, or nothing was recorded then. A line under the list says what a period can't include — a saved place shows in a period only if that's when you last opened it, and folders visited more than 62 days ago can't be listed.
 
@@ -220,7 +221,9 @@ If you only want the favourite cards visible, click **Hide list**. The grid coll
 | **Ctrl+1** … **Ctrl+9** | Open favourite card 1–9 |
 | **Enter** (in search box) | Open the top result |
 | **Down** (in search box) | Move into the grid |
-| **Esc** (in search box) | Clear the search, or move into the grid if it's already empty |
+| **Esc** (with a date filter active) | Clear the date filter, keeping the other filters |
+| **Esc** (in search box, with no date filter) | Clear the search, or move into the grid if it's already empty |
+| **Arrow keys** (in the Library or workspace calendar) | Day mode: Up/Down moves a day, Left/Right a week; Week/Month mode: move a whole period |
 
 These act on the selected grid row, when the grid has keyboard focus:
 

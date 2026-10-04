@@ -75,6 +75,7 @@ public partial class MainWindow : Window
         var shell = new WindowsShell();
         var library = new LibraryViewModel(placesService, sessionStore, activityStore, recentFilesStore,
             new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+        InputBindings.Add(new KeyBinding(new RelayCommand(library.ClearPeriod, () => library.HasPeriod), Key.Escape, ModifierKeys.None));
         _workspaceView = new WorkspaceView();
         var workspace = new WorkspaceViewModel(workspaceLayout, library);
         _workspaceView.SessionShortcutRequested += OpenSessionAt;
