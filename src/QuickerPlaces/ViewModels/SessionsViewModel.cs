@@ -269,6 +269,13 @@ public sealed class SessionsViewModel : ObservableObject
             StatusMessage = $"Saved \"{row.Name}\" with {FileCount(row.Session.Files.Count)}.";
     }
 
+    /// <summary>Called by the view after a session was shared: says where the file went, to send on.</summary>
+    public void NoteShared(string sessionName, string filePath)
+    {
+        ClearMessages();
+        StatusMessage = $"Shared \"{sessionName}\" as \"{filePath}\". Send that file to anyone with QuickerPlaces; they choose Open shared to use it.";
+    }
+
     /// <summary>True when <paramref name="session"/> passes <paramref name="search"/> and <paramref name="tag"/>: every word of the search in its name, a tag or a file name, and the tag among its tags.</summary>
     public static bool Matches(SessionSnapshot session, string? search, string? tag)
     {

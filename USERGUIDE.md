@@ -126,10 +126,32 @@ A **session** is a named, tagged set of files you had open together — the draw
 - **Open selected file** (or double-click a file, or Enter on it) opens just that one.
 - **Edit…** renames the session, changes its tags, or adds and removes files (**Find open files** adds what's open now).
 - **Delete…** deletes the session after asking. Only the session goes; its files stay where they are.
+- **Share…** saves the session as a file to send to another QuickerPlaces user (see *Sharing a session* below).
 
 Opening a session doesn't count as opening a place: Last Opened and Opens in the main grid are unaffected, and a session's files never appear there.
 
 Drag a session card to reorder it. The card dims while you drag, and a highlighted insertion marker shows its destination. Hover over the upper or lower half of another card to insert before or after it. Dropping saves the order and updates the **Ctrl+Shift+1…9** shortcuts; **Esc** cancels the drag.
+
+### Sharing a session
+
+**Sending one.** Select a session and choose **Share…** (also on the card's right-click menu). The list shows each file and where it lives:
+
+- **SharePoint or Teams**: in a library you sync with OneDrive. Others with access to the library can use it, even though it syncs to a different folder on their PC.
+- **Personal OneDrive**: in your own OneDrive. Others can open it only if you've shared it with them in OneDrive.
+- **Network share**: on a `\\server\share` path or a mapped drive.
+- **This PC only**: anywhere else. No one else can reach these, so they start unticked. Move them to a shared library first if others need them.
+
+Tick the files to share and click **Save shared file…** to save a `.qpsession` file. Send it any way you like: email, Teams or a shared folder. The file lists each file's full path on your PC (which can include your Windows user name) and its web or network address. It doesn't contain the files themselves, or when you opened them.
+
+**Opening one.** Click **Open shared…** beside **Save files** and choose the `.qpsession` file, or drag the file onto the list of sessions. QuickerPlaces looks for each file on your PC and says what it found:
+
+- **Found in your synced library**: the file is in your own synced copy of the same SharePoint or Teams library, wherever that is on your PC.
+- **Found at the same path**: the same path as on the sender's PC.
+- **Library not synced here**: right-click the file and choose **Open online**, or **Open folder online** and click **Sync** in SharePoint. When OneDrive has synced it, click **Check again**.
+- **On \\server, not checked yet**: QuickerPlaces doesn't contact a server named in someone else's file until you say so. If you know the server, click **Check network files**.
+- **Not found**: select it and click **Locate…** to point at it. Other files from the same folders are then found too.
+
+Found files are ticked. Change the name or tags if you like, then click **Save session**. Only files found on your PC can be saved, because a session holds paths on your PC; a session with the same name as one of yours is given "(shared)" on the end.
 
 Sessions are saved in `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside your places, the moment you save, edit, reopen or delete one. They aren't part of **Export places**. If a save fails, the Sessions window says so in red; the change is kept and tried again with the next change and when QuickerPlaces closes.
 
