@@ -13,8 +13,8 @@ namespace QuickerPlaces.Tests;
 /// <summary>
 /// History plan §4: activity.json and recent-files.json hand every day they
 /// hold to the history before they prune any, keep their data when that
-/// fails, and never delete history: stopping tracking or clearing Recent
-/// Files leaves past months as they are.
+/// fails, and never delete history: stopping tracking leaves past months as
+/// they are.
 /// </summary>
 public sealed class StoreHistoryTests
 {
@@ -146,26 +146,5 @@ public sealed class StoreHistoryTests
         var store = new RecentFilesStore(_filesFile, time, History(time));
 
         Assert.Equal(2, store.QueryFiles().Single().Opens);
-    }
-
-    [Fact]
-    public void RecentFilesStore_ForgetAndClear_KeepTheHistory()
-    {
-        var time = new ManualTimeProvider();
-        var history = History(time);
-        var store = new RecentFilesStore(_filesFile, time, history);
-        Assert.True(store.SetEnabled(true).Saved);
-        store.Record(new[] { new RecentDocument(A101, time.UtcNow.AddMinutes(1)), new RecentDocument(Report, time.UtcNow.AddMinutes(2)) }, _ => true);
-        time.UtcNow = time.UtcNow.AddDays(1);
-        Assert.True(store.Flush().Saved);
-        Assert.Equal(2, history.ReadMonth(Today.Year, Today.Month)!.Files.Count);
-
-        Assert.True(store.Forget(A101).Saved);
-        Assert.True(store.ClearHistory().Saved);
-        time.UtcNow = time.UtcNow.AddDays(1);
-        Assert.True(store.Flush().Saved);
-
-        Assert.Empty(store.QueryFiles());
-        Assert.Equal(2, History(time).ReadMonth(Today.Year, Today.Month)!.Files.Count);
     }
 }

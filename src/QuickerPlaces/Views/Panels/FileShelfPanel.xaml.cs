@@ -311,7 +311,6 @@ public partial class FileShelfPanel : UserControl
             return;
         }
 
-        ForgetMenuItem.IsEnabled = SelectedRow.CanForget;
         AddAsPlaceMenuItem.Visibility = ShowsTracking && SelectedRow.CanAddAsPlace ? Visibility.Visible : Visibility.Collapsed;
         // A link has no folder to show.
         OpenLocationMenuItem.Visibility = SelectedRow.Item.Kind == LibraryKind.Link ? Visibility.Collapsed : Visibility.Visible;
@@ -354,7 +353,6 @@ public partial class FileShelfPanel : UserControl
         }
     }
 
-    private void ForgetMenu_Click(object sender, RoutedEventArgs e) => ViewModel?.Forget(SelectedRow);
 
     private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {

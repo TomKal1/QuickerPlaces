@@ -34,14 +34,6 @@
                     </Border>
                 </GroupBox>
             </StackPanel>
-            <Button HorizontalAlignment="Left" Margin="28,0,0,0" Style="{StaticResource Button.Compact}" Click="ClearRecentFiles_Click"
-                    ToolTip="Delete everything Recent Files has recorded. Your places, sessions and files are not touched."
-                    AutomationProperties.Name="Delete Recent Files history">
-                <StackPanel Orientation="Horizontal">
-                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Trash}" />
-                    <TextBlock Text="Delete Recent Files history…" Margin="7,0,0,0" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
         </StackPanel>
     </Border>
 </UserControl>

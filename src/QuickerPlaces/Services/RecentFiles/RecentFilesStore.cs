@@ -30,8 +30,8 @@ namespace QuickerPlaces.Services.RecentFiles;
 /// - Kept <see cref="RetentionDays"/> days, pruned at load and in the first
 ///   flush of each new local day. Before pruning, every open still held is
 ///   handed to the activity history (history plan §4), which keeps it
-///   forever; if that fails, nothing is pruned that day. Forgetting a file,
-///   or all of them, clears this list only: the history is kept (history plan H5). Each file keeps at most
+///   forever; if that fails, nothing is pruned that day. Nothing recorded can
+///   be deleted by the user (history plan H5). Each file keeps at most
 ///   <see cref="MaxOpensPerFile"/> opens.
 /// - Loading goes through <see cref="JsonStoreLoader"/> and is handled as
 ///   activity.json's is: a damaged file is set aside and tracking restarts
@@ -257,32 +257,6 @@ public sealed class RecentFilesStore
                 _hasUnsavedChanges = true;
 
             return _hasUnsavedChanges ? SaveNow() : PersistenceResult.Ok();
-        }
-    }
-
-    /// <summary>Forgets one file and all its opens. Saved at once.</summary>
-    public PersistenceResult Forget(string path)
-    {
-        lock (_sync)
-        {
-            if (!IsAvailable)
-                return PersistenceResult.Fail(Notice!);
-
-            var key = DocumentPaths.Normalize(path) ?? path;
-            return _files.Remove(key) ? SaveNow() : PersistenceResult.Ok();
-        }
-    }
-
-    /// <summary>Deletes every recorded open, keeping the settings. Saved at once.</summary>
-    public PersistenceResult ClearHistory()
-    {
-        lock (_sync)
-        {
-            if (!IsAvailable)
-                return PersistenceResult.Fail(Notice!);
-
-            _files.Clear();
-            return SaveNow();
         }
     }
 

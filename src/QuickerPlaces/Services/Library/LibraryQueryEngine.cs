@@ -144,8 +144,10 @@ public static class LibraryQueryEngine
         var inPeriod = LibraryIndex.Build(PlacesIn(data, period), SessionsIn(data, period), FoldersIn(data, period), FilesIn(data, period));
         var items = inPeriod.Where(i => Passes(i, filter, ignoreKind: true)).ToList();
 
-        // Every item known across all kept history, to tie heat evidence to items.
-        var allItems = period is null ? inPeriod : LibraryIndex.Build(data.Places, data.Sessions, FoldersIn(data, null), FilesIn(data, null));
+        // Every item known across all kept history, loaded history months included, to tie heat evidence to items.
+        var allItems = period is null && data.HistoryFrom is null
+            ? inPeriod
+            : LibraryIndex.Build(data.Places, data.Sessions, FoldersIn(data, null, everything: true), FilesIn(data, null, everything: true));
         var everything = allItems.ToDictionary(i => i.Key, ResourceIdentity.Comparer);
 
         var heat = new Dictionary<DateOnly, HeatDay>();
@@ -156,6 +158,9 @@ public static class LibraryQueryEngine
             AddFileHeat(data, filter, everything, heat, starts),
             AddSessionHeat(data, filter, everything, heat, starts),
         };
+
+        if (data.HistoryFirstDay is { } historyStart)
+            starts.Add(historyStart);
 
         return new LibraryQueryResult(items, inPeriod.Count, heat, starts.Count > 0 ? starts.Min() : data.Today,
             coverage, PeriodNotes(data, filter, period, culture));
@@ -194,20 +199,30 @@ public static class LibraryQueryEngine
             : data.Sessions.Where(s => In(data.LocalDate(s.CreatedAt), period) || s.OpenedAt.Any(o => In(data.LocalDate(o), period)));
 
     /// <summary>
+    /// The first day whose folder detail is known: the kept window, or for a
+    /// chosen period (or all evidence) as far back as loaded history reaches.
+    /// </summary>
+    private static DateOnly DetailFrom(LibrarySnapshot data, bool withHistory)
+        => withHistory && data.HistoryFrom is { } history && history < data.FolderDetailKeptFrom ? history : data.FolderDetailKeptFrom;
+
+    /// <summary>
     /// Folders visited in the period, from the kept detail, summed across
     /// days. Detail older than the kept window is ignored even before Recents
-    /// prunes it, so what is listed doesn't depend on when pruning last ran.
+    /// prunes it, so what is listed doesn't depend on when pruning last ran;
+    /// with a period, loaded history counts too. With no period the list is
+    /// what Recents holds, unless <paramref name="everything"/> asks for all
+    /// that is loaded (to tie heat to items).
     /// </summary>
-    private static IEnumerable<FolderActivity> FoldersIn(LibrarySnapshot data, (DateOnly From, DateOnly To)? period)
+    private static IEnumerable<FolderActivity> FoldersIn(LibrarySnapshot data, (DateOnly From, DateOnly To)? period, bool everything = false)
         => data.Roots
             .SelectMany(r => r.FolderDays)
-            .Where(d => d.Date >= data.FolderDetailKeptFrom && In(d.Date, period))
+            .Where(d => d.Date >= DetailFrom(data, everything || period is not null) && In(d.Date, period))
             .SelectMany(d => d.Folders)
             .GroupBy(f => f.Folder, StringComparer.OrdinalIgnoreCase)
             .Select(g => new FolderActivity(g.First().Folder, TimeSpan.FromTicks(g.Sum(f => f.Time.Ticks)), g.Sum(f => f.Visits), g.Max(f => f.LastVisited)));
 
-    /// <summary>Files opened in the period, with how often and when last.</summary>
-    private static IEnumerable<RecentFileSummary> FilesIn(LibrarySnapshot data, (DateOnly From, DateOnly To)? period)
+    /// <summary>Files opened in the period, with how often and when last. With no period, history older than Recent Files' own year is left out, unless <paramref name="everything"/>.</summary>
+    private static IEnumerable<RecentFileSummary> FilesIn(LibrarySnapshot data, (DateOnly From, DateOnly To)? period, bool everything = false)
     {
         foreach (var file in data.Files)
         {
@@ -216,6 +231,8 @@ public static class LibraryQueryEngine
             foreach (var open in file.Opens)
             {
                 if (period is not null && !In(data.LocalDate(open), period))
+                    continue;
+                if (period is null && !everything && data.LocalDate(open) < data.FilesKeptFrom)
                     continue;
                 count++;
                 if (open > last)
@@ -236,8 +253,13 @@ public static class LibraryQueryEngine
 
         if ((filter.Kind is null or LibraryKind.Folder or LibraryKind.Link) && data.Places.Count > 0)
             notes.Add("Saved places are listed for a period only if it holds their last open.");
-        if ((filter.Kind is null or LibraryKind.Folder) && data.Roots.Count > 0 && p.From < data.FolderDetailKeptFrom)
-            notes.Add($"Folders visited before {Day(data.FolderDetailKeptFrom)} aren't listed: Recents keeps which folders were visited for {ActivityStore.DetailDays} days.");
+        if ((filter.Kind is null or LibraryKind.Folder) && data.Roots.Count > 0)
+        {
+            if (data.HistoryFrom is null && p.From < data.FolderDetailKeptFrom)
+                notes.Add($"Folders visited before {Day(data.FolderDetailKeptFrom)} aren't listed: Recents keeps which folders were visited for {ActivityStore.DetailDays} days.");
+            else if (data.HistoryFrom is not null && data.Roots.Any(r => UnknownDays(data, r).Any(d => d >= p.From && d <= p.To)))
+                notes.Add("Folders visited on some days in this period aren't listed: they were recorded before your activity history began.");
+        }
         if (filter.Kind is not (LibraryKind.Folder or LibraryKind.Link) &&
             data.RecentFilesSettings.TrackingStartedAt is { } started && p.From < data.LocalDate(started))
             notes.Add($"Recent Files started recording on {Day(data.LocalDate(started))}.");
@@ -285,7 +307,7 @@ public static class LibraryQueryEngine
         else
         {
             foreach (var root in roots)
-            foreach (var day in root.FolderDays.Where(d => d.Date >= data.FolderDetailKeptFrom))
+            foreach (var day in root.FolderDays.Where(d => d.Date >= DetailFrom(data, withHistory: true)))
             foreach (var folder in day.Folders)
             {
                 if (everything.TryGetValue(ResourceIdentity.Key(LibraryKind.Folder, folder.Folder), out var item) && Passes(item, filter))
@@ -294,19 +316,21 @@ public static class LibraryQueryEngine
 
             // Days whose totals outlive their detail: visits happened, but to which folders is no longer known.
             foreach (var root in roots)
-            foreach (var (date, total) in root.DayTotals)
-            {
-                if (date < data.FolderDetailKeptFrom && total.Visits > 0)
-                    Add(heat, date, foldersUnknown: true);
-            }
+            foreach (var date in UnknownDays(data, root))
+                Add(heat, date, foldersUnknown: true);
         }
 
         var state = CoverageState.Available;
         string? reason = null;
-        if (!unfiltered)
+        if (!unfiltered && data.HistoryFrom is null)
         {
             state = CoverageState.Partial;
             reason = $"Recents keeps which folders were visited for {ActivityStore.DetailDays} days, so earlier visits can't be searched or narrowed to saved places.";
+        }
+        else if (!unfiltered && roots.Any(r => UnknownDays(data, r).Any()))
+        {
+            state = CoverageState.Partial;
+            reason = "Which folders were visited isn't known for days recorded before your activity history began, so those visits can't be searched or narrowed to saved places.";
         }
         else if (roots.All(r => !r.Enabled))
         {
@@ -315,6 +339,19 @@ public static class LibraryQueryEngine
         }
 
         return new SourceCoverage(FolderSource, state, reason);
+    }
+
+    /// <summary>
+    /// The root's days with visits whose folders aren't known: before the
+    /// kept detail, and, where history is loaded, with no detail in it either.
+    /// </summary>
+    private static IEnumerable<DateOnly> UnknownDays(LibrarySnapshot data, RecentsRootData root)
+    {
+        var detailFrom = DetailFrom(data, withHistory: true);
+        var known = data.HistoryFrom is null ? null : root.FolderDays.Select(d => d.Date).ToHashSet();
+        return root.DayTotals
+            .Where(d => d.Value.Visits > 0 && d.Key < data.FolderDetailKeptFrom && (d.Key < detailFrom || known?.Contains(d.Key) == false))
+            .Select(d => d.Key);
     }
 
     private static SourceCoverage AddFileHeat(LibrarySnapshot data, LibraryFilter filter,

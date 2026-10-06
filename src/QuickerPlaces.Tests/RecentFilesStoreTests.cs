@@ -207,21 +207,6 @@ public sealed class RecentFilesStoreTests
     }
 
     [Fact]
-    public void Forget_AndClearHistory_AreSavedAtOnce_AndKeepTheSettings()
-    {
-        var store = Enabled();
-        store.Record(new[] { At(A101, 1), At(Report, 1) }, Anywhere);
-
-        Assert.True(store.Forget(A101.ToLowerInvariant()).Saved);
-        Assert.Equal(new[] { Report }, NewStore().QueryFiles().Select(f => f.Path));
-
-        Assert.True(store.ClearHistory().Saved);
-        var reloaded = NewStore();
-        Assert.Empty(reloaded.QueryFiles());
-        Assert.True(reloaded.IsTracking);
-    }
-
-    [Fact]
     public void IsInScope_TrackedFolders_MeansUnderATrackedRootOrItsEquivalent()
     {
         var roots = new[]

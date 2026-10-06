@@ -5,7 +5,9 @@ using System.Globalization;
 using System.Linq;
 using QuickerPlaces.Models.Activity;
 using QuickerPlaces.Mvvm;
+using QuickerPlaces.Models.History;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.History;
 
 namespace QuickerPlaces.ViewModels;
 
@@ -13,6 +15,10 @@ namespace QuickerPlaces.ViewModels;
 /// The Activity window's root configuration decisions. A successful change
 /// wakes the host even when its immediate save fails, because ActivityStore
 /// keeps that change in memory and reports the failure separately.
+///
+/// Days the store no longer holds come from the activity history (history
+/// plan §5): the months the year strip and the chosen period need are
+/// loaded when they are shown, and let go when they no longer are.
 /// </summary>
 public sealed class ActivityViewModel : ObservableObject
 {
@@ -34,6 +40,8 @@ public sealed class ActivityViewModel : ObservableObject
     private string _periodNotice = "";
     private string _periodSummary = "";
     private string _groupingNotice = "";
+    private readonly HistoryMonthCache? _history;
+    private IReadOnlyList<HistoryMonthDocument> _historyMonths = Array.Empty<HistoryMonthDocument>();
 
     public ActivityViewModel(ActivityStore store, Action rootsChanged, TimeProvider? time = null,
         CultureInfo? culture = null)
@@ -42,6 +50,7 @@ public sealed class ActivityViewModel : ObservableObject
         _rootsChanged = rootsChanged;
         _time = time ?? TimeProvider.System;
         _culture = culture ?? CultureInfo.CurrentCulture;
+        _history = store.HistoryReader is { } reader ? new HistoryMonthCache(reader) : null;
         _anchorDate = Today();
         _calendarYear = _anchorDate.Year;
         Reload();
@@ -87,7 +96,18 @@ public sealed class ActivityViewModel : ObservableObject
     public bool CanMoveNext => PeriodTo < Today();
     public int CalendarYear => _calendarYear;
     public string CalendarYearLabel => $"{_calendarYear} activity";
-    public int EarliestCalendarYear => Today().AddDays(-364).Year;
+    /// <summary>The first year the year list offers: a year back, or as far as the activity history reaches.</summary>
+    public int EarliestCalendarYear
+    {
+        get
+        {
+            var kept = Today().AddDays(-364).Year;
+            return _history?.EarliestDay() is { } first && first.Year < kept ? first.Year : kept;
+        }
+    }
+
+    /// <summary>How many history months are loaded now, for tests: only what the strip and period need.</summary>
+    public int LoadedHistoryMonths => _history?.LoadedCount ?? 0;
     public ActivityPeriodMode PeriodMode => _periodMode;
     public bool IsWeekMode => _periodMode == ActivityPeriodMode.Week;
     public bool IsMonthMode => _periodMode == ActivityPeriodMode.Month;
@@ -312,7 +332,9 @@ public sealed class ActivityViewModel : ObservableObject
         if (year < EarliestCalendarYear || year >= DateOnly.MaxValue.Year)
             return false;
         _calendarYear = year;
+        LoadHistory();
         RefreshCalendar();
+        OnPropertyChanged(nameof(LoadedHistoryMonths));
         return true;
     }
 
@@ -336,13 +358,15 @@ public sealed class ActivityViewModel : ObservableObject
 
     public void RefreshPeriod()
     {
+        LoadHistory();
         RefreshCalendar();
         PeriodRows.Clear();
         _periodNotice = "";
         _periodSummary = "";
         if (SelectedRoot is { } selected &&
-            _store.QueryPeriod(selected.RootId, PeriodFrom, PeriodTo) is { } period)
+            _store.QueryPeriod(selected.RootId, PeriodFrom, PeriodTo) is { } stored)
         {
+            var period = WithHistory(stored, selected);
             foreach (var folder in period.Folders)
                 PeriodRows.Add(new ActivityFolderRow(folder, _time.LocalTimeZone, _culture, selected.Path));
 
@@ -356,8 +380,7 @@ public sealed class ActivityViewModel : ObservableObject
             _periodSummary = $"{ActivityFormat.Duration(total)} in {period.Folders.Count} {(period.Folders.Count == 1 ? "folder" : "folders")}";
 
             if (_periodMode == ActivityPeriodMode.Day && period.DetailExpired &&
-                _store.QueryDayTotals(selected.RootId)?.TryGetValue(_anchorDate, out var dayTotal) == true &&
-                dayTotal is not null)
+                DayTotals(selected).TryGetValue(_anchorDate, out var dayTotal))
                 _periodSummary = $"{ActivityFormat.Duration(dayTotal.Time)} total; folder details have expired";
         }
 
@@ -373,6 +396,60 @@ public sealed class ActivityViewModel : ObservableObject
         OnPropertyChanged(nameof(HasPeriodRows));
         OnPropertyChanged(nameof(EmptyPeriodText));
         OnPropertyChanged(nameof(CanMoveNext));
+        OnPropertyChanged(nameof(LoadedHistoryMonths));
+    }
+
+    /// <summary>
+    /// Loads the history months the year strip (for day totals) and the
+    /// period (for folder detail) need, letting every other month go.
+    /// </summary>
+    private void LoadHistory()
+    {
+        if (_history is null)
+            return;
+
+        var cutoffs = HistoryCutoffs.For(Today());
+        var index = _history.Index();
+        var months = HistoryMonthCache.Needed(index, new DateOnly(_calendarYear, 1, 1), new DateOnly(_calendarYear, 12, 31), cutoffs.TotalsFrom)
+            .Concat(HistoryMonthCache.Needed(index, PeriodFrom, PeriodTo, cutoffs.DetailFrom));
+        _historyMonths = _history.Load(months, cutoffs);
+    }
+
+    /// <summary>The root's day totals: the store's year, and whatever history is loaded.</summary>
+    private IReadOnlyDictionary<DateOnly, ActivityDayTotal> DayTotals(ActivityRootSnapshot root)
+    {
+        var stored = _store.QueryDayTotals(root.RootId) ?? new Dictionary<DateOnly, ActivityDayTotal>();
+        return _historyMonths.Count == 0 ? stored : HistoryMerge.Add(stored, HistoryMerge.DayTotals(_historyMonths, root.Path));
+    }
+
+    /// <summary>When tracking began as far as anything recorded shows: on this PC, or earlier in the loaded history.</summary>
+    private DateOnly TrackingStartedOn(ActivityRootSnapshot root)
+    {
+        var started = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(root.TrackingStartedAt, _time.LocalTimeZone).DateTime);
+        return HistoryMerge.FirstDay(_historyMonths, root.Path) is { } first && first < started ? first : started;
+    }
+
+    /// <summary>
+    /// The store's period with the loaded history's folders added. Without
+    /// history it is the store's as it was. With it, detail counts as expired
+    /// only before the last day in the period that has a total and no folders
+    /// in either: days recorded before the history began.
+    /// </summary>
+    private ActivityPeriod WithHistory(ActivityPeriod stored, ActivityRootSnapshot root)
+    {
+        if (_history is null)
+            return stored;
+
+        var historyDays = HistoryMerge.FolderDays(_historyMonths, root.Path);
+        var folders = HistoryMerge.SumFolders(stored.Folders, historyDays, stored.From, stored.To);
+        var detailDates = historyDays.Select(d => d.Date).ToHashSet();
+        var missing = DayTotals(root)
+            .Where(d => d.Key >= stored.From && d.Key <= stored.To && d.Key < stored.DetailKeptFrom && d.Value.Visits > 0 && !detailDates.Contains(d.Key))
+            .Select(d => d.Key)
+            .DefaultIfEmpty(DateOnly.MinValue)
+            .Max();
+        var keptFrom = missing == DateOnly.MinValue ? stored.From : missing.AddDays(1);
+        return stored with { Folders = folders, TrackingStartedOn = TrackingStartedOn(root), DetailKeptFrom = keptFrom };
     }
 
     private void RefreshCalendar()
@@ -384,13 +461,11 @@ public sealed class ActivityViewModel : ObservableObject
         OnPropertyChanged(nameof(CalendarYear));
         OnPropertyChanged(nameof(CalendarYearLabel));
         OnPropertyChanged(nameof(EarliestCalendarYear));
-        if (SelectedRoot is not { } root || _store.QueryDayTotals(root.RootId) is not { } totals)
+        if (SelectedRoot is not { } root || _store.QueryDayTotals(root.RootId) is null)
             return;
 
-        var started = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(root.TrackingStartedAt,
-            _time.LocalTimeZone).DateTime);
-        var calendar = ActivityCalendar.BuildYear(totals, started, Today(), _calendarYear, _culture,
-            PeriodFrom, PeriodTo);
+        var calendar = ActivityCalendar.BuildYear(DayTotals(root), TrackingStartedOn(root), Today(), _calendarYear, _culture,
+            PeriodFrom, PeriodTo, _history?.EarliestDay());
         foreach (var month in calendar.Months)
             CalendarMonths.Add(month);
         foreach (var week in calendar.Weeks)

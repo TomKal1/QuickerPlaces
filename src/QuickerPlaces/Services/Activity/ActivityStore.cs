@@ -117,6 +117,9 @@ public sealed class ActivityStore
         }
     }
 
+    /// <summary>The activity history this store saves to, for the views that read past months back (history plan §5), or null without one.</summary>
+    public IHistoryReader? HistoryReader => _history as IHistoryReader;
+
     /// <summary>What happened when activity.json was loaded (the same classification as places.json, Phase 1 D6).</summary>
     public StoreLoadOutcome LoadOutcome { get; }
 

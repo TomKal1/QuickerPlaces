@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Activity history kept for good, one file per month
-status: step 1 (saving) implemented on branch ccr-f4ba4678-mo9ok7 (2026-10-06); the solution builds with 0 warnings and 1,419 tests pass on Linux; NOT yet run on Windows. Steps 2 and 3 not started
+status: steps 1 (saving) and 2 (reading) implemented on branch ccr-f4ba4678-mo9ok7 (2026-10-06); the solution builds with 0 warnings and 1,428 tests pass on Linux; NOT yet run on Windows. Step 3 not started
 created: 2026-10-06
 parent: ai/260914_Folder Activity Tracking Plan.md, ai/260928_PDF Project Sessions Plan.md
 ---
@@ -60,18 +60,46 @@ The two features were designed two weeks apart with different goals, and the win
 - **Damaged and newer files:**
   - one of this PC's files that can't be read is set aside as `….unreadable-<time>.txt` and the month starts again;
   - a file from a newer version is left alone, and the save reports failure, so the store keeps its data.
-- **History can't be deleted from the app (H5).** **Delete tracked folder…** is gone from both menus; **Stop tracking** is the way to stop. **Remove from Recent Files** and **Delete Recent Files history…** clear the working list only, and the confirmation says the history is kept.
+- **Nothing recorded can be deleted from the app (H5).** **Delete tracked folder…**, **Remove from Recent Files** and **Delete Recent Files history…** are gone, along with their view-model and store methods (`ActivityStore.DeleteRoot` stays for its tests). **Stop tracking** and turning Recent Files off are the ways to stop recording.
 - **The log names counts and file names only, never a folder or a document**, as the stores' own log lines do.
 - **`qp` and the developer ActivityProbe** build the stores without a history, so they never write one.
 
-## 5. Reading: step 2, next
+## 5. Reading: step 2, implemented
 
-`ActivityHistory.ReadMonth(year, month)` and `Months()` exist and are tested. What remains:
+**Reading API.** `IHistoryReader` (implemented by `ActivityHistory`, reached through `ActivityStore.HistoryReader`) offers:
 
-- **Loading on demand.** In Recents (`ActivityViewModel`) and the Library (`LibrarySnapshot` / `LibraryQueryEngine`), choosing a day, week or month older than the working store loads just the months it touches. A week across a month boundary loads two. The data is released when the period changes, with the last 2 months kept in a small cache so arrowing day by day doesn't re-read files.
-- **Year strip shading** for years past the 365 days of totals comes from the month files' `totals`. The year list already reaches 2100.
-- **The "details have expired" notes** go away for any period the history covers.
-- **`qp`'s `--days` limit (3650)** and its notes about each store's limits are updated.
+- `MonthIndex()`: which months exist, and whether this PC and other PCs wrote them, from the file names alone;
+- `ReadMonth(year, month, ownHeldFrom)`: one month merged across PCs, leaving out this PC's days on and after `HistoryCutoffs`. Those days are still in the stores, so nothing is counted twice.
+
+**Which months are loaded.** `HistoryMonthCache` loads exactly the months a view asks for and lets every other month go. A month is needed when another PC wrote it, or when this PC wrote it and it starts before the cutoff the view needs:
+
+- day totals and file opens for the year strip (the stores hold a year);
+- folder detail for a chosen period, a search or a Saved filter (the store holds 62 days).
+
+So with only this PC and the current year shown, nothing is read at all.
+
+**`HistoryMerge`** turns loaded months into the shapes the views already use: folder days, day totals and file opens, matched to tracked folders by path.
+
+**Recents (`ActivityViewModel`):**
+
+- **Loading:** `LoadHistory()` runs on every period or year change and loads the year strip's months plus the period's.
+- **Rows:** the period's rows are the store's plus history's.
+- **Day totals:** add history's to the store's.
+- **When tracking started:** whichever is earlier, this PC's start or the first day in the loaded history.
+- **The year list** starts at the oldest history month.
+- **"Folder details … have expired"** now appears only for days that have a total but no folders in the history either: days recorded before the history began.
+
+**Library (`LibraryViewModel`, `LibrarySnapshot.WithHistory`, `LibraryQueryEngine`):**
+
+- **Loading:** the months are loaded off the UI thread, with the query.
+- **Changing year** runs the query again, so the old year's months are let go and the new year's loaded.
+- **Folders that only another PC tracked** become extra, read-only roots in the query. They count in the strip, but get no root chips.
+- **The list with no period** stays what the stores hold. History is listed only for a chosen period. It also always counts in the strip, and is used to tie the strip's filtered evidence to items.
+- **Days counted as unknown:** in the heat and the period notes, a day counts as "folders unknown" only when history has no detail for it either.
+
+**`ActivityCalendar.BuildYear`** takes `historyFrom`. Days back to it are no longer drawn as expired.
+
+**Not yet:** `qp` (the CLI) still reads only the working stores. Its `--days` limit and notes are unchanged.
 
 ## 6. Recent Files on the same footing: step 3
 
@@ -91,10 +119,12 @@ Older opens are read from the month files, as in step 2. The 500-opens-per-file 
 | H2 | Automatic, with no setting to turn it on: history is kept whenever Recents or Recent Files is tracking. |
 | H3 | The stores save before they prune, and don't prune when saving fails. |
 | H4 | The whole held window is saved daily, so a lost PC loses about a day. |
-| H5 | History can't be deleted from the app (user, 2026-10-06). **Delete tracked folder…** is removed and **Stop tracking** stays. Clearing Recent Files clears its working list only. `ActivityStore.DeleteRoot` remains for its tests, and keeps history. |
+| H5 | Nothing recorded can be deleted from the app (user, 2026-10-06). **Delete tracked folder…**, **Remove from Recent Files** and **Delete Recent Files history…** are removed. **Stop tracking** and turning Recent Files off stay. |
 | H6 | Nothing in the app ever deletes from the month files. |
+| H7 | History is loaded only for what is shown (the year strip and the chosen period) and let go after. This PC's days the stores hold are always read from the stores. |
+| H8 | The Library's list with no period stays what the stores hold. History appears for a chosen period and in the strip. |
 
-## 8. Files (step 1)
+## 8. Files
 
 | File | |
 |---|---|
@@ -106,11 +136,15 @@ Older opens are read from the month files, as in step 2. The 500-opens-per-file 
 | `App.xaml.cs`, `Services/Activity/ActivityTrackingHost.cs` | Wiring |
 | `Views/ActivityWindow.xaml(.cs)`, `Views/Panels/FileShelfPanel.xaml(.cs)`, `ViewModels/ActivityViewModel.cs` | **Delete tracked folder…** removed (H5) |
 | `ViewModels/LibraryViewModel.cs` | The Recent Files clear confirmation says history is kept |
-| Tests | `ActivityHistoryTests`, `StoreHistoryTests` (25 tests) |
+| `Services/History/HistoryMonthCache.cs`, `Services/History/HistoryMerge.cs` | Step 2: what is loaded, and merging it |
+| `ViewModels/ActivityViewModel.cs`, `ViewModels/ActivityCalendar.cs` | Step 2: Recents reads history |
+| `Services/Library/LibrarySnapshot.cs`, `Services/Library/LibraryQueryEngine.cs`, `ViewModels/LibraryViewModel.cs` | Step 2: the Library reads history |
+| `Views/Panels/FileShelfPanel.xaml(.cs)`, `Views/Panels/RecentFilesSettings.xaml(.cs)`, `Services/RecentFiles/RecentFilesStore.cs` | H5: the Recent Files delete options removed |
+| Tests | `ActivityHistoryTests`, `StoreHistoryTests`, `HistoryReadingTests` (37 tests) |
 
 No schema changes: `activity.json` and `recent-files.json` are untouched.
 
-## 9. Windows checklist (step 1)
+## 9. Windows checklist
 
 1. With Recents tracking a folder, leave QuickerPlaces running past midnight, or change the clock. `Documents\QuickerPlaces\History` appears with this month's file (and last month's), named for this PC.
 2. On the first run with existing data, files appear for each month `activity.json` holds totals for, up to 13. The months covered by the last 62 days have folder detail.
@@ -118,5 +152,12 @@ No schema changes: `activity.json` and `recent-files.json` are untouched.
 4. Make the History folder read-only. The log says the history couldn't be saved, and the Folder Activity window still shows detail older than 62 days the next day, because nothing was pruned.
 5. **Startup time and memory with 13 month files.** Measure first launch of the day (when the save runs) against a normal launch, three times each, using the steps in `261002_Performance Baseline.md`.
 6. A PC name with spaces or brackets gives a safe file name.
+7. **Step 2.** To fake an older month, copy a month file and change its name and dates to a year ago.
+    - In Recents, the year list offers that year, and its strip is shaded.
+    - Clicking a day lists its folders, with no "expired" note.
+    - Going back to today, the Library and Recents memory doesn't stay higher. Compare private bytes before and after with `dotnet-counters`, three times.
+8. In the Library, choose that day. Its folders and files are listed. **Clear date filter** removes the old files from the list.
+9. Copy a second PC's month file (another name in brackets) into the folder. A day both PCs worked shows both PCs' time added together.
+10. Type a search in the Library with a year of history in the folder. Typing stays smooth, because the months load off the UI thread.
 
 Record each item as passed, failed or untested in `BUILD_SUMMARY.md`.

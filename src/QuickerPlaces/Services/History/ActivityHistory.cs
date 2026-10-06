@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using QuickerPlaces.Models.Activity;
 using QuickerPlaces.Models.History;
 using QuickerPlaces.Models.RecentFiles;
+using QuickerPlaces.Services.Activity;
 
 namespace QuickerPlaces.Services.History;
 
@@ -27,6 +28,51 @@ public interface IFileHistory
 {
     /// <summary>Adds every open in <paramref name="files"/> to the month files. False when any month couldn't be saved.</summary>
     bool SaveFiles(IReadOnlyCollection<RecentFileRecord> files);
+}
+
+/// <summary>Reads the month files back (history plan §5). ActivityHistory implements it; the views reach it through ActivityStore.HistoryReader.</summary>
+public interface IHistoryReader
+{
+    /// <summary>Every month any PC has a file for, oldest first, and whose files they are. Read from the file names only.</summary>
+    IReadOnlyList<HistoryMonthInfo> MonthIndex();
+
+    /// <summary>
+    /// A month as every PC recorded it, merged, or null when there is none.
+    /// With <paramref name="ownHeldFrom"/>, this PC's own days from those
+    /// dates on are left out, because the working stores still hold them and
+    /// are the newer copy.
+    /// </summary>
+    HistoryMonthDocument? ReadMonth(int year, int month, HistoryCutoffs? ownHeldFrom = null);
+}
+
+/// <summary>One month in the history folder: whether this PC and other PCs have a file for it.</summary>
+public sealed record HistoryMonthInfo(int Year, int Month, bool HasOwn, bool HasOthers)
+{
+    public DateOnly First => new(Year, Month, 1);
+
+    public DateOnly Last => First.AddMonths(1).AddDays(-1);
+}
+
+/// <summary>
+/// The first local dates this PC's working stores still hold: folder detail,
+/// day totals and file opens. On and after them the stores are read; before
+/// them, the month files.
+/// </summary>
+public sealed record HistoryCutoffs(DateOnly DetailFrom, DateOnly TotalsFrom, DateOnly FilesFrom)
+{
+    /// <summary>
+    /// The cutoffs for <paramref name="today"/> by the stores' own windows.
+    /// Recent Files keeps the same year as the day totals
+    /// (RecentFilesStore.RetentionDays); a test holds the two equal, so this
+    /// file needs no reference to Recent Files.
+    /// </summary>
+    public static HistoryCutoffs For(DateOnly today)
+        => new(today.AddDays(-(ActivityStore.DetailDays - 1)),
+            today.AddDays(-(ActivityStore.TotalDays - 1)),
+            today.AddDays(-(ActivityStore.TotalDays - 1)));
+
+    /// <summary>The latest of the three: before it, some of this PC's data is only in the month files.</summary>
+    public DateOnly Latest => new[] { DetailFrom, TotalsFrom, FilesFrom }.Max();
 }
 
 /// <summary>
@@ -49,7 +95,7 @@ public interface IFileHistory
 /// One lock: the folder tracker's thread and Recent Files' thread both save
 /// here. UI-free and linked into the test project.
 /// </summary>
-public sealed class ActivityHistory : IFolderHistory, IFileHistory
+public sealed class ActivityHistory : IFolderHistory, IFileHistory, IHistoryReader
 {
     public const int CurrentSchemaVersion = 1;
 
@@ -262,9 +308,9 @@ public sealed class ActivityHistory : IFolderHistory, IFileHistory
     /// A month as every PC recorded it, merged: a folder's time and visits on
     /// a day are added across PCs, and a file's opens are joined. Null when
     /// no PC has a readable file for the month. Read fresh each call; the
-    /// caller decides how long to keep it.
+    /// caller decides how long to keep it (HistoryMonthCache).
     /// </summary>
-    public HistoryMonthDocument? ReadMonth(int year, int month)
+    public HistoryMonthDocument? ReadMonth(int year, int month, HistoryCutoffs? ownHeldFrom = null)
     {
         var prefix = $"{year:D4}-{month:D2} (";
         HistoryMonthDocument? merged = null;
@@ -282,6 +328,9 @@ public sealed class ActivityHistory : IFolderHistory, IFileHistory
                 continue;
             }
 
+            if (ownHeldFrom is not null && IsOwn(name))
+                LeaveOutHeld(document!, ownHeldFrom);
+
             merged ??= new HistoryMonthDocument { SchemaVersion = CurrentSchemaVersion, Month = $"{year:D4}-{month:D2}" };
             MergeInto(merged, document!);
         }
@@ -290,14 +339,44 @@ public sealed class ActivityHistory : IFolderHistory, IFileHistory
     }
 
     /// <summary>The months any PC has history for, oldest first.</summary>
-    public IReadOnlyList<(int Year, int Month)> Months()
-        => MonthFiles()
-            .Select(n => FileNamePattern.Match(n))
-            .Select(m => (int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture)))
-            .Where(m => m.Item2 is >= 1 and <= 12)
-            .Distinct()
-            .OrderBy(m => m)
-            .ToList();
+    public IReadOnlyList<(int Year, int Month)> Months() => MonthIndex().Select(m => (m.Year, m.Month)).ToList();
+
+    public IReadOnlyList<HistoryMonthInfo> MonthIndex()
+    {
+        var months = new SortedDictionary<(int Year, int Month), (bool Own, bool Others)>();
+        foreach (var name in MonthFiles())
+        {
+            var match = FileNamePattern.Match(name);
+            var key = (int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture), int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture));
+            if (key.Item2 is < 1 or > 12 || key.Item1 < 1)
+                continue;
+
+            var own = IsOwn(name);
+            months.TryGetValue(key, out var seen);
+            months[key] = (seen.Own || own, seen.Others || !own);
+        }
+
+        return months.Select(m => new HistoryMonthInfo(m.Key.Year, m.Key.Month, m.Value.Own, m.Value.Others)).ToList();
+    }
+
+    private bool IsOwn(string name)
+        => string.Equals(FileNamePattern.Match(name).Groups[3].Value, Machine, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Drops this PC's days the working stores still hold, so they are never counted twice.</summary>
+    private void LeaveOutHeld(HistoryMonthDocument document, HistoryCutoffs held)
+    {
+        foreach (var root in document.Roots)
+        {
+            foreach (var date in root.Days.Keys.Where(d => d >= held.DetailFrom).ToList())
+                root.Days.Remove(date);
+            foreach (var date in root.Totals.Keys.Where(d => d >= held.TotalsFrom).ToList())
+                root.Totals.Remove(date);
+        }
+
+        foreach (var file in document.Files)
+            file.Opens.RemoveAll(o => LocalDate(o) >= held.FilesFrom);
+        document.Files.RemoveAll(f => f.Opens.Count == 0);
+    }
 
     private static void MergeInto(HistoryMonthDocument into, HistoryMonthDocument from)
     {
