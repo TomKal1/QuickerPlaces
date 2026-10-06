@@ -238,7 +238,7 @@ public sealed class RecentFilesStoreTests
     [Fact]
     public void AnUnreadableOrNewerFile_IsLeftAlone_AndNothingIsWritten()
     {
-        _storage.ContentsToReturn = @"{""schemaVersion"":2,""files"":[]}";
+        _storage.ContentsToReturn = @"{""schemaVersion"":3,""files"":[]}";
         var newer = NewStore();
         Assert.Equal(StoreLoadOutcome.WrittenByNewerVersion, newer.LoadOutcome);
         Assert.False(newer.SetEnabled(true).Saved);

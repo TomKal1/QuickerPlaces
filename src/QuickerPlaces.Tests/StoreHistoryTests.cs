@@ -130,7 +130,8 @@ public sealed class StoreHistoryTests
 
         var store = new RecentFilesStore(_filesFile, time, History(time));
 
-        Assert.Equal(1, store.QueryFiles().Single().Opens);
+        Assert.Single(store.QueryHistory().Single().Opens);
+        Assert.Equal(2, store.QuerySummary().Single().Opens);
         var history = History(time);
         var expiredDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(expired, time.LocalTimeZone).DateTime);
         Assert.Equal(new[] { expired }, history.ReadMonth(expiredDate.Year, expiredDate.Month)!.Files.Single().Opens);

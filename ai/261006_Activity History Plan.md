@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Activity history kept for good, one file per month
-status: steps 1 (saving) and 2 (reading) implemented on branch ccr-f4ba4678-mo9ok7 (2026-10-06); the solution builds with 0 warnings and 1,428 tests pass on Linux; NOT yet run on Windows. Step 3 not started
+status: steps 1 (saving), 2 (reading) and 3 (recent-files.json v2) implemented on branch ccr-f4ba4678-mo9ok7 (2026-10-06); the solution builds with 0 warnings and 1,435 tests pass on Linux; NOT yet run on Windows — the §9 checklist is open
 created: 2026-10-06
 parent: ai/260914_Folder Activity Tracking Plan.md, ai/260928_PDF Project Sessions Plan.md
 ---
@@ -73,7 +73,7 @@ The two features were designed two weeks apart with different goals, and the win
 
 **Which months are loaded.** `HistoryMonthCache` loads exactly the months a view asks for and lets every other month go. A month is needed when another PC wrote it, or when this PC wrote it and it starts before the cutoff the view needs:
 
-- day totals and file opens for the year strip (the stores hold a year);
+- day totals and daily file counts for the year strip (the stores hold a year);
 - folder detail for a chosen period, a search or a Saved filter (the store holds 62 days).
 
 So with only this PC and the current year shown, nothing is read at all.
@@ -101,15 +101,69 @@ So with only this PC and the current year shown, nothing is read at all.
 
 **Not yet:** `qp` (the CLI) still reads only the working stores. Its `--days` limit and notes are unchanged.
 
-## 6. Recent Files on the same footing: step 3
+## 6. Recent Files on the same footing: step 3, implemented
 
-`recent-files.json` shrinks to:
+### What changed
 
-- 62 days of opens;
-- one line per file opened in the last year (path, last opened, total opens), for the undated Library list;
-- daily counts for the year strip.
+`recent-files.json` is now schema version 2. It keeps for files what `activity.json` keeps for folders (`RecentFilesStore`, `RecentFilesDocument`):
 
-Older opens are read from the month files, as in step 2. The 500-opens-per-file cap goes. **Per CLAUDE.md, this is measured before and after** (load time and the app's private bytes with a year of opens), not assumed to help.
+| | Version 1 | Version 2 |
+|---|---|---|
+| Each open | a year, max 500 per file | 62 days (`RecentFilesStore.DetailDays`, the same as `ActivityStore.DetailDays`), max 500 per file |
+| Per file | — | `lastOpenedAt` and `openCount`, kept until a year after its last open: the Library's list with no period |
+| Per day | — | opens and distinct files per kind (`days`, short names), a year (`RetentionDays`): the year strip where the opens have aged out |
+| Older | deleted | in the month files (step 1) |
+
+**Converting.** A version 1 file is converted at load: day counts and summaries are worked out from its year of opens, then all of those opens are saved to the history before pruning cuts them to 62 days. The conversion stays in memory until the next save (a recorded open or a settings change), because loading never writes (Phase 1). An older build then refuses the file as newer, and keeps Recent Files off.
+
+**Duplicate opens.** The check that stops the same open being recorded twice now compares with `lastOpenedAt`, so it still works after a file's opens have aged out.
+
+### The Library
+
+`LibrarySnapshot` carries:
+
+- **`FileSummaries`:** the list with no period;
+- **`FileDayCounts`**, **`FilesDetailFrom`** and **`HistoryMonths`:** the months of history that were loaded.
+
+Which source counts a day's file opens (`LibrarySnapshot.KnowsOpensOn`):
+
+| The day is… | Counted from |
+|---|---|
+| on or after the store's 62-day cutoff | the store's opens, one by one |
+| in a loaded history month | the history's opens, one by one. The day counts are ignored, so nothing counts twice |
+| anywhere else | the day counts. These can be narrowed by kind, but not by a search, tag or scope |
+
+Any filter but the kind therefore loads history months back to the 62-day cutoff, as folder detail does (`LibraryViewModel.Refresh`).
+
+### `qp`
+
+`files recent`, `folders recent` and `activity days` read the history too, through `CliContext.ReadHistory`. It is read-only, from `<data root>\History` under `--data-root`. `status` counts the listed files.
+
+### Measured (CLAUDE.md)
+
+`tools/RecentFilesLoadBench` loads `RecentFilesStore` from a synthetic year of Recent Files: 10,440 opens of about 1,500 PDF, Word and Excel files, seeded so every run is the same.
+
+- **Measures:** load time, memory still held after a full GC, and bytes allocated while loading.
+- **Each run** loads the store 9 times and reports the last 7.
+- **Runs:** three for each mode.
+- **Environment:** Linux cloud container, 4 cores, .NET 10.0.112, Release.
+
+| | File | Load, median of each run (ms) | Held after GC | Allocated while loading |
+|---|---|---|---|---|
+| Before: v1, as the previous build keeps it (`before` on the previous build) | 463 KiB | 30.3, 38.5, 28.6 (range 27.5–54.9) | 497 KiB (one sample 509) | 8.3 MiB |
+| After: v2, steady state (`after`) | 365 KiB | 22.7, 22.7, 22.1 (range 21.7–52.0) | 439 KiB | 6.1 MiB |
+| One-off: v1 loaded by this build before its first save | 463 KiB | 33.3, 31.1, 32.9 (range 30.5–80.2) | 584 KiB | 9.9 MiB |
+
+**What the numbers show.** For this workload the steady state is smaller and quicker to load:
+
+- file: about −21%;
+- held memory: about −12%;
+- allocation: about −25%;
+- load time: about −20 to −40%.
+
+The gain is modest because the per-file summary still holds every file's path, and paths are most of the file. Until the first save after upgrading, each load converts the file and costs a little more.
+
+**What they don't show.** These are not Windows numbers, and not the app's private bytes. The Windows comparison is §9 item 11.
 
 ## 7. Decisions
 
@@ -123,6 +177,8 @@ Older opens are read from the month files, as in step 2. The 500-opens-per-file 
 | H6 | Nothing in the app ever deletes from the month files. |
 | H7 | History is loaded only for what is shown (the year strip and the chosen period) and let go after. This PC's days the stores hold are always read from the stores. |
 | H8 | The Library's list with no period stays what the stores hold. History appears for a chosen period and in the strip. |
+| H9 | Recent Files keeps opens for the same 62 days as folder detail, and per-day counts and per-file summaries for a year, so files and folders behave alike (user, 2026-10-06: "seems like a miss"). |
+| H10 | `qp` reads the history read-only, with the same cutoffs as the app. |
 
 ## 8. Files
 
@@ -140,7 +196,10 @@ Older opens are read from the month files, as in step 2. The 500-opens-per-file 
 | `ViewModels/ActivityViewModel.cs`, `ViewModels/ActivityCalendar.cs` | Step 2: Recents reads history |
 | `Services/Library/LibrarySnapshot.cs`, `Services/Library/LibraryQueryEngine.cs`, `ViewModels/LibraryViewModel.cs` | Step 2: the Library reads history |
 | `Views/Panels/FileShelfPanel.xaml(.cs)`, `Views/Panels/RecentFilesSettings.xaml(.cs)`, `Services/RecentFiles/RecentFilesStore.cs` | H5: the Recent Files delete options removed |
-| Tests | `ActivityHistoryTests`, `StoreHistoryTests`, `HistoryReadingTests` (37 tests) |
+| `Models/RecentFiles/RecentFilesDocument.cs`, `Services/RecentFiles/RecentFilesStore.cs` | Step 3: version 2 |
+| `src/QuickerPlaces.Cli/CliContext.cs`, `ActivityCommands.cs`, `CliApp.cs` | Step 3: `qp` reads history |
+| `tools/RecentFilesLoadBench/` | Step 3: the measurement |
+| Tests | `ActivityHistoryTests`, `StoreHistoryTests`, `HistoryReadingTests`, `RecentFilesSummaryTests`, and one in `CliAppTests` (44 tests) |
 
 No schema changes: `activity.json` and `recent-files.json` are untouched.
 
@@ -159,5 +218,12 @@ No schema changes: `activity.json` and `recent-files.json` are untouched.
 8. In the Library, choose that day. Its folders and files are listed. **Clear date filter** removes the old files from the list.
 9. Copy a second PC's month file (another name in brackets) into the folder. A day both PCs worked shows both PCs' time added together.
 10. Type a search in the Library with a year of history in the folder. Typing stays smooth, because the months load off the UI thread.
+11. **Step 3, upgrade:** back up `recent-files.json` from a version 1 build. Start this build:
+    - the Library lists the same files with the same counts;
+    - this year's strip looks the same;
+    - the History folder has every month the old file covered.
+
+    After opening one more file, `recent-files.json` says `"schemaVersion": 2` and is smaller. Measure the app's private bytes with the Library open, before and after the upgrade, three times each (`dotnet-counters`, as in `261002_Performance Baseline.md`), and record the results here.
+12. `qp files recent --days 900` lists files from the history.
 
 Record each item as passed, failed or untested in `BUILD_SUMMARY.md`.

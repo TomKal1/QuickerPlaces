@@ -27,12 +27,17 @@ namespace QuickerPlaces.Services.RecentFiles;
 /// - Opens are buffered in memory and written by <see cref="Flush"/>, like
 ///   folder activity; settings and deletions are written at once, and a
 ///   failed write is returned to be shown.
-/// - Kept <see cref="RetentionDays"/> days, pruned at load and in the first
-///   flush of each new local day. Before pruning, every open still held is
-///   handed to the activity history (history plan §4), which keeps it
-///   forever; if that fails, nothing is pruned that day. Nothing recorded can
-///   be deleted by the user (history plan H5). Each file keeps at most
-///   <see cref="MaxOpensPerFile"/> opens.
+/// - Kept as activity.json keeps folders (history plan §6): each open for
+///   <see cref="DetailDays"/> days, opens per kind per day for
+///   <see cref="RetentionDays"/>, and per file its last open and open count
+///   until a year after its last open. Pruned at load and in the first flush
+///   of each new local day. Before pruning, every open still held is handed
+///   to the activity history (history plan §4), which keeps it forever; if
+///   that fails, nothing is pruned that day. Nothing recorded can be deleted
+///   by the user (history plan H5). Each file keeps at most
+///   <see cref="MaxOpensPerFile"/> recent opens.
+/// - A version 1 file (every open for a year) is converted at load: its day
+///   counts and summaries are worked out from its opens before they are pruned.
 /// - Loading goes through <see cref="JsonStoreLoader"/> and is handled as
 ///   activity.json's is: a damaged file is set aside and tracking restarts
 ///   empty; an unreadable or newer one is left untouched and tracking stays
@@ -43,9 +48,12 @@ namespace QuickerPlaces.Services.RecentFiles;
 /// </summary>
 public sealed class RecentFilesStore
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
-    /// <summary>Days of opens kept, today included: a full year for the year view.</summary>
+    /// <summary>Days each open is kept, today included: the same as Recents keeps folder detail.</summary>
+    public const int DetailDays = ActivityStore.DetailDays;
+
+    /// <summary>Days the per-day counts are kept, today included, and how long a file stays listed after its last open: a full year for the year view.</summary>
     public const int RetentionDays = 365;
 
     public const int MaxOpensPerFile = 500;
@@ -62,6 +70,7 @@ public sealed class RecentFilesStore
     private readonly TimeProvider _time;
     private readonly RecentFilesSettings _settings;
     private readonly Dictionary<string, RecentFileRecord> _files;
+    private readonly Dictionary<DateOnly, RecentFilesDay> _days;
     private readonly IFileHistory? _history;
     private DateOnly _prunedOn;
     private bool _hasUnsavedChanges;
@@ -77,6 +86,9 @@ public sealed class RecentFilesStore
         LoadOutcome = outcome;
         _settings = Normalize(document?.Settings);
         _files = Normalize(document?.Files);
+        _days = document is { SchemaVersion: >= 2 }
+            ? (document.Days ?? new Dictionary<DateOnly, RecentFilesDay>()).Where(d => d.Value is not null).ToDictionary(d => d.Key, d => d.Value)
+            : CountDays(_files.Values);
 
         switch (outcome)
         {
@@ -229,12 +241,20 @@ public sealed class RecentFilesStore
 
                 if (!_files.TryGetValue(path, out var record))
                     _files[path] = record = new RecentFileRecord { Path = path };
-                if (record.Opens.Count > 0 && observation.LastOpenedAt <= record.Opens[^1])
+                if (record.LastOpenedAt is { } last && observation.LastOpenedAt <= last)
                     continue;
 
-                record.Opens.Add(observation.LastOpenedAt.ToUniversalTime());
+                var open = observation.LastOpenedAt.ToUniversalTime();
+                var date = LocalDate(open);
+                var firstToday = !record.Opens.Any(o => LocalDate(o) == date);
+                record.Opens.Add(open);
                 if (record.Opens.Count > MaxOpensPerFile)
                     record.Opens.RemoveRange(0, record.Opens.Count - MaxOpensPerFile);
+                record.LastOpenedAt = open;
+                record.OpenCount++;
+                if (!_days.TryGetValue(date, out var day))
+                    _days[date] = day = new RecentFilesDay();
+                day.Add(kind, 1, firstToday ? 1 : 0);
                 added++;
             }
 
@@ -262,13 +282,19 @@ public sealed class RecentFilesStore
 
     /// <summary>
     /// Each file opened between the local dates <paramref name="from"/> and
-    /// <paramref name="to"/> inclusive (all kept history when null), of the
-    /// given kinds (all when null), most recently opened first.
+    /// <paramref name="to"/> inclusive, of the given kinds (all when null),
+    /// most recently opened first. With no dates, every file still listed,
+    /// with its open count and last open (<see cref="QuerySummary"/>);
+    /// with dates, only the last <see cref="DetailDays"/> days are held here,
+    /// and earlier opens are in the activity history.
     /// </summary>
     public IReadOnlyList<RecentFileSummary> QueryFiles(DateOnly? from = null, DateOnly? to = null, IReadOnlyCollection<DocumentKind>? kinds = null)
     {
         lock (_sync)
         {
+            if (from is null && to is null)
+                return Summaries(kinds);
+
             var rows = new List<RecentFileSummary>();
             foreach (var record in _files.Values)
             {
@@ -284,10 +310,28 @@ public sealed class RecentFilesStore
         }
     }
 
+    /// <summary>Every file still listed (opened in the last year), with its open count and last open, most recent first.</summary>
+    public IReadOnlyList<RecentFileSummary> QuerySummary()
+    {
+        lock (_sync)
+            return Summaries(null);
+    }
+
+    private List<RecentFileSummary> Summaries(IReadOnlyCollection<DocumentKind>? kinds)
+        => _files.Values
+            .Where(r => r.LastOpenedAt is not null)
+            .Select(r => (Record: r, Kind: DocumentKinds.FromPath(r.Path)))
+            .Where(r => r.Kind is { } kind && (kinds is null || kinds.Contains(kind)))
+            .Select(r => new RecentFileSummary(r.Record.Path, r.Kind!.Value, Math.Max(1, r.Record.OpenCount), r.Record.LastOpenedAt!.Value))
+            .OrderByDescending(r => r.LastOpenedAt)
+            .ThenBy(r => r.Path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
     /// <summary>
-    /// Every recorded file with each of its kept opens, oldest first: what
-    /// the Library reads to count opens per day for just the files that pass
-    /// its filters. Files of a kind that can't be told from the path are left out.
+    /// Every file with each of its held opens (the last <see cref="DetailDays"/>
+    /// days), oldest first: what the Library reads to count opens per day for
+    /// just the files that pass its filters. Files of a kind that can't be
+    /// told from the path are left out.
     /// </summary>
     public IReadOnlyList<RecentFileHistory> QueryHistory()
     {
@@ -304,30 +348,48 @@ public sealed class RecentFilesStore
         }
     }
 
-    /// <summary>Opens and distinct files per local day, of the given kinds (all when null), for the year view.</summary>
+    /// <summary>Opens and distinct files per local day for the last year, of the given kinds (all when null), for the year view.</summary>
     public IReadOnlyDictionary<DateOnly, RecentFileDayTotal> QueryDayTotals(IReadOnlyCollection<DocumentKind>? kinds = null)
     {
         lock (_sync)
         {
-            var opens = new Dictionary<DateOnly, (int Opens, HashSet<string> Files)>();
-            foreach (var record in _files.Values)
+            var totals = new Dictionary<DateOnly, RecentFileDayTotal>();
+            foreach (var (date, day) in _days)
             {
-                if (DocumentKinds.FromPath(record.Path) is not { } kind || (kinds is not null && !kinds.Contains(kind)))
-                    continue;
-
-                foreach (var open in record.Opens)
+                var opens = 0;
+                var files = 0;
+                foreach (var kind in DocumentKinds.All.Where(k => kinds is null || kinds.Contains(k)))
                 {
-                    var date = LocalDate(open);
-                    if (!opens.TryGetValue(date, out var day))
-                        opens[date] = day = (0, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-                    day.Files.Add(record.Path);
-                    opens[date] = (day.Opens + 1, day.Files);
+                    if (day.Get(kind) is { } count)
+                    {
+                        opens += count.Opens;
+                        files += count.Files;
+                    }
                 }
+
+                if (opens > 0)
+                    totals[date] = new RecentFileDayTotal(opens, files);
             }
 
-            return opens.ToDictionary(d => d.Key, d => new RecentFileDayTotal(d.Value.Opens, d.Value.Files.Count));
+            return totals;
         }
     }
+
+    /// <summary>Opens per kind per local day for the last year: the year strip's counts where the opens themselves have aged out.</summary>
+    public IReadOnlyDictionary<DateOnly, IReadOnlyDictionary<DocumentKind, int>> QueryDayCounts()
+    {
+        lock (_sync)
+        {
+            return _days.ToDictionary(
+                d => d.Key,
+                d => (IReadOnlyDictionary<DocumentKind, int>)DocumentKinds.All
+                    .Where(k => d.Value.Get(k) is { Opens: > 0 })
+                    .ToDictionary(k => k, k => d.Value.Get(k)!.Opens));
+        }
+    }
+
+    /// <summary>The first local date whose opens are still held here.</summary>
+    public DateOnly DetailKeptFrom => Today().AddDays(-(DetailDays - 1));
 
     /// <summary>The local date of <paramref name="instant"/> in the store's zone.</summary>
     public DateOnly LocalDate(DateTimeOffset instant)
@@ -361,6 +423,7 @@ public sealed class RecentFilesStore
                 SchemaVersion = CurrentSchemaVersion,
                 Settings = _settings,
                 Files = _files.Values.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToList(),
+                Days = new SortedDictionary<DateOnly, RecentFilesDay>(_days).ToDictionary(d => d.Key, d => d.Value),
             };
             _storage.Write(JsonSerializer.Serialize(document, JsonOptions));
             _hasUnsavedChanges = false;
@@ -374,7 +437,11 @@ public sealed class RecentFilesStore
         }
     }
 
-    /// <summary>Drops opens older than the retention window, and files left with none; true if anything went.</summary>
+    /// <summary>
+    /// Saves every held open to the history, then drops opens older than
+    /// <see cref="DetailDays"/>, day counts older than <see cref="RetentionDays"/>,
+    /// and files last opened before that; true if anything went.
+    /// </summary>
     private bool Prune(DateOnly today)
     {
         _prunedOn = today;
@@ -384,16 +451,40 @@ public sealed class RecentFilesStore
             return false;
         }
 
+        var opensFrom = today.AddDays(-(DetailDays - 1));
         var keepFrom = today.AddDays(-(RetentionDays - 1));
         var pruned = false;
         foreach (var (path, record) in _files.ToList())
         {
-            pruned |= record.Opens.RemoveAll(o => LocalDate(o) < keepFrom) > 0;
-            if (record.Opens.Count == 0)
+            pruned |= record.Opens.RemoveAll(o => LocalDate(o) < opensFrom) > 0;
+            if (record.LastOpenedAt is not { } last || LocalDate(last) < keepFrom)
                 pruned |= _files.Remove(path);
         }
 
+        foreach (var date in _days.Keys.Where(d => d < keepFrom).ToList())
+            pruned |= _days.Remove(date);
+
         return pruned;
+    }
+
+    /// <summary>A version 1 file's day counts, worked out from the opens it kept.</summary>
+    private Dictionary<DateOnly, RecentFilesDay> CountDays(IEnumerable<RecentFileRecord> files)
+    {
+        var days = new Dictionary<DateOnly, RecentFilesDay>();
+        foreach (var record in files)
+        {
+            if (DocumentKinds.FromPath(record.Path) is not { } kind)
+                continue;
+
+            foreach (var group in record.Opens.GroupBy(LocalDate))
+            {
+                if (!days.TryGetValue(group.Key, out var day))
+                    days[group.Key] = day = new RecentFilesDay();
+                day.Add(kind, group.Count(), 1);
+            }
+        }
+
+        return days;
     }
 
     private static RecentFilesSettings Normalize(RecentFilesSettings? loaded)
@@ -421,11 +512,18 @@ public sealed class RecentFilesStore
             if (!files.TryGetValue(path, out var existing))
                 files[path] = existing = new RecentFileRecord { Path = path };
             existing.Opens.AddRange(record.Opens ?? new List<DateTimeOffset>());
+            existing.OpenCount += Math.Max(0, record.OpenCount);
+            if (record.LastOpenedAt is { } last && (existing.LastOpenedAt is null || last > existing.LastOpenedAt))
+                existing.LastOpenedAt = last.ToUniversalTime();
         }
 
         foreach (var record in files.Values)
         {
             var opens = record.Opens.Select(o => o.ToUniversalTime()).Distinct().OrderBy(o => o).ToList();
+            // A version 1 file has no summary: its opens are the whole story.
+            if (opens.Count > 0 && (record.LastOpenedAt is null || opens[^1] > record.LastOpenedAt))
+                record.LastOpenedAt = opens[^1];
+            record.OpenCount = Math.Max(record.OpenCount, opens.Count);
             record.Opens = opens.Count > MaxOpensPerFile ? opens.GetRange(opens.Count - MaxOpensPerFile, MaxOpensPerFile) : opens;
         }
 

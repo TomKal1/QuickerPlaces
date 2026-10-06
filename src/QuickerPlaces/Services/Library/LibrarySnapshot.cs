@@ -31,6 +31,10 @@ namespace QuickerPlaces.Services.Library;
 /// <param name="HistoryFrom">The first day of the earliest history month added, or null when none was: folder detail is known back to it.</param>
 /// <param name="HistoryFirstDay">The first day with any activity in the history added, or null.</param>
 /// <param name="FilesKeptFrom">With history added, the first day Recent Files itself holds: earlier opens are listed only for a chosen period.</param>
+/// <param name="FileSummaries">Every file Recent Files still lists, with its open count and last open: the list with no period. Null keeps the older rule (counted from <see cref="Files"/>).</param>
+/// <param name="FileDayCounts">Opens per kind per day for the year Recent Files counts, for days whose opens it no longer holds (before <see cref="FilesDetailFrom"/>).</param>
+/// <param name="FilesDetailFrom">The first day Recent Files holds each open for.</param>
+/// <param name="HistoryMonths">The months of activity history added: on those days, opens come from the history instead of <see cref="FileDayCounts"/>.</param>
 public sealed record LibrarySnapshot(
     IReadOnlyList<Place> Places,
     IReadOnlyList<SessionSnapshot> Sessions,
@@ -46,7 +50,11 @@ public sealed record LibrarySnapshot(
     TimeZoneInfo Zone,
     DateOnly? HistoryFrom = null,
     DateOnly? HistoryFirstDay = null,
-    DateOnly FilesKeptFrom = default)
+    DateOnly FilesKeptFrom = default,
+    IReadOnlyList<RecentFileSummary>? FileSummaries = null,
+    IReadOnlyDictionary<DateOnly, IReadOnlyDictionary<DocumentKind, int>>? FileDayCounts = null,
+    DateOnly FilesDetailFrom = default,
+    IReadOnlySet<(int Year, int Month)>? HistoryMonths = null)
 {
     public static LibrarySnapshot Capture(PlacesService places, SessionStore sessions, ActivityStore activity,
         RecentFilesStore recentFiles, TimeProvider time)
@@ -76,7 +84,10 @@ public sealed record LibrarySnapshot(
             recentFiles.Settings,
             recentFiles.QueryHistory(),
             Local(time.GetUtcNow()),
-            zone);
+            zone,
+            FileSummaries: recentFiles.QuerySummary(),
+            FileDayCounts: recentFiles.QueryDayCounts(),
+            FilesDetailFrom: recentFiles.DetailKeptFrom);
     }
 
     /// <summary>
@@ -122,12 +133,21 @@ public sealed record LibrarySnapshot(
             HistoryFrom = months.Select(m => FirstOfMonth(m.Month)).OfType<DateOnly>().DefaultIfEmpty(Today).Min(),
             HistoryFirstDay = firstOpen < firstFolder ? firstOpen : firstFolder,
             FilesKeptFrom = HistoryCutoffs.For(Today).FilesFrom,
+            HistoryMonths = months.Select(m => FirstOfMonth(m.Month)).OfType<DateOnly>().Select(d => (d.Year, d.Month)).ToHashSet(),
         };
     }
 
     private static DateOnly? FirstOfMonth(string month)
         => DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None, out var first) ? first : null;
+
+    /// <summary>
+    /// True when a day's file opens are known one by one: Recent Files holds
+    /// them, or a history month for the day is loaded. Otherwise only
+    /// <see cref="FileDayCounts"/> knows how many there were.
+    /// </summary>
+    public bool KnowsOpensOn(DateOnly date)
+        => FileDayCounts is null || date >= FilesDetailFrom || HistoryMonths?.Contains((date.Year, date.Month)) == true;
 
     /// <summary>The local date of <paramref name="instant"/>.</summary>
     public DateOnly LocalDate(DateTimeOffset instant) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, Zone).DateTime);

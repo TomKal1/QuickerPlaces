@@ -61,8 +61,12 @@ public sealed class HistoryReadingTests
     // ---------------------------------------------------------------
 
     [Fact]
-    public void RecentFilesAndDayTotals_KeepTheSameYear_SoOneCutoffServesBoth()
-        => Assert.Equal(RecentFilesStore.RetentionDays, ActivityStore.TotalDays);
+    public void RecentFilesAndRecents_KeepDetailAndCountsForTheSameDays()
+    {
+        Assert.Equal(ActivityStore.DetailDays, RecentFilesStore.DetailDays);
+        Assert.Equal(ActivityStore.TotalDays, RecentFilesStore.RetentionDays);
+        Assert.Equal(HistoryCutoffs.For(Today).DetailFrom, HistoryCutoffs.For(Today).FilesFrom);
+    }
 
     [Fact]
     public void ReadMonth_LeavesOutThisPcsHeldDays_ButNotAnotherPcs()

@@ -221,9 +221,22 @@ public static class LibraryQueryEngine
             .GroupBy(f => f.Folder, StringComparer.OrdinalIgnoreCase)
             .Select(g => new FolderActivity(g.First().Folder, TimeSpan.FromTicks(g.Sum(f => f.Time.Ticks)), g.Sum(f => f.Visits), g.Max(f => f.LastVisited)));
 
-    /// <summary>Files opened in the period, with how often and when last. With no period, history older than Recent Files' own year is left out, unless <paramref name="everything"/>.</summary>
+    /// <summary>
+    /// Files opened in the period, with how often and when last. With no
+    /// period, Recent Files' own list (every file opened in the last year,
+    /// with its count), unless <paramref name="everything"/> asks for all
+    /// that is loaded.
+    /// </summary>
     private static IEnumerable<RecentFileSummary> FilesIn(LibrarySnapshot data, (DateOnly From, DateOnly To)? period, bool everything = false)
     {
+        if (period is null && data.FileSummaries is { } summaries)
+        {
+            foreach (var summary in summaries)
+                yield return summary;
+            if (!everything)
+                yield break;
+        }
+
         foreach (var file in data.Files)
         {
             var count = 0;
@@ -365,7 +378,7 @@ public static class LibraryQueryEngine
         var settings = data.RecentFilesSettings;
         if (settings.TrackingStartedAt is { } started)
             starts.Add(data.LocalDate(started));
-        if (!settings.Enabled && data.Files.Count == 0)
+        if (!settings.Enabled && data.Files.Count == 0 && (data.FileSummaries?.Count ?? 0) == 0)
             return new SourceCoverage(FileSource, CoverageState.Unavailable, "Recent Files is off.");
 
         foreach (var file in data.Files)
@@ -377,7 +390,25 @@ public static class LibraryQueryEngine
                 continue;
 
             foreach (var open in file.Opens)
-                Add(heat, data.LocalDate(open), opens: 1);
+            {
+                var date = data.LocalDate(open);
+                if (data.KnowsOpensOn(date))
+                    Add(heat, date, opens: 1);
+            }
+        }
+
+        // Days whose opens Recent Files no longer holds one by one, and no history month covers: its counts per kind.
+        // They can be narrowed by kind, but not to the files a search, tag or scope picks.
+        if (filter.OnlyKind && data.FileDayCounts is { } counts)
+        {
+            foreach (var (date, kinds) in counts)
+            {
+                if (data.KnowsOpensOn(date))
+                    continue;
+                var opens = kinds.Where(k => filter.Kind is null || LibraryKinds.From(k.Key) == filter.Kind).Sum(k => k.Value);
+                if (opens > 0)
+                    Add(heat, date, opens: opens);
+            }
         }
 
         if (!settings.Enabled)

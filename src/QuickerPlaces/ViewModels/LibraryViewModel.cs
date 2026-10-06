@@ -627,7 +627,7 @@ public sealed class LibraryViewModel : ObservableObject
         {
             if (Period is null && _tab == LibraryTab.Sessions && _snapshot.Sessions.All(s => s.Files.Count == 0))
                 return "No session files yet. Save files as a session from the Sessions panel.";
-            if (Period is null && _tab == LibraryTab.Recent && _snapshot.Roots.Count == 0 && _snapshot.Files.Count == 0)
+            if (Period is null && _tab == LibraryTab.Recent && _snapshot.Roots.Count == 0 && _snapshot.Files.Count == 0 && (_snapshot.FileSummaries?.Count ?? 0) == 0)
                 return "Nothing recent yet. Track a folder above, or turn on Recent Files.";
             var inPeriod = _result?.ItemsInPeriod ?? 0;
             if (Period is not { } p)
@@ -978,10 +978,10 @@ public sealed class LibraryViewModel : ObservableObject
             if (history is null)
                 return (Result: LibraryQueryEngine.Run(snapshot, filter, period, culture), Reach: (DateOnly?)null);
 
-            // The strip needs day totals and opens (a year held by the stores); a search, a Saved filter or a period needs folder detail (62 days).
+            // The strip needs day totals and counts (a year held by the stores); any filter but the kind, or a period, needs each folder and open (62 days).
             var cutoffs = HistoryCutoffs.For(snapshot.Today);
             var index = history.Index();
-            var needsDetail = !string.IsNullOrWhiteSpace(filter.Text) || filter.Source == LibrarySourceFilter.Saved;
+            var needsDetail = !filter.OnlyKind;
             var months = HistoryMonthCache.Needed(index, new DateOnly(year, 1, 1), new DateOnly(year, 12, 31), needsDetail ? cutoffs.DetailFrom : cutoffs.TotalsFrom).ToList();
             if (period is { } p)
                 months.AddRange(HistoryMonthCache.Needed(index, p.From, p.To, cutoffs.DetailFrom));

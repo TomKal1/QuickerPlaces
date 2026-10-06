@@ -62,14 +62,14 @@ public sealed record HistoryCutoffs(DateOnly DetailFrom, DateOnly TotalsFrom, Da
 {
     /// <summary>
     /// The cutoffs for <paramref name="today"/> by the stores' own windows.
-    /// Recent Files keeps the same year as the day totals
-    /// (RecentFilesStore.RetentionDays); a test holds the two equal, so this
-    /// file needs no reference to Recent Files.
+    /// Recent Files keeps each open as long as Recents keeps folder detail
+    /// (RecentFilesStore.DetailDays is ActivityStore.DetailDays), so this file
+    /// needs no reference to Recent Files.
     /// </summary>
     public static HistoryCutoffs For(DateOnly today)
         => new(today.AddDays(-(ActivityStore.DetailDays - 1)),
             today.AddDays(-(ActivityStore.TotalDays - 1)),
-            today.AddDays(-(ActivityStore.TotalDays - 1)));
+            today.AddDays(-(ActivityStore.DetailDays - 1)));
 
     /// <summary>The latest of the three: before it, some of this PC's data is only in the month files.</summary>
     public DateOnly Latest => new[] { DetailFrom, TotalsFrom, FilesFrom }.Max();

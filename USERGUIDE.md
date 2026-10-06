@@ -105,11 +105,9 @@ Changing the grouping affects **new visits only**. Earlier rows keep the groupin
 
 **Stop tracking** keeps the tracked folder and its recorded data, and **Resume tracking** starts it again. A tracked folder can't be deleted, so its history is never lost. Before tracking began, or on days recorded before your history began keeping folder detail, the app does not present missing detail as zero activity: it says the detail has expired.
 
-**Your history is kept for good.** Once a day, and always before anything is cleared from the window above, QuickerPlaces saves every day it holds (each folder's time and visits, and each day's totals) into your activity history: one file per month in `Documents\QuickerPlaces\History`, such as `2026-09 (DESKTOP-ABC).json`, named after this PC. Nothing needs turning on. The files are small (well under a megabyte a month), are never deleted by QuickerPlaces, and are in Documents so they go with your other files when you back up or move to a new PC. Recent Files is saved into the same files.
+**Your folder activity is kept for good** in your activity history (see *Activity history* below), so Recents can show any day you have tracked, however long ago.
 
-**Looking back.** The year list in Recents and the Library goes back as far as your history does. Choose an older year, and its strip is shaded from the history; choose a day, week or month in it, and its folders (and, in the Library, the files you opened) are listed as for any recent day. QuickerPlaces reads only the months it needs, when you look at them, and lets them go when you move on, so years of history don't slow it down. If the same folder is tracked on two PCs that share the History folder (by copying it, or through OneDrive), a day worked on both shows the time from both.
-
-Activity is stored only on this computer in `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json`, separately from your Places and their export. It is buffered and saved about every five minutes, and on idle, lock, and exit; a crash can lose up to the last five minutes. If a tracked folder's setting cannot be saved, the Folder Activity window shows an error and **Retry save**. Explorer restarts can cause a brief gap before tracking resumes. After you have been idle past the root's timeout, QuickerPlaces checks for your return every 15 seconds; a short test visit made immediately on return may not count until that check and the visit threshold have both elapsed.
+The last 62 days are stored on this computer in `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json`, separately from your Places and their export; older days are in your activity history. It is buffered and saved about every five minutes, and on idle, lock, and exit; a crash can lose up to the last five minutes. If a tracked folder's setting cannot be saved, the Folder Activity window shows an error and **Retry save**. Explorer restarts can cause a brief gap before tracking resumes. After you have been idle past the root's timeout, QuickerPlaces checks for your return every 15 seconds; a short test visit made immediately on return may not count until that check and the visit threshold have both elapsed.
 
 ### Keeping tracking on in the background
 
@@ -168,9 +166,33 @@ Turn it on in the **Library** (the **Library** button in the header), in the **R
 - **Kinds:** untick PDF, Word or Excel to stop recording that kind from now on.
 - **Where:** by default, only files under folders you track in Recents are recorded — if you track none, nothing is. Choose **Anywhere** to record files wherever they are.
 - **Pause tracking** in the tray menu pauses Recent Files along with folder tracking.
-- What Recent Files records is kept for good as part of your activity history (see Folder Activity); it can't be deleted from QuickerPlaces. Turn Recent Files off to stop recording.
+- What Recent Files records is kept for good as part of your activity history (see *Activity history* below); it can't be deleted from QuickerPlaces. Turn Recent Files off to stop recording.
 
-It is best effort: it sees what Windows' Recent Items sees, which covers files opened from Explorer and from most programs' Open dialogs, but a program can skip it, a policy can turn it off, and two opens of the same file within a minute count once. Recent Files keeps a year of history in `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json`, on this computer only, and it is never exported. Every open is also saved for good in your activity history in `Documents\QuickerPlaces\History` (see Folder Activity).
+It is best effort: it sees what Windows' Recent Items sees, which covers files opened from Explorer and from most programs' Open dialogs, but a program can skip it, a policy can turn it off, and two opens of the same file within a minute count once. `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json`, on this computer only and never exported, holds each open for 62 days, and for a year the files you opened (with how many times and when last) and how many opens there were each day. Every open is also kept for good in your activity history.
+
+## Activity history
+
+QuickerPlaces keeps what Folder Activity (Recents) and Recent Files record for good, so you can look back over months and years — a whole career, if you like. Nothing needs turning on: whenever either is recording, its history is kept.
+
+**Where it is.** One file per month in `Documents\QuickerPlaces\History`, named for the month and this PC, such as `2026-09 (DESKTOP-ABC).json`. Each holds that month's folder activity (each tracked folder's time and visits per day, and each day's totals) and the PDF, Word and Excel files opened. The files are plain text, small (well under a megabyte a month, a year in a few megabytes), and are created only once there is something to keep.
+
+**How it is kept.** QuickerPlaces itself keeps only recent activity: the last 62 days of folders and file opens, and a year of daily totals. Once a day, and always before it clears anything older, it saves every day it still holds into the month files, so a day is in your history long before it leaves the app. If the history can't be saved (the folder is read-only, say), nothing is cleared that day, and it tries again the next. A PC that wasn't used for months still saves those months the next time QuickerPlaces starts.
+
+**It can't be deleted from QuickerPlaces.** There is no command that removes history. To stop recording, use **Stop tracking** on a tracked folder, or turn Recent Files off; what was recorded stays. QuickerPlaces never deletes or shortens a month file.
+
+**Looking back.** The year list in Recents and the Library goes back as far as your history does.
+- Choose an older year: its strip is shaded from the history.
+- Choose a day, week or month in it: its folders (and, in the Library, the files you opened) are listed as for any recent day.
+- The Library's list with no date chosen shows recent activity: folders from the last 62 days and files opened in the last year. Older ones appear when you choose their period.
+- Days recorded before your history began keeping folder detail (the history started with this version) know only their totals; for those days the app says the folder detail has expired, rather than showing nothing.
+
+QuickerPlaces reads only the months it needs, when you look at them, and lets them go when you move on, so years of history don't make it slower or larger.
+
+**More than one PC.** Each PC writes only the files with its own name, so a History folder shared between PCs (copied across, or synced by OneDrive) never has two PCs writing one file. QuickerPlaces reads every PC's files: a day worked on both shows the time from both, and a folder tracked only on the other PC still counts in the Library's year strip.
+
+**A new PC.** Copy `Documents\QuickerPlaces\History` across (or let OneDrive do it if it backs up your Documents), and your history is there when you track folders again.
+
+**From the command line.** `qp folders recent`, `qp files recent` and `qp activity days` read the history too, so `--days 3650` reaches back ten years.
 
 ## The Library
 
@@ -330,9 +352,9 @@ QuickerPlaces keeps a few small plain-text files, all safe to open in a text edi
 - **A backup of the previous version:** `%AppData%\QuickerPlaces\QuickerPlaces\places.bak.json` — QuickerPlaces keeps the previous contents of `places.json` every time it saves, automatically, right next to it. You don't need to do anything to get this; it's just there as an extra safety net.
 - **Window layout** (size, position, whether the grid is collapsed, how it's sorted), the **global hotkey**, and the tray/startup switches: `%LocalAppData%\QuickerPlaces\QuickerPlaces\settings.json` — saved when the window closes, and straight away when you change Settings.
 - **Project sessions:** `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside `places.json`, with its previous version as `sessions.bak.json` — written the instant you save, edit, reopen or delete a session. Copy it along with `places.json` to take your sessions to another machine.
-- **Recent Files settings and history:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json` — stays on this computer, is never exported, and exists only once you've turned Recent Files on.
+- **Recent Files settings and recent opens:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\recent-files.json` — the last 62 days of opens and a year of the files you opened and daily counts; older opens are in your activity history. It stays on this computer, is never exported, and exists only once you've turned Recent Files on.
 - **Folder Activity roots and recorded time:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\activity.json` — stays on this computer and is separate from a Places export.
-- **Activity history:** `Documents\QuickerPlaces\History`, one file per month per PC — folder activity and Recent Files, kept for good (see Folder Activity). Copy the folder to keep your history when you change PCs; history written by several PCs in the same folder is kept apart by the PC's name in each file name. QuickerPlaces never deletes from these files: stopping tracking or turning Recent Files off leaves past months as they are.
+- **Activity history:** `Documents\QuickerPlaces\History`, one file per month per PC — folder activity and Recent Files, kept for good (see *Activity history*). Copy the folder to keep your history when you change PCs; history written by several PCs in the same folder is kept apart by the PC's name in each file name. QuickerPlaces never deletes from these files: stopping tracking or turning Recent Files off leaves past months as they are.
 
 Last Opened and Opens are stored with each place in `places.json`, so they go wherever that file goes. The sort is in `settings.json`, which stays on this computer.
 - **The diagnostic log:** `%LocalAppData%\QuickerPlaces\QuickerPlaces\logs\quickerplaces.log` — see "Where the log lives" above.
@@ -342,6 +364,8 @@ You never need to touch any of these files by hand, but if you ever want to move
 **Upgrading from a version without Recently Deleted.** This version stores `places.json` in a new format: dates are kept in UTC (the grid still shows your local date), and removed places are marked rather than deleted. The first time it starts, it converts your existing file in memory and writes nothing. The converted file is saved with your first change, and right after that save `places.bak.json` is your pre-upgrade file, until the next save replaces it. From then on, an older version of QuickerPlaces that has the startup recovery prompt says the file was written by a newer version, and leaves it untouched. A version from before the recovery prompt existed doesn't check: it would show the places in Recently Deleted as ordinary places, and forget they were removed the next time it saved. Don't go back to one of those with this file.
 
 **Upgrading from a version without Last Opened.** The same happens again: the file is converted in memory when QuickerPlaces starts and saved in the new format with your first change, usually the first place you open. Every place starts as never opened. Right after that first save `places.bak.json` is your pre-upgrade file, and any earlier version of QuickerPlaces with the recovery prompt, including the one with Recently Deleted, says the file was written by a newer version and leaves it untouched.
+
+**Upgrading to the version with activity history.** `recent-files.json` moves to a new format that keeps 62 days of opens instead of a year. The first time it starts, this version saves all of your existing opens into your activity history, works out the new file in memory, and writes it with the next file you open or setting you change. After that, an older QuickerPlaces says Recent Files was saved by a newer version and keeps Recent Files off; `activity.json` is unchanged and still works in an older version.
 
 ## If something goes wrong
 
