@@ -78,8 +78,6 @@
                                                 <MenuItem Header="About folder…" Click="AboutRoot_Click" />
                                                 <Separator />
                                                 <MenuItem Header="Stop tracking" Tag="Toggle" Click="ToggleRoot_Click" />
-                                                <Separator />
-                                                <MenuItem Header="Delete tracked folder…" Tag="Manage" Click="DeleteRoot_Click" />
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal">

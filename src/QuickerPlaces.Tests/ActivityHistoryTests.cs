@@ -13,8 +13,8 @@ namespace QuickerPlaces.Tests;
 
 /// <summary>
 /// History plan §3, §4: the month files that keep folder and file activity
-/// forever. Saving adds or replaces days and never deletes; forgetting
-/// reaches every PC's files; reading merges them.
+/// forever. Saving adds or replaces days and never deletes; reading merges
+/// every PC's files.
 /// </summary>
 public sealed class ActivityHistoryTests
 {
@@ -238,51 +238,6 @@ public sealed class ActivityHistoryTests
     }
 
     [Fact]
-    public void ForgetRoot_RemovesItFromEveryPcsFiles_AndKeepsTheRest()
-    {
-        Assert.True(NewHistory("DESK-1").SaveFolders(new[] { Root(Jobs, (Sep1, Acme, 60, 3)), Root(@"D:\Other", (Sep1, @"D:\Other\X", 5, 1)) }));
-        Assert.True(NewHistory("LAPTOP").SaveFolders(new[] { Root(Jobs, (Aug31, Acme, 30, 1)) }));
-        Assert.True(NewHistory("LAPTOP").SaveFiles(new[] { File(A101, Utc(8, 31, 1)) }));
-        var history = NewHistory("DESK-1");
-
-        history.ForgetRoot(@"c:\jobs");
-
-        Assert.Equal(new[] { @"D:\Other" }, history.ReadMonth(2026, 9)!.Roots.Select(r => r.Path));
-        var august = history.ReadMonth(2026, 8)!;
-        Assert.Empty(august.Roots);
-        Assert.Single(august.Files);
-    }
-
-    [Fact]
-    public void ForgetRoot_ThenSaving_DoesNotBringBackAStaleCopy()
-    {
-        var history = NewHistory();
-        Assert.True(history.SaveFolders(new[] { Root(Jobs, (Sep1, Acme, 60, 3)) }));
-
-        history.ForgetRoot(Jobs);
-        Assert.True(history.SaveFiles(new[] { File(A101, Utc(9, 1, 1)) }));
-
-        Assert.Empty(history.ReadMonth(2026, 9)!.Roots);
-    }
-
-    [Fact]
-    public void ForgetFile_AndForgetAllFiles_ReachEveryPc_AndKeepFolders()
-    {
-        Assert.True(NewHistory("DESK-1").SaveFiles(new[] { File(A101, Utc(9, 1, 1)), File(Report, Utc(9, 1, 2)) }));
-        Assert.True(NewHistory("LAPTOP").SaveFiles(new[] { File(A101, Utc(9, 2, 1)) }));
-        Assert.True(NewHistory("LAPTOP").SaveFolders(new[] { Root(Jobs, (Sep1, Acme, 60, 3)) }));
-        var history = NewHistory();
-
-        history.ForgetFile(@"c:\jobs\acme\a-101.PDF");
-        Assert.Equal(new[] { Report }, history.ReadMonth(2026, 9)!.Files.Select(f => f.Path));
-
-        history.ForgetAllFiles();
-        var september = history.ReadMonth(2026, 9)!;
-        Assert.Empty(september.Files);
-        Assert.Single(september.Roots);
-    }
-
-    [Fact]
     public void TheRealFolder_IsCreatedOnlyByTheFirstWrite_AndListsOnlyHistory()
     {
         using var temp = new TempDirectory();
@@ -291,7 +246,6 @@ public sealed class ActivityHistoryTests
         var history = new ActivityHistory(folder, _time, "DESK-1");
 
         Assert.Empty(folder.List());
-        history.ForgetAllFiles();
         Assert.Null(history.ReadMonth(2026, 9));
         Assert.False(Directory.Exists(path));
 

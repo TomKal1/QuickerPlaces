@@ -31,7 +31,7 @@ namespace QuickerPlaces.Services.RecentFiles;
 ///   flush of each new local day. Before pruning, every open still held is
 ///   handed to the activity history (history plan §4), which keeps it
 ///   forever; if that fails, nothing is pruned that day. Forgetting a file,
-///   or all of them, forgets it in the history too. Each file keeps at most
+///   or all of them, clears this list only: the history is kept (history plan H5). Each file keeps at most
 ///   <see cref="MaxOpensPerFile"/> opens.
 /// - Loading goes through <see cref="JsonStoreLoader"/> and is handled as
 ///   activity.json's is: a damaged file is set aside and tracking restarts
@@ -269,9 +269,7 @@ public sealed class RecentFilesStore
                 return PersistenceResult.Fail(Notice!);
 
             var key = DocumentPaths.Normalize(path) ?? path;
-            var persistence = _files.Remove(key) ? SaveNow() : PersistenceResult.Ok();
-            _history?.ForgetFile(key);
-            return persistence;
+            return _files.Remove(key) ? SaveNow() : PersistenceResult.Ok();
         }
     }
 
@@ -284,9 +282,7 @@ public sealed class RecentFilesStore
                 return PersistenceResult.Fail(Notice!);
 
             _files.Clear();
-            var persistence = SaveNow();
-            _history?.ForgetAllFiles();
-            return persistence;
+            return SaveNow();
         }
     }
 

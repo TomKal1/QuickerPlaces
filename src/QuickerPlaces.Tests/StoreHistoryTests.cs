@@ -13,7 +13,8 @@ namespace QuickerPlaces.Tests;
 /// <summary>
 /// History plan §4: activity.json and recent-files.json hand every day they
 /// hold to the history before they prune any, keep their data when that
-/// fails, and forget in the history what the user deletes.
+/// fails, and never delete history: stopping tracking or clearing Recent
+/// Files leaves past months as they are.
 /// </summary>
 public sealed class StoreHistoryTests
 {
@@ -78,16 +79,15 @@ public sealed class StoreHistoryTests
     }
 
     [Fact]
-    public void ActivityStore_DeleteRoot_ForgetsItsHistory()
+    public void ActivityStore_StoppingTracking_KeepsTheHistory()
     {
         var rootId = SeedActivity(ExpiredDetail, Today);
         var store = new ActivityStore(_activityFile, new ManualTimeProvider(), History());
-        Assert.NotNull(History().ReadMonth(ExpiredDetail.Year, ExpiredDetail.Month));
 
-        Assert.True(store.DeleteRoot(rootId).Saved);
+        Assert.True(store.SetEnabled(rootId, false).Saved);
 
-        Assert.Empty(History().ReadMonth(ExpiredDetail.Year, ExpiredDetail.Month)!.Roots);
-        Assert.Empty(History().ReadMonth(Today.Year, Today.Month)!.Roots);
+        Assert.Single(History().ReadMonth(ExpiredDetail.Year, ExpiredDetail.Month)!.Roots);
+        Assert.Single(History().ReadMonth(Today.Year, Today.Month)!.Roots);
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class StoreHistoryTests
     }
 
     [Fact]
-    public void RecentFilesStore_ForgetAndClear_ReachTheHistory()
+    public void RecentFilesStore_ForgetAndClear_KeepTheHistory()
     {
         var time = new ManualTimeProvider();
         var history = History(time);
@@ -161,9 +161,11 @@ public sealed class StoreHistoryTests
         Assert.Equal(2, history.ReadMonth(Today.Year, Today.Month)!.Files.Count);
 
         Assert.True(store.Forget(A101).Saved);
-        Assert.Equal(new[] { Report }, history.ReadMonth(Today.Year, Today.Month)!.Files.Select(f => f.Path));
-
         Assert.True(store.ClearHistory().Saved);
-        Assert.Empty(history.ReadMonth(Today.Year, Today.Month)!.Files);
+        time.UtcNow = time.UtcNow.AddDays(1);
+        Assert.True(store.Flush().Saved);
+
+        Assert.Empty(store.QueryFiles());
+        Assert.Equal(2, History(time).ReadMonth(Today.Year, Today.Month)!.Files.Count);
     }
 }

@@ -20,9 +20,6 @@ public interface IFolderHistory
     /// any month couldn't be saved: the caller then keeps its data.
     /// </summary>
     bool SaveFolders(IReadOnlyCollection<TrackedRoot> roots);
-
-    /// <summary>Deletes a root's days from every month file in the folder.</summary>
-    void ForgetRoot(string rootPath);
 }
 
 /// <summary>What RecentFilesStore hands its opens to before it deletes any (history plan §4).</summary>
@@ -30,12 +27,6 @@ public interface IFileHistory
 {
     /// <summary>Adds every open in <paramref name="files"/> to the month files. False when any month couldn't be saved.</summary>
     bool SaveFiles(IReadOnlyCollection<RecentFileRecord> files);
-
-    /// <summary>Deletes one file's opens from every month file.</summary>
-    void ForgetFile(string path);
-
-    /// <summary>Deletes every file open from every month file, keeping folder activity.</summary>
-    void ForgetAllFiles();
 }
 
 /// <summary>
@@ -46,9 +37,9 @@ public interface IFileHistory
 /// it into the month files. So a day is in a month file long before it
 /// leaves the working store, and a lost PC loses at most a day.
 ///
-/// - Saving only adds or replaces the days it is given; it never deletes.
-///   Days leave history only when the user deletes them (a tracked folder,
-///   a recent file, or all of Recent Files), which reaches every PC's files.
+/// - Saving only adds or replaces the days it is given; nothing here ever
+///   deletes history (history plan H5): stopping tracking, or clearing
+///   Recent Files, leaves past months as they are.
 /// - A month file is written only when its content changed.
 /// - A file this PC wrote that can't be read is set aside, never written
 ///   over; one from a newer version is left alone and the caller keeps its data.
@@ -74,7 +65,7 @@ public sealed class ActivityHistory : IFolderHistory, IFileHistory
     private readonly IHistoryFolder _folder;
     private readonly TimeProvider _time;
 
-    /// <summary>Each of this PC's month files as last read or written, by name: saves compare against it instead of reading again.</summary>
+    /// <summary>Each of this PC's month files as last read or written, by name: saves compare against it instead of reading again. Only this class writes them.</summary>
     private readonly Dictionary<string, (HistoryMonthDocument Document, string Text)> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     public ActivityHistory(IHistoryFolder folder, TimeProvider time, string machine)
@@ -260,63 +251,6 @@ public sealed class ActivityHistory : IFolderHistory, IFileHistory
                     DiagnosticLog.Error($"Activity history {name} couldn't be read or set aside; it is left as it is.", ex);
                     return false;
                 }
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Forgetting
-    // ---------------------------------------------------------------
-
-    public void ForgetRoot(string rootPath)
-        => ForgetEverywhere(document => document.Roots.RemoveAll(r => SamePath(r.Path, rootPath)) > 0, "a tracked folder");
-
-    public void ForgetFile(string path)
-        => ForgetEverywhere(document => document.Files.RemoveAll(f => SamePath(f.Path, path)) > 0, "a recent file");
-
-    public void ForgetAllFiles()
-        => ForgetEverywhere(document =>
-        {
-            var had = document.Files.Count > 0;
-            document.Files.Clear();
-            return had;
-        }, "Recent Files");
-
-    /// <summary>
-    /// Applies <paramref name="forget"/> to every month file in the folder,
-    /// whichever PC wrote it, and writes each one it changed. A file that
-    /// can't be read is left as it is and logged.
-    /// </summary>
-    private void ForgetEverywhere(Func<HistoryMonthDocument, bool> forget, string what)
-    {
-        lock (_sync)
-        {
-            _cache.Clear();
-            var changed = 0;
-            var failed = 0;
-            foreach (var name in MonthFiles())
-            {
-                try
-                {
-                    if (_folder.Read(name) is not { } text || Parse(text, out var document) != ParseOutcome.Ok)
-                    {
-                        failed++;
-                        continue;
-                    }
-
-                    if (!forget(document!))
-                        continue;
-
-                    _folder.Write(name, JsonSerializer.Serialize(document, JsonOptions));
-                    changed++;
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Warn($"Couldn't remove {what} from activity history {name} ({ex.GetType().Name}).");
-                    failed++;
-                }
-            }
-
-            DiagnosticLog.Info($"Removed {what} from {changed} activity history file(s); {failed} couldn't be changed.");
         }
     }
 

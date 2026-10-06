@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Activity history kept for good, one file per month
-status: step 1 (saving) implemented on branch ccr-f4ba4678-mo9ok7 (2026-10-06); the solution builds with 0 warnings and 1,422 tests pass on Linux; NOT yet run on Windows. Steps 2 and 3 not started
+status: step 1 (saving) implemented on branch ccr-f4ba4678-mo9ok7 (2026-10-06); the solution builds with 0 warnings and 1,419 tests pass on Linux; NOT yet run on Windows. Steps 2 and 3 not started
 created: 2026-10-06
 parent: ai/260914_Folder Activity Tracking Plan.md, ai/260928_PDF Project Sessions Plan.md
 ---
@@ -60,7 +60,7 @@ The two features were designed two weeks apart with different goals, and the win
 - **Damaged and newer files:**
   - one of this PC's files that can't be read is set aside as `….unreadable-<time>.txt` and the month starts again;
   - a file from a newer version is left alone, and the save reports failure, so the store keeps its data.
-- **Deletes reach the history.** Deleting a tracked folder, forgetting a recent file, or **Delete Recent Files history…** removes those entries from every month file, whichever PC wrote it. The two confirmations now say "including its history from past months".
+- **History can't be deleted from the app (H5).** **Delete tracked folder…** is gone from both menus; **Stop tracking** is the way to stop. **Remove from Recent Files** and **Delete Recent Files history…** clear the working list only, and the confirmation says the history is kept.
 - **The log names counts and file names only, never a folder or a document**, as the stores' own log lines do.
 - **`qp` and the developer ActivityProbe** build the stores without a history, so they never write one.
 
@@ -91,8 +91,8 @@ Older opens are read from the month files, as in step 2. The 500-opens-per-file 
 | H2 | Automatic, with no setting to turn it on: history is kept whenever Recents or Recent Files is tracking. |
 | H3 | The stores save before they prune, and don't prune when saving fails. |
 | H4 | The whole held window is saved daily, so a lost PC loses about a day. |
-| H5 | Deleting a tracked folder or recent files deletes their history too, on every PC's files. This was proposed as the default and is in the confirmation text. **Confirm with the user.** |
-| H6 | Saving never deletes; only the user's deletes do. |
+| H5 | History can't be deleted from the app (user, 2026-10-06). **Delete tracked folder…** is removed and **Stop tracking** stays. Clearing Recent Files clears its working list only. `ActivityStore.DeleteRoot` remains for its tests, and keeps history. |
+| H6 | Nothing in the app ever deletes from the month files. |
 
 ## 8. Files (step 1)
 
@@ -104,8 +104,9 @@ Older opens are read from the month files, as in step 2. The 500-opens-per-file 
 | `Services/AppDataFolders.cs` | `History` |
 | `Services/Activity/ActivityStore.cs`, `Services/RecentFiles/RecentFilesStore.cs` | Save before prune; forget on delete |
 | `App.xaml.cs`, `Services/Activity/ActivityTrackingHost.cs` | Wiring |
-| `Views/ActivityWindow.xaml.cs`, `ViewModels/LibraryViewModel.cs` | Confirmation text |
-| Tests | `ActivityHistoryTests`, `StoreHistoryTests` (28 tests) |
+| `Views/ActivityWindow.xaml(.cs)`, `Views/Panels/FileShelfPanel.xaml(.cs)`, `ViewModels/ActivityViewModel.cs` | **Delete tracked folder…** removed (H5) |
+| `ViewModels/LibraryViewModel.cs` | The Recent Files clear confirmation says history is kept |
+| Tests | `ActivityHistoryTests`, `StoreHistoryTests` (25 tests) |
 
 No schema changes: `activity.json` and `recent-files.json` are untouched.
 
@@ -113,7 +114,7 @@ No schema changes: `activity.json` and `recent-files.json` are untouched.
 
 1. With Recents tracking a folder, leave QuickerPlaces running past midnight, or change the clock. `Documents\QuickerPlaces\History` appears with this month's file (and last month's), named for this PC.
 2. On the first run with existing data, files appear for each month `activity.json` holds totals for, up to 13. The months covered by the last 62 days have folder detail.
-3. **Delete tracked folder…** removes the folder from every month file. **Delete Recent Files history…** empties the files sections and keeps the folders.
+3. Right-clicking a tracked folder offers **Stop tracking** and no delete, in both the Folder Activity window and the workspace. **Delete Recent Files history…** empties the Library's recent files and leaves the month files unchanged.
 4. Make the History folder read-only. The log says the history couldn't be saved, and the Folder Activity window still shows detail older than 62 days the next day, because nothing was pruned.
 5. **Startup time and memory with 13 month files.** Measure first launch of the day (when the save runs) against a normal launch, three times each, using the steps in `261002_Performance Baseline.md`.
 6. A PC name with spaces or brackets gives a safe file name.

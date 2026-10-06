@@ -251,8 +251,8 @@ public sealed class ActivityStore
 
     /// <summary>
     /// Deletes a root's configuration and every day recorded under it, in one
-    /// write (§3, D18), and its days in the activity history too. An unknown
-    /// root changes nothing.
+    /// write (§3, D18). Its activity history is kept (history plan H5): the app
+    /// no longer offers this, only Stop tracking. An unknown root changes nothing.
     /// </summary>
     public PersistenceResult DeleteRoot(string rootId)
     {
@@ -266,9 +266,7 @@ public sealed class ActivityStore
                 return PersistenceResult.Ok();
 
             _roots.Remove(root);
-            var persistence = SaveNow();
-            _history?.ForgetRoot(root.Path);
-            return persistence;
+            return SaveNow();
         }
     }
 

@@ -821,7 +821,7 @@ public sealed class LibraryViewModel : ObservableObject
         }
     }
 
-    public string ClearRecentFilesConfirmation => "Delete everything Recent Files has recorded, including its history from past months?\n\nYour saved places, sessions, folder activity and the files themselves are not touched.";
+    public string ClearRecentFilesConfirmation => "Clear everything Recent Files has recorded?\n\nYour activity history in Documents\\QuickerPlaces\\History is kept, as are your saved places, sessions and the files themselves.";
 
     public void ClearRecentFiles()
     {

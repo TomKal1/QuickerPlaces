@@ -19,7 +19,7 @@ public sealed class ActivityViewModelTests
         => new(new ActivityStore(_storage, _time), () => _rootNotifications++, _time);
 
     [Fact]
-    public void AddToggleAndDelete_UpdateSelectionAndNotifyTheHost()
+    public void AddAndToggle_UpdateSelectionAndNotifyTheHost()
     {
         var view = NewViewModel();
         Assert.True(view.AddRoot(@"C:\Jobs", null));
@@ -31,11 +31,6 @@ public sealed class ActivityViewModelTests
         Assert.False(view.SelectedRoot!.Enabled);
         Assert.Equal("Resume tracking", view.ToggleLabel);
         Assert.Equal(2, _rootNotifications);
-
-        view.DeleteSelected();
-        Assert.False(view.HasRoots);
-        Assert.Null(view.SelectedRoot);
-        Assert.Equal(3, _rootNotifications);
     }
 
     [Fact]

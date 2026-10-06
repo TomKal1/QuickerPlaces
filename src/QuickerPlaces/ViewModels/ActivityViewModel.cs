@@ -267,14 +267,6 @@ public sealed class ActivityViewModel : ObservableObject
         Reload(selected.RootId);
     }
 
-    public void DeleteSelected()
-    {
-        if (SelectedRoot is not { } selected) return;
-        ApplyPersistence(_store.DeleteRoot(selected.RootId));
-        _rootsChanged();
-        Reload();
-    }
-
     public void RetrySave() => ApplyPersistence(_store.Flush());
 
     public void Reload(string? selectRootId = null)
