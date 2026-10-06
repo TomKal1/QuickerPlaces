@@ -155,7 +155,7 @@ public partial class ActivityWindow : Window
     private void Delete_Click(object sender, RoutedEventArgs e)
     {
         if (_viewModel.SelectedRoot is not { } selected) return;
-        var message = $"Delete \"{selected.Path}\" and all of its recorded activity? This cannot be undone. To keep the data, use Stop tracking instead.";
+        var message = $"Delete \"{selected.Path}\" and all of its recorded activity, including its history from past months? This cannot be undone. To keep the data, use Stop tracking instead.";
         if (MessageForm.ShowDestructiveConfirm(message, "Delete tracked folder",
                 "Delete folder and its data", this))
             _viewModel.DeleteSelected();

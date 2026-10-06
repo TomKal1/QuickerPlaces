@@ -101,6 +101,8 @@
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
+    <Compile Include="..\QuickerPlaces\Models\History\*.cs" LinkBase="Linked\Models\History" />
+    <Compile Include="..\QuickerPlaces\Services\History\*.cs" LinkBase="Linked\Services\History" />
     <Compile Include="..\QuickerPlaces\Services\Library\LibraryIndex.cs" Link="Linked\Services\Library\LibraryIndex.cs" />
     <Compile Include="..\QuickerPlaces\Services\Library\ResourceIdentity.cs" Link="Linked\Services\Library\ResourceIdentity.cs" />
     <Compile Include="..\QuickerPlaces\Services\Library\LibrarySnapshot.cs" Link="Linked\Services\Library\LibrarySnapshot.cs" />

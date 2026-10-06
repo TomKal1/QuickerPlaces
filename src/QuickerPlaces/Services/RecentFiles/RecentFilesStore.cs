@@ -8,6 +8,7 @@ using QuickerPlaces.Models;
 using QuickerPlaces.Models.RecentFiles;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.History;
 
 namespace QuickerPlaces.Services.RecentFiles;
 
@@ -27,7 +28,10 @@ namespace QuickerPlaces.Services.RecentFiles;
 ///   folder activity; settings and deletions are written at once, and a
 ///   failed write is returned to be shown.
 /// - Kept <see cref="RetentionDays"/> days, pruned at load and in the first
-///   flush of each new local day. Each file keeps at most
+///   flush of each new local day. Before pruning, every open still held is
+///   handed to the activity history (history plan §4), which keeps it
+///   forever; if that fails, nothing is pruned that day. Forgetting a file,
+///   or all of them, forgets it in the history too. Each file keeps at most
 ///   <see cref="MaxOpensPerFile"/> opens.
 /// - Loading goes through <see cref="JsonStoreLoader"/> and is handled as
 ///   activity.json's is: a damaged file is set aside and tracking restarts
@@ -58,13 +62,16 @@ public sealed class RecentFilesStore
     private readonly TimeProvider _time;
     private readonly RecentFilesSettings _settings;
     private readonly Dictionary<string, RecentFileRecord> _files;
+    private readonly IFileHistory? _history;
     private DateOnly _prunedOn;
     private bool _hasUnsavedChanges;
 
-    public RecentFilesStore(IPlacesStorage storage, TimeProvider timeProvider)
+    /// <param name="history">Where opens go before they are pruned, or null to keep no history (the tests, and qp, which only reads).</param>
+    public RecentFilesStore(IPlacesStorage storage, TimeProvider timeProvider, IFileHistory? history = null)
     {
         _storage = storage;
         _time = timeProvider;
+        _history = history;
 
         var (document, outcome) = JsonStoreLoader.Load<RecentFilesDocument>(storage, CurrentSchemaVersion, "files", "Recent files store", JsonOptions);
         LoadOutcome = outcome;
@@ -109,9 +116,9 @@ public sealed class RecentFilesStore
     }
 
     /// <summary>recent-files.json in %LocalAppData%, beside activity.json: machine-local, like folder tracking.</summary>
-    public static RecentFilesStore CreateDefault()
+    public static RecentFilesStore CreateDefault(IFileHistory? history = null)
     {
-        return new RecentFilesStore(new FilePlacesStorage(AppDataFolders.Local, "recent-files.json"), TimeProvider.System);
+        return new RecentFilesStore(new FilePlacesStorage(AppDataFolders.Local, "recent-files.json"), TimeProvider.System, history);
     }
 
     public StoreLoadOutcome LoadOutcome { get; }
@@ -262,7 +269,9 @@ public sealed class RecentFilesStore
                 return PersistenceResult.Fail(Notice!);
 
             var key = DocumentPaths.Normalize(path) ?? path;
-            return _files.Remove(key) ? SaveNow() : PersistenceResult.Ok();
+            var persistence = _files.Remove(key) ? SaveNow() : PersistenceResult.Ok();
+            _history?.ForgetFile(key);
+            return persistence;
         }
     }
 
@@ -275,7 +284,9 @@ public sealed class RecentFilesStore
                 return PersistenceResult.Fail(Notice!);
 
             _files.Clear();
-            return SaveNow();
+            var persistence = SaveNow();
+            _history?.ForgetAllFiles();
+            return persistence;
         }
     }
 
@@ -397,6 +408,12 @@ public sealed class RecentFilesStore
     private bool Prune(DateOnly today)
     {
         _prunedOn = today;
+        if (_history is not null && _files.Count > 0 && !_history.SaveFiles(_files.Values))
+        {
+            DiagnosticLog.Warn("Activity history couldn't be saved, so no recent files were deleted today.");
+            return false;
+        }
+
         var keepFrom = today.AddDays(-(RetentionDays - 1));
         var pruned = false;
         foreach (var (path, record) in _files.ToList())

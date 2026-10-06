@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.Activity;
+using QuickerPlaces.Services.History;
 
 namespace QuickerPlaces.Services.Activity;
 
@@ -28,7 +29,9 @@ namespace QuickerPlaces.Services.Activity;
 /// - Time is held in whole milliseconds, so a day's total is always exactly
 ///   the sum of its folders (D34).
 /// - Folder detail is kept 62 days and day totals 365 (D16, D20), pruned at
-///   load and in the first flush of each new local day.
+///   load and in the first flush of each new local day. Before pruning, every
+///   day still held is handed to the activity history (history plan §4),
+///   which keeps it forever; if that fails, nothing is pruned that day.
 /// - Loading never throws and never asks anything (§7, D33): a damaged file
 ///   is quarantined and tracking restarts empty, with one line in
 ///   <see cref="Notice"/>; a file that cannot be opened, or that a newer
@@ -60,14 +63,17 @@ public sealed class ActivityStore
     private readonly IPlacesStorage _storage;
     private readonly TimeProvider _time;
     private readonly List<TrackedRoot> _roots;
+    private readonly IFolderHistory? _history;
 
     /// <summary>The local date retention was last applied for.</summary>
     private DateOnly _prunedOn;
 
-    public ActivityStore(IPlacesStorage storage, TimeProvider timeProvider)
+    /// <param name="history">Where days go before they are pruned, or null to keep no history (the tests, and qp, which only reads).</param>
+    public ActivityStore(IPlacesStorage storage, TimeProvider timeProvider, IFolderHistory? history = null)
     {
         _storage = storage;
         _time = timeProvider;
+        _history = history;
 
         var (roots, outcome) = Load();
         _roots = roots;
@@ -243,7 +249,11 @@ public sealed class ActivityStore
         }
     }
 
-    /// <summary>Deletes a root's configuration and every day recorded under it, in one write (§3, D18). An unknown root changes nothing.</summary>
+    /// <summary>
+    /// Deletes a root's configuration and every day recorded under it, in one
+    /// write (§3, D18), and its days in the activity history too. An unknown
+    /// root changes nothing.
+    /// </summary>
     public PersistenceResult DeleteRoot(string rootId)
     {
         lock (_sync)
@@ -256,7 +266,9 @@ public sealed class ActivityStore
                 return PersistenceResult.Ok();
 
             _roots.Remove(root);
-            return SaveNow();
+            var persistence = SaveNow();
+            _history?.ForgetRoot(root.Path);
+            return persistence;
         }
     }
 
@@ -514,10 +526,20 @@ public sealed class ActivityStore
     // Helpers
     // ---------------------------------------------------------------
 
-    /// <summary>Deletes detail and totals older than their windows; true if anything went.</summary>
+    /// <summary>
+    /// Saves every day still held to the history, then deletes detail and
+    /// totals older than their windows; true if anything went. When the
+    /// history can't be saved, nothing is deleted until the next day's try.
+    /// </summary>
     private bool Prune(DateOnly today)
     {
         _prunedOn = today;
+        if (_history is not null && _roots.Count > 0 && !_history.SaveFolders(_roots))
+        {
+            DiagnosticLog.Warn("Activity history couldn't be saved, so no folder activity was deleted today.");
+            return false;
+        }
+
         var detailFrom = today.AddDays(-(DetailDays - 1));
         var totalsFrom = today.AddDays(-(TotalDays - 1));
         var pruned = false;
