@@ -107,8 +107,8 @@ public partial class App : Application
         var recentFilesStore = RecentFilesStore.CreateDefault(activityHistory);
         var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
 
-        // The workspace (configurable canvas plan M3) only with --workspace
-        // until M7 makes it the default; its layouts are read only then.
+        // The workspace is the default; --places-list keeps the older view
+        // available without loading workspace layouts.
         var workspaceLayout = options.Workspace ? CreateWorkspaceLayout() : null;
         if (workspaceLayout is not null)
             DiagnosticLog.Info($"Showing the workspace ({workspaceLayout.ActiveName}).");

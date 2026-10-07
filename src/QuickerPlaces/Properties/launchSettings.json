@@ -1,11 +1,11 @@
 {
   "profiles": {
     "QuickerPlaces (workspace)": {
-      "commandName": "Project",
-      "commandLineArgs": "--workspace"
+      "commandName": "Project"
     },
     "QuickerPlaces (places list)": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "--places-list"
     }
   }
 }

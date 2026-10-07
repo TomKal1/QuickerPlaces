@@ -7,9 +7,9 @@ namespace QuickerPlaces.Services;
 /// The command line QuickerPlaces understands:
 ///
 /// - <c>--tray</c>: start hidden in the tray (the Windows sign-in entry passes it).
-/// - <c>--workspace</c>: show the workspace in the main window instead of the
-///   places list. A temporary development switch (configurable canvas plan
-///   M3) until M7 makes the workspace the default.
+/// - The workspace is shown by default.
+/// - <c>--workspace</c>: explicitly show the workspace (also the default).
+/// - <c>--places-list</c>: show the older places list instead of the workspace.
 /// - <c>--data-root &lt;folder&gt;</c> or <c>--data-root=&lt;folder&gt;</c>: keep every
 ///   store under that folder (<see cref="AppDataFolders"/>), for trying the
 ///   workspace on test data.
@@ -21,12 +21,13 @@ public sealed record StartupOptions(bool Tray, bool Workspace, string? DataRoot,
 {
     public const string TrayArg = "--tray";
     public const string WorkspaceArg = "--workspace";
+    public const string PlacesListArg = "--places-list";
     public const string DataRootArg = "--data-root";
 
     public static StartupOptions Parse(IReadOnlyList<string> args)
     {
         var tray = false;
-        var workspace = false;
+        var workspace = true;
         string? dataRoot = null;
         var problems = new List<string>();
 
@@ -40,6 +41,10 @@ public sealed record StartupOptions(bool Tray, bool Workspace, string? DataRoot,
             else if (Is(arg, WorkspaceArg))
             {
                 workspace = true;
+            }
+            else if (Is(arg, PlacesListArg))
+            {
+                workspace = false;
             }
             else if (Is(arg, DataRootArg))
             {
