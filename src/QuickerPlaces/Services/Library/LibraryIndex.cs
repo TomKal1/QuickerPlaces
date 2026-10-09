@@ -9,7 +9,7 @@ using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.Services.Library;
 
-/// <summary>What a Library item is: the five kinds the Library splits by.</summary>
+/// <summary>What a Library item is: a folder, a link, or one of the document kinds (in <see cref="DocumentKind"/>'s order).</summary>
 public enum LibraryKind
 {
     Folder,
@@ -17,17 +17,26 @@ public enum LibraryKind
     Pdf,
     Word,
     Excel,
+    PowerPoint,
+    Text,
+    Revit,
+    AutoCad,
 }
 
 public static class LibraryKinds
 {
-    public static IReadOnlyList<LibraryKind> All { get; } = new[] { LibraryKind.Folder, LibraryKind.Link, LibraryKind.Pdf, LibraryKind.Word, LibraryKind.Excel };
+    public static IReadOnlyList<LibraryKind> All { get; } = new[] { LibraryKind.Folder, LibraryKind.Link }
+        .Concat(DocumentKinds.All.Select(From)).ToArray();
 
     public static LibraryKind From(DocumentKind kind) => kind switch
     {
         DocumentKind.Pdf => LibraryKind.Pdf,
         DocumentKind.Word => LibraryKind.Word,
-        _ => LibraryKind.Excel,
+        DocumentKind.Excel => LibraryKind.Excel,
+        DocumentKind.PowerPoint => LibraryKind.PowerPoint,
+        DocumentKind.Text => LibraryKind.Text,
+        DocumentKind.Revit => LibraryKind.Revit,
+        _ => LibraryKind.AutoCad,
     };
 
     /// <summary>The document kind, or null for a folder or link.</summary>
@@ -36,27 +45,28 @@ public static class LibraryKinds
         LibraryKind.Pdf => DocumentKind.Pdf,
         LibraryKind.Word => DocumentKind.Word,
         LibraryKind.Excel => DocumentKind.Excel,
+        LibraryKind.PowerPoint => DocumentKind.PowerPoint,
+        LibraryKind.Text => DocumentKind.Text,
+        LibraryKind.Revit => DocumentKind.Revit,
+        LibraryKind.AutoCad => DocumentKind.AutoCad,
         _ => null,
     };
 
-    /// <summary>"Folders", "Links", "PDFs", "Word", "Excel": filter chips and group headings.</summary>
+    /// <summary>"Folders", "Links", "PDFs", "Word", "Excel", "PowerPoint", "Text", "Revit", "AutoCAD": filter chips and group headings.</summary>
     public static string PluralLabel(this LibraryKind kind) => kind switch
     {
         LibraryKind.Folder => "Folders",
         LibraryKind.Link => "Links",
         LibraryKind.Pdf => "PDFs",
-        LibraryKind.Word => "Word",
-        _ => "Excel",
+        _ => kind.ToDocumentKind()!.Value.Label(),
     };
 
-    /// <summary>"Folder", "Link", "PDF", "Word", "Excel": the Type column.</summary>
+    /// <summary>"Folder", "Link", "PDF", "Word", "Excel" and so on: the Type column.</summary>
     public static string Label(this LibraryKind kind) => kind switch
     {
         LibraryKind.Folder => "Folder",
         LibraryKind.Link => "Link",
-        LibraryKind.Pdf => "PDF",
-        LibraryKind.Word => "Word",
-        _ => "Excel",
+        _ => kind.ToDocumentKind()!.Value.Label(),
     };
 }
 

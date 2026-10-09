@@ -106,7 +106,7 @@
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button x:Name="ScanButton" Content="Find open files" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="Scan_Click"
                         ToolTip="Look again for files open now; files already listed keep their ticks" />
-                <Button Content="_Add files…" Style="{StaticResource Button.Compact}" Click="AddFiles_Click" ToolTip="Choose PDF, Word or Excel files to add by hand" />
+                <Button Content="_Add files…" Style="{StaticResource Button.Compact}" Click="AddFiles_Click" ToolTip="Choose PDF, Office, text, Revit or AutoCAD files to add by hand" />
             </StackPanel>
             <TextBlock Text="FILES" Style="{StaticResource TextBlock.Caps}" />
             <TextBlock Text="{Binding IncludedText}" Foreground="{DynamicResource Text.Secondary}"

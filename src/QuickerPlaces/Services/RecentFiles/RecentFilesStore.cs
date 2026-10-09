@@ -14,7 +14,7 @@ namespace QuickerPlaces.Services.RecentFiles;
 
 /// <summary>
 /// Owns recent-files.json (documents plan §5): Recent Files tracking's
-/// settings and the PDF, Word and Excel opens it has recorded. It is to
+/// settings and the document opens it has recorded. It is to
 /// files what ActivityStore is to folders, and separate from saved sessions
 /// in the same way Recents is separate from saved places.
 ///
@@ -529,7 +529,7 @@ public sealed class RecentFilesStore
         var settings = loaded ?? new RecentFilesSettings();
         settings.Kinds = DocumentKinds.All.Where(k => settings.Kinds?.Contains(k) == true).ToList();
         if (settings.Kinds.Count == 0)
-            settings.Kinds = new List<DocumentKind>(DocumentKinds.All);
+            settings.Kinds = new List<DocumentKind>(DocumentKinds.Defaults);
         if (!Enum.IsDefined(settings.Scope))
             settings.Scope = RecentFilesScope.TrackedFolders;
         if (settings.Enabled && settings.ResumedAt is null)

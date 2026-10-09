@@ -186,9 +186,14 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </DockPanel>
-            <!-- D5: what the strip can't count, never shown as zero. -->
-            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding CoverageNotesText}" Style="{StaticResource CollapsedWhenEmpty}"
-                       Foreground="{DynamicResource Text.Secondary}" FontSize="12" TextWrapping="Wrap" Margin="4,2,4,0" />
+            <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="4,2,4,0">
+                <!-- What is being recorded now, so the notes below read as history, not as the current state. -->
+                <TextBlock Text="{Binding RecordingStatus}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{DynamicResource Text.Primary}" AutomationProperties.Name="Recording status" />
+                <!-- D5: what the strip can't count, never shown as zero. -->
+                <TextBlock Text="{Binding CoverageNotesText}" Style="{StaticResource CollapsedWhenEmpty}"
+                           Foreground="{DynamicResource Text.Secondary}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
+            </StackPanel>
             <!-- The year picker, shared by the strip's and the month view's year buttons; it takes no room. -->
             <Popup x:Name="YearPopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
                 <Border Background="{DynamicResource Bg.Raised}" BorderBrush="{DynamicResource Border.Strong}"

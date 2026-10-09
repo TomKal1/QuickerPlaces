@@ -41,6 +41,10 @@ public sealed class RecentFilesSettingsViewModel : ObservableObject
     public bool TrackPdf { get => _kinds.Contains(DocumentKind.Pdf); set => SetKind(DocumentKind.Pdf, value); }
     public bool TrackWord { get => _kinds.Contains(DocumentKind.Word); set => SetKind(DocumentKind.Word, value); }
     public bool TrackExcel { get => _kinds.Contains(DocumentKind.Excel); set => SetKind(DocumentKind.Excel, value); }
+    public bool TrackPowerPoint { get => _kinds.Contains(DocumentKind.PowerPoint); set => SetKind(DocumentKind.PowerPoint, value); }
+    public bool TrackText { get => _kinds.Contains(DocumentKind.Text); set => SetKind(DocumentKind.Text, value); }
+    public bool TrackRevit { get => _kinds.Contains(DocumentKind.Revit); set => SetKind(DocumentKind.Revit, value); }
+    public bool TrackAutoCad { get => _kinds.Contains(DocumentKind.AutoCad); set => SetKind(DocumentKind.AutoCad, value); }
 
     public bool TrackEverywhere
     {
@@ -95,7 +99,11 @@ public sealed class RecentFilesSettingsViewModel : ObservableObject
         {
             DocumentKind.Pdf => nameof(TrackPdf),
             DocumentKind.Word => nameof(TrackWord),
-            _ => nameof(TrackExcel),
+            DocumentKind.Excel => nameof(TrackExcel),
+            DocumentKind.PowerPoint => nameof(TrackPowerPoint),
+            DocumentKind.Text => nameof(TrackText),
+            DocumentKind.Revit => nameof(TrackRevit),
+            _ => nameof(TrackAutoCad),
         });
         Edited();
     }

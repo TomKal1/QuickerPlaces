@@ -35,8 +35,8 @@ public sealed class RecentFilesSettings
 {
     public bool Enabled { get; set; }
 
-    /// <summary>The kinds recorded. All three by default.</summary>
-    public List<DocumentKind> Kinds { get; set; } = new(DocumentKinds.All);
+    /// <summary>The kinds recorded. Every kind but text files by default (<see cref="DocumentKinds.Defaults"/>).</summary>
+    public List<DocumentKind> Kinds { get; set; } = new(DocumentKinds.Defaults);
 
     public RecentFilesScope Scope { get; set; } = RecentFilesScope.TrackedFolders;
 
@@ -87,12 +87,32 @@ public sealed class RecentFilesDay
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RecentFilesKindCount? Excel { get; set; }
 
+    [JsonPropertyName("ppt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecentFilesKindCount? PowerPoint { get; set; }
+
+    [JsonPropertyName("txt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecentFilesKindCount? Text { get; set; }
+
+    [JsonPropertyName("rvt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecentFilesKindCount? Revit { get; set; }
+
+    [JsonPropertyName("dwg")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecentFilesKindCount? AutoCad { get; set; }
+
     /// <summary>The count for <paramref name="kind"/>, or null when nothing of that kind was opened.</summary>
     public RecentFilesKindCount? Get(DocumentKind kind) => kind switch
     {
         DocumentKind.Pdf => Pdf,
         DocumentKind.Word => Word,
-        _ => Excel,
+        DocumentKind.Excel => Excel,
+        DocumentKind.PowerPoint => PowerPoint,
+        DocumentKind.Text => Text,
+        DocumentKind.Revit => Revit,
+        _ => AutoCad,
     };
 
     /// <summary>Adds <paramref name="opens"/> opens of <paramref name="files"/> more distinct files of <paramref name="kind"/>.</summary>
@@ -105,7 +125,11 @@ public sealed class RecentFilesDay
         {
             case DocumentKind.Pdf: Pdf = count; break;
             case DocumentKind.Word: Word = count; break;
-            default: Excel = count; break;
+            case DocumentKind.Excel: Excel = count; break;
+            case DocumentKind.PowerPoint: PowerPoint = count; break;
+            case DocumentKind.Text: Text = count; break;
+            case DocumentKind.Revit: Revit = count; break;
+            default: AutoCad = count; break;
         }
     }
 }

@@ -147,7 +147,7 @@ public sealed class SessionStoreTests
 
     [Theory]
     [InlineData(@"Jobs\A-101.pdf")]
-    [InlineData(@"C:\Jobs\notes.txt")]
+    [InlineData(@"C:\Jobs\notes.zip")]
     [InlineData(@"https://example.com/a.pdf")]
     [InlineData(@"C:\")]
     public void APathThatIsNotAFullPathToAPdf_IsRefused_AndNamed(string path)

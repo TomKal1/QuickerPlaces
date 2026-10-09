@@ -436,6 +436,27 @@ public sealed class CliAppTests : IDisposable
         Assert.Empty(days[1]!["sessions"]!.AsArray());
     }
 
+    [Fact]
+    public void RecentFiles_FilterByTheNewKinds()
+    {
+        var local = Path.Combine(_temp.Path, "Local");
+        var files = new RecentFilesStore(new FilePlacesStorage(local, "recent-files.json"), _clock);
+        Assert.True(files.SetEnabled(true).Saved);
+        var history = new ActivityHistory(new HistoryFolder(Path.Combine(_temp.Path, "History")), _clock, System.Environment.MachineName);
+        var at = new DateTimeOffset(2025, 3, 10, 1, 0, 0, TimeSpan.Zero);
+        Assert.True(history.SaveFiles(new[]
+        {
+            new Models.RecentFiles.RecentFileRecord { Path = @"C:\Jobs\Old.pdf", Opens = { at } },
+            new Models.RecentFiles.RecentFileRecord { Path = @"C:\Jobs\Tower.rvt", Opens = { at } },
+            new Models.RecentFiles.RecentFileRecord { Path = @"C:\Jobs\Site.dwg", Opens = { at } },
+        }));
+
+        var revit = Assert.Single(Ok("files", "recent", "--days", "900", "--kind", "revit,autocad")["files"]!.AsArray(), f => f!["kind"]!.GetValue<string>() == "revit")!;
+        Assert.Equal(@"C:\Jobs\Tower.rvt", revit["path"]!.GetValue<string>());
+        Assert.Equal(2, Ok("files", "recent", "--days", "900", "--kind", "revit,autocad")["files"]!.AsArray().Count);
+        Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "files", "recent", "--kind", "dwg"));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

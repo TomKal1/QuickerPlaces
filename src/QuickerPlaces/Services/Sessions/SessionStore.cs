@@ -379,7 +379,7 @@ public sealed class SessionStore
         {
             var file = DocumentPaths.Normalize(raw);
             if (file is null)
-                return ValidationResult.Fail($"\"{raw}\" isn't a full path to a PDF, Word or Excel file, so it can't be saved in a session.");
+                return ValidationResult.Fail($"\"{raw}\" isn't a full path to a PDF, Office, text, Revit or AutoCAD file, so it can't be saved in a session.");
             if (!cleanFiles.Any(f => string.Equals(f, file, StringComparison.OrdinalIgnoreCase)))
                 cleanFiles.Add(file);
         }

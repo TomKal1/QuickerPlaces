@@ -348,7 +348,10 @@ public static class LibraryQueryEngine
         else if (roots.All(r => !r.Enabled))
         {
             state = CoverageState.Partial;
-            reason = "Tracking is off for every folder in Recents, so nothing new is counted.";
+            // A target paused while All folders is on still has its folders' visits recorded, under All folders.
+            reason = filter.Root is { } paused && data.Roots.Any(r => r.Enabled && r.Path == ActivityStore.AllFoldersPath)
+                ? $"{paused.Path} is paused while All folders is on: new visits there are counted under All folders, not this target."
+                : "Folder tracking is off, so new visits aren't counted.";
         }
 
         return new SourceCoverage(FolderSource, state, reason);

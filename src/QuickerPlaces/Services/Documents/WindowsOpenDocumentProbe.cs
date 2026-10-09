@@ -22,7 +22,7 @@ namespace QuickerPlaces.Services.Documents;
 ///   OpusApp and XLMAIN, whatever their titles say), with the owning
 ///   program's description and command line (NtQueryInformationProcess,
 ///   ProcessCommandLineInformation).
-/// - The PDF, Word and Excel files those windows' programs hold open, with
+/// - The PDF, Office, text, Revit and AutoCAD files those windows' programs hold open, with
 ///   full paths, through <see cref="WindowsHeldFiles"/>: every Revu or
 ///   Acrobat tab, whether or not it is in Recent Items.
 /// - Recent Items, through the shared <see cref="WindowsRecentItems"/>.
@@ -101,14 +101,14 @@ public sealed class WindowsOpenDocumentProbe
             held = read.Files;
             drives = read.MappedDrives;
             if (!read.IsComplete)
-                warnings.Add("Not every file open in PDF, Word and Excel programs could be listed, so some may be missing.");
+                warnings.Add("Not every file open in document programs could be listed, so some may be missing.");
         }
         catch (Exception ex)
         {
             DiagnosticLog.Warn($"Listing held documents failed ({ex.GetType().Name}).");
             held = Array.Empty<HeldFile>();
             drives = new Dictionary<string, string>();
-            warnings.Add("The files open in PDF, Word and Excel programs couldn't be listed, so some may be missing.");
+            warnings.Add("The files open in document programs couldn't be listed, so some may be missing.");
         }
 
         IReadOnlyList<RecentDocument> recents;
@@ -413,7 +413,7 @@ public sealed class WindowsOpenDocumentProbe
         return end < 0 ? share[2..] : share[2..end];
     }
 
-    /// <summary>Word or Excel when <paramref name="hwnd"/> is that program's main window, by its window class, which doesn't change with language or title.</summary>
+    /// <summary>Word, Excel or PowerPoint when <paramref name="hwnd"/> is that program's main window, by its window class, which doesn't change with language or title.</summary>
     private static DocumentKind? OfficeKindOf(IntPtr hwnd)
     {
         var name = new StringBuilder(64);
@@ -424,6 +424,7 @@ public sealed class WindowsOpenDocumentProbe
         {
             "OpusApp" => DocumentKind.Word,
             "XLMAIN" => DocumentKind.Excel,
+            "PPTFrameClass" => DocumentKind.PowerPoint,
             _ => null,
         };
     }

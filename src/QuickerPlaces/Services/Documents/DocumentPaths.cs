@@ -17,7 +17,7 @@ public static class DocumentPaths
     /// <paramref name="path"/> spelled the one way a session or Recent Files
     /// keeps it (as RootPathMatcher spells a folder: backslashes, "." and
     /// ".." resolved, casing as given), or null when it is not a drive or UNC
-    /// path to a PDF, Word or Excel file (<see cref="DocumentKinds"/>).
+    /// path to a PDF, Office, text, Revit or AutoCAD file (<see cref="DocumentKinds"/>).
     /// Surrounding quotes, as a command line or a copied path carries them,
     /// are removed first.
     /// </summary>

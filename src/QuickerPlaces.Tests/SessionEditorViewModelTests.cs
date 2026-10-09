@@ -76,12 +76,12 @@ public sealed class SessionEditorViewModelTests
         var vm = new SessionEditorViewModel(_store, null);
         vm.ApplyScan(Scan(Suggested(A101)));
 
-        vm.AddFiles(new[] { A101.ToLowerInvariant(), A102, @"C:\Jobs\notes.txt" });
+        vm.AddFiles(new[] { A101.ToLowerInvariant(), A102, @"C:\Jobs\notes.zip" });
 
         Assert.Equal(new[] { A101, A102 }, vm.Files.Select(f => f.Path));
         Assert.All(vm.Files, f => Assert.True(f.IsIncluded));
         Assert.Equal("Added by you", vm.Files[1].Reason);
-        Assert.Equal("Only PDF, Word and Excel files can be added: notes.txt.", vm.ErrorMessage);
+        Assert.Equal("Only PDF, Office, text, Revit and AutoCAD files can be added: notes.zip.", vm.ErrorMessage);
     }
 
     [Fact]

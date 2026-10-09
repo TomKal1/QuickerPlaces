@@ -701,7 +701,7 @@ public sealed class LibraryViewModel : ObservableObject
     {
         LibraryKind.Folder => "Folder visits from Recents",
         LibraryKind.Link => "Links keep no history, only when each was last opened",
-        LibraryKind.Pdf or LibraryKind.Word or LibraryKind.Excel => $"{_selectedKind.Value.PluralLabel()} opened (Recent Files), and sessions saved or reopened",
+        { } kind when kind.ToDocumentKind() is not null => $"{kind.PluralLabel()} opened (Recent Files), and sessions saved or reopened",
         _ => "Recorded activity: folder visits, files opened, and sessions saved or reopened",
     };
 
@@ -807,6 +807,10 @@ public sealed class LibraryViewModel : ObservableObject
     public bool TrackPdf { get => Tracks(DocumentKind.Pdf); set => SetTracked(DocumentKind.Pdf, value); }
     public bool TrackWord { get => Tracks(DocumentKind.Word); set => SetTracked(DocumentKind.Word, value); }
     public bool TrackExcel { get => Tracks(DocumentKind.Excel); set => SetTracked(DocumentKind.Excel, value); }
+    public bool TrackPowerPoint { get => Tracks(DocumentKind.PowerPoint); set => SetTracked(DocumentKind.PowerPoint, value); }
+    public bool TrackText { get => Tracks(DocumentKind.Text); set => SetTracked(DocumentKind.Text, value); }
+    public bool TrackRevit { get => Tracks(DocumentKind.Revit); set => SetTracked(DocumentKind.Revit, value); }
+    public bool TrackAutoCad { get => Tracks(DocumentKind.AutoCad); set => SetTracked(DocumentKind.AutoCad, value); }
 
     /// <summary>Selects Anywhere. Radio-button uncheck notifications never change the scope.</summary>
     public bool TrackEverywhere
@@ -834,6 +838,38 @@ public sealed class LibraryViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// What is being recorded right now, in one line for the Activity panel:
+    /// "Recording visits to all folders · opens of PDF and Word files".
+    /// </summary>
+    public string RecordingStatus
+    {
+        get
+        {
+            var tracked = _activity.IsAvailable ? _activity.EnabledRoots().Count : 0;
+            var folders = !_activity.IsAvailable || tracked == 0 ? null
+                : _activity.TrackAllFolders ? "visits to all folders"
+                : $"visits to {tracked} tracked {(tracked == 1 ? "folder" : "folders")}";
+
+            var settings = _recentFiles.Settings;
+            string? files = null;
+            if (_recentFiles.IsAvailable && settings.Enabled)
+            {
+                var labels = DocumentKinds.All.Where(settings.Kinds.Contains).Select(k => k.Label()).ToList();
+                var list = labels.Count == 1 ? labels[0] : $"{string.Join(", ", labels.Take(labels.Count - 1))} and {labels[^1]}";
+                files = $"opens of {list} files";
+            }
+
+            return (folders, files) switch
+            {
+                (null, null) => "Not recording: folder tracking and Recent Files are off.",
+                (not null, not null) => $"Recording {folders} · {files}",
+                (not null, null) => $"Recording {folders} · Recent Files is off",
+                _ => $"Recording {files} · Folder tracking is off",
+            };
+        }
+    }
+
     /// <summary>One line about what Recent Files is doing.</summary>
     public string RecentFilesStatus
     {
@@ -844,7 +880,7 @@ public sealed class LibraryViewModel : ObservableObject
 
             var settings = _recentFiles.Settings;
             if (!settings.Enabled)
-                return "Recent Files is off. When on, it lists the PDF, Word and Excel files you open, from Windows' Recent Items, on this computer only.";
+                return "Recent Files is off. When on, it lists the PDF, Office, text, Revit and AutoCAD files you open, from Windows' Recent Items, on this computer only.";
 
             var kinds = string.Join(", ", settings.Kinds.Select(k => k.PluralLabel()));
             var where = settings.Scope == RecentFilesScope.Everywhere
@@ -1043,6 +1079,7 @@ public sealed class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(Coverage));
             OnPropertyChanged(nameof(CoverageNotes));
             OnPropertyChanged(nameof(CoverageNotesText));
+            OnPropertyChanged(nameof(RecordingStatus));
             OnPropertyChanged(nameof(PeriodNotes));
             OnPropertyChanged(nameof(PeriodNotesText));
         });
@@ -1053,11 +1090,17 @@ public sealed class LibraryViewModel : ObservableObject
         var passing = _result?.Items ?? Array.Empty<LibraryItem>();
         var selected = _selectedKind;
         UpdateKindFilter(0, null, $"All ({passing.Count})", selected is null);
-        for (var index = 0; index < LibraryKinds.All.Count; index++)
+        var chips = 1;
+        foreach (var kind in LibraryKinds.All)
         {
-            var kind = LibraryKinds.All[index];
-            UpdateKindFilter(index + 1, kind, $"{kind.PluralLabel()} ({passing.Count(i => i.Kind == kind)})", selected == kind);
+            // A kind gets a chip only when there is something to show, so the strip stays short; the selected chip always stays.
+            var count = passing.Count(i => i.Kind == kind);
+            if (count == 0 && selected != kind)
+                continue;
+            UpdateKindFilter(chips++, kind, $"{kind.PluralLabel()} ({count})", selected == kind);
         }
+        while (KindFilters.Count > chips)
+            KindFilters.RemoveAt(KindFilters.Count - 1);
 
         var shown = passing.Where(i => selected is null || i.Kind == selected).ToList();
         var rows = new List<LibraryRowViewModel>();
@@ -1302,9 +1345,14 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(TrackPdf));
         OnPropertyChanged(nameof(TrackWord));
         OnPropertyChanged(nameof(TrackExcel));
+        OnPropertyChanged(nameof(TrackPowerPoint));
+        OnPropertyChanged(nameof(TrackText));
+        OnPropertyChanged(nameof(TrackRevit));
+        OnPropertyChanged(nameof(TrackAutoCad));
         OnPropertyChanged(nameof(TrackEverywhere));
         OnPropertyChanged(nameof(TrackUnderTrackedFolders));
         OnPropertyChanged(nameof(RecentFilesStatus));
+        OnPropertyChanged(nameof(RecordingStatus));
     }
 
     private void NotifySource()

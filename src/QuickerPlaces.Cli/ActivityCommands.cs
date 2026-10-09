@@ -18,7 +18,7 @@ public static class ActivityCommands
 
     public static IEnumerable<CommandSpec> All() => new[]
     {
-        new CommandSpec("sessions list", "List project sessions (saved sets of PDF, Word and Excel files), most recently used first.", "no arguments", 0, 0,
+        new CommandSpec("sessions list", "List project sessions (saved sets of PDF, Office, text, Revit and AutoCAD files), most recently used first.", "no arguments", 0, 0,
             new[] { new OptionSpec("tag", "Only sessions with this tag (any case).", ValueName: "tag"), Limit }, false, ListSessions,
             new[] { "qp sessions list --tag client" }),
 
@@ -36,8 +36,8 @@ public static class ActivityCommands
             Period.Options.Append(new OptionSpec("limit", "At most N of each kind per day (1-100; default 10).", ValueName: "n")).ToArray(),
             false, Days, new[] { "qp activity days --period week", "qp activity days --days 1" }),
 
-        new CommandSpec("files recent", "PDF, Word and Excel files opened in a period, most recent first, from Recent Files and the activity history (needs Recent Files turned on in the app).", "no arguments", 0, 0,
-            Period.Options.Append(new OptionSpec("kind", "pdf, word and/or excel, comma-separated.", ValueName: "kinds", Repeatable: true)).Append(Limit).ToArray(),
+        new CommandSpec("files recent", "Documents (PDF, Word, Excel, PowerPoint, text, Revit, AutoCAD) opened in a period, most recent first, from Recent Files and the activity history (needs Recent Files turned on in the app).", "no arguments", 0, 0,
+            Period.Options.Append(new OptionSpec("kind", "pdf, word, excel, powerpoint, text, revit and/or autocad, comma-separated.", ValueName: "kinds", Repeatable: true)).Append(Limit).ToArray(),
             false, RecentFiles, new[] { "qp files recent --period week --kind pdf" }),
 
         new CommandSpec("folders recent", "Folders you spent time in, in a period, most time first, from the app's opt-in folder tracking (Recents). Each folder names the saved place it is, if any. Folder detail is kept for 62 days in the app, and for good in the activity history, which this reads too.", "no arguments", 0, 0,
@@ -242,13 +242,8 @@ public static class ActivityCommands
         List<DocumentKind>? kinds = null;
         if (args.Values("kind").Count > 0)
         {
-            kinds = args.List("kind").Select(k => k.ToLowerInvariant() switch
-            {
-                "pdf" => DocumentKind.Pdf,
-                "word" => DocumentKind.Word,
-                "excel" => DocumentKind.Excel,
-                _ => throw CliError.Usage("--kind must be pdf, word or excel.")
-            }).Distinct().ToList();
+            kinds = args.List("kind").Select(k => DocumentKinds.All.Cast<DocumentKind?>().FirstOrDefault(kind => kind!.Value.CliName() == k.ToLowerInvariant())
+                ?? throw CliError.Usage("--kind must be pdf, word, excel, powerpoint, text, revit or autocad.")).Distinct().ToList();
         }
 
         // The store holds each open for 62 days; older ones, and other PCs', are in the activity history.

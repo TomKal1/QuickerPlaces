@@ -35,7 +35,7 @@ public sealed class CliEnvironment
     public required Func<string?, OperationRequest, OperationReply> SendToApp { get; init; }
 
     /// <summary>
-    /// Finds the PDF, Word and Excel files open now, the way the app's
+    /// Finds the PDF, Office, text, Revit and AutoCAD files open now, the way the app's
     /// Sessions screen does; null where that isn't possible (off Windows).
     /// </summary>
     public Func<OpenDocumentScan>? ScanOpenDocuments { get; init; }

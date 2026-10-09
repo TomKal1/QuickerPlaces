@@ -73,6 +73,80 @@ public sealed class LibraryViewModelTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TrackingAllFolders_IsNotReportedAsTrackingOff(bool targetPaused)
+    {
+        var root = AddRoot(_activity);
+        if (targetPaused)
+            Assert.True(_activity.TrySaveTrackingSettings(false, new[] { new TrackedFolderChoice(root.RootId, root.Path, false, Array.Empty<string>()) }).Saved);
+        Assert.True(_activity.TrySetTrackAllFolders(true).Saved);
+
+        var vm = NewViewModel();
+
+        Assert.DoesNotContain("racking is off", vm.CoverageNotesText);
+    }
+
+    [Fact]
+    public void ATargetScopedWhileAllFoldersIsOn_SaysItsVisitsAreCountedUnderAllFolders()
+    {
+        var root = AddRoot(_activity);
+        Assert.True(_activity.TrySaveTrackingSettings(false, new[] { new TrackedFolderChoice(root.RootId, root.Path, false, Array.Empty<string>()) }).Saved);
+        Assert.True(_activity.TrySetTrackAllFolders(true).Saved);
+        var vm = NewViewModel();
+
+        vm.ToggleRootScope(root.RootId);
+
+        Assert.DoesNotContain("Tracking is off", vm.CoverageNotesText);
+        Assert.Contains("counted under All folders", vm.CoverageNotesText);
+    }
+
+    [Fact]
+    public void WithEveryFolderPaused_TheNoteSaysFolderTrackingIsOff()
+    {
+        var root = AddRoot(_activity);
+        Assert.True(_activity.TrySaveTrackingSettings(false, new[] { new TrackedFolderChoice(root.RootId, root.Path, false, Array.Empty<string>()) }).Saved);
+
+        var vm = NewViewModel();
+
+        Assert.Contains("Folder tracking is off, so new visits aren't counted.", vm.CoverageNotesText);
+    }
+
+    [Fact]
+    public void RecordingStatus_SaysWhatIsBeingRecordedNow()
+    {
+        var vm = NewViewModel();
+        Assert.Equal("Not recording: folder tracking and Recent Files are off.", vm.RecordingStatus);
+
+        Assert.True(_activity.TrySetTrackAllFolders(true).Saved);
+        vm.RecentFilesEnabled = true;
+        vm.Reload();
+        Assert.Equal("Recording visits to all folders · opens of PDF, Word, Excel, PowerPoint, Revit and AutoCAD files", vm.RecordingStatus);
+
+        vm.RecentFilesEnabled = false;
+        Assert.Equal("Recording visits to all folders · Recent Files is off", vm.RecordingStatus);
+
+        Assert.True(_activity.TrySetTrackAllFolders(false).Saved);
+        AddRoot(_activity);
+        vm.RecentFilesEnabled = true;
+        vm.Reload();
+        Assert.Equal("Recording visits to 1 tracked folder · opens of PDF, Word, Excel, PowerPoint, Revit and AutoCAD files", vm.RecordingStatus);
+    }
+
+    [Fact]
+    public void Kinds_GetAChipOnlyWhenThereIsSomethingToShow()
+    {
+        Seed();
+        Assert.True(_recentFiles.TrySetKinds(DocumentKinds.All, out _).Success);
+        _recentFiles.Record(new[] { new RecentDocument(@"C:\Jobs\Acme\Tower.rvt", _time.UtcNow.AddMinutes(6)) }, _ => true);
+
+        var vm = NewViewModel();
+
+        Assert.Equal(new[] { "All (7)", "Folders (2)", "Links (1)", "PDFs (1)", "Word (1)", "Excel (1)", "Revit (1)" }, vm.KindFilters.Select(k => k.Label));
+        Assert.Equal("Revit", vm.Rows.Last().GroupName);
+    }
+
+    [Theory]
     [InlineData(LibraryKind.Folder, new[] { "Acme", "Jobs" })]
     [InlineData(LibraryKind.Link, new[] { "Wiki" })]
     [InlineData(LibraryKind.Pdf, new[] { "A-101.pdf" })]
@@ -101,7 +175,20 @@ public sealed class LibraryViewModelTests
 
         vm.IsSourceRecent = true;
         Assert.Equal(new[] { "Acme", "Budget.xlsx" }, vm.Rows.Select(r => r.Name).OrderBy(n => n));
-        Assert.Equal(new[] { "All (2)", "Folders (1)", "Links (0)", "PDFs (0)", "Word (0)", "Excel (1)" }, vm.KindFilters.Select(k => k.Label));
+        Assert.Equal(new[] { "All (2)", "Folders (1)", "Excel (1)" }, vm.KindFilters.Select(k => k.Label));
+    }
+
+    [Fact]
+    public void AnEmptyKindChip_StaysWhileSelected_SoItCanBeCleared()
+    {
+        Seed();
+        var vm = NewViewModel();
+        vm.SelectedKind = LibraryKind.Link;
+
+        vm.IsSourceRecent = true;
+
+        Assert.Equal(new[] { "All (2)", "Folders (1)", "Links (0)", "Excel (1)" }, vm.KindFilters.Select(k => k.Label));
+        Assert.True(vm.KindFilters.Single(k => k.Kind == LibraryKind.Link).IsSelected);
     }
 
     [Fact]
@@ -187,6 +274,10 @@ public sealed class LibraryViewModelTests
 
         var today = vm.CalendarWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today);
         Assert.EndsWith("1 folder visit · 1 file opened · 1 session saved", today.Label);
+        Assert.Equal("Recorded activity: folder visits, files opened, and sessions saved or reopened", vm.CalendarCaption);
+
+        vm.SelectedKind = LibraryKind.Revit;
+        Assert.Equal("Revit opened (Recent Files), and sessions saved or reopened", vm.CalendarCaption);
 
         vm.SelectedKind = LibraryKind.Folder;
         today = vm.CalendarWeeks.SelectMany(w => w.Days).Single(d => d.Date == Today);
@@ -269,6 +360,7 @@ public sealed class LibraryViewModelTests
         Assert.Contains("none are tracked yet", vm.RecentFilesStatus);
 
         vm.TrackWord = false;
+        vm.TrackPowerPoint = vm.TrackRevit = vm.TrackAutoCad = false;
         vm.TrackEverywhere = true;
         Assert.Equal(new[] { DocumentKind.Pdf, DocumentKind.Excel }, _recentFiles.Settings.Kinds);
         Assert.Equal("Recording PDFs, Excel workbooks you open anywhere.", vm.RecentFilesStatus);

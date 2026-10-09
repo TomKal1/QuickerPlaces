@@ -19,11 +19,11 @@ public static class DocumentCommands
 {
     public static IEnumerable<CommandSpec> All() => new[]
     {
-        new CommandSpec("files open", "The PDF, Word and Excel files open now (Windows only), found as the app's Sessions screen finds them, each with its folder and the saved place it is in. Also groups them by folder and suggests a session name. Detection is a best guess: show the list to the user before saving.", "no arguments", 0, 0,
+        new CommandSpec("files open", "The PDF, Office, text, Revit and AutoCAD files open now (Windows only), found as the app's Sessions screen finds them, each with its folder and the saved place it is in. Also groups them by folder and suggests a session name. Detection is a best guess: show the list to the user before saving.", "no arguments", 0, 0,
             new[] { new OptionSpec("suggestions", "Also list recently opened files that may not be open now (likelyOpen: false).", IsFlag: true) },
             false, OpenFiles, new[] { "qp files open", "qp files open --suggestions" }),
 
-        new CommandSpec("sessions save", "Save a new project session from PDF, Word and Excel files.", "no arguments", 0, 0, new[]
+        new CommandSpec("sessions save", "Save a new project session from PDF, Office, text, Revit and AutoCAD files.", "no arguments", 0, 0, new[]
             {
                 new OptionSpec("name", "The session's name (unique, up to 100 characters).", ValueName: "name"),
                 new OptionSpec("tags", "Tags, comma-separated; may be repeated.", ValueName: "a,b", Repeatable: true),

@@ -6,20 +6,33 @@ namespace QuickerPlaces.Services.Documents;
 
 /// <summary>
 /// The document types project sessions and Recent Files handle (documents
-/// plan D1): PDFs, Word documents and Excel workbooks. Decided by the file's
+/// plan D1): PDFs, Word documents, Excel workbooks, PowerPoint presentations,
+/// text files, Revit models and AutoCAD drawings. Decided by the file's
 /// extension only; QuickerPlaces never opens a document to look inside it.
+/// Saved by name, so new kinds go anywhere; listed in display order.
 /// </summary>
 public enum DocumentKind
 {
     Pdf,
     Word,
     Excel,
+    PowerPoint,
+    Text,
+    Revit,
+    AutoCad,
 }
 
 public static class DocumentKinds
 {
     /// <summary>Every kind, in the order they are shown.</summary>
-    public static IReadOnlyList<DocumentKind> All { get; } = new[] { DocumentKind.Pdf, DocumentKind.Word, DocumentKind.Excel };
+    public static IReadOnlyList<DocumentKind> All { get; } = new[]
+    {
+        DocumentKind.Pdf, DocumentKind.Word, DocumentKind.Excel, DocumentKind.PowerPoint,
+        DocumentKind.Text, DocumentKind.Revit, DocumentKind.AutoCad,
+    };
+
+    /// <summary>The kinds Recent Files records until the user chooses: all but text files, which logs and settings make noisy.</summary>
+    public static IReadOnlyList<DocumentKind> Defaults { get; } = All.Where(k => k != DocumentKind.Text).ToArray();
 
     private static readonly IReadOnlyDictionary<string, DocumentKind> ByExtension = new Dictionary<string, DocumentKind>(StringComparer.OrdinalIgnoreCase)
     {
@@ -34,6 +47,16 @@ public static class DocumentKinds
         [".xlsb"] = DocumentKind.Excel,
         [".xls"] = DocumentKind.Excel,
         [".xltx"] = DocumentKind.Excel,
+        [".pptx"] = DocumentKind.PowerPoint,
+        [".pptm"] = DocumentKind.PowerPoint,
+        [".ppt"] = DocumentKind.PowerPoint,
+        [".potx"] = DocumentKind.PowerPoint,
+        [".ppsx"] = DocumentKind.PowerPoint,
+        [".txt"] = DocumentKind.Text,
+        [".rvt"] = DocumentKind.Revit,
+        [".rfa"] = DocumentKind.Revit,
+        [".dwg"] = DocumentKind.AutoCad,
+        [".dxf"] = DocumentKind.AutoCad,
     };
 
     /// <summary>Every extension recognised, with its dot, longest first so ".docx" is tried before ".doc".</summary>
@@ -50,34 +73,42 @@ public static class DocumentKinds
         return dot > 0 && ByExtension.TryGetValue(name[dot..], out var kind) ? kind : null;
     }
 
-    /// <summary>"PDF", "Word" or "Excel".</summary>
+    /// <summary>"PDF", "Word", "Excel", "PowerPoint", "Text", "Revit" or "AutoCAD".</summary>
     public static string Label(this DocumentKind kind) => kind switch
     {
         DocumentKind.Pdf => "PDF",
         DocumentKind.Word => "Word",
-        _ => "Excel",
+        DocumentKind.Excel => "Excel",
+        DocumentKind.PowerPoint => "PowerPoint",
+        DocumentKind.Text => "Text",
+        DocumentKind.Revit => "Revit",
+        _ => "AutoCAD",
     };
 
-    /// <summary>"PDFs", "Word documents" or "Excel workbooks", for filters and counts.</summary>
+    /// <summary>"PDFs", "Word documents", "Revit models" and so on, for filters, counts and the file dialog.</summary>
     public static string PluralLabel(this DocumentKind kind) => kind switch
     {
         DocumentKind.Pdf => "PDFs",
         DocumentKind.Word => "Word documents",
-        _ => "Excel workbooks",
+        DocumentKind.Excel => "Excel workbooks",
+        DocumentKind.PowerPoint => "PowerPoint presentations",
+        DocumentKind.Text => "Text files",
+        DocumentKind.Revit => "Revit models",
+        _ => "AutoCAD drawings",
     };
 
-    /// <summary>The name its program shows in a title bar ("Word", "Excel"), or null for a PDF, which has no one program.</summary>
-    public static string? OfficeAppName(this DocumentKind kind) => kind switch
-    {
-        DocumentKind.Word => "Word",
-        DocumentKind.Excel => "Excel",
-        _ => null,
-    };
+    /// <summary>The lower-case name the qp CLI takes and prints for a kind: "pdf", "powerpoint", "autocad".</summary>
+    public static string CliName(this DocumentKind kind) => kind.ToString().ToLowerInvariant();
 
     /// <summary>The Windows open-file dialog filter for every kind, then each kind alone.</summary>
-    public const string FileDialogFilter =
-        "PDF, Word and Excel files|*.pdf;*.docx;*.docm;*.doc;*.dotx;*.rtf;*.xlsx;*.xlsm;*.xlsb;*.xls;*.xltx" +
-        "|PDF files (*.pdf)|*.pdf" +
-        "|Word documents|*.docx;*.docm;*.doc;*.dotx;*.rtf" +
-        "|Excel workbooks|*.xlsx;*.xlsm;*.xlsb;*.xls;*.xltx";
+    public static string FileDialogFilter { get; } = BuildFileDialogFilter();
+
+    private static string BuildFileDialogFilter()
+    {
+        string Patterns(DocumentKind? kind) => string.Join(";",
+            ByExtension.Where(e => kind is null || e.Value == kind).OrderBy(e => All.ToList().IndexOf(e.Value)).Select(e => "*" + e.Key));
+
+        return "Supported files|" + Patterns(null) +
+            string.Concat(All.Select(k => $"|{k.PluralLabel()}|{Patterns(k)}"));
+    }
 }
