@@ -200,7 +200,7 @@ The **Library** (in the header) shows everything QuickerPlaces knows about in on
 
 - **Kind chips** — All, Folders, Links, PDFs, Word, Excel — show one kind, with how many of each there are.
 - **Show All, Saved or Recent** — Saved is your places and session files; Recent is Recents' folders and Recent Files.
-- **Group by Type or Tag** — by tag, each session tag gets its own group, a file with two tags appears under both, and anything untagged (including places, which don't have tags) is under **No tag**.
+- **Group by Type, Tag or Folder** — by tag, each session tag gets its own group, a file with two tags appears under both, and anything untagged (including places, which don't have tags) is under **No tag**. Folder grouping uses the selected absolute path level: level 3 puts `C:\X\2023\230108\Plans.pdf` and the `C:\X\2023\230108` folder under **C:\X\2023\230108**. Paths that don't reach that level go under **Shallower than level 3**; links go under **No folder**. **Folder level** remains available for grouping by depth below a tracked Recents folder.
 - **Tag** narrows to files in sessions with one tag; **Any tag** shows everything again.
 - **Search** matches names, paths, tags and session names.
 - **The location pin button below D/W/M** selects the current local day, week or month according to the active **D/W/M** choice and returns the calendar to it. Its tooltip says **Jump to Today**, **Jump to This week**, or **Jump to This month**. Other filters stay in place; clicking it again keeps the selection. Week and month use the current period even when a saved layout is reopened later.

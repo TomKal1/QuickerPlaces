@@ -26,6 +26,9 @@ public enum LibraryGrouping
     /// <summary>One group per session tag, then "No tag". An item with two tags is in both.</summary>
     Tag,
 
+    /// <summary>By the ancestor folder at the chosen absolute path depth.</summary>
+    Folder,
+
     /// <summary>By depth below the tracked folder that holds each item, then "Not in a tracked folder" (Desk layout design §4).</summary>
     Level,
 }
@@ -92,6 +95,7 @@ public sealed class LibraryViewModel : ObservableObject
     private LibraryKind? _selectedKind;
     private LibrarySourceFilter _source;
     private LibraryGrouping _grouping;
+    private int _folderLevel = 3;
     private string _searchText = "";
     private string? _tag;
     private string? _rootId;
@@ -236,14 +240,36 @@ public sealed class LibraryViewModel : ObservableObject
                 return;
             OnPropertyChanged(nameof(IsGroupedByType));
             OnPropertyChanged(nameof(IsGroupedByTag));
+            OnPropertyChanged(nameof(IsGroupedByFolder));
             OnPropertyChanged(nameof(IsGroupedByLevel));
+            OnPropertyChanged(nameof(ShowsFolderGroupLevel));
             BuildRows();
         }
     }
 
     public bool IsGroupedByType { get => _grouping == LibraryGrouping.Type; set { if (value) Grouping = LibraryGrouping.Type; } }
     public bool IsGroupedByTag { get => _grouping == LibraryGrouping.Tag; set { if (value) Grouping = LibraryGrouping.Tag; } }
+    public bool IsGroupedByFolder { get => _grouping == LibraryGrouping.Folder; set { if (value) Grouping = LibraryGrouping.Folder; } }
     public bool IsGroupedByLevel { get => _grouping == LibraryGrouping.Level; set { if (value) Grouping = LibraryGrouping.Level; } }
+
+    /// <summary>Absolute folder depth used by Group by Folder: 3 groups under paths such as C:\\X\\2023\\230108.</summary>
+    public int FolderLevel
+    {
+        get => _folderLevel;
+        set
+        {
+            var clamped = Math.Clamp(value, 1, 20);
+            if (!SetProperty(ref _folderLevel, clamped))
+                return;
+            if (_grouping == LibraryGrouping.Folder)
+                BuildRows();
+        }
+    }
+
+    /// <summary>Depth choices for Group by Folder.</summary>
+    public IReadOnlyList<int> FolderLevelChoices { get; } = Enumerable.Range(1, 20).ToArray();
+
+    public bool ShowsFolderGroupLevel => _grouping == LibraryGrouping.Folder;
 
     public string SearchText
     {
@@ -1043,6 +1069,32 @@ public sealed class LibraryViewModel : ObservableObject
             foreach (var (item, _) in placed.Where(p => p.Level is null))
                 rows.Add(new LibraryRowViewModel(item, TrackedFolderPaths.NotTracked, int.MaxValue, zone, _culture));
         }
+        else if (_grouping == LibraryGrouping.Folder)
+        {
+            const string noFolder = "No folder";
+            var folderNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var placed = shown.Select(item =>
+            {
+                if (item.TreePath.Length == 0)
+                    return (Item: item, Group: noFolder);
+
+                var folder = FolderAtDepth(item.TreePath, _folderLevel);
+                if (folder is null)
+                    return (Item: item, Group: $"Shallower than level {_folderLevel}");
+
+                if (!folderNames.TryGetValue(folder, out var canonical))
+                    folderNames[folder] = canonical = folder;
+                return (Item: item, Group: canonical);
+            }).ToList();
+
+            var groups = placed.Select(p => p.Group).Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            for (var index = 0; index < groups.Count; index++)
+            {
+                foreach (var (item, group) in placed.Where(p => string.Equals(p.Group, groups[index], StringComparison.OrdinalIgnoreCase)))
+                    rows.Add(new LibraryRowViewModel(item, group, index, zone, _culture));
+            }
+        }
         else
         {
             var tags = shown.SelectMany(i => i.Tags).Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1072,6 +1124,27 @@ public sealed class LibraryViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyText));
+    }
+
+    /// <summary>Returns the folder at an absolute depth below a drive or UNC share root, or null when shallower.</summary>
+    private static string? FolderAtDepth(string path, int depth)
+    {
+        var normalized = RootPathMatcher.Normalize(path);
+        if (normalized is null)
+            return null;
+
+        var segments = normalized.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        var head = normalized.StartsWith(@"\\", StringComparison.Ordinal) ? 2 : 1;
+        var targetLength = head + depth;
+        if (segments.Length < targetLength)
+            return null;
+
+        if (segments.Length == head)
+            return normalized;
+        var root = head == 2 ? $@"\\{segments[0]}\{segments[1]}" : segments[0] + @"\";
+        return targetLength == head
+            ? root
+            : root + string.Join(@"\", segments.Skip(head).Take(depth));
     }
 
     private void UpdateKindFilter(int index, LibraryKind? kind, string label, bool selected)

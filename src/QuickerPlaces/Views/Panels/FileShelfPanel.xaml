@@ -195,6 +195,9 @@
                                 <RadioButton Content="Tag" IsChecked="{Binding IsGroupedByTag}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="0"
                                              ToolTip="One group per session tag; untagged items last" />
+                                <RadioButton Content="Folder" IsChecked="{Binding IsGroupedByFolder}"
+                                             Style="{StaticResource RadioButton.Segment}" Tag="0"
+                                             ToolTip="Group by the folder at a chosen depth in each path" />
                                 <RadioButton Content="Folder level" IsChecked="{Binding IsGroupedByLevel}"
                                              Visibility="{Binding ShowsFolderLevel, Converter={StaticResource BooleanToVisibilityConverter}}"
                                              Style="{StaticResource RadioButton.Segment}" Tag="0,5,5,0" BorderThickness="0"
@@ -202,6 +205,13 @@
                             </StackPanel>
                         </Border>
                     </GroupBox>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0"
+                                Visibility="{Binding ShowsFolderGroupLevel, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Text="PATH LEVEL" Style="{StaticResource TextBlock.Caps}" Margin="0,0,6,0" />
+                        <ComboBox ItemsSource="{Binding FolderLevelChoices}" SelectedItem="{Binding FolderLevel, Mode=TwoWay}"
+                                  Width="58" VerticalAlignment="Center" AutomationProperties.Name="Folder grouping level"
+                                  ToolTip="For example, level 3 groups items under C:\X\2023\230108" />
+                    </StackPanel>
                     <TextBlock Text="TAG" Style="{StaticResource TextBlock.Caps}" Margin="24,0,10,0" />
                     <ComboBox ItemsSource="{Binding TagChoices}" SelectedItem="{Binding TagChoice, Mode=TwoWay}" MinWidth="130"
                               VerticalAlignment="Center" AutomationProperties.Name="Only items in sessions with this tag"
