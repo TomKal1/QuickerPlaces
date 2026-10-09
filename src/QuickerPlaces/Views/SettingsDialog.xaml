@@ -110,14 +110,16 @@
                 <StackPanel x:Name="WorkspaceSection">
                     <Separator />
 
-                    <TextBlock Text="LAYOUT AND FILES" Style="{StaticResource TextBlock.Caps}" HorizontalAlignment="Left" />
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button Content="Customise layout…" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="CustomiseLayout_Click"
+                    <TextBlock Text="TRACKING AND LAYOUT" Style="{StaticResource TextBlock.Caps}" HorizontalAlignment="Left" />
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button x:Name="CustomiseLayoutButton" Content="Customise layout…" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="CustomiseLayout_Click"
                                 ToolTip="Move, hide or add panels, or pick another layout. Reset to Desk puts everything back." />
-                        <Button Content="Recent files…" Style="{StaticResource Button.Compact}" Click="RecentFiles_Click"
+                        <Button x:Name="RecentFilesButton" Content="Recent files…" Style="{StaticResource Button.Compact}" Click="RecentFiles_Click" Margin="0,0,8,0"
                                 ToolTip="Record the PDF, Word and Excel files you open, and which" />
-                    </StackPanel>
-                    <TextBlock Text="Customise layout saves these settings first, then lets you rearrange the panels."
+                        <Button x:Name="FolderActivityButton" Content="Folder activity…" Style="{StaticResource Button.Compact}" Click="FolderActivity_Click"
+                                ToolTip="Record visits in target folders only, or in all folders." />
+                    </WrapPanel>
+                    <TextBlock x:Name="CustomiseLayoutHint" Text="Customise layout saves these settings first, then lets you rearrange the panels."
                                Style="{StaticResource TextBlock.Hint}" Margin="0,8,0,0" />
                 </StackPanel>
 

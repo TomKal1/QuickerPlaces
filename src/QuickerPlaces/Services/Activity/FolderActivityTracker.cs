@@ -100,7 +100,7 @@ public sealed class FolderActivityTracker
         foreach (var root in updated)
         {
             if (previous.TryGetValue(root.RootId, out var before) &&
-                (before.Rollup != root.Rollup || before.Depth != root.Depth ||
+                (before.IsAllFolders != root.IsAllFolders || before.Rollup != root.Rollup || before.Depth != root.Depth ||
                  !string.Equals(before.Path, root.Path, StringComparison.OrdinalIgnoreCase) ||
                  !before.EquivalentPrefixes.SequenceEqual(root.EquivalentPrefixes, StringComparer.OrdinalIgnoreCase)))
                 _visits.Remove(root.RootId);

@@ -44,7 +44,9 @@ namespace QuickerPlaces.Services.Activity;
 public sealed class ActivityStore
 {
     /// <summary>The activity.json schema version this build writes and reads.</summary>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
+
+    public const string AllFoldersPath = "All folders";
 
     /// <summary>Days of per-folder detail kept, today included: the smallest window that always holds a whole previous month.</summary>
     public const int DetailDays = 62;
@@ -145,6 +147,12 @@ public sealed class ActivityStore
     /// <summary>Every tracked root, enabled or not, in the order added.</summary>
     public IReadOnlyList<ActivityRootSnapshot> Roots
     {
+        get { lock (_sync) return _roots.Where(r => !r.IsRemoved).Select(Snapshot).ToList(); }
+    }
+
+    /// <summary>Includes removed targets so their recorded activity remains available.</summary>
+    public IReadOnlyList<ActivityRootSnapshot> AllRoots
+    {
         get { lock (_sync) return _roots.Select(Snapshot).ToList(); }
     }
 
@@ -152,8 +160,100 @@ public sealed class ActivityStore
     public IReadOnlyList<TrackedRootConfig> EnabledRoots()
     {
         lock (_sync)
-            return _roots.Where(r => r.Enabled).Select(r => Snapshot(r).Config).ToList();
+            return _roots.Where(IsActive).Select(r => Snapshot(r).Config).ToList();
     }
+
+    public bool TrackAllFolders
+    {
+        get { lock (_sync) return _roots.Any(r => r.IsAllFolders && r.Enabled); }
+    }
+
+    /// <summary>Switches between all visited folders and the saved target folders. History and target settings are kept.</summary>
+    public PersistenceResult TrySetTrackAllFolders(bool enabled)
+    {
+        lock (_sync)
+        {
+            if (!IsAvailable)
+                return PersistenceResult.Fail(Notice!);
+            if (enabled == TrackAllFolders)
+                return PersistenceResult.Ok();
+
+            return TrySaveTrackingSettings(enabled, Roots.Where(r => !r.Config.IsAllFolders)
+                .Select(r => new TrackedFolderChoice(r.RootId, r.Path, r.Enabled, r.Config.EquivalentPrefixes)));
+        }
+    }
+
+    /// <summary>Saves the scope and target list together. Removing a target preserves its data; failure applies nothing.</summary>
+    public PersistenceResult TrySaveTrackingSettings(bool allFolders, IEnumerable<TrackedFolderChoice> targets)
+    {
+        lock (_sync)
+        {
+            if (!IsAvailable) return PersistenceResult.Fail(Notice!);
+            var prepared = new List<(TrackedRoot? Root, string Path, bool Enabled, List<string> Prefixes)>();
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var choice in targets)
+            {
+                var path = RootPathMatcher.Normalize(choice.Path);
+                if (path is null) return PersistenceResult.Fail("Choose a folder on a drive or a network share.");
+                if (!paths.Add(path)) return PersistenceResult.Fail("That folder is already in your tracking list.");
+                if (!TryNormalizePrefixes(choice.EquivalentPrefixes, out var prefixes, out var error))
+                    return PersistenceResult.Fail(error);
+                var root = choice.RootId is null ? _roots.FirstOrDefault(r => !r.IsAllFolders && r.IsRemoved && SamePath(r.Path, path)) : Find(choice.RootId);
+                if (choice.RootId is not null && (root is null || root.IsAllFolders || !SamePath(root.Path, path)))
+                    return PersistenceResult.Fail("A tracked folder changed while these settings were open. Reopen Folder Activity and try again.");
+                if (root is null && _roots.Any(r => !r.IsRemoved && SamePath(r.Path, path)))
+                    return PersistenceResult.Fail("That folder is already in your tracking list.");
+                prepared.Add((root, path, choice.Enabled, prefixes));
+            }
+
+            var before = _roots.Select(r => (Root: r, r.Enabled, r.IsRemoved, r.EquivalentPrefixes)).ToList();
+            var wasDirty = _hasUnsavedChanges;
+            var originalCount = _roots.Count;
+            var kept = prepared.Where(p => p.Root is not null).Select(p => p.Root!).ToHashSet();
+            foreach (var root in _roots.Where(r => !r.IsAllFolders && !kept.Contains(r)))
+            {
+                root.IsRemoved = true;
+                root.Enabled = false;
+            }
+            foreach (var target in prepared)
+            {
+                var root = target.Root;
+                if (root is null)
+                {
+                    root = new TrackedRoot { RootId = NewRootId(), Path = target.Path, TrackingStartedAt = _time.GetUtcNow() };
+                    _roots.Add(root);
+                }
+                root.IsRemoved = false;
+                root.Enabled = target.Enabled;
+                root.EquivalentPrefixes = target.Prefixes;
+            }
+            var global = _roots.FirstOrDefault(r => r.IsAllFolders);
+            if (allFolders && global is null)
+            {
+                global = new TrackedRoot
+                {
+                    RootId = NewRootId(), Path = AllFoldersPath, IsAllFolders = true,
+                    Rollup = RollupMode.Exact, TrackingStartedAt = _time.GetUtcNow(),
+                };
+                _roots.Add(global);
+            }
+            if (global is not null) global.Enabled = allFolders;
+            var result = SaveNow();
+            if (result.Saved) return result;
+
+            _roots.RemoveRange(originalCount, _roots.Count - originalCount);
+            foreach (var state in before)
+            {
+                state.Root.Enabled = state.Enabled;
+                state.Root.IsRemoved = state.IsRemoved;
+                state.Root.EquivalentPrefixes = state.EquivalentPrefixes;
+            }
+            _hasUnsavedChanges = wasDirty;
+            return PersistenceResult.Fail("Couldn't save your folder activity settings. Your changes have not been applied. Try Save again.");
+        }
+    }
+
+    private bool IsActive(TrackedRoot root) => !root.IsRemoved && root.Enabled && (TrackAllFolders ? root.IsAllFolders : !root.IsAllFolders);
 
     /// <summary>
     /// Starts tracking <paramref name="path"/>, with the default settings and
@@ -175,20 +275,27 @@ public sealed class ActivityStore
             if (normalized is null)
                 return ValidationResult.Fail("Choose a folder on a drive or a network share.");
 
-            if (_roots.Any(r => SamePath(r.Path, normalized)))
+            var previous = _roots.FirstOrDefault(r => !r.IsAllFolders && SamePath(r.Path, normalized));
+            if (previous is { IsRemoved: false })
                 return ValidationResult.Fail("That folder is already tracked.");
 
             if (!TryNormalizePrefixes(equivalentPrefixes, out var prefixes, out var error))
                 return ValidationResult.Fail(error);
 
-            var root = new TrackedRoot
+            var root = previous ?? new TrackedRoot
             {
                 RootId = NewRootId(),
                 Path = normalized,
                 EquivalentPrefixes = prefixes,
                 TrackingStartedAt = _time.GetUtcNow(),
             };
-            _roots.Add(root);
+            if (previous is null) _roots.Add(root);
+            else
+            {
+                root.IsRemoved = false;
+                root.Enabled = true;
+                if (equivalentPrefixes is not null) root.EquivalentPrefixes = prefixes;
+            }
 
             persistence = SaveNow();
             added = Snapshot(root);
@@ -213,7 +320,7 @@ public sealed class ActivityStore
             var root = Find(settings.RootId);
             if (root is null)
                 return ValidationResult.Fail("That folder is no longer tracked.");
-            if (!SamePath(root.Path, settings.Path))
+            if (!SamePath(root.Path, settings.Path) || root.IsAllFolders != settings.IsAllFolders)
                 return ValidationResult.Fail("A tracked folder can't be moved. Add the other folder as a root of its own.");
             if (settings.Depth < 1)
                 return ValidationResult.Fail("The depth must be at least 1.");
@@ -224,11 +331,11 @@ public sealed class ActivityStore
             if (!TryNormalizePrefixes(settings.EquivalentPrefixes, out var prefixes, out var error))
                 return ValidationResult.Fail(error);
 
-            root.Rollup = settings.Rollup;
+            root.Rollup = root.IsAllFolders ? RollupMode.Exact : settings.Rollup;
             root.Depth = settings.Depth;
             root.DwellThresholdSeconds = (int)Math.Round(settings.DwellThreshold.TotalSeconds);
             root.IdleTimeoutMinutes = (int)Math.Round(settings.IdleTimeout.TotalMinutes);
-            root.EquivalentPrefixes = prefixes;
+            root.EquivalentPrefixes = root.IsAllFolders ? new List<string>() : prefixes;
 
             persistence = SaveNow();
             return ValidationResult.Ok();
@@ -247,6 +354,9 @@ public sealed class ActivityStore
             if (root is null)
                 return PersistenceResult.Ok();
 
+            if (root.IsAllFolders)
+                return TrySetTrackAllFolders(enabled);
+            if (enabled) root.IsRemoved = false;
             root.Enabled = enabled;
             return SaveNow();
         }
@@ -288,7 +398,7 @@ public sealed class ActivityStore
             foreach (var interval in intervals)
             {
                 var root = Find(interval.RootId);
-                if (root is null || !root.Enabled)
+                if (root is null || !IsActive(root))
                     continue;
 
                 var milliseconds = (long)Math.Round(interval.Duration.TotalMilliseconds, MidpointRounding.AwayFromZero);
@@ -459,6 +569,16 @@ public sealed class ActivityStore
                 root.RootId = NewRootId(ids);
 
             root.Path ??= "";
+            if (root.IsRemoved) root.Enabled = false;
+            if (root.IsAllFolders)
+            {
+                // One global collection, with exact paths rather than rollups.
+                if (roots.Any(r => r.IsAllFolders))
+                    continue;
+                root.Path = AllFoldersPath;
+                root.Rollup = RollupMode.Exact;
+                root.EquivalentPrefixes = new List<string>();
+            }
             root.EquivalentPrefixes = (root.EquivalentPrefixes ?? new List<string>()).Where(p => p is not null).ToList();
             root.Days = (root.Days ?? new Dictionary<DateOnly, DayActivity>())
                 .Where(d => d.Value is not null)
@@ -600,6 +720,7 @@ public sealed class ActivityStore
         => new(
             new TrackedRootConfig(root.RootId, root.Path)
             {
+                IsAllFolders = root.IsAllFolders,
                 EquivalentPrefixes = root.EquivalentPrefixes.ToArray(),
                 Rollup = root.Rollup,
                 Depth = root.Depth,
@@ -607,7 +728,8 @@ public sealed class ActivityStore
                 IdleTimeout = TimeSpan.FromMinutes(root.IdleTimeoutMinutes),
             },
             root.Enabled,
-            root.TrackingStartedAt);
+            root.TrackingStartedAt,
+            root.IsRemoved);
 
     private DateOnly Today() => LocalDate(_time.GetUtcNow());
 

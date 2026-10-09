@@ -170,7 +170,7 @@ public partial class MainWindow : Window
     public void UpdateActivityIndicator()
     {
         var count = _activityStore.EnabledRoots().Count;
-        var summary = ActivityFormat.TrackingSummary(count, _activityStore.Roots.Count, _activityHost.IsPaused);
+        var summary = ActivityFormat.TrackingSummary(count, _activityStore.Roots.Count, _activityHost.IsPaused, _activityStore.TrackAllFolders);
         var text = $"Recents — {char.ToLowerInvariant(summary[0])}{summary[1..]}";
         ActivityButton.ToolTip = text;
         AutomationProperties.SetName(ActivityButton, text);
@@ -236,6 +236,18 @@ public partial class MainWindow : Window
         return null;
     }
 
+    private void ShowFolderActivitySettings(Window owner)
+        => FolderTrackingDialog.Show(owner, _activityStore, () =>
+        {
+            if (_workspaceView is not null)
+                _workspaceView.RefreshFolderTracking();
+            else
+            {
+                _activityHost.RootsChanged();
+                UpdateActivityIndicator();
+            }
+        });
+
     private void SetGlobalHotkeyText(string? text)
     {
         if (DataContext is MainViewModel viewModel)
@@ -253,7 +265,8 @@ public partial class MainWindow : Window
             ThemePreference.ParseTheme(_settings.Theme), ThemePreference.ParseHighlight(_settings.Highlight),
             _themeManager.Apply, ApplySettingsChoice,
             _workspaceView is null ? null : _workspaceView.ShowRecentFiles,
-            _workspaceView is null ? null : _workspaceView.BeginCustomise);
+            _workspaceView is null ? null : _workspaceView.BeginCustomise,
+            ShowFolderActivitySettings);
         if (saved is null)
         {
             // The app is exiting (tray Exit, session end) and closed this

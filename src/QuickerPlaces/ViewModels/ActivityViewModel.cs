@@ -83,6 +83,9 @@ public sealed class ActivityViewModel : ObservableObject
     public bool HasRoots => Roots.Count > 0;
     public bool HasSelection => SelectedRoot is not null;
     public bool IsDepthRollup => Rollup == RollupMode.Depth;
+    public bool IsTargetFolderSelection => SelectedRoot?.Config.IsAllFolders != true;
+    public bool IsCoveredByAllFolders => _store.TrackAllFolders && IsTargetFolderSelection;
+    public bool CanToggleSelected => CanManage && HasSelection && !IsCoveredByAllFolders;
     public bool HasError => ErrorMessage is not null;
     public string? StatusMessage
     {
@@ -132,8 +135,11 @@ public sealed class ActivityViewModel : ObservableObject
         ActivityPeriodMode.Day => _anchorDate.ToDateTime(TimeOnly.MinValue).ToString("D", _culture),
         _ => $"{PeriodFrom.ToDateTime(TimeOnly.MinValue).ToString("d", _culture)} – {PeriodTo.ToDateTime(TimeOnly.MinValue).ToString("d", _culture)}"
     };
-    public string ToggleLabel => SelectedRoot?.Enabled == true ? "Stop tracking" : "Resume tracking";
-    public string SelectedStatusText => SelectedRoot?.Enabled == true ? "Tracking is on" : "Tracking is paused";
+    public string ToggleLabel => SelectedRoot?.Config.IsAllFolders == true
+        ? SelectedRoot.Enabled ? "Use target folders only" : "Track all folders"
+        : SelectedRoot?.Enabled == true ? "Stop tracking" : "Resume tracking";
+    public string SelectedStatusText => IsCoveredByAllFolders ? "Covered by All folders"
+        : SelectedRoot?.Enabled == true ? "Tracking is on" : "Tracking is paused";
     public string TrackingStartedText => SelectedRoot is { } root
         ? $"Tracking started {root.TrackingStartedAt.ToLocalTime():d}"
         : "";
@@ -147,6 +153,9 @@ public sealed class ActivityViewModel : ObservableObject
                 _groupingNotice = "";
             if (!SetProperty(ref _selectedRoot, value)) return;
             OnPropertyChanged(nameof(HasSelection));
+            OnPropertyChanged(nameof(IsTargetFolderSelection));
+            OnPropertyChanged(nameof(IsCoveredByAllFolders));
+            OnPropertyChanged(nameof(CanToggleSelected));
             OnPropertyChanged(nameof(ToggleLabel));
             OnPropertyChanged(nameof(SelectedStatusText));
             OnPropertyChanged(nameof(TrackingStartedText));
@@ -281,6 +290,7 @@ public sealed class ActivityViewModel : ObservableObject
 
     public void ToggleSelected()
     {
+        if (!CanToggleSelected) return;
         if (SelectedRoot is not { } selected) return;
         ApplyPersistence(_store.SetEnabled(selected.RootId, !selected.Enabled));
         _rootsChanged();
@@ -297,6 +307,9 @@ public sealed class ActivityViewModel : ObservableObject
             Roots.Add(root);
         SelectedRoot = Roots.FirstOrDefault(root => root.RootId == selectRootId) ?? Roots.FirstOrDefault();
         OnPropertyChanged(nameof(HasRoots));
+        OnPropertyChanged(nameof(IsCoveredByAllFolders));
+        OnPropertyChanged(nameof(CanToggleSelected));
+        OnPropertyChanged(nameof(SelectedStatusText));
         OnPropertyChanged(nameof(HasUnsavedChanges));
         RefreshPeriod();
     }

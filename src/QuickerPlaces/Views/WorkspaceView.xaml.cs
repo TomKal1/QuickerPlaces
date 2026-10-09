@@ -948,6 +948,15 @@ public partial class WorkspaceView : UserControl
             RecentFilesDialog.Show(owner, _workspace.Library);
     }
 
+    public void RefreshFolderTracking()
+    {
+        _activityHost?.RootsChanged();
+        _trackingChanged?.Invoke();
+        foreach (var shelf in _shelves)
+            shelf.UpdateTracking();
+        RequestReload();
+    }
+
     private void ResetDesk_Click(object sender, RoutedEventArgs e)
     {
         _workspace?.ResetToDesk();
@@ -1169,7 +1178,7 @@ public partial class WorkspaceView : UserControl
             RequestReload();
         });
         shelf.AttachTracking(activity, _networkDrives!, () => ActivityFormat.TrackingSummary(
-            _activityStore!.EnabledRoots().Count, _activityStore.Roots.Count, _activityHost!.IsPaused));
+            _activityStore!.EnabledRoots().Count, _activityStore.Roots.Count, _activityHost!.IsPaused, _activityStore.TrackAllFolders));
         _shelves.Add(shelf);
         return shelf;
     }

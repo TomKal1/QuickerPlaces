@@ -68,7 +68,7 @@ public sealed class RecentFilesStore
     private readonly object _sync = new();
     private readonly IPlacesStorage _storage;
     private readonly TimeProvider _time;
-    private readonly RecentFilesSettings _settings;
+    private RecentFilesSettings _settings;
     private readonly Dictionary<string, RecentFileRecord> _files;
     private readonly Dictionary<DateOnly, RecentFilesDay> _days;
     private readonly IFileHistory? _history;
@@ -159,6 +159,43 @@ public sealed class RecentFilesStore
             lock (_sync)
                 return new RecentFilesSettingsSnapshot(_settings.Enabled, _settings.Kinds.ToArray(), _settings.Scope,
                     _settings.TrackingStartedAt, _settings.ResumedAt);
+        }
+    }
+
+    /// <summary>Saves a settings draft in one write. A failed write leaves tracking and its settings unchanged.</summary>
+    public PersistenceResult TrySaveSettings(bool enabled, IEnumerable<DocumentKind> kinds, RecentFilesScope scope)
+    {
+        lock (_sync)
+        {
+            if (!IsAvailable)
+                return PersistenceResult.Fail(Notice!);
+
+            var chosen = DocumentKinds.All.Where(kinds.Contains).ToList();
+            if (chosen.Count == 0)
+                return PersistenceResult.Fail("Choose at least one file type.");
+            if (!Enum.IsDefined(scope))
+                return PersistenceResult.Fail("Choose where to record files.");
+
+            var previous = _settings;
+            var wasDirty = _hasUnsavedChanges;
+            var starting = enabled && !previous.Enabled;
+            var now = _time.GetUtcNow();
+            _settings = new RecentFilesSettings
+            {
+                Enabled = enabled,
+                Kinds = chosen,
+                Scope = scope,
+                TrackingStartedAt = starting ? previous.TrackingStartedAt ?? now : previous.TrackingStartedAt,
+                ResumedAt = starting ? now : previous.ResumedAt,
+            };
+
+            var result = SaveNow();
+            if (result.Saved)
+                return result;
+
+            _settings = previous;
+            _hasUnsavedChanges = wasDirty;
+            return PersistenceResult.Fail("Couldn't save your Recent Files settings. Your changes have not been applied. Try Save again.");
         }
     }
 

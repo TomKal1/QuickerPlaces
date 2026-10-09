@@ -99,8 +99,9 @@ public partial class ActivityWindow : Window
             if (item is MenuItem action)
             {
                 if (Equals(action.Tag, "ToggleTracking"))
-                    action.Header = root.Enabled ? "Stop tracking" : "Resume tracking";
-                action.IsEnabled = _viewModel.CanManage || Equals(action.Tag, "ReadOnly");
+                    action.Header = _viewModel.IsCoveredByAllFolders ? "Covered by All folders" : _viewModel.ToggleLabel;
+                action.IsEnabled = Equals(action.Tag, "ToggleTracking") ? _viewModel.CanToggleSelected
+                    : _viewModel.CanManage || Equals(action.Tag, "ReadOnly");
             }
     }
 

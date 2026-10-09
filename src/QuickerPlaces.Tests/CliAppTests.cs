@@ -436,8 +436,10 @@ public sealed class CliAppTests : IDisposable
         Assert.Empty(days[1]!["sessions"]!.AsArray());
     }
 
-    [Fact]
-    public void RecentFilesAndFolders_ReachBackThroughTheActivityHistory()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RecentFilesAndFolders_ReachBackThroughTheActivityHistory(bool removeTarget)
     {
         var local = Path.Combine(_temp.Path, "Local");
         var activity = new ActivityStore(new FilePlacesStorage(local, "activity.json"), _clock);
@@ -453,6 +455,11 @@ public sealed class CliAppTests : IDisposable
         root.Days[old].Folders[@"C:\Jobs\Acme"] = new Models.Activity.FolderTotal { Milliseconds = 3_600_000, Visits = 2 };
         Assert.True(history.SaveFolders(new[] { root }));
         Assert.True(history.SaveFiles(new[] { new Models.RecentFiles.RecentFileRecord { Path = @"C:\Jobs\Acme\Old.pdf", Opens = { new DateTimeOffset(2025, 3, 10, 1, 0, 0, TimeSpan.Zero) } } }));
+        if (removeTarget)
+        {
+            Assert.True(activity.TrySaveTrackingSettings(false, Array.Empty<TrackedFolderChoice>()).Saved);
+            Assert.Empty(activity.Roots);
+        }
 
         var recentFiles = Ok("files", "recent", "--days", "900")["files"]!.AsArray();
         Assert.Equal(@"C:\Jobs\Acme\Old.pdf", Assert.Single(recentFiles)!["path"]!.GetValue<string>());

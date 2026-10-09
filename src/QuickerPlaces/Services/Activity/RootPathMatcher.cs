@@ -29,6 +29,9 @@ public static class RootPathMatcher
     /// </summary>
     public static string? Credit(string? observedPath, TrackedRootConfig root)
     {
+        if (root.IsAllFolders)
+            return Normalize(observedPath);
+
         var observed = Parse(observedPath);
         var rootPath = Parse(root.Path);
         if (observed is null || rootPath is null)

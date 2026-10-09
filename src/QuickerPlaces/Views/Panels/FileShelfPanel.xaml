@@ -69,9 +69,18 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Button Style="{StaticResource Button.KindChip}" Click="RootChip_Click" ContextMenuOpening="RootChip_ContextMenuOpening"
+                                    <Button Click="RootChip_Click" ContextMenuOpening="RootChip_ContextMenuOpening"
                                             ToolTip="{Binding Path}" AutomationProperties.Name="{Binding Path}"
                                             AutomationProperties.HelpText="Shows only what is in this folder; again shows everything. Right-click to manage tracking.">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource Button.KindChip}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CoveredByAllFolders}" Value="True">
+                                                        <Setter Property="Opacity" Value="0.45" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
                                         <Button.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="Edit tracking settings…" Tag="Manage" Click="EditRoot_Click" />
@@ -84,19 +93,8 @@
                                             <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Folder}" Margin="0,0,7,0" />
                                             <TextBlock Text="{Binding Path}" FontFamily="{StaticResource Font.Mono}" FontSize="12.5"
                                                        TextTrimming="CharacterEllipsis" MaxWidth="260" VerticalAlignment="Center" />
-                                            <TextBlock Text="Paused" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource Text.Secondary}">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Enabled}" Value="False">
-                                                                <Setter Property="Visibility" Value="Visible" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                            <TextBlock Text="{Binding Status}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource Text.Secondary}" Style="{StaticResource CollapsedWhenEmpty}" />
                                         </StackPanel>
                                     </Button>
                                 </DataTemplate>

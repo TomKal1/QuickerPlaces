@@ -250,12 +250,13 @@ public partial class FileShelfPanel : UserControl
             return;
         }
 
+        _activity.Reload(chip.RootId);
         _activity.SelectedRoot = _activity.Roots.FirstOrDefault(r => r.RootId == chip.RootId);
         foreach (var item in menu.Items.OfType<MenuItem>())
         {
             if (Equals(item.Tag, "Toggle"))
-                item.Header = chip.Enabled ? "Stop tracking" : "Resume tracking";
-            item.IsEnabled = item.Tag is null || _activity.CanManage;
+                item.Header = _activity.IsCoveredByAllFolders ? "Covered by All folders" : _activity.ToggleLabel;
+            item.IsEnabled = Equals(item.Tag, "Toggle") ? _activity.CanToggleSelected : item.Tag is null || _activity.CanManage;
         }
     }
 

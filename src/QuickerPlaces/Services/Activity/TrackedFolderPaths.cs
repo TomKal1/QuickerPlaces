@@ -18,6 +18,13 @@ public static class TrackedFolderPaths
     /// <summary>How many folders below <paramref name="rootPath"/> <paramref name="path"/> is: 0 for the root itself; null when it isn't inside it.</summary>
     public static int? LevelBelow(string rootPath, string path)
     {
+        if (rootPath == ActivityStore.AllFoldersPath)
+        {
+            var normalized = RootPathMatcher.Normalize(path);
+            if (normalized is null) return null;
+            var head = normalized.StartsWith(@"\\", StringComparison.Ordinal) ? 2 : 1;
+            return normalized.Split('\\', StringSplitOptions.RemoveEmptyEntries).Length - head;
+        }
         var root = rootPath.TrimEnd('\\', '/');
         if (root.Length == 0 || !path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
             return null;
@@ -32,7 +39,8 @@ public static class TrackedFolderPaths
     public static string? RootFor(IEnumerable<string> rootPaths, string path)
         => rootPaths
             .Where(root => LevelBelow(root, path) is not null)
-            .OrderByDescending(root => root.TrimEnd('\\', '/').Length)
+            .OrderBy(root => root == ActivityStore.AllFoldersPath ? 1 : 0)
+            .ThenByDescending(root => root.TrimEnd('\\', '/').Length)
             .FirstOrDefault();
 
     /// <summary>"Root folder", "Level 1 · directly below root", "Level 2 · below root"…</summary>

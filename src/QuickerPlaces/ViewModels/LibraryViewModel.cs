@@ -787,6 +787,9 @@ public sealed class LibraryViewModel : ObservableObject
 
     public string? RecentFilesNotice => _recentFiles.Notice;
 
+    public RecentFilesSettingsViewModel CreateRecentFilesSettingsEditor()
+        => new(_recentFiles, () => { OnRecentFilesSettingsChanged(); Reload(); });
+
     /// <summary>Recent Files on or off. Turning it on starts from now; turning it off keeps what was recorded.</summary>
     public bool RecentFilesEnabled
     {
@@ -805,15 +808,15 @@ public sealed class LibraryViewModel : ObservableObject
     public bool TrackWord { get => Tracks(DocumentKind.Word); set => SetTracked(DocumentKind.Word, value); }
     public bool TrackExcel { get => Tracks(DocumentKind.Excel); set => SetTracked(DocumentKind.Excel, value); }
 
-    /// <summary>True to record files anywhere; false (the default) for only under folders tracked in Recents.</summary>
+    /// <summary>Selects Anywhere. Radio-button uncheck notifications never change the scope.</summary>
     public bool TrackEverywhere
     {
         get => _recentFiles.Settings.Scope == RecentFilesScope.Everywhere;
         set
         {
-            if (value == TrackEverywhere)
+            if (!value || TrackEverywhere)
                 return;
-            Report(_recentFiles.SetScope(value ? RecentFilesScope.Everywhere : RecentFilesScope.TrackedFolders), null);
+            Report(_recentFiles.SetScope(RecentFilesScope.Everywhere), null);
             OnRecentFilesSettingsChanged();
         }
     }
@@ -824,8 +827,10 @@ public sealed class LibraryViewModel : ObservableObject
         get => !TrackEverywhere;
         set
         {
-            if (value)
-                TrackEverywhere = false;
+            if (!value || TrackUnderTrackedFolders)
+                return;
+            Report(_recentFiles.SetScope(RecentFilesScope.TrackedFolders), null);
+            OnRecentFilesSettingsChanged();
         }
     }
 
@@ -844,6 +849,8 @@ public sealed class LibraryViewModel : ObservableObject
             var kinds = string.Join(", ", settings.Kinds.Select(k => k.PluralLabel()));
             var where = settings.Scope == RecentFilesScope.Everywhere
                 ? "anywhere"
+                : _activity.TrackAllFolders
+                ? "anywhere (All folders is on)"
                 : _activity.EnabledRoots().Count == 0
                     ? "under folders tracked in Recents — none are tracked yet, so nothing is recorded"
                     : "under folders tracked in Recents";
@@ -933,6 +940,11 @@ public sealed class LibraryViewModel : ObservableObject
     {
         _history?.Clear();
         _snapshot = Capture();
+        if (_rootId is not null && _snapshot.Roots.All(r => r.RootId != _rootId || r.IsRemoved))
+        {
+            _rootId = null;
+            OnPropertyChanged(nameof(RootScope));
+        }
         BuildRootChips();
         if (_sessionId is not null && SessionScopeName is null)
         {
@@ -951,15 +963,16 @@ public sealed class LibraryViewModel : ObservableObject
     private LibrarySnapshot Capture() => LibrarySnapshot.Capture(_places, _sessions, _activity, _recentFiles, _time);
 
     private RootScope? ScopeFor(string? rootId)
-        => rootId is not null && _snapshot.Roots.FirstOrDefault(r => r.RootId == rootId) is { } root
+        => rootId is not null && _snapshot.Roots.FirstOrDefault(r => r.RootId == rootId && !r.IsRemoved) is { } root
             ? new RootScope(root.RootId, root.Path)
             : null;
 
     private void BuildRootChips()
     {
         TrackedRootChips.Clear();
-        foreach (var root in _snapshot.Roots)
-            TrackedRootChips.Add(new TrackedRootChip(root.RootId, root.Path, root.Enabled, root.RootId == _rootId));
+        foreach (var root in _snapshot.Roots.Where(r => !r.IsRemoved))
+            TrackedRootChips.Add(new TrackedRootChip(root.RootId, root.Path, root.Enabled, root.RootId == _rootId,
+                _activity.TrackAllFolders && root.Path != ActivityStore.AllFoldersPath));
         OnPropertyChanged(nameof(HasTrackedRoots));
     }
 
@@ -1056,7 +1069,7 @@ public sealed class LibraryViewModel : ObservableObject
         }
         else if (_grouping == LibraryGrouping.Level)
         {
-            var roots = _snapshot.Roots.Select(r => r.Path).Where(p => p.Length > 0).ToList();
+            var roots = _snapshot.Roots.Where(r => !r.IsRemoved).Select(r => r.Path).Where(p => p.Length > 0).ToList();
             var placed = shown.Select(item =>
             {
                 var root = item.TreePath.Length == 0 ? null : TrackedFolderPaths.RootFor(roots, item.TreePath);
@@ -1423,4 +1436,7 @@ public sealed class LibraryKindFilter
 }
 
 /// <summary>One tracked folder as the Recents panel shows it: selected when the list is narrowed to it.</summary>
-public sealed record TrackedRootChip(string RootId, string Path, bool Enabled, bool IsSelected);
+public sealed record TrackedRootChip(string RootId, string Path, bool Enabled, bool IsSelected, bool CoveredByAllFolders = false)
+{
+    public string Status => CoveredByAllFolders ? "Covered by All folders" : Enabled ? "" : "Paused";
+}

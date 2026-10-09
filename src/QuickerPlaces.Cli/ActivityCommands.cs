@@ -189,7 +189,7 @@ public static class ActivityCommands
         var placesByFolder = PlacesByFolder(context);
         if (activity.LoadOutcome is StoreLoadOutcome.Ok)
         {
-            foreach (var root in activity.Roots)
+            foreach (var root in activity.AllRoots)
             {
                 var held = activity.QueryFolderDays(root.RootId) ?? Array.Empty<Services.Activity.FolderDay>();
                 foreach (var folderDay in held.Concat(HistoryMerge.FolderDays(history, root.Path)))
@@ -292,9 +292,9 @@ public static class ActivityCommands
         var history = context.ReadHistory(period.From, period.To);
         var roots = new List<Dictionary<string, object?>>();
         var folders = new List<(Services.Activity.FolderActivity Folder, string RootPath)>();
-        foreach (var root in store.Roots)
+        foreach (var root in store.AllRoots)
         {
-            // A paused root still reports what it recorded before it was paused; the history adds older days and other PCs'.
+            // Paused and removed targets still report their history.
             var activity = store.QueryPeriod(root.RootId, from, period.To) is { } held
                 ? WithHistory(held, history, root.Path)
                 : null;

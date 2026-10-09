@@ -62,14 +62,15 @@ public sealed record LibrarySnapshot(
         var zone = time.LocalTimeZone;
         DateOnly Local(DateTimeOffset instant) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
 
-        var roots = activity.Roots
+        var roots = activity.AllRoots
             .Select(root => new RecentsRootData(
                 root.RootId,
-                root.Enabled,
+                root.Enabled && (activity.TrackAllFolders ? root.Config.IsAllFolders : !root.Config.IsAllFolders),
                 Local(root.TrackingStartedAt),
                 activity.QueryDayTotals(root.RootId) ?? new Dictionary<DateOnly, ActivityDayTotal>(),
                 activity.QueryFolderDays(root.RootId) ?? Array.Empty<FolderDay>(),
-                root.Path))
+                root.Path,
+                root.IsRemoved))
             .ToList();
 
         return new LibrarySnapshot(
@@ -161,4 +162,5 @@ public sealed record RecentsRootData(
     DateOnly TrackingStartedOn,
     IReadOnlyDictionary<DateOnly, ActivityDayTotal> DayTotals,
     IReadOnlyList<FolderDay> FolderDays,
-    string Path = "");
+    string Path = "",
+    bool IsRemoved = false);

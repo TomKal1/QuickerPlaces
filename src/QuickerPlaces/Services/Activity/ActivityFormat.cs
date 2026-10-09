@@ -24,8 +24,9 @@ public static class ActivityFormat
     /// and the header's tooltip after "Recents — ". Paused is the tracking
     /// host's own pause, while folders are tracked.
     /// </summary>
-    public static string TrackingSummary(int enabledRoots, int allRoots, bool paused)
+    public static string TrackingSummary(int enabledRoots, int allRoots, bool paused, bool allFolders = false)
         => enabledRoots > 0 && paused ? "Tracking paused"
+            : enabledRoots > 0 && allFolders ? "Tracking all folders"
             : enabledRoots > 0 ? $"Tracking {enabledRoots} {(enabledRoots == 1 ? "folder" : "folders")}"
             : allRoots > 0 ? "Tracking is off for every folder"
             : "No folders tracked";

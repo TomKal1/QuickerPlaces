@@ -97,7 +97,7 @@ public sealed class ActivityStoreLoadTests
     [Fact]
     public void AFileFromANewerVersion_IsNeverTouched_AndNothingIsWritten()
     {
-        var storage = new FakePlacesStorage { ContentsToReturn = @"{""schemaVersion"":2,""roots"":[]}" };
+        var storage = new FakePlacesStorage { ContentsToReturn = @"{""schemaVersion"":3,""roots"":[]}" };
 
         var store = new ActivityStore(storage, new ManualTimeProvider());
 

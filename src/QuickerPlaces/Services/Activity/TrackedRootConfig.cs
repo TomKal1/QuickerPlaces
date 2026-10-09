@@ -4,6 +4,9 @@ using QuickerPlaces.Models.Activity;
 
 namespace QuickerPlaces.Services.Activity;
 
+/// <summary>A target folder in a settings draft; a null identity denotes a new target.</summary>
+public sealed record TrackedFolderChoice(string? RootId, string Path, bool Enabled, IReadOnlyList<string> EquivalentPrefixes);
+
 /// <summary>
 /// What the tracker needs to know about one enabled root (Phase 9 plan 5.3):
 /// where it is, which other paths reach the same folder (D15, D22), how a
@@ -13,6 +16,8 @@ namespace QuickerPlaces.Services.Activity;
 /// </summary>
 public sealed record TrackedRootConfig(string RootId, string Path)
 {
+    public bool IsAllFolders { get; init; }
+
     /// <summary>Other prefixes the user said reach this root, such as a mapped drive's network path (D15, D22).</summary>
     public IReadOnlyList<string> EquivalentPrefixes { get; init; } = Array.Empty<string>();
 

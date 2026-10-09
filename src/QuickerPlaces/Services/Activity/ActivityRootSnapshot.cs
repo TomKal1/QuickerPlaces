@@ -8,13 +8,14 @@ namespace QuickerPlaces.Services.Activity;
 /// (D26): what the Activity window lists, and, for an enabled root, what the
 /// tracker is given.
 /// </summary>
-public sealed record ActivityRootSnapshot(TrackedRootConfig Config, bool Enabled, DateTimeOffset TrackingStartedAt)
+public sealed record ActivityRootSnapshot(TrackedRootConfig Config, bool Enabled, DateTimeOffset TrackingStartedAt, bool IsRemoved = false)
 {
     public string RootId => Config.RootId;
 
     public string Path => Config.Path;
 
-    public string TrackingToolTip => $"{Path}\nFolder grouping: " + (Config.Rollup switch
+    public string TrackingToolTip => Config.IsAllFolders ? "All folders you visit in File Explorer, recorded at their exact paths."
+        : $"{Path}\nFolder grouping: " + (Config.Rollup switch
     {
         RollupMode.Exact => "All subfolders",
         RollupMode.Depth => $"Chosen depth below root (level {Config.Depth})",

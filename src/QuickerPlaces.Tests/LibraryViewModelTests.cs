@@ -280,6 +280,35 @@ public sealed class LibraryViewModelTests
     }
 
     [Fact]
+    public void ScopeRadioUncheck_DoesNotResetAnywhere()
+    {
+        var vm = NewViewModel();
+        vm.TrackEverywhere = true;
+        vm.TrackUnderTrackedFolders = false;
+        vm.TrackEverywhere = false;
+        Assert.Equal(RecentFilesScope.Everywhere, _recentFiles.Settings.Scope);
+        Assert.True(NewViewModel().TrackEverywhere);
+
+        vm.TrackUnderTrackedFolders = true;
+        vm.TrackEverywhere = false;
+        Assert.Equal(RecentFilesScope.TrackedFolders, _recentFiles.Settings.Scope);
+    }
+
+    [Fact]
+    public void RecentFilesDialogSave_RefreshesTheLibrarySettings()
+    {
+        var vm = NewViewModel();
+        var editor = vm.CreateRecentFilesSettingsEditor();
+        editor.RecentFilesEnabled = true;
+        editor.TrackEverywhere = true;
+        Assert.False(vm.RecentFilesEnabled);
+        Assert.True(editor.Save());
+        Assert.True(vm.RecentFilesEnabled);
+        Assert.True(vm.TrackEverywhere);
+        Assert.Contains("anywhere", vm.RecentFilesStatus);
+    }
+
+    [Fact]
     public void Empty_SaysWhereThingsComeFrom()
     {
         var vm = NewViewModel();

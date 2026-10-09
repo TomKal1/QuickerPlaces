@@ -17,6 +17,12 @@ public sealed class TrackedRoot
     /// <summary>The folder as the user chose it, normalized (RootPathMatcher.Normalize). Every folder is recorded under this spelling (5.2).</summary>
     public string Path { get; set; } = "";
 
+    /// <summary>The global collection of visited folders, independent of target paths.</summary>
+    public bool IsAllFolders { get; set; }
+
+    /// <summary>Removed from the tracking list; recorded days are kept for the Library and history.</summary>
+    public bool IsRemoved { get; set; }
+
     /// <summary>Other prefixes that reach the same folder, such as a mapped drive's network path (D15, D22).</summary>
     public List<string> EquivalentPrefixes { get; set; } = new();
 
