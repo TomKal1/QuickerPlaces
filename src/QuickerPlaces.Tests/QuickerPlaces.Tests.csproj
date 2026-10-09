@@ -101,6 +101,7 @@
     <Compile Include="..\QuickerPlaces\Services\Revit\RevitFileInfoReader.cs" Link="Linked\Services\Revit\RevitFileInfoReader.cs" />
     <Compile Include="..\QuickerPlaces\Services\Revit\RevitReleaseCache.cs" Link="Linked\Services\Revit\RevitReleaseCache.cs" />
     <Compile Include="..\QuickerPlaces\Services\Revit\RevitLabels.cs" Link="Linked\Services\Revit\RevitLabels.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\Handlers\*.cs" LinkBase="Linked\Services\Revit\Handlers" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
