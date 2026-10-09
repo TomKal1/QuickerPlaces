@@ -1,0 +1,90 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    QuickerPlaces sample Revit handler.
+
+    One project builds for Revit 2022 to 2026. Pick the release with the configuration:
+
+        dotnet build -c "Release R25"        (also "Debug R22" ... "Debug R26", "Release R22" ... "Release R26")
+
+    Each configuration sets RevitVersion and TargetFramework below. Plain "Debug" or "Release" builds for Revit 2025.
+    Revit 2022 to 2024 run .NET Framework 4.8; Revit 2025 and 2026 run .NET 8.
+
+    The Revit API comes from the Nice3point.Revit.Api.* packages (API assemblies only, not the Nice3point
+    Toolkit). ExcludeAssets="runtime" keeps Revit's own DLLs out of the output folder: the add-in must
+    always use the copies in the running Revit.
+
+    To reuse this in your own add-in: copy the Core and Revit folders and adapt the PropertyGroups below.
+  -->
+
+  <PropertyGroup>
+    <Configurations>Debug R22;Debug R23;Debug R24;Debug R25;Debug R26;Release R22;Release R23;Release R24;Release R25;Release R26</Configurations>
+    <Platforms>AnyCPU</Platforms>
+    <RootNamespace>QuickerPlaces.RevitHandler</RootNamespace>
+    <AssemblyName>QuickerPlaces.RevitHandler</AssemblyName>
+    <Version>1.0.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Lets the net8.0-windows builds restore and compile on a non-Windows machine too. Harmless on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <!-- Plain "Debug" / "Release" (no release suffix) means Revit 2025. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == 'Release'">
+    <RevitVersion>2025</RevitVersion>
+    <TargetFramework>net8.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug R22' Or '$(Configuration)' == 'Release R22'">
+    <RevitVersion>2022</RevitVersion>
+    <TargetFramework>net48</TargetFramework>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug R23' Or '$(Configuration)' == 'Release R23'">
+    <RevitVersion>2023</RevitVersion>
+    <TargetFramework>net48</TargetFramework>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug R24' Or '$(Configuration)' == 'Release R24'">
+    <RevitVersion>2024</RevitVersion>
+    <TargetFramework>net48</TargetFramework>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug R25' Or '$(Configuration)' == 'Release R25'">
+    <RevitVersion>2025</RevitVersion>
+    <TargetFramework>net8.0-windows</TargetFramework>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug R26' Or '$(Configuration)' == 'Release R26'">
+    <RevitVersion>2026</RevitVersion>
+    <TargetFramework>net8.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);REVIT$(RevitVersion)</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.StartsWith('Debug'))">
+    <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(Configuration.StartsWith('Release'))">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).*" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!-- Reference assemblies so that .NET Framework 4.8 builds on machines without the 4.8 targeting pack (Linux, CI). -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- The .addin manifest is copied next to the DLL so both are in the output folder. -->
+  <ItemGroup>
+    <None Include="QuickerPlaces.RevitHandler.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
