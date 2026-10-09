@@ -219,4 +219,13 @@
     <Compile Include="..\QuickerPlaces\Services\Revit\AddIns\*.cs" LinkBase="Linked\Services\Revit\AddIns" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Opening Revit files (roadmap §4.21): installs, running processes, the
+      open planner and runner. UI-free; Windows-only parts are guarded.
+    -->
+    <Compile Include="..\QuickerPlaces\Services\Revit\Opening\*.cs" LinkBase="Linked\Services\Revit\Opening" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\NetworkDriveResolver.cs" Link="Linked\Services\Activity\NetworkDriveResolver.cs" />
+  </ItemGroup>
+
 </Project>

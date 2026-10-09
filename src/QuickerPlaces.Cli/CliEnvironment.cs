@@ -6,6 +6,7 @@ using QuickerPlaces.Services;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Revit.Dialogs;
+using QuickerPlaces.Services.Revit.Opening;
 
 namespace QuickerPlaces.Cli;
 
@@ -44,6 +45,9 @@ public sealed class CliEnvironment
     /// <summary>Lists a process's top-level windows for <c>qp revit dialogs</c>; null is treated as seeing none.</summary>
     public IDialogDetector? DialogDetector { get; init; }
 
+    /// <summary>What <c>qp revit installs</c>, <c>handlers</c> and <c>open</c> take from the machine; null is a machine with no Revit.</summary>
+    public RevitMachine? Revit { get; init; }
+
     public static CliEnvironment ForThisMachine() => new()
     {
         Time = TimeProvider.System,
@@ -52,7 +56,8 @@ public sealed class CliEnvironment
         DefaultDataRoot = Environment.GetEnvironmentVariable(DataRootVariable),
         SendToApp = (scope, request) => RemoteCommandClient.Send(RemoteProtocol.PipeName(scope), request, TimeSpan.FromSeconds(3)),
         ScanOpenDocuments = OpenDocumentScanner(),
-        DialogDetector = DialogDetectors.ForThisMachine()
+        DialogDetector = DialogDetectors.ForThisMachine(),
+        Revit = RevitMachine.ForThisMachine()
     };
 
     private static Func<OpenDocumentScan>? OpenDocumentScanner()

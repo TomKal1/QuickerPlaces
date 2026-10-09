@@ -10,6 +10,8 @@ using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Remote;
+using QuickerPlaces.Services.Revit.Handlers;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Revit.Dialogs;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Tests.Fakes;
@@ -36,6 +38,10 @@ public sealed class CliAppTests : IDisposable
     private bool _appAnswers = true;
     private OpenDocumentScan? _openDocuments;
     private readonly FakeDialogDetector _dialogs = new();
+    private readonly FakeInstallSource _revitInstalls = new();
+    private readonly FakeProcessLister _revitProcesses = new();
+    private readonly FakeLauncher _revitLauncher = new();
+    private readonly FakeProcessProbe _revitProbe = new();
 
     public void Dispose() => _temp.Dispose();
 
@@ -56,7 +62,8 @@ public sealed class CliAppTests : IDisposable
         IsAppRunning = _ => _app is not null,
         SendToApp = (scope, request) => _appAnswers ? _app!.Execute(request, out _) : throw new TimeoutException(),
         ScanOpenDocuments = _openDocuments is null ? null : () => _openDocuments,
-        DialogDetector = _dialogs
+        DialogDetector = _dialogs,
+        Revit = new RevitMachine { InstallSource = _revitInstalls, Processes = _revitProcesses, Launcher = _revitLauncher, Probe = _revitProbe }
     };
 
     private (int Exit, JsonObject Json) Run(params string[] args)
@@ -571,5 +578,197 @@ public sealed class CliAppTests : IDisposable
     {
         Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "revit", "dialogs", "notapid"));
         Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "revit", "dialogs", "-5"));
+    }
+
+    // --- qp revit installs / handlers / open ---------------------------------------
+
+    private string RevitRoot => Path.Combine(_temp.Path, "revit");
+
+    private void RegisterHandler(string id, string release = "2025", params string[] actions)
+    {
+        var registration = new HandlerRegistration
+        {
+            Protocol = 1, HandlerId = id, DisplayName = id + " name", RevitRelease = release,
+            Actions = actions.Length == 0 ? [HandlerProtocol.ActionOpenNewLocal] : actions, WrittenUtc = Now.UtcDateTime,
+        };
+        var folder = new RevitProtocolFolder(RevitRoot);
+        RevitProtocolFolder.WriteAtomic(folder.RegistrationFile(release, id), HandlerJson.ToUtf8(registration));
+    }
+
+    private string CentralFile() => RevitTestFiles.Write(_temp.File("Tower_Central.rvt"),
+        RevitTestFiles.Modern("2025", workshared: true, worksharingType: 0, @"\\server\projects\Tower_Central.rvt", null));
+
+    private string LocalFile() => RevitTestFiles.Write(_temp.File("Tower_me.rvt"),
+        RevitTestFiles.Modern("2025", workshared: true, worksharingType: 1, @"\\server\projects\Tower_Central.rvt", null));
+
+    [Fact]
+    public void RevitInstalls_ListsInstallsAndRunningProcesses_WithoutChangingAnything()
+    {
+        var exe = _revitInstalls.AddDefault(2025);
+        _revitProcesses.Processes.Add(new RevitProcessInfo(4242, Now.UtcDateTime, exe, 25));
+
+        var data = Ok("revit", "installs");
+
+        var install = Assert.Single(data["installs"]!.AsArray());
+        Assert.Equal(2025, install!["release"]!.GetValue<int>());
+        Assert.Equal(exe, install["exePath"]!.GetValue<string>());
+        var running = Assert.Single(data["running"]!.AsArray());
+        Assert.Equal(4242, running!["processId"]!.GetValue<int>());
+        Assert.Equal(2025, running["release"]!.GetValue<int>());
+        Assert.Empty(_revitLauncher.Launches);
+    }
+
+    [Fact]
+    public void RevitInstalls_WithNoRevit_IsEmpty()
+    {
+        var data = Ok("revit", "installs");
+
+        Assert.Empty(data["installs"]!.AsArray());
+        Assert.Empty(data["running"]!.AsArray());
+    }
+
+    [Fact]
+    public void RevitHandlers_ListsRegistrationsPerRelease_AndTheSettingsChoice()
+    {
+        _revitInstalls.AddDefault(2024);
+        RegisterHandler("contoso", "2025");
+        Directory.CreateDirectory(Path.Combine(_temp.Path, "Local"));
+        File.WriteAllText(Path.Combine(_temp.Path, "Local", "settings.json"),
+            """{ "schemaVersion": 6, "revitReleases": { "2025": { "handlerId": "contoso", "localFolder": "D:\\Locals" } } }""");
+
+        var data = Ok("revit", "handlers");
+
+        Assert.Equal(RevitRoot, data["protocolRoot"]!.GetValue<string>());
+        var releases = data["releases"]!.AsArray();
+        Assert.Equal(["2024", "2025"], releases.Select(r => r!["release"]!.GetValue<string>()));
+        Assert.True(releases[0]!["installed"]!.GetValue<bool>());
+        Assert.False(releases[1]!["installed"]!.GetValue<bool>());
+        Assert.Equal(@"C:\REVIT_LOCAL2024", releases[0]!["localFolder"]!.GetValue<string>());
+        Assert.Empty(releases[0]!["handlers"]!.AsArray());
+
+        var y2025 = releases[1]!;
+        Assert.Equal("contoso", y2025["chosenHandlerId"]!.GetValue<string>());
+        Assert.Equal(@"D:\Locals", y2025["localFolder"]!.GetValue<string>());
+        var handler = Assert.Single(y2025["handlers"]!.AsArray())!;
+        Assert.Equal("contoso name", handler["displayName"]!.GetValue<string>());
+        Assert.True(handler["chosen"]!.GetValue<bool>());
+        Assert.False(handler["loaded"]!.GetValue<bool>());
+        Assert.Empty(handler["instances"]!.AsArray());
+    }
+
+    [Fact]
+    public void RevitOpen_DryRun_OfALocal_PlansADirectOpen_AndLaunchesNothing()
+    {
+        var exe = _revitInstalls.AddDefault(2025);
+
+        var data = Ok("revit", "open", LocalFile(), "--dry-run");
+
+        Assert.True(data["dryRun"]!.GetValue<bool>());
+        var plan = data["plan"]!;
+        Assert.Equal("directOpen", plan["kind"]!.GetValue<string>());
+        Assert.Equal("2025", plan["release"]!.GetValue<string>());
+        Assert.Equal(exe, plan["exePath"]!.GetValue<string>());
+        Assert.Empty(_revitLauncher.Launches);
+        Assert.Null(data["outcome"]);
+    }
+
+    [Fact]
+    public void RevitOpen_DryRun_OfACentral_UsesTheOnlyHandler_AndWritesNothing()
+    {
+        _revitInstalls.AddDefault(2025);
+        RegisterHandler("contoso");
+
+        var data = Ok("revit", "open", CentralFile(), "--dry-run", "--local-folder", @"D:\L", "--worksets", "none");
+
+        var plan = data["plan"]!;
+        Assert.Equal("handlerRequest", plan["kind"]!.GetValue<string>());
+        Assert.Equal("contoso", plan["handlerId"]!.GetValue<string>());
+        Assert.Equal(@"D:\L", plan["localFolder"]!.GetValue<string>());
+        Assert.Equal("none", plan["worksets"]!.GetValue<string>());
+        Assert.Equal("notRunning", plan["handlerState"]!.GetValue<string>());
+        Assert.True(plan["needsLaunch"]!.GetValue<bool>());
+        Assert.False(Directory.Exists(Path.Combine(RevitRoot, "requests")));
+        Assert.Empty(_revitLauncher.Launches);
+    }
+
+    [Fact]
+    public void RevitOpen_OfACentral_WithNoHandler_IsRefused_AsInvalid_WithThePlan()
+    {
+        _revitInstalls.AddDefault(2025);
+        var (exit, json) = Run("revit", "open", CentralFile(), "--dry-run");
+
+        Assert.Equal(ExitCodes.Invalid, exit);
+        Assert.Equal(ErrorCodes.Invalid, json["error"]!["code"]!.GetValue<string>());
+        Assert.Contains("none is chosen", json["error"]!["message"]!.GetValue<string>());
+        Assert.Equal("refuse", json["error"]!["details"]!["plan"]!["kind"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void RevitOpen_WithSeveralHandlers_AndNoChoice_ListsThem()
+    {
+        _revitInstalls.AddDefault(2025);
+        RegisterHandler("alpha");
+        RegisterHandler("beta");
+        var (exit, json) = Run("revit", "open", CentralFile(), "--dry-run");
+
+        Assert.Equal(ExitCodes.Invalid, exit);
+        Assert.Equal(["alpha", "beta"], json["error"]!["details"]!["choices"]!.AsArray().Select(c => c!.GetValue<string>()).Order());
+
+        var data = Ok("revit", "open", CentralFile(), "--dry-run", "--handler", "beta");
+        Assert.Equal("beta", data["plan"]!["handlerId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void RevitOpen_NotInstalled_MissingFile_AndBadOptions_UseTheUsualCodes()
+    {
+        Assert.Equal(ErrorCodes.Invalid, Error(ExitCodes.Invalid, "revit", "open", LocalFile(), "--dry-run")); // Revit 2025 not installed
+        Assert.Equal(ErrorCodes.NotFound, Error(ExitCodes.NotFound, "revit", "open", _temp.File("gone.rvt")));
+        Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "revit", "open", LocalFile(), "--worksets", "most"));
+        Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "revit", "open", LocalFile(), "--local-folder", "relative"));
+    }
+
+    [Fact]
+    public void RevitOpen_OfALocal_LaunchesThatReleasesRevit()
+    {
+        var exe = _revitInstalls.AddDefault(2025);
+        var file = LocalFile();
+
+        var data = Ok("revit", "open", file);
+
+        var launch = Assert.Single(_revitLauncher.Launches);
+        Assert.Equal(exe, launch.ExePath);
+        Assert.Equal("\"" + file + "\"", launch.Arguments);
+        Assert.False(data["dryRun"]!.GetValue<bool>());
+        Assert.Equal("launched", data["outcome"]!["result"]!.GetValue<string>());
+        Assert.Equal(7000, data["outcome"]!["launchedProcessId"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void RevitOpen_OfACentral_WithNoWait_WritesTheRequest_AndLaunchesRevitWithIt()
+    {
+        _revitInstalls.AddDefault(2025);
+        RegisterHandler("contoso");
+        var file = CentralFile();
+
+        var data = Ok("revit", "open", file, "--no-wait");
+
+        var launch = Assert.Single(_revitLauncher.Launches);
+        var requestId = data["outcome"]!["requestId"]!.GetValue<string>();
+        Assert.Equal(requestId, launch.Environment[RevitOpener.RequestVariable]);
+        Assert.Equal(RevitRoot, launch.Environment[RevitOpener.RootVariable]);
+        var request = new RevitProtocolFolder(RevitRoot).RequestFile("2025", "contoso", requestId);
+        Assert.True(File.Exists(request));
+        Assert.Contains(file.Replace("\\", "\\\\"), File.ReadAllText(request));
+    }
+
+    [Fact]
+    public void Describe_ListsTheRevitCommands_WithOpenAsAWrite()
+    {
+        var commands = Ok()["commands"]!.AsArray();
+
+        bool Writes(string name) => commands.Single(c => c!["name"]!.GetValue<string>() == name)!["writes"]!.GetValue<bool>();
+        Assert.True(Writes("revit open"));
+        Assert.False(Writes("revit installs"));
+        Assert.False(Writes("revit handlers"));
     }
 }

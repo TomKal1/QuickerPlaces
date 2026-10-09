@@ -85,4 +85,18 @@
     <Compile Include="..\QuickerPlaces\Services\Revit\AddIns\*.cs" LinkBase="Linked\Services\Revit\AddIns" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Opening Revit files (roadmap §4.21): installs, running processes, the
+      open planner and runner. UI-free; Windows-only parts are guarded.
+    -->
+    <Compile Include="..\QuickerPlaces\Services\Revit\Opening\*.cs" LinkBase="Linked\Services\Revit\Opening" />
+    <Compile Include="..\QuickerPlaces\Models\AppSettings.cs" Link="Linked\Models\AppSettings.cs" />
+    <Compile Include="..\QuickerPlaces\Models\HotkeyGesture.cs" Link="Linked\Models\HotkeyGesture.cs" />
+    <Compile Include="..\QuickerPlaces\Models\ThemePreference.cs" Link="Linked\Models\ThemePreference.cs" />
+    <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\INetworkDriveResolver.cs" Link="Linked\Services\Activity\INetworkDriveResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\NetworkDriveResolver.cs" Link="Linked\Services\Activity\NetworkDriveResolver.cs" />
+  </ItemGroup>
+
 </Project>

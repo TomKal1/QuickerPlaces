@@ -203,10 +203,13 @@ public sealed class RevitRequestQueue
     /// deleted after being read. Cancelling the token throws
     /// <see cref="OperationCanceledException"/> and leaves the request as it
     /// is, for the caller to <see cref="Cancel"/> or keep waiting on. A claimed
-    /// request whose Revit dies is never finished; that wait ends only by the token.
+    /// request whose Revit dies is never finished; that wait ends only by the
+    /// token, or by <paramref name="stopWhen"/>: called with the status of each
+    /// poll that is not final, and when it returns true the wait ends and
+    /// returns that status (the caller knows why it stopped, and what to clean up).
     /// </summary>
     public async Task<RequestStatus> WaitAsync(HandlerRequest request, IProgress<RequestStatus>? progress = null,
-        TimeSpan? pollInterval = null, CancellationToken cancellationToken = default)
+        TimeSpan? pollInterval = null, CancellationToken cancellationToken = default, Func<RequestStatus, bool>? stopWhen = null)
     {
         var interval = pollInterval ?? DefaultPollInterval;
         RequestStatus? last = null;
@@ -237,8 +240,22 @@ public sealed class RevitRequestQueue
                     break;
             }
 
+            if (stopWhen?.Invoke(status) == true)
+                return status;
+
             await _delay(interval, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Deletes every file of the request: the waiting file, claimed files and
+    /// the result. For a request nobody will finish, such as one claimed by a
+    /// Revit that has since ended; never for one a live handler is working on.
+    /// </summary>
+    public void Discard(HandlerRequest request)
+    {
+        TryDelete(_folder.RequestFile(request.RevitRelease, request.HandlerId, request.RequestId));
+        DeleteResultAndClaims(request);
     }
 
     /// <summary>

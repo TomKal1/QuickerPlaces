@@ -10,6 +10,8 @@ using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Remote;
+using QuickerPlaces.Services.Revit.Handlers;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.Cli;
@@ -49,6 +51,18 @@ public sealed class CliContext
     public IShell Shell => Environment.Shell;
 
     public bool AppRunning => Environment.IsAppRunning(AppDataFolders.InstanceScope(DataRoot));
+
+    /// <summary>The Revit handler protocol folder: <c>&lt;data root&gt;\revit</c> under --data-root, else %LocalAppData%\QuickerPlaces\revit.</summary>
+    public RevitProtocolFolder RevitFolder => RevitProtocolFolder.ForDataRoot(DataRoot);
+
+    public RevitMachine Revit => Environment.Revit ?? RevitMachine.None();
+
+    /// <summary>settings.json as the app would load it (defaults when there is none), read without creating anything.</summary>
+    public AppSettings ReadSettings()
+    {
+        var path = Path.Combine(LocalFolder, "settings.json");
+        return File.Exists(path) ? new SettingsService(path).Load() : new AppSettings();
+    }
 
     public IPlacesStorage PlacesFile => new FilePlacesStorage(RoamingFolder, "places.json");
 

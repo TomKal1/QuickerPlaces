@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace QuickerPlaces.Models;
 
 /// <summary>
@@ -35,8 +37,13 @@ public sealed class AppSettings
     /// 5: added Theme and Highlight (UI refresh U7). No migration needed: a
     /// version-4 file lacks them, which reads as dark with Hull green, the
     /// look closest to what that version showed.
+    ///
+    /// 6: added RevitReleases (Revit handler plan, step 2): per-release
+    /// handler choice and local folder. No migration needed: a version-5
+    /// file lacks it, which reads as no handler chosen and the default
+    /// local folder for every release.
     /// </summary>
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -90,4 +97,25 @@ public sealed class AppSettings
 
     /// <summary>"green", "blue", "red", "cognac" or "windows" (see <see cref="ThemePreference"/>).</summary>
     public string? Highlight { get; set; } = "green";
+
+    /// <summary>
+    /// Revit settings per release, keyed by the release as its four-digit
+    /// year ("2025"). A release with no entry has the defaults (no handler,
+    /// C:\REVIT_LOCAL&lt;release&gt;); read them through
+    /// <c>RevitSettingsResolver</c>, which also copes with null.
+    /// </summary>
+    public Dictionary<string, RevitReleaseSettings>? RevitReleases { get; set; } = new();
+}
+
+/// <summary>
+/// One Revit release's settings. Both values are optional: null or blank
+/// means the default.
+/// </summary>
+public sealed class RevitReleaseSettings
+{
+    /// <summary>The chosen Revit handler's id for this release; null for none.</summary>
+    public string? HandlerId { get; set; }
+
+    /// <summary>Where new locals are made; null for C:\REVIT_LOCAL&lt;release&gt;.</summary>
+    public string? LocalFolder { get; set; }
 }

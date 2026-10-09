@@ -27,6 +27,14 @@ public sealed class RevitProtocolFolder
     public static RevitProtocolFolder Default() => new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuickerPlaces", "revit"));
 
+    /// <summary>
+    /// The protocol folder that goes with a data root (<c>--data-root</c>,
+    /// <c>AppDataFolders.Root</c>): <c>&lt;dataRoot&gt;\revit</c>, so test
+    /// data never touches the real handlers; with no data root, <see cref="Default"/>.
+    /// </summary>
+    public static RevitProtocolFolder ForDataRoot(string? dataRoot) =>
+        string.IsNullOrWhiteSpace(dataRoot) ? Default() : new(Path.Combine(dataRoot, "revit"));
+
     public string Root { get; }
 
     public string HandlersFolder => Path.Combine(Root, "handlers");

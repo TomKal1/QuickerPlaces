@@ -45,6 +45,9 @@ on Linux). Opening a place uses the system's default handler.
 | `activity days` | | Day by day: places opened, sessions reopened, files opened, folders worked in. Folders and files reach back through the activity history. |
 | `revit info <file>` | | The Revit release a `.rvt`, `.rfa` or `.rte` file was saved in, and whether it is a central or a local. Read without Revit. Revit 2022 and later; older files give `problem: "tooOld"`. |
 | `revit dialogs <pid>` | | Every top-level window of a running process (a `Revit.exe`): class, enabled, visible, title, static texts and buttons, and which count as dialogs Revit is waiting on. Read-only; nothing is pressed. `--release <year>` recognises a security prompt from recorded signatures. Windows only. |
+| `revit installs` | | The installed Revit releases (2022 and later) with their `Revit.exe`, and the Revit processes running now. Windows only; empty elsewhere. |
+| `revit handlers` | | Per release: the registered Revit handler add-ins, whether each is loaded in a running Revit, when it was last seen, and which one the settings choose. |
+| `revit open <file>` | ✓ | Opens a Revit file in the release that saved it, never another. A local or non-workshared file launches that release's `Revit.exe`. A central opens as a new local through the chosen handler add-in. `--dry-run` prints the plan only; `--handler <id>`, `--local-folder <path>`, `--worksets lastViewed\|all\|none`, `--no-wait`. A refusal is `invalid` (details hold the plan); a failed open is `open_failed`. |
 
 `<ref>` is an alias (any case) or an id. Every command also takes
 `--data-root <folder>` (or the `QUICKERPLACES_DATA_ROOT` variable) to use
