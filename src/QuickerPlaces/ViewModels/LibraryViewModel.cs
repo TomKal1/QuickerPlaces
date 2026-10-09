@@ -10,6 +10,7 @@ using QuickerPlaces.Mvvm;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.Library;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Sessions;
@@ -84,6 +85,8 @@ public sealed class LibraryViewModel : ObservableObject
     private readonly CultureInfo _culture;
     private readonly IBackgroundWork _work;
     private LibrarySnapshot _snapshot;
+    private readonly HistoryMonthCache? _history;
+    private DateOnly? _historyReach;
     private LibraryQueryResult? _result;
     private int _generation;
     private LibraryKind? _selectedKind;
@@ -119,6 +122,7 @@ public sealed class LibraryViewModel : ObservableObject
         _time = time ?? TimeProvider.System;
         _culture = culture ?? CultureInfo.CurrentCulture;
         _work = work ?? InlineBackgroundWork.Instance;
+        _history = activity.HistoryReader is { } reader ? new HistoryMonthCache(reader) : null;
         _calendarYear = Today().Year;
         _calendarMonth = Today().Month;
         _snapshot = Capture();
@@ -623,7 +627,7 @@ public sealed class LibraryViewModel : ObservableObject
         {
             if (Period is null && _tab == LibraryTab.Sessions && _snapshot.Sessions.All(s => s.Files.Count == 0))
                 return "No session files yet. Save files as a session from the Sessions panel.";
-            if (Period is null && _tab == LibraryTab.Recent && _snapshot.Roots.Count == 0 && _snapshot.Files.Count == 0)
+            if (Period is null && _tab == LibraryTab.Recent && _snapshot.Roots.Count == 0 && _snapshot.Files.Count == 0 && (_snapshot.FileSummaries?.Count ?? 0) == 0)
                 return "Nothing recent yet. Track a folder above, or turn on Recent Files.";
             var inPeriod = _result?.ItemsInPeriod ?? 0;
             if (Period is not { } p)
@@ -695,7 +699,7 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(CanShowPreviousYear));
         OnPropertyChanged(nameof(CanShowNextYear));
         OnPropertyChanged(nameof(CalendarYearLabel));
-        BuildCalendar();
+        YearChanged();
         return true;
     }
 
@@ -739,7 +743,7 @@ public sealed class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(CalendarYearLabel));
             OnPropertyChanged(nameof(CanShowPreviousYear));
             OnPropertyChanged(nameof(CanShowNextYear));
-            BuildCalendar();
+            YearChanged();
         }
         else
         {
@@ -819,23 +823,6 @@ public sealed class LibraryViewModel : ObservableObject
                     : "under folders tracked in Recents";
             return $"Recording {kinds} you open {where}.";
         }
-    }
-
-    public string ClearRecentFilesConfirmation => "Delete everything Recent Files has recorded?\n\nYour saved places, sessions and the files themselves are not touched.";
-
-    public void ClearRecentFiles()
-    {
-        Report(_recentFiles.ClearHistory(), "Recent Files history deleted.");
-        Reload();
-    }
-
-    /// <summary>Removes one file from Recent Files' history (not from sessions, and not from disk).</summary>
-    public void Forget(LibraryRowViewModel? row)
-    {
-        if (row is null || row.Item.Kind.ToDocumentKind() is null || !row.Item.IsRecent)
-            return;
-        Report(_recentFiles.Forget(row.Item.Location), $"Removed \"{row.Name}\" from Recent Files.");
-        Reload();
     }
 
     // ---------------------------------------------------------------
@@ -918,6 +905,7 @@ public sealed class LibraryViewModel : ObservableObject
     /// <summary>Reads all four sources again and refreshes the rows and the year strip: after a launch, a change to a source, or new tracking.</summary>
     public void Reload()
     {
+        _history?.Clear();
         _snapshot = Capture();
         BuildRootChips();
         if (_sessionId is not null && SessionScopeName is null)
@@ -955,7 +943,27 @@ public sealed class LibraryViewModel : ObservableObject
         QueryChanged?.Invoke();
     }
 
-    /// <summary>Runs the query on the current snapshot; a result overtaken by a newer query is dropped.</summary>
+    /// <summary>
+    /// A new year on the strip: with activity history, its months are loaded
+    /// (and the last year's let go) by running the query again; without, the
+    /// strip is simply redrawn.
+    /// </summary>
+    private void YearChanged()
+    {
+        if (_history is null)
+            BuildCalendar();
+        else
+            Refresh();
+    }
+
+    /// <summary>How many history months are loaded now, for tests: only what the year strip and the period need.</summary>
+    public int LoadedHistoryMonths => _history?.LoadedCount ?? 0;
+
+    /// <summary>
+    /// Runs the query on the current snapshot, with the history months the
+    /// year strip and the chosen period need loaded first, off the UI thread
+    /// (history plan §5); a result overtaken by a newer query is dropped.
+    /// </summary>
     private void Refresh()
     {
         var generation = ++_generation;
@@ -963,10 +971,29 @@ public sealed class LibraryViewModel : ObservableObject
         var filter = new LibraryFilter(_selectedKind, _source, _searchText, _tag, ScopeFor(_rootId), SessionScopeName);
         var period = Period;
         var culture = _culture;
-        _work.Run(() => LibraryQueryEngine.Run(snapshot, filter, period, culture), result =>
+        var history = _history;
+        var year = _calendarYear;
+        _work.Run(() =>
+        {
+            if (history is null)
+                return (Result: LibraryQueryEngine.Run(snapshot, filter, period, culture), Reach: (DateOnly?)null);
+
+            // The strip needs day totals and counts (a year held by the stores); any filter but the kind, or a period, needs each folder and open (62 days).
+            var cutoffs = HistoryCutoffs.For(snapshot.Today);
+            var index = history.Index();
+            var needsDetail = !filter.OnlyKind;
+            var months = HistoryMonthCache.Needed(index, new DateOnly(year, 1, 1), new DateOnly(year, 12, 31), needsDetail ? cutoffs.DetailFrom : cutoffs.TotalsFrom).ToList();
+            if (period is { } p)
+                months.AddRange(HistoryMonthCache.Needed(index, p.From, p.To, cutoffs.DetailFrom));
+            var data = snapshot.WithHistory(history.Load(months, cutoffs));
+            return (Result: LibraryQueryEngine.Run(data, filter, period, culture), Reach: index.FirstOrDefault()?.First);
+        }, outcome =>
         {
             if (generation != _generation)
                 return;
+            var result = outcome.Result;
+            _historyReach = outcome.Reach;
+            OnPropertyChanged(nameof(LoadedHistoryMonths));
             _result = result;
             BuildRows();
 
@@ -1075,7 +1102,7 @@ public sealed class LibraryViewModel : ObservableObject
         var days = heat.ToDictionary(d => d.Key, d => new CalendarDay(d.Value.Weight, d.Value.Summary, Unknown: d.Value.FoldersUnknown && d.Value.Weight == 0));
         var period = Period;
         var year = ActivityCalendar.BuildYear(days, result?.TrackingStartedOn ?? Today(), Today(), _calendarYear, _culture,
-            period?.From, period?.To);
+            period?.From, period?.To, _historyReach);
         _builtFrom = result is null ? null : new CalendarSource(heat, result.TrackingStartedOn, Today(), period, _calendarYear);
 
         UpdateCalendarWeeks(CalendarWeeks, year.Weeks);
@@ -1305,9 +1332,6 @@ public sealed class LibraryRowViewModel
            SourceText == other.SourceText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
            VisitsText == other.VisitsText && TimeText == other.TimeText && SessionsText == other.SessionsText &&
            ReferenceEquals(Item.Place, other.Item.Place);
-
-    /// <summary>True for a file Recent Files recorded, which Remove from Recent Files can forget.</summary>
-    public bool CanForget => Item.IsRecent && Item.Kind.ToDocumentKind() is not null;
 }
 
 /// <summary>One kind chip: a kind, or null for All, with its count.</summary>

@@ -1,9 +1,13 @@
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Win32;
+using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
@@ -14,13 +18,16 @@ namespace QuickerPlaces.Views.Panels;
 /// The Sessions panel (sessions plan §5; configurable canvas plan M2): a thin
 /// view over <see cref="SessionsViewModel"/>, which decides what is shown and
 /// makes every store call. This code-behind only passes clicks in, asks
-/// before deleting, and shows <see cref="SessionEditorDialog"/>. Hosted by the
-/// Sessions window and by the workspace (M3).
+/// before deleting, and shows <see cref="SessionEditorDialog"/> and the two
+/// sharing dialogs (session sharing plan §5, §6). Hosted by the Sessions
+/// window and by the workspace (M3).
 /// </summary>
 public partial class SessionsPanel : UserControl
 {
     private SessionStore? _store;
+    private IShell? _shell;
     private WindowsOpenDocumentProbe? _probe;
+    private readonly ICloudSyncRoots _cloudRoots = new WindowsCloudSyncRoots();
     private SessionsViewModel? _viewModel;
     private readonly CardDropPreview<SessionRowViewModel> _dropPreview;
 
@@ -59,6 +66,7 @@ public partial class SessionsPanel : UserControl
     public void Attach(SessionStore store, IShell shell, WindowsOpenDocumentProbe probe)
     {
         _store = store;
+        _shell = shell;
         _probe = probe;
         _viewModel = new SessionsViewModel(store, new SessionLauncher(store, shell), allowsNoSelection: AllowsNoSelection);
         _notifiedId = _viewModel.SelectedRow?.Id;
@@ -113,7 +121,7 @@ public partial class SessionsPanel : UserControl
     private Panel? _headerSlot;
     private bool _actionInHeader;
 
-    /// <summary>Gives the panel the frame's title-line slot for Save files; it stays in the panel until <see cref="ActionInHeader"/> is set.</summary>
+    /// <summary>Gives the panel the frame's title-line slot for Open shared and Save files; they stay in the panel until <see cref="ActionInHeader"/> is set.</summary>
     public void AttachHeaderSlot(Panel slot)
     {
         _headerSlot = slot;
@@ -121,7 +129,7 @@ public partial class SessionsPanel : UserControl
     }
 
     /// <summary>
-    /// True puts Save files on the frame's title line, level with the
+    /// True puts Open shared and Save files on the frame's title line, level with the
     /// title (small enough not to make that line taller); false puts it back in
     /// the panel's first row, under the title. The workspace turns it off while
     /// the frame's own Hide and Arrange controls are shown, so they have the line.
@@ -143,22 +151,24 @@ public partial class SessionsPanel : UserControl
     {
         var inHeader = _actionInHeader && _headerSlot is not null;
         Panel target = inHeader ? _headerSlot! : ActionRow;
-        if (ReferenceEquals(SaveOpenButton.Parent, target))
+        if (ReferenceEquals(ActionButtons.Parent, target))
             return;
 
-        (SaveOpenButton.Parent as Panel)?.Children.Remove(SaveOpenButton);
+        (ActionButtons.Parent as Panel)?.Children.Remove(ActionButtons);
         if (inHeader)
         {
             SaveOpenButton.Height = 24;
-            SaveOpenButton.Margin = new Thickness(0);
+            OpenSharedButton.Height = 24;
+            ActionButtons.Margin = new Thickness(0);
         }
         else
         {
             SaveOpenButton.ClearValue(HeightProperty);
-            SaveOpenButton.Margin = new Thickness(12, 0, 0, 10);
+            OpenSharedButton.ClearValue(HeightProperty);
+            ActionButtons.Margin = new Thickness(12, 0, 0, 10);
         }
 
-        target.Children.Add(SaveOpenButton);
+        target.Children.Add(ActionButtons);
     }
 
     /// <summary>Start where the work is: the list when there are sessions, Save files when there are none.</summary>
@@ -287,6 +297,62 @@ public partial class SessionsPanel : UserControl
 
     private void Edit_Click(object sender, RoutedEventArgs e) => EditSelected(focusCards: true);
 
+    /// <summary>Share Session (session sharing plan §5): the selected session as a .qpsession file to send.</summary>
+    private void Share_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel?.SelectedRow is not { } row)
+            return;
+
+        var share = new ShareSessionViewModel(row.Session, _cloudRoots.Read(), new NetworkDriveResolver(), TimeProvider.System);
+        if (ShareSessionDialog.Show(OwnerWindow, share) is { } written)
+            _viewModel.NoteShared(row.Name, written);
+        FocusSelectedSession();
+    }
+
+    private void OpenShared_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new OpenFileDialog
+        {
+            Title = "Open a shared session",
+            Filter = SharedSessionFormat.FileDialogFilter,
+            CheckFileExists = true,
+        };
+        if (picker.ShowDialog(OwnerWindow) == true)
+            OpenSharedFile(picker.FileName);
+    }
+
+    /// <summary>
+    /// Open Shared Session (session sharing plan §6): reads the .qpsession at
+    /// <paramref name="filePath"/>, shows where its files are on this PC, and
+    /// saves the ones the user keeps as a new session.
+    /// </summary>
+    public void OpenSharedFile(string filePath)
+    {
+        if (_store is null || _shell is null || _viewModel is null)
+            return;
+
+        if (!_store.IsAvailable)
+        {
+            MessageForm.Show(_store.Notice!, Title, owner: OwnerWindow);
+            return;
+        }
+
+        var read = SharedSessionFormat.Read(filePath);
+        if (read.Document is null)
+        {
+            MessageForm.Show(read.ErrorMessage!, Title, MessageFormButtons.OK, MessageFormIcon.Warning, OwnerWindow);
+            return;
+        }
+
+        var import = new ImportSharedSessionViewModel(_store, _shell, _cloudRoots.Read(), read.Document);
+        if (ImportSharedSessionDialog.Show(OwnerWindow, import, _shell, _cloudRoots))
+        {
+            _viewModel.NoteSaved(import.SavedId!, import.SavePersistenceMessage);
+            SessionsChanged?.Invoke();
+        }
+        FocusSelectedSession();
+    }
+
     private void EditSelected(bool focusCards)
     {
         if (_store is null || _probe is null || _viewModel?.SelectedRow is not { } row || !_viewModel.CanEditSelection)
@@ -385,9 +451,21 @@ public partial class SessionsPanel : UserControl
         _dropPreview.Drag(item, row);
     }
 
+    /// <summary>The one .qpsession file being dragged in from Explorer, or null.</summary>
+    private static string? DroppedSharedSession(DragEventArgs e)
+        => e.Data.GetData(DataFormats.FileDrop) is string[] { Length: 1 } paths &&
+           string.Equals(Path.GetExtension(paths[0]), SharedSessionFormat.Extension, StringComparison.OrdinalIgnoreCase)
+            ? paths[0]
+            : null;
+
     private void SessionsList_DragOver(object sender, DragEventArgs e)
     {
-        if (_viewModel is { CanChange: true } vm &&
+        if (_viewModel is { CanChange: true } && DroppedSharedSession(e) is not null)
+        {
+            _dropPreview.Clear();
+            e.Effects = DragDropEffects.Copy;
+        }
+        else if (_viewModel is { CanChange: true } vm &&
             e.Data.GetData(typeof(SessionRowViewModel)) is SessionRowViewModel dragged && vm.Rows.Contains(dragged))
         {
             _dropPreview.Update(e.GetPosition(SessionsList), dragged, vertical: true);
@@ -410,6 +488,14 @@ public partial class SessionsPanel : UserControl
     private void SessionsList_Drop(object sender, DragEventArgs e)
     {
         _dropPreview.Clear();
+        if (_viewModel is { CanChange: true } && DroppedSharedSession(e) is { } shared)
+        {
+            e.Handled = true;
+            // After the drop returns, so Explorer isn't held while the dialog is open.
+            Dispatcher.BeginInvoke(() => OpenSharedFile(shared));
+            return;
+        }
+
         if (_viewModel is { CanChange: true } &&
             e.Data.GetData(typeof(SessionRowViewModel)) is SessionRowViewModel dragged &&
             _dropPreview.FindTarget(e.GetPosition(SessionsList), dragged, vertical: true) is { } target)

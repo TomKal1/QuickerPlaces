@@ -12,6 +12,9 @@
     <Compile Include="../QuickerPlaces/AppInfo.cs" Link="Linked/AppInfo.cs" />
     <Compile Include="../QuickerPlaces/Models/Activity/*.cs" Link="Linked/Models/Activity/%(Filename)%(Extension)" />
     <Compile Include="../QuickerPlaces/Models/PersistenceResult.cs" Link="Linked/Models/PersistenceResult.cs" />
+    <Compile Include="../QuickerPlaces/Models/History/*.cs" Link="Linked/Models/History/%(Filename)%(Extension)" />
+    <Compile Include="../QuickerPlaces/Models/RecentFiles/*.cs" Link="Linked/Models/RecentFiles/%(Filename)%(Extension)" />
+    <Compile Include="../QuickerPlaces/Services/History/*.cs" Link="Linked/Services/History/%(Filename)%(Extension)" />
     <Compile Include="../QuickerPlaces/Models/StoreLoadOutcome.cs" Link="Linked/Models/StoreLoadOutcome.cs" />
     <Compile Include="../QuickerPlaces/Services/AppDataFolders.cs" Link="Linked/Services/AppDataFolders.cs" />
     <Compile Include="../QuickerPlaces/Services/Activity/*.cs" Link="Linked/Services/Activity/%(Filename)%(Extension)" />

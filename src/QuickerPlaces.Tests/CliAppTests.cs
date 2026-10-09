@@ -5,7 +5,10 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Cli;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.History;
+using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Tests.Fakes;
@@ -431,5 +434,37 @@ public sealed class CliAppTests : IDisposable
         Assert.Equal("Acme audit", days[0]!["sessions"]![0]!["name"]!.GetValue<string>());
         Assert.Equal(1, days[1]!["places"]![0]!["opens"]!.GetValue<int>());
         Assert.Empty(days[1]!["sessions"]!.AsArray());
+    }
+
+    [Fact]
+    public void RecentFilesAndFolders_ReachBackThroughTheActivityHistory()
+    {
+        var local = Path.Combine(_temp.Path, "Local");
+        var activity = new ActivityStore(new FilePlacesStorage(local, "activity.json"), _clock);
+        Assert.True(activity.TryAddRoot(@"C:\Jobs", null, out _, out _).Success);
+        var files = new RecentFilesStore(new FilePlacesStorage(local, "recent-files.json"), _clock);
+        Assert.True(files.SetEnabled(true).Saved);
+
+        // A year and a half ago, saved by this PC before the stores pruned it.
+        var old = new DateOnly(2025, 3, 10);
+        var history = new ActivityHistory(new HistoryFolder(Path.Combine(_temp.Path, "History")), _clock, System.Environment.MachineName);
+        var root = new Models.Activity.TrackedRoot { Path = @"C:\Jobs" };
+        root.Days[old] = new Models.Activity.DayActivity();
+        root.Days[old].Folders[@"C:\Jobs\Acme"] = new Models.Activity.FolderTotal { Milliseconds = 3_600_000, Visits = 2 };
+        Assert.True(history.SaveFolders(new[] { root }));
+        Assert.True(history.SaveFiles(new[] { new Models.RecentFiles.RecentFileRecord { Path = @"C:\Jobs\Acme\Old.pdf", Opens = { new DateTimeOffset(2025, 3, 10, 1, 0, 0, TimeSpan.Zero) } } }));
+
+        var recentFiles = Ok("files", "recent", "--days", "900")["files"]!.AsArray();
+        Assert.Equal(@"C:\Jobs\Acme\Old.pdf", Assert.Single(recentFiles)!["path"]!.GetValue<string>());
+        Assert.Empty(Ok("files", "recent", "--period", "month")["files"]!.AsArray());
+
+        var folder = Assert.Single(Ok("folders", "recent", "--days", "900")["folders"]!.AsArray())!;
+        Assert.Equal(@"C:\Jobs\Acme", folder["folder"]!.GetValue<string>());
+        Assert.Equal(3600, folder["seconds"]!.GetValue<long>());
+
+        var day = Assert.Single(Ok("activity", "days", "--days", "900")["days"]!.AsArray())!;
+        Assert.Equal("2025-03-10", day["date"]!.GetValue<string>());
+        Assert.Single(day["files"]!.AsArray());
+        Assert.Single(day["folders"]!.AsArray());
     }
 }

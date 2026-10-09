@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
+using QuickerPlaces.Models.History;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
+using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
@@ -26,7 +30,11 @@ public sealed class CliContext
         DataRoot = dataRoot;
         RoamingFolder = AppDataFolders.RoamingFor(dataRoot);
         LocalFolder = AppDataFolders.LocalFor(dataRoot);
+        HistoryPath = AppDataFolders.HistoryFor(dataRoot);
     }
+
+    /// <summary>The activity history folder: Documents\QuickerPlaces\History, or "History" under --data-root.</summary>
+    public string HistoryPath { get; }
 
     public CliEnvironment Environment { get; }
 
@@ -57,6 +65,23 @@ public sealed class CliContext
     public RecentFilesStore ReadRecentFiles() => new(new ReadOnlyStorage(RecentFilesFile), Time);
 
     public ActivityStore ReadActivity() => new(new ReadOnlyStorage(ActivityFile), Time);
+
+    /// <summary>
+    /// The activity history months touching <paramref name="from"/> (null for
+    /// all) to <paramref name="to"/> that hold what the stores no longer do,
+    /// or another PC's days, with this PC's held days left out (history plan
+    /// §5). Read only; nothing in the folder is written.
+    /// </summary>
+    public IReadOnlyList<HistoryMonthDocument> ReadHistory(DateOnly? from, DateOnly to)
+    {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Time.GetUtcNow(), Time.LocalTimeZone).DateTime);
+        var cutoffs = HistoryCutoffs.For(today);
+        var history = new ActivityHistory(new HistoryFolder(HistoryPath), Time, System.Environment.MachineName);
+        return HistoryMonthCache.Needed(history.MonthIndex(), from ?? DateOnly.MinValue, to, cutoffs.DetailFrom)
+            .Select(m => history.ReadMonth(m.Year, m.Month, cutoffs))
+            .OfType<HistoryMonthDocument>()
+            .ToList();
+    }
 
     /// <summary>
     /// Runs one change and returns its data. With the app open the request goes

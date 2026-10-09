@@ -139,18 +139,28 @@
                        Style="{StaticResource TextBlock.Hint}" Foreground="{DynamicResource Text.Tertiary}" Margin="0,0,0,8" />
             <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Notice}" Foreground="{DynamicResource Signal}"
                        TextWrapping="Wrap" Margin="0,0,0,10" VerticalAlignment="Center" Style="{StaticResource CollapsedWhenEmpty}" />
-            <Button Grid.Row="1" Grid.Column="1" x:Name="SaveOpenButton"
-                    Style="{StaticResource Button.Primary}" VerticalAlignment="Top" Margin="12,0,0,10"
-                    IsEnabled="{Binding CanChange}"
-                    ToolTip="Find the files open now, check the list, and save them as a session"
-                    AutomationProperties.Name="Save files"
-                    Click="SaveOpen_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
-                    <!-- AccessText, not a TextBlock, so "_S" still gives Alt+S. -->
-                    <AccessText Text="_Save files" Margin="7,0,0,0" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
+            <!-- Open shared and Save files move together (ActionInHeader). -->
+            <StackPanel Grid.Row="1" Grid.Column="1" x:Name="ActionButtons" Orientation="Horizontal"
+                        VerticalAlignment="Top" Margin="12,0,0,10">
+                <Button x:Name="OpenSharedButton" Margin="0,0,8,0" IsEnabled="{Binding CanChange}"
+                        ToolTip="Open a session someone shared with you (a .qpsession file), find its files on this PC, and save it"
+                        AutomationProperties.Name="Open shared session"
+                        Click="OpenShared_Click">
+                    <AccessText Text="Open s_hared…" VerticalAlignment="Center" />
+                </Button>
+                <Button x:Name="SaveOpenButton"
+                        Style="{StaticResource Button.Primary}"
+                        IsEnabled="{Binding CanChange}"
+                        ToolTip="Find the files open now, check the list, and save them as a session"
+                        AutomationProperties.Name="Save files"
+                        Click="SaveOpen_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Plus}" />
+                        <!-- AccessText, not a TextBlock, so "_S" still gives Alt+S. -->
+                        <AccessText Text="_Save files" Margin="7,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!--
@@ -247,6 +257,7 @@
                                 <MenuItem x:Name="ViewFilesMenuItem" Header="View session files" FontWeight="Bold"
                                           Click="ViewFiles_Click" Visibility="Collapsed" />
                                 <MenuItem Header="Open all" Click="OpenAll_Click" />
+                                <MenuItem Header="Share…" Click="Share_Click" />
                                 <Separator />
                                 <MenuItem Header="Edit…" Click="Edit_Click" IsEnabled="{Binding CanEditSelection}" />
                                 <MenuItem Header="Delete…" Click="Delete_Click" IsEnabled="{Binding CanEditSelection}" />
@@ -344,6 +355,8 @@
                                     ToolTip="Open every file in this session (Enter)" Click="OpenAll_Click" />
                             <Button Content="Open selected file" Margin="0,0,8,0"
                                     ToolTip="Open just the file selected above (or double-click it)" Click="OpenFile_Click" />
+                            <Button Content="Sh_are…" Margin="0,0,8,0"
+                                    ToolTip="Save this session as a file to send to another QuickerPlaces user" Click="Share_Click" />
                             <Button Content="_Edit…" Margin="0,0,8,0" IsEnabled="{Binding CanEditSelection}"
                                     ToolTip="Rename, retag, or add and remove files" Click="Edit_Click" />
                             <Button Content="_Delete…" IsEnabled="{Binding CanEditSelection}"

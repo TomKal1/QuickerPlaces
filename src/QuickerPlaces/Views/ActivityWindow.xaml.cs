@@ -152,15 +152,6 @@ public partial class ActivityWindow : Window
 
     private void RetrySave_Click(object sender, RoutedEventArgs e) => _viewModel.RetrySave();
 
-    private void Delete_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel.SelectedRoot is not { } selected) return;
-        var message = $"Delete \"{selected.Path}\" and all of its recorded activity? This cannot be undone. To keep the data, use Stop tracking instead.";
-        if (MessageForm.ShowDestructiveConfirm(message, "Delete tracked folder",
-                "Delete folder and its data", this))
-            _viewModel.DeleteSelected();
-    }
-
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Week_Click(object sender, RoutedEventArgs e)

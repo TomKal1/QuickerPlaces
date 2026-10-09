@@ -78,8 +78,6 @@
                                                 <MenuItem Header="About folder…" Click="AboutRoot_Click" />
                                                 <Separator />
                                                 <MenuItem Header="Stop tracking" Tag="Toggle" Click="ToggleRoot_Click" />
-                                                <Separator />
-                                                <MenuItem Header="Delete tracked folder…" Tag="Manage" Click="DeleteRoot_Click" />
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal">
@@ -325,8 +323,6 @@
                         <MenuItem x:Name="OpenLocationMenuItem" Header="Open file location" Click="OpenLocation_Click" />
                         <MenuItem Header="Copy path or link" Click="CopyMenu_Click" />
                         <MenuItem x:Name="AddAsPlaceMenuItem" Header="Add as place…" Click="AddAsPlace_Click" Visibility="Collapsed" />
-                        <Separator />
-                        <MenuItem x:Name="ForgetMenuItem" Header="Remove from Recent Files" Click="ForgetMenu_Click" />
                         <Separator x:Name="SaveSelectionSeparator" />
                         <MenuItem x:Name="SaveSelectionMenuItem" Header="Save as session…" Click="SaveSelection_Click" />
                     </ContextMenu>

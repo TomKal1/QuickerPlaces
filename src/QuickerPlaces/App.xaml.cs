@@ -5,6 +5,7 @@ using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
@@ -91,7 +92,10 @@ public partial class App : Application
         }
 
         var mainViewModel = new MainViewModel(settings, placesService);
-        var activityStore = ActivityTrackingHost.CreateStore();
+        // Activity history (history plan): every day the two tracking stores
+        // hold is saved to a month file in Documents before they prune it.
+        var activityHistory = ActivityHistory.CreateDefault();
+        var activityStore = ActivityTrackingHost.CreateStore(activityHistory);
         var activityHost = new ActivityTrackingHost(activityStore);
 
         var sessionStore = SessionStore.CreateDefault();
@@ -100,11 +104,11 @@ public partial class App : Application
         var recentItems = new WindowsRecentItems();
 
         // Recent Files: off until turned on; the tray's Pause tracking pauses it with folder tracking.
-        var recentFilesStore = RecentFilesStore.CreateDefault();
+        var recentFilesStore = RecentFilesStore.CreateDefault(activityHistory);
         var recentFilesHost = new RecentFilesHost(recentFilesStore, activityStore, recentItems, () => activityHost.IsPaused);
 
-        // The workspace (configurable canvas plan M3) only with --workspace
-        // until M7 makes it the default; its layouts are read only then.
+        // The workspace is the default; --places-list keeps the older view
+        // available without loading workspace layouts.
         var workspaceLayout = options.Workspace ? CreateWorkspaceLayout() : null;
         if (workspaceLayout is not null)
             DiagnosticLog.Info($"Showing the workspace ({workspaceLayout.ActiveName}).");

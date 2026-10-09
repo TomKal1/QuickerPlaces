@@ -273,16 +273,6 @@ public partial class FileShelfPanel : UserControl
 
     private void ToggleRoot_Click(object sender, RoutedEventArgs e) => _activity?.ToggleSelected();
 
-    private void DeleteRoot_Click(object sender, RoutedEventArgs e)
-    {
-        if (_activity?.SelectedRoot is not { } selected)
-            return;
-
-        var message = $"Delete \"{selected.Path}\" and all of its recorded activity? This cannot be undone. To keep the data, use Stop tracking instead.";
-        if (MessageForm.ShowDestructiveConfirm(message, "Delete tracked folder", "Delete folder and its data", Window.GetWindow(this)))
-            _activity.DeleteSelected();
-    }
-
     private void RetryTrackingSave_Click(object sender, RoutedEventArgs e) => _activity?.RetrySave();
 
     private void AddAsPlace_Click(object sender, RoutedEventArgs e)
@@ -321,7 +311,6 @@ public partial class FileShelfPanel : UserControl
             return;
         }
 
-        ForgetMenuItem.IsEnabled = SelectedRow.CanForget;
         AddAsPlaceMenuItem.Visibility = ShowsTracking && SelectedRow.CanAddAsPlace ? Visibility.Visible : Visibility.Collapsed;
         // A link has no folder to show.
         OpenLocationMenuItem.Visibility = SelectedRow.Item.Kind == LibraryKind.Link ? Visibility.Collapsed : Visibility.Visible;
@@ -364,7 +353,6 @@ public partial class FileShelfPanel : UserControl
         }
     }
 
-    private void ForgetMenu_Click(object sender, RoutedEventArgs e) => ViewModel?.Forget(SelectedRow);
 
     private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {

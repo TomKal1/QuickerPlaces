@@ -280,25 +280,6 @@ public sealed class LibraryViewModelTests
     }
 
     [Fact]
-    public void ForgetAndClear_RemoveOnlyRecentFilesHistory()
-    {
-        Seed();
-        _recentFiles.Record(new[] { new RecentDocument(Pdf, _time.UtcNow.AddMinutes(6)) }, _ => true);
-        var vm = NewViewModel();
-
-        var pdf = vm.Rows.Single(r => r.Name == "A-101.pdf");
-        Assert.True(pdf.CanForget);
-        Assert.False(vm.Rows.Single(r => r.Name == "Report.docx").CanForget);
-        vm.Forget(pdf);
-        Assert.Contains("A-101.pdf", vm.Rows.Select(r => r.Name));
-        Assert.False(vm.Rows.Single(r => r.Name == "A-101.pdf").Item.IsRecent);
-
-        vm.ClearRecentFiles();
-        Assert.DoesNotContain("Budget.xlsx", vm.Rows.Select(r => r.Name));
-        Assert.Single(_sessions.Sessions);
-    }
-
-    [Fact]
     public void Empty_SaysWhereThingsComeFrom()
     {
         var vm = NewViewModel();

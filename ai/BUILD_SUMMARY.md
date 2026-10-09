@@ -833,6 +833,41 @@ Design and plan: [261001_Calendar Left Column and Numbered Month View Design.md]
 - **One Visits column on All and Recent** (replaces the short-lived Opens column). `LibraryViewModel.ShowsVisits` (All, Recent, and a Recents panel with no tab) and `ShowsTime` (Recent / no tab; was `ShowsVisitsAndTime`). `VisitsText` is `RecentCount` for every row, so a folder's visits (Recents) and a file's opens (Recent Files) are counted alike and both called Visits; the tooltip (`VisitsToolTip`) says "3 visits" / "1 visit". The column is centred like Saved places' count. Recent's Visits used to be blank for files; it no longer is. "Where from" lists sources only, with "Recent" for recorded visits (`LibraryItem.WhereFromText`); `SourceText` (with the count) stays as the Source marker's tooltip. The Saved places table's header was renamed from OPENS to VISITS to match; **its number is still how often QuickerPlaces itself launched the place (`PlaceViewModel.OpenCount`), not Windows' or Recents' count**, so the two can differ for the same folder. What the Library's count is: opens Windows reported through Recent Items for files, Recents' visits for folders, in the chosen period. Checked in the real app with seeded recent files on All, Recent and Saved places. Note for testing: a day chosen on the calendar is saved with the layout's query and comes back on the next launch, which makes the list look empty.
 - **Checked on Windows** (scratch data root, Light theme): left column with the month view and picker; wide default Desk with the year strip and a chosen-day chip; picking a year from the list applied it (2095 shown with all days greyed). Not checked: the popup's own pixels (a popup is a separate window and was not captured), Dark theme for this layout, keyboard use of the list.
 
+## Session sharing (2026-10-05)
+
+Plan: [261005_Session Sharing Plan.md](261005_Session%20Sharing%20Plan.md). Branch `ccr-f4ba4678-mo9ok7`.
+
+- **Share…** on a session saves a `.qpsession` file. For each file it records:
+  - the sender's path;
+  - the file's OneDrive or SharePoint address, when the file is in a synced library;
+  - its `\\server\share` path, when it is on a share or a mapped drive.
+- **Open shared…** (or dropping the file on the session list) looks for each file on the recipient's PC:
+  - the same path;
+  - their own synced copy of the library;
+  - the network path, only after **Check network files**, because looking up a server named in someone else's file could send it the user's Windows sign-in.
+- **Files not found:** can be opened online, or located by hand. One Locate finds the rest of the same folders.
+- **Not checked on Windows.** The OneDrive registry keys (`SyncEngines\Providers\OneDrive`, `OneDrive\Accounts`) are undocumented and unverified; the plan's §9 checklist covers them.
+
+## Activity history (2026-10-06)
+
+Plan: [261006_Activity History Plan.md](261006_Activity%20History%20Plan.md). Branch `ccr-f4ba4678-mo9ok7`.
+
+- **Saving.** What Recents and Recent Files record is kept for good, one JSON file per month per PC in `Documents\QuickerPlaces\History`.
+  - Both stores save every day they hold before pruning, at load and once a day. They prune nothing when saving fails.
+  - Each PC writes only its own files.
+- **Reading.** Recents, the Library and `qp` read the history back, loading only the months the year strip and the chosen period need, and letting them go after.
+  - This PC's days still in the stores are never counted twice.
+  - Another PC's days are added.
+- **Nothing recorded can be deleted from the app**, by the user's decision. **Delete tracked folder…**, **Remove from Recent Files** and **Delete Recent Files history…** were removed.
+- **`recent-files.json` is now version 2.** It keeps 62 days of opens (like folder detail), a year of per-day counts and per-file summaries, and converts a version 1 file at load.
+  - Measured with `tools/RecentFilesLoadBench` on Linux, same synthetic year, three runs each (plan §6):
+    - file: 463 → 365 KiB;
+    - held memory: 497 → 439 KiB;
+    - allocated while loading: 8.3 → 6.1 MiB;
+    - median load: about 29–39 → 22–23 ms.
+  - Windows private bytes are not yet measured.
+- **Verification status:** 1,435 tests pass, and the solution builds with 0 warnings, all on Linux. Nothing was run on Windows; the plan's §9 checklist is open.
+
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.

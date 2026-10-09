@@ -1,0 +1,119 @@
+<Window x:Class="QuickerPlaces.Views.ImportSharedSessionDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Title}"
+        Width="900" Height="600" MinWidth="660" MinHeight="440"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
+    <!--
+        Session sharing plan §6: a shared session's files, where each was
+        found on this PC, and a tick for those to save. Files not found can be
+        opened online, located by hand, or found after syncing their library
+        (Check again); files on network shares are looked for only after
+        Check network files. DataContext is an ImportSharedSessionViewModel;
+        the code-behind runs the network check off the UI thread and shows
+        the Locate picker.
+    -->
+    <Grid Margin="20,18,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="{Binding Heading}" Style="{StaticResource TextBlock.SectionTitle}"
+                   TextWrapping="Wrap" Margin="0,0,0,12" />
+
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <Label Content="Save as session _named" Target="{Binding ElementName=NameBox}" Padding="0" Margin="0,0,0,6"
+                       FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource Text.Primary}" />
+                <TextBox x:Name="NameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                         MaxLength="100" AutomationProperties.Name="Session name" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <Label Content="_Tags (separate with commas)" Target="{Binding ElementName=TagsBox}" Padding="0" Margin="0,0,0,6"
+                       FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource Text.Primary}" />
+                <TextBox x:Name="TagsBox" Text="{Binding TagsText, UpdateSourceTrigger=PropertyChanged}"
+                         AutomationProperties.Name="Tags" />
+            </StackPanel>
+        </Grid>
+
+        <DockPanel Grid.Row="2" Margin="0,4,0,8">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="CheckNetworkButton" Content="Check _network files" Style="{StaticResource Button.Compact}" Margin="0,0,8,0"
+                        Click="CheckNetwork_Click" ToolTip="{Binding NetworkServersText}"
+                        IsEnabled="{Binding HasUncheckedNetwork}" />
+                <Button Content="Check _again" Style="{StaticResource Button.Compact}" Margin="0,0,8,0" Click="CheckAgain_Click"
+                        ToolTip="Look again for the files not found, after syncing a library or OneDrive catching up" />
+                <Button Content="_Locate…" Style="{StaticResource Button.Compact}" Click="Locate_Click"
+                        ToolTip="Point at where the selected file is on this PC; others in the same folders are found too" />
+            </StackPanel>
+            <TextBlock Text="FILES" Style="{StaticResource TextBlock.Caps}" />
+            <TextBlock Text="{Binding IncludedText}" Foreground="{DynamicResource Text.Secondary}"
+                       VerticalAlignment="Center" Margin="10,0,0,0" />
+        </DockPanel>
+
+        <DataGrid Grid.Row="3" x:Name="FilesGrid" ItemsSource="{Binding Rows}" AutoGenerateColumns="False"
+                  IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Single"
+                  AutomationProperties.Name="Shared files" KeyboardNavigation.TabNavigation="Once"
+                  PreviewKeyDown="FilesGrid_PreviewKeyDown" ContextMenuOpening="FilesGrid_ContextMenuOpening">
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem x:Name="OpenOnlineMenuItem" Header="Open online" Click="OpenOnline_Click" />
+                    <MenuItem x:Name="OpenFolderOnlineMenuItem" Header="Open folder online (to Sync it)" Click="OpenFolderOnline_Click" />
+                    <Separator />
+                    <MenuItem Header="Locate…" Click="Locate_Click" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="SAVE" Width="60" SortMemberPath="IsIncluded">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsIncluded, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding CanInclude}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" Focusable="False"
+                                      AutomationProperties.Name="{Binding FileName}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="FILE" SortMemberPath="FileName" Width="*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding Detail}">
+                                <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Document}" />
+                                <TextBlock Text="{Binding FileName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="WHERE" Binding="{Binding Where}" Width="1.3*" ElementStyle="{StaticResource Cell.Path}" />
+                <DataGridTextColumn Header="FOUND" Binding="{Binding StatusText}" Width="220" ElementStyle="{StaticResource Cell.Secondary}" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Grid.Row="4" Text="{Binding Advice}" Foreground="{DynamicResource Signal}" TextWrapping="Wrap"
+                   Margin="0,10,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
+
+        <StackPanel Grid.Row="5" Margin="0,8,0,0">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}"
+                       TextWrapping="Wrap" Style="{StaticResource CollapsedWhenEmpty}" />
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}"
+                       TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Cancel" MinWidth="84" Margin="0,0,8,0" IsCancel="True" />
+            <Button Content="_Save session" MinWidth="84" Style="{StaticResource Button.Primary}"
+                    IsDefault="True" Click="Save_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

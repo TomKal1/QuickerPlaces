@@ -13,7 +13,7 @@ public sealed class StartupOptionsTests
         var options = StartupOptions.Parse(new string[0]);
 
         Assert.False(options.Tray);
-        Assert.False(options.Workspace);
+        Assert.True(options.Workspace);
         Assert.Null(options.DataRoot);
         Assert.Empty(options.Problems);
     }
@@ -25,6 +25,40 @@ public sealed class StartupOptionsTests
 
         Assert.True(options.Tray);
         Assert.True(options.Workspace);
+    }
+
+    [Theory]
+    [InlineData("--places-list")]
+    [InlineData("--PLACES-LIST")]
+    public void Places_list_is_an_explicit_opt_out(string arg)
+    {
+        var options = StartupOptions.Parse(new[] { arg });
+
+        Assert.False(options.Workspace);
+        Assert.False(options.Tray);
+        Assert.Null(options.DataRoot);
+        Assert.Empty(options.Problems);
+    }
+
+    [Theory]
+    [InlineData("--places-list", "--workspace", true)]
+    [InlineData("--workspace", "--places-list", false)]
+    public void The_last_view_switch_wins(string first, string second, bool workspace)
+    {
+        var options = StartupOptions.Parse(new[] { first, second });
+
+        Assert.Equal(workspace, options.Workspace);
+        Assert.Empty(options.Problems);
+    }
+
+    [Fact]
+    public void Tray_start_also_defaults_to_the_workspace()
+    {
+        var options = StartupOptions.Parse(new[] { "--tray" });
+
+        Assert.True(options.Tray);
+        Assert.True(options.Workspace);
+        Assert.Empty(options.Problems);
     }
 
     [Fact]

@@ -63,6 +63,8 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsOpenDocumentProbe.cs" Link="Linked\Services\Documents\WindowsOpenDocumentProbe.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsRecentItems.cs" Link="Linked\Services\Documents\WindowsRecentItems.cs" />
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\*.cs" LinkBase="Linked\Models\RecentFiles" />
+    <Compile Include="..\QuickerPlaces\Models\History\*.cs" LinkBase="Linked\Models\History" />
+    <Compile Include="..\QuickerPlaces\Services\History\*.cs" LinkBase="Linked\Services\History" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
   </ItemGroup>
 

@@ -101,6 +101,8 @@
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
+    <Compile Include="..\QuickerPlaces\Models\History\*.cs" LinkBase="Linked\Models\History" />
+    <Compile Include="..\QuickerPlaces\Services\History\*.cs" LinkBase="Linked\Services\History" />
     <Compile Include="..\QuickerPlaces\Services\Library\LibraryIndex.cs" Link="Linked\Services\Library\LibraryIndex.cs" />
     <Compile Include="..\QuickerPlaces\Services\Library\ResourceIdentity.cs" Link="Linked\Services\Library\ResourceIdentity.cs" />
     <Compile Include="..\QuickerPlaces\Services\Library\LibrarySnapshot.cs" Link="Linked\Services\Library\LibrarySnapshot.cs" />
@@ -137,6 +139,18 @@
     <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceLayoutService.cs" Link="Linked\Services\Workspace\WorkspaceLayoutService.cs" />
     <Compile Include="..\QuickerPlaces\Services\Workspace\PanelLayoutEngine.cs" Link="Linked\Services\Workspace\PanelLayoutEngine.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionFileSet.cs" Link="Linked\Services\Sessions\SessionFileSet.cs" />
+    <!--
+      Session sharing (ai/261005_Session Sharing Plan.md): the .qpsession
+      format, the OneDrive path mapping, finding shared files, and the two
+      dialogs' view models. The registry reader is app-only.
+    -->
+    <Compile Include="..\QuickerPlaces\Models\Sessions\SharedSessionDocument.cs" Link="Linked\Models\Sessions\SharedSessionDocument.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\INetworkDriveResolver.cs" Link="Linked\Services\Activity\INetworkDriveResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\CloudPaths.cs" Link="Linked\Services\Sessions\CloudPaths.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\SharedSessionFormat.cs" Link="Linked\Services\Sessions\SharedSessionFormat.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\SessionSharing.cs" Link="Linked\Services\Sessions\SessionSharing.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\ShareSessionViewModel.cs" Link="Linked\ViewModels\ShareSessionViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\ImportSharedSessionViewModel.cs" Link="Linked\ViewModels\ImportSharedSessionViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\WorkspaceViewModel.cs" Link="Linked\ViewModels\WorkspaceViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SaveLayoutViewModel.cs" Link="Linked\ViewModels\SaveLayoutViewModel.cs" />
     <Compile Include="..\QuickerPlaces\Services\InstanceGate.cs" Link="Linked\Services\InstanceGate.cs" />

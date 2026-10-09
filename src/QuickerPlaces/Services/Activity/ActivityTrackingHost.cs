@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using QuickerPlaces.Services.History;
 
 namespace QuickerPlaces.Services.Activity;
 
@@ -33,10 +34,10 @@ public sealed class ActivityTrackingHost : IDisposable
         _presence.Signal += Signal;
     }
 
-    /// <summary>Constructs the host's store in machine-local activity.json.</summary>
-    public static ActivityStore CreateStore()
+    /// <summary>Constructs the host's store in machine-local activity.json, saving to <paramref name="history"/> before it prunes.</summary>
+    public static ActivityStore CreateStore(IFolderHistory? history = null)
     {
-        return new ActivityStore(new FilePlacesStorage(AppDataFolders.Local, "activity.json"), TimeProvider.System);
+        return new ActivityStore(new FilePlacesStorage(AppDataFolders.Local, "activity.json"), TimeProvider.System, history);
     }
 
     public bool IsAvailable { get; }

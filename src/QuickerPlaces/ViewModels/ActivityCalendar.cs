@@ -24,26 +24,31 @@ public static class ActivityCalendar
     /// <summary>A January-to-December activity strip with aligned weeks and month markers, from folder totals.</summary>
     public static ActivityCalendarYearResult BuildYear(IReadOnlyDictionary<DateOnly, ActivityDayTotal> totals,
         DateOnly trackingStartedOn, DateOnly today, int year, CultureInfo culture,
-        DateOnly? selectedFrom = null, DateOnly? selectedTo = null)
+        DateOnly? selectedFrom = null, DateOnly? selectedTo = null, DateOnly? historyFrom = null)
         => BuildYear(totals.ToDictionary(pair => pair.Key, pair => new CalendarDay(
                 pair.Value.Time.TotalMilliseconds,
                 $"{ActivityFormat.Duration(pair.Value.Time)} in {pair.Value.Folders} {(pair.Value.Folders == 1 ? "folder" : "folders")}")),
-            trackingStartedOn, today, year, culture, selectedFrom, selectedTo);
+            trackingStartedOn, today, year, culture, selectedFrom, selectedTo, historyFrom);
 
     /// <summary>
     /// The same year strip from any per-day weight: a day's shade ranks its
     /// weight among the year's other nonzero days, and its label is
     /// "date — summary". Recent Files (opens per day) and project sessions
     /// (reopens per day) use this; folders use the overload above.
+    /// Days more than a year back show as expired, unless
+    /// <paramref name="historyFrom"/> says the activity history reaches back
+    /// to them (history plan §5).
     /// </summary>
     public static ActivityCalendarYearResult BuildYear(IReadOnlyDictionary<DateOnly, CalendarDay> days,
         DateOnly trackingStartedOn, DateOnly today, int year, CultureInfo culture,
-        DateOnly? selectedFrom = null, DateOnly? selectedTo = null)
+        DateOnly? selectedFrom = null, DateOnly? selectedTo = null, DateOnly? historyFrom = null)
     {
         selectedTo ??= selectedFrom;
         var first = new DateOnly(year, 1, 1);
         var last = new DateOnly(year, 12, 31);
         var keptFrom = today.AddDays(-364);
+        if (historyFrom is { } reach && reach < keptFrom)
+            keptFrom = reach;
         var firstDayOfWeek = (int)culture.DateTimeFormat.FirstDayOfWeek;
         var nonzero = days.Where(pair => pair.Key >= first && pair.Key <= last &&
                 pair.Key >= keptFrom && pair.Key <= today && pair.Value.Weight > 0)

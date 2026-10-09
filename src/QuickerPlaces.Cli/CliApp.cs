@@ -226,7 +226,7 @@ public static class CliApp
                 StoreJson("sessions", context.SessionsFile.StoreFilePath, sessions.LoadOutcome, SessionStore.CurrentSchemaVersion,
                     new() { ["sessions"] = sessions.Sessions.Count }),
                 StoreJson("recentFiles", context.RecentFilesFile.StoreFilePath, recentFiles.LoadOutcome, RecentFilesStore.CurrentSchemaVersion,
-                    new() { ["enabled"] = recentFiles.Settings.Enabled, ["files"] = recentFiles.QueryHistory().Count }),
+                    new() { ["enabled"] = recentFiles.Settings.Enabled, ["files"] = recentFiles.QuerySummary().Count }),
                 StoreJson("activity", context.ActivityFile.StoreFilePath, activity.LoadOutcome, ActivityStore.CurrentSchemaVersion,
                     new() { ["roots"] = activity.Roots.Count })
             }

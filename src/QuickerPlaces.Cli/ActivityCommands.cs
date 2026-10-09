@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.History;
+using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Remote;
 using QuickerPlaces.Services.Sessions;
 
@@ -34,11 +36,11 @@ public static class ActivityCommands
             Period.Options.Append(new OptionSpec("limit", "At most N of each kind per day (1-100; default 10).", ValueName: "n")).ToArray(),
             false, Days, new[] { "qp activity days --period week", "qp activity days --days 1" }),
 
-        new CommandSpec("files recent", "PDF, Word and Excel files opened in a period, most recent first (needs Recent Files turned on in the app).", "no arguments", 0, 0,
+        new CommandSpec("files recent", "PDF, Word and Excel files opened in a period, most recent first, from Recent Files and the activity history (needs Recent Files turned on in the app).", "no arguments", 0, 0,
             Period.Options.Append(new OptionSpec("kind", "pdf, word and/or excel, comma-separated.", ValueName: "kinds", Repeatable: true)).Append(Limit).ToArray(),
             false, RecentFiles, new[] { "qp files recent --period week --kind pdf" }),
 
-        new CommandSpec("folders recent", "Folders you spent time in, in a period, most time first, from the app's opt-in folder tracking (Recents). Each folder names the saved place it is, if any. Folder detail is kept for 62 days.", "no arguments", 0, 0,
+        new CommandSpec("folders recent", "Folders you spent time in, in a period, most time first, from the app's opt-in folder tracking (Recents). Each folder names the saved place it is, if any. Folder detail is kept for 62 days in the app, and for good in the activity history, which this reads too.", "no arguments", 0, 0,
             Period.Options.Append(Limit).ToArray(), false, RecentFolders, new[] { "qp folders recent --period month --limit 20" })
     };
 
@@ -136,9 +138,10 @@ public static class ActivityCommands
     }
 
     /// <summary>
-    /// Everything recorded per local day. Each source keeps its own history:
-    /// place opens (last 500 per place), session reopens (365 days), file opens
-    /// (365 days) and folder detail (62 days), so an older day may show only some.
+    /// Everything recorded per local day. Folder detail and file opens come
+    /// from the stores (62 days) and the activity history (kept for good);
+    /// place opens (last 500 per place) and session reopens (365 days) only
+    /// from their stores, so an older day may show only some.
     /// </summary>
     private static object Days(CliContext context, CliArgs args)
     {
@@ -165,13 +168,20 @@ public static class ActivityCommands
             }
         }
 
+        var history = context.ReadHistory(period.From, period.To);
         var files = context.ReadRecentFiles();
         if (files.LoadOutcome is StoreLoadOutcome.Ok)
         {
-            foreach (var file in files.QueryHistory())
+            var opens = files.QueryHistory().ToDictionary(f => f.Path, f => f.Opens.ToList(), StringComparer.OrdinalIgnoreCase);
+            foreach (var (path, older) in HistoryMerge.FileOpens(history))
+                (opens.TryGetValue(path, out var list) ? list : opens[path] = new List<DateTimeOffset>()).AddRange(older);
+
+            foreach (var (path, fileOpens) in opens)
             {
-                foreach (var group in file.Opens.GroupBy(o => Period.LocalDate(o, time)).Where(g => period.Contains(g.Key)))
-                    Day(group.Key).Files.Add((file.Path, file.Kind, group.Count()));
+                if (DocumentKinds.FromPath(path) is not { } kind)
+                    continue;
+                foreach (var group in fileOpens.Distinct().GroupBy(o => Period.LocalDate(o, time)).Where(g => period.Contains(g.Key)))
+                    Day(group.Key).Files.Add((path, kind, group.Count()));
             }
         }
 
@@ -181,7 +191,8 @@ public static class ActivityCommands
         {
             foreach (var root in activity.Roots)
             {
-                foreach (var folderDay in activity.QueryFolderDays(root.RootId) ?? Array.Empty<Services.Activity.FolderDay>())
+                var held = activity.QueryFolderDays(root.RootId) ?? Array.Empty<Services.Activity.FolderDay>();
+                foreach (var folderDay in held.Concat(HistoryMerge.FolderDays(history, root.Path)))
                 {
                     if (period.Contains(folderDay.Date))
                         Day(folderDay.Date).Folders.AddRange(folderDay.Folders);
@@ -240,7 +251,17 @@ public static class ActivityCommands
             }).Distinct().ToList();
         }
 
-        var files = store.QueryFiles(period.From, period.To, kinds);
+        // The store holds each open for 62 days; older ones, and other PCs', are in the activity history.
+        var opens = store.QueryHistory().ToDictionary(f => f.Path, f => f.Opens.ToList(), StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, older) in HistoryMerge.FileOpens(context.ReadHistory(period.From, period.To)))
+            (opens.TryGetValue(path, out var list) ? list : opens[path] = new List<DateTimeOffset>()).AddRange(older);
+        var files = opens
+            .Select(f => (Path: f.Key, Kind: DocumentKinds.FromPath(f.Key), Opens: f.Value.Distinct().Where(o => period.Contains(Period.LocalDate(o, context.Time))).OrderBy(o => o).ToList()))
+            .Where(f => f.Kind is { } kind && (kinds is null || kinds.Contains(kind)) && f.Opens.Count > 0)
+            .Select(f => new RecentFileSummary(f.Path, f.Kind!.Value, f.Opens.Count, f.Opens[^1]))
+            .OrderByDescending(f => f.LastOpenedAt)
+            .ThenBy(f => f.Path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         return new Dictionary<string, object?>
         {
             ["enabled"] = store.Settings.Enabled,
@@ -268,12 +289,15 @@ public static class ActivityCommands
         var places = PlacesByFolder(context);
         var from = period.From ?? DateOnly.MinValue;
 
+        var history = context.ReadHistory(period.From, period.To);
         var roots = new List<Dictionary<string, object?>>();
         var folders = new List<(Services.Activity.FolderActivity Folder, string RootPath)>();
         foreach (var root in store.Roots)
         {
-            // A paused root still reports what it recorded before it was paused.
-            var activity = store.QueryPeriod(root.RootId, from, period.To);
+            // A paused root still reports what it recorded before it was paused; the history adds older days and other PCs'.
+            var activity = store.QueryPeriod(root.RootId, from, period.To) is { } held
+                ? WithHistory(held, history, root.Path)
+                : null;
             roots.Add(new Dictionary<string, object?>
             {
                 ["rootId"] = root.RootId,
@@ -304,6 +328,27 @@ public static class ActivityCommands
                     ? new Dictionary<string, object?> { ["id"] = place.Id, ["alias"] = place.Alias }
                     : null
             }).ToList()
+        };
+    }
+
+    /// <summary>
+    /// A root's period with the history's folders for it added. Detail is
+    /// expired only before the history's first day for the root, since the
+    /// history keeps folder detail for every day it saved.
+    /// </summary>
+    private static Services.Activity.ActivityPeriod WithHistory(Services.Activity.ActivityPeriod held,
+        IReadOnlyList<Models.History.HistoryMonthDocument> history, string rootPath)
+    {
+        var days = HistoryMerge.FolderDays(history, rootPath);
+        if (days.Count == 0)
+            return held;
+
+        var first = days.Min(d => d.Date);
+        return held with
+        {
+            Folders = HistoryMerge.SumFolders(held.Folders, days, held.From, held.To),
+            DetailKeptFrom = first < held.DetailKeptFrom ? first : held.DetailKeptFrom,
+            TrackingStartedOn = first < held.TrackingStartedOn ? first : held.TrackingStartedOn,
         };
     }
 

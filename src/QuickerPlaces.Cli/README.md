@@ -40,9 +40,9 @@ on Linux). Opening a place uses the system's default handler.
 | `sessions open <ref>` | ✓ | Opens the session's files (or `--file` ones) and records the reopen; lists missing files. |
 | `sessions save` | ✓ | `--name`, `--tags`, and `--file` once per file. |
 | `files open` | | PDF, Word and Excel files open now (Windows), with folders, containing places and a suggested name. |
-| `files recent` | | PDF, Word and Excel files opened in a period (Recent Files). |
-| `folders recent` | | Time spent per folder in a period (Recents), each linked to its saved place. |
-| `activity days` | | Day by day: places opened, sessions reopened, files opened, folders worked in. |
+| `files recent` | | PDF, Word and Excel files opened in a period (Recent Files, and the activity history for older days). |
+| `folders recent` | | Time spent per folder in a period (Recents, and the activity history for older days), each linked to its saved place. |
+| `activity days` | | Day by day: places opened, sessions reopened, files opened, folders worked in. Folders and files reach back through the activity history. |
 
 `<ref>` is an alias (any case) or an id. Every command also takes
 `--data-root <folder>` (or the `QUICKERPLACES_DATA_ROOT` variable) to use

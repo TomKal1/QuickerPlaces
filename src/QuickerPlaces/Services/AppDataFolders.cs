@@ -14,7 +14,7 @@ namespace QuickerPlaces.Services;
 /// Started with <c>--data-root &lt;folder&gt;</c> (configurable canvas plan M0,
 /// M3), both move under that folder instead, as "Roaming" and "Local", so the
 /// workspace can be tried against test data without touching the real
-/// stores. Set once at startup, before any store is built. UI-free and linked
+/// stores, history included. Set once at startup, before any store is built. UI-free and linked
 /// into the test project.
 /// </summary>
 public static class AppDataFolders
@@ -32,6 +32,25 @@ public static class AppDataFolders
 
     /// <summary>The roaming folder: places and sessions.</summary>
     public static string Roaming => RoamingFor(_root);
+
+    /// <summary>
+    /// Activity history, one file per month (history plan §3):
+    /// Documents\QuickerPlaces\History, where people back up and copy what
+    /// they keep, so years of history survive a new PC. Under --data-root, a
+    /// "History" folder there; with no Documents folder, beside the local stores.
+    /// </summary>
+    public static string History => HistoryFor(_root);
+
+    public static string HistoryFor(string? root)
+    {
+        if (root is not null)
+            return Path.Combine(root, "History");
+
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        return string.IsNullOrEmpty(documents)
+            ? Path.Combine(LocalFor(null), "History")
+            : Path.Combine(documents, AppInfo.Name, "History");
+    }
 
     public static string LocalFor(string? root) => root is null
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppInfo.Publisher, AppInfo.Name)
