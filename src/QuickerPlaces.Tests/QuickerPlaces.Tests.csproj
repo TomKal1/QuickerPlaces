@@ -209,4 +209,14 @@
     <None Include="..\QuickerPlaces\Resources\Palette.Light.xaml" Link="Palettes\Palette.Light.xaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Revit dialog detection and the Load Once rules (ai/261008_Revit Handler
+      Handoff.md): UI-free. The Windows detector compiles everywhere and
+      returns nothing off Windows.
+    -->
+    <Compile Include="..\QuickerPlaces\Services\Revit\Dialogs\*.cs" LinkBase="Linked\Services\Revit\Dialogs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\AddIns\*.cs" LinkBase="Linked\Services\Revit\AddIns" />
+  </ItemGroup>
+
 </Project>

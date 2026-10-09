@@ -10,6 +10,7 @@ using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Remote;
+using QuickerPlaces.Services.Revit.Dialogs;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Tests.Fakes;
 using Xunit;
@@ -34,6 +35,7 @@ public sealed class CliAppTests : IDisposable
     private PlacesService? _appPlaces;
     private bool _appAnswers = true;
     private OpenDocumentScan? _openDocuments;
+    private readonly FakeDialogDetector _dialogs = new();
 
     public void Dispose() => _temp.Dispose();
 
@@ -53,7 +55,8 @@ public sealed class CliAppTests : IDisposable
         Shell = _shell,
         IsAppRunning = _ => _app is not null,
         SendToApp = (scope, request) => _appAnswers ? _app!.Execute(request, out _) : throw new TimeoutException(),
-        ScanOpenDocuments = _openDocuments is null ? null : () => _openDocuments
+        ScanOpenDocuments = _openDocuments is null ? null : () => _openDocuments,
+        DialogDetector = _dialogs
     };
 
     private (int Exit, JsonObject Json) Run(params string[] args)
@@ -526,5 +529,47 @@ public sealed class CliAppTests : IDisposable
     public void RevitInfo_MissingFile_IsNotFound()
     {
         Assert.Equal(ErrorCodes.NotFound, Error(ExitCodes.NotFound, "revit", "info", _temp.File("gone.rvt")));
+    }
+
+    [Fact]
+    public void RevitDialogs_ListsWindowsAndTheClassification_WithoutPressingAnything()
+    {
+        _dialogs.Windows[4242] = new List<DialogWindow>
+        {
+            DialogFixtures.Dialog("Autodesk Revit 2025", new string[0], className: "Afx:Main"),
+            DialogFixtures.SecurityPrompt("MyAddin", @"C:\Addins\My.dll"),
+            DialogFixtures.Dialog("Model Upgrade", new string[0]),
+        };
+
+        var data = Ok("revit", "dialogs", "4242", "--release", "2025");
+
+        Assert.Equal(4242, data["processId"]!.GetValue<int>());
+        var windows = data["windows"]!.AsArray();
+        Assert.Equal(3, windows.Count);
+        Assert.Equal("notADialog", windows[0]!["verdict"]!.GetValue<string>());
+        Assert.Equal("waiting", windows[1]!["verdict"]!.GetValue<string>());
+        Assert.Equal("noButtons", windows[2]!["verdict"]!.GetValue<string>());
+        Assert.Equal("Security - Unsigned Add-In", windows[1]!["title"]!.GetValue<string>());
+        Assert.Equal(3, windows[1]!["buttons"]!.AsArray().Count);
+        Assert.Equal("Add-in: MyAddin", windows[1]!["staticTexts"]![0]!.GetValue<string>());
+        Assert.Single(data["waiting"]!.AsArray());
+        Assert.Equal("Revit is waiting on a dialog: Security - Unsigned Add-In", data["statusText"]!.GetValue<string>());
+        Assert.Empty(_dialogs.Pressed);
+    }
+
+    [Fact]
+    public void RevitDialogs_ForAProcessWithNoWindows_IsOkAndEmpty()
+    {
+        var data = Ok("revit", "dialogs", "99");
+
+        Assert.Empty(data["windows"]!.AsArray());
+        Assert.Null(data["statusText"]);
+    }
+
+    [Fact]
+    public void RevitDialogs_NeedsAProcessId()
+    {
+        Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "revit", "dialogs", "notapid"));
+        Assert.Equal(ErrorCodes.Usage, Error(ExitCodes.Usage, "revit", "dialogs", "-5"));
     }
 }

@@ -5,6 +5,7 @@ using System.Runtime.Versioning;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Remote;
+using QuickerPlaces.Services.Revit.Dialogs;
 
 namespace QuickerPlaces.Cli;
 
@@ -40,6 +41,9 @@ public sealed class CliEnvironment
     /// </summary>
     public Func<OpenDocumentScan>? ScanOpenDocuments { get; init; }
 
+    /// <summary>Lists a process's top-level windows for <c>qp revit dialogs</c>; null is treated as seeing none.</summary>
+    public IDialogDetector? DialogDetector { get; init; }
+
     public static CliEnvironment ForThisMachine() => new()
     {
         Time = TimeProvider.System,
@@ -47,7 +51,8 @@ public sealed class CliEnvironment
         IsAppRunning = InstanceGate.IsAppRunning,
         DefaultDataRoot = Environment.GetEnvironmentVariable(DataRootVariable),
         SendToApp = (scope, request) => RemoteCommandClient.Send(RemoteProtocol.PipeName(scope), request, TimeSpan.FromSeconds(3)),
-        ScanOpenDocuments = OpenDocumentScanner()
+        ScanOpenDocuments = OpenDocumentScanner(),
+        DialogDetector = DialogDetectors.ForThisMachine()
     };
 
     private static Func<OpenDocumentScan>? OpenDocumentScanner()
