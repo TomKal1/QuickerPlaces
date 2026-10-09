@@ -59,6 +59,7 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitFileInfoReader.cs" Link="Linked\Services\Revit\RevitFileInfoReader.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsHeldFiles.cs" Link="Linked\Services\Documents\WindowsHeldFiles.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsOpenDocumentProbe.cs" Link="Linked\Services\Documents\WindowsOpenDocumentProbe.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsRecentItems.cs" Link="Linked\Services\Documents\WindowsRecentItems.cs" />
@@ -66,6 +67,11 @@
     <Compile Include="..\QuickerPlaces\Models\History\*.cs" LinkBase="Linked\Models\History" />
     <Compile Include="..\QuickerPlaces\Services\History\*.cs" LinkBase="Linked\Services\History" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reads Revit files' BasicFileInfo stream (Services/Revit); MPL-2.0. -->
+    <PackageReference Include="OpenMcdf" Version="3.2.0" />
   </ItemGroup>
 
 </Project>

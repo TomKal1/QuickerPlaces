@@ -8,7 +8,9 @@ namespace QuickerPlaces.Services.Documents;
 /// The document types project sessions and Recent Files handle (documents
 /// plan D1): PDFs, Word documents, Excel workbooks, PowerPoint presentations,
 /// text files, Revit models and AutoCAD drawings. Decided by the file's
-/// extension only; QuickerPlaces never opens a document to look inside it.
+/// extension only; QuickerPlaces never opens a document to look inside it,
+/// except a Revit file's small BasicFileInfo stream, read-only, for its
+/// saved release (<see cref="Revit.RevitFileInfoReader"/>).
 /// Saved by name, so new kinds go anywhere; listed in display order.
 /// </summary>
 public enum DocumentKind

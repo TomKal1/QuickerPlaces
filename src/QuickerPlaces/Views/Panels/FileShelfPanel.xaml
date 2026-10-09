@@ -362,7 +362,19 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <!-- A Revit file's release arrives in the background ("Revit 2025"); its tooltip says central or local, or why the release isn't known. -->
+                    <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="100">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Cell.Secondary}">
+                                <Setter Property="ToolTip" Value="{Binding KindToolTip}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding KindToolTip}" Value="">
+                                        <Setter Property="ToolTip" Value="{x:Null}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn x:Name="WhereFromColumn" Header="WHERE FROM" Binding="{Binding WhereFromText}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}" />
                     <!-- Visits: a folder's visits or a file's opens, one number and one name on the All and Recent tabs, centred as Saved places' count is. -->
                     <DataGridTextColumn x:Name="VisitsColumn" Header="VISITS" Binding="{Binding VisitsText}" Width="70"

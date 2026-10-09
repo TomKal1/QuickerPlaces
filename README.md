@@ -95,4 +95,4 @@ This project was scaffolded and largely written with Claude, working from the sp
 
 ## Tech
 
-WPF on .NET 10, hand-rolled MVVM (no external MVVM package), `System.Text.Json` for persistence, no third-party dependencies.
+WPF on .NET 10, hand-rolled MVVM (no external MVVM package), `System.Text.Json` for persistence. One third-party package: [OpenMcdf](https://github.com/openmcdf/openmcdf) (MPL-2.0), used read-only to find the Revit release a `.rvt`, `.rfa` or `.rte` file was saved in.

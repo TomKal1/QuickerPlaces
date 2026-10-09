@@ -12,6 +12,7 @@ using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Revit;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
@@ -29,6 +30,9 @@ public partial class MainWindow : Window
     private readonly WindowsRecentItems _recentItems;
     private readonly PlacesService _placesService;
     private readonly RecentFilesStore _recentFilesStore;
+
+    /// <summary>Revit files' releases, read once per version of each file and shared by every Library view (roadmap §4.21).</summary>
+    private readonly RevitReleaseCache _revitReleases = new();
     private readonly RecentFilesHost _recentFilesHost;
     private readonly ThemeManager _themeManager;
     private TrayIcon? _trayIcon;
@@ -74,7 +78,7 @@ public partial class MainWindow : Window
         // windows' content in panels, so their buttons go.
         var shell = new WindowsShell();
         var library = new LibraryViewModel(placesService, sessionStore, activityStore, recentFilesStore,
-            new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+            new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher), revitReleases: _revitReleases);
         InputBindings.Add(new KeyBinding(new RelayCommand(library.ClearPeriod, () => library.HasPeriod), Key.Escape, ModifierKeys.None));
         _workspaceView = new WorkspaceView();
         var workspace = new WorkspaceViewModel(workspaceLayout, library);
@@ -154,7 +158,7 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel viewModel) return;
         var shell = new WindowsShell();
         var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
-            new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+            new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher), revitReleases: _revitReleases);
         LibraryWindow.Show(this, library, _recentFilesHost, _activityHost, viewModel.NotePlaceOpened);
     }
 

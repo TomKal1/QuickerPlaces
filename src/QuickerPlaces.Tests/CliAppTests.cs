@@ -495,4 +495,36 @@ public sealed class CliAppTests : IDisposable
         Assert.Single(day["files"]!.AsArray());
         Assert.Single(day["folders"]!.AsArray());
     }
+
+    [Fact]
+    public void RevitInfo_ReportsReleaseAndWorksharing()
+    {
+        var path = RevitTestFiles.Write(_temp.File("Tower_someone.rvt"),
+            RevitTestFiles.Modern("2025", workshared: true, worksharingType: 1, @"\\server\projects\Tower.rvt", @"C:\REVIT_LOCAL2025\Tower_someone.rvt"));
+
+        var data = Ok("revit", "info", path);
+
+        Assert.Equal(path, data["path"]!.GetValue<string>());
+        Assert.Equal(2025, data["release"]!.GetValue<int>());
+        Assert.Equal("local", data["worksharing"]!.GetValue<string>());
+        Assert.Equal(@"\\server\projects\Tower.rvt", data["centralModelPath"]!.GetValue<string>());
+        Assert.Null(data["problem"]);
+    }
+
+    [Fact]
+    public void RevitInfo_UnsupportedFile_IsStillOk_WithTheProblem()
+    {
+        var path = RevitTestFiles.Write(_temp.File("Old.rvt"), RevitTestFiles.BasicFileInfo(1, false, 0, null, null, "20080126_1900", null));
+
+        var data = Ok("revit", "info", path);
+
+        Assert.Null(data["release"]);
+        Assert.Equal("tooOld", data["problem"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void RevitInfo_MissingFile_IsNotFound()
+    {
+        Assert.Equal(ErrorCodes.NotFound, Error(ExitCodes.NotFound, "revit", "info", _temp.File("gone.rvt")));
+    }
 }

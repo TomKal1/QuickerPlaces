@@ -154,6 +154,7 @@ public static class CliApp
         commands.AddRange(PlaceCommands.All());
         commands.AddRange(ActivityCommands.All());
         commands.AddRange(DocumentCommands.All());
+        commands.AddRange(RevitCommands.All());
         return commands;
     }
 

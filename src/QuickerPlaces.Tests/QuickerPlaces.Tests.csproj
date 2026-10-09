@@ -98,6 +98,9 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitFileInfoReader.cs" Link="Linked\Services\Revit\RevitFileInfoReader.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitReleaseCache.cs" Link="Linked\Services\Revit\RevitReleaseCache.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitLabels.cs" Link="Linked\Services\Revit\RevitLabels.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
@@ -171,6 +174,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="OpenMcdf" Version="3.2.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,7 +2,7 @@
 
 **Status:** Phases 1, 2, 3 and 9 implemented and merged to `main` (547 tests pass; every manual checklist closed); Phase 4 is next, then 6 → 7 → 8 → 5 (§1.1)  
 **Created:** 2026-09-01  
-**Last revised:** 2026-09-28 — project sessions, Recent Files and the Library added at the user's request, outside the phase order ([plan](260928_PDF%20Project%20Sessions%20Plan.md)); the tags/workspaces non-goal no longer applies to them (§2). 2026-09-27 — Phase 9 merged; Phase 4 is next. 2026-09-25 — the release split withdrawn for a plain order of work, with Phase 9 moved up to next (§1.1); the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 merged  
+**Last revised:** 2026-10-08 — opening Revit centrals changed from a WWTools-only request handler to a public handler contract with a sample add-in, and QuickerPlaces now reads a file's saved release from its `BasicFileInfo` stream (§4.21). 2026-09-28 — project sessions, Recent Files and the Library added at the user's request, outside the phase order ([plan](260928_PDF%20Project%20Sessions%20Plan.md)); the tags/workspaces non-goal no longer applies to them (§2). 2026-09-27 — Phase 9 merged; Phase 4 is next. 2026-09-25 — the release split withdrawn for a plain order of work, with Phase 9 moved up to next (§1.1); the direction for opening Revit central models through WWTools recorded in §4.21 and deferred to after Phase 9; Phase 3 merged  
 **Scope:** improve reliability, recovery, retrieval, and distribution without turning QuickerPlaces into a general-purpose file manager  
 **Detailed plans:** [Phase 1](260901_Phase%201%20Detailed%20Plan.md), [Phase 2](260925_Phase%202%20Detailed%20Plan.md), [Phase 3](260925_Phase%203%20Detailed%20Plan.md), [Phase 9](260914_Folder%20Activity%20Tracking%20Plan.md). Later phases get a detailed plan when the phase before them lands — see [`ai/README.md`](README.md).
 
@@ -39,12 +39,12 @@ The planned release adds:
 | Then | Phase 7: search and retrieval polish | Planned |
 | Then | Phase 8: distribution (publish profiles, clean-machine check) | Planned; must also check Phase 9's COM interop in a single-file build |
 | Then | Phase 5: user-defined file tabs, opening policies, Revit release selection | Planned; the largest phase, and the only one that depends on third-party software |
-| Last | Opening workshared Revit central models through WWTools (§4.21) | Direction settled, deferred to after Phase 9 |
+| Last | Opening workshared Revit central models through a Revit handler add-in (§4.21) | Direction settled (revised 2026-10-08 to a public handler contract), deferred to after Phase 9 |
 | Unscheduled | AI agents driving QuickerPlaces: an MCP wrapper over `qp`, for local or cloud models ([future note](261001_AI%20Agent%20Integration%20Future%20Note.md)) | Potential dev step, recorded 2026-10-01; not started |
 
 **Why Phase 9 moved up.** It was placed last because it is the only phase that watches in the background rather than acting on a command, and to keep it from competing for attention with the persistence work. That reasoning no longer applies: Phases 1 and 3, its only prerequisites, are done, and nothing in Phases 4 to 8 depends on it or is affected by it (it tracks folders only). Its value also grows with how long it has run, so starting it sooner means its Week and Month views fill sooner. The user ranks it above file support.
 
-**Opening workshared central models** stays deferred. The direction is settled in §4.21, "Opening workshared central models": Revit's own `CreateNewLocal`, run by a request handler in the user's WWTools add-in, and never a file copy or RevitBatchProcessor. Phase 5 does not depend on it.
+**Opening workshared central models** stays deferred. The direction is settled in §4.21, "Opening workshared central models": Revit's own `CreateNewLocal`, run inside Revit by any add-in that implements QuickerPlaces' public Revit handler contract, and never a file copy or RevitBatchProcessor. The repository ships a working sample handler; the user's WWTools add-in implements the same contract privately. Phase 5 does not depend on it.
 
 ## 2. Explicit non-goals
 
@@ -373,29 +373,79 @@ Initial implementation:
 
 Later optional Revit adapter:
 
-- Use Autodesk's supported `BasicFileInfo.Extract` capability to inspect `.rvt`, `.rfa`, and `.rte` saved-version metadata without opening the model.
-- Keep Autodesk assemblies out of the generic QuickerPlaces process. Use a separately versioned helper/adapter compatible with the installed Revit runtime.
+- Read the saved release of `.rvt`, `.rfa`, and `.rte` files with QuickerPlaces' own read-only `BasicFileInfo` stream reader (see "Reading the saved release" below). This replaces the earlier idea of calling Autodesk's `BasicFileInfo.Extract`, which only runs inside Revit and so cannot choose which Revit to launch.
+- Keep Autodesk assemblies out of the generic QuickerPlaces process. Anything that needs the Revit API runs in a Revit add-in (the handler contract below).
 - Treat inspection failure or forward-incompatible metadata as **Unknown version**, never as permission to choose the newest Revit automatically.
 - Match the detected saved version to an installed release and show the decision before launch.
 - Test workshared, local, central, family, template, cloud-connected, and future-version failure cases before enabling automatic selection by default.
-- Do not parse undocumented RVT internals or private Autodesk history files.
+- Do not parse undocumented RVT internals or private Autodesk history files, with one exception decided on 2026-10-08: the `BasicFileInfo` stream, read-only, as described below.
 
-Opening workshared central models, through WWTools (recorded 2026-09-25; **deferred until after Phase 9**):
+Opening workshared central models, through a Revit handler add-in (recorded 2026-09-25, revised 2026-10-08; **deferred until after Phase 9**):
 
-A central model should never be opened directly. The user works in a local copy, and a local can only be made by Revit itself. This was researched on 2026-09-25 against the user's own repositories, and the direction below is settled. It is deferred to after Phase 9 at the user's request; nothing in Phases 4 to 9 depends on it.
+A central model should never be opened directly. The user works in a local copy, and a local can only be made by Revit itself. This was researched on 2026-09-25 against the user's own repositories. On 2026-10-08 the user changed one part of it: QuickerPlaces is public, so it must not depend on the user's private WWTools add-in. Instead, QuickerPlaces defines a small public **handler contract**. Any Revit add-in can implement it, the repository ships a working sample handler, and WWTools implements the same contract privately. It is deferred to after Phase 9 at the user's request; nothing in Phases 4 to 9 depends on it.
+
+Safety rules:
 
 - **QuickerPlaces never copies a central file to make a local.** A Windows file copy keeps the central's identity, and synchronising from it can damage the central or lose other people's work. Locals are made only by Revit's `WorksharingUtils.CreateNewLocal`, inside a Revit session.
-- **QuickerPlaces never deletes or overwrites an existing local.** It may hold unsynchronised work. A new local that would collide gets a timestamped name, or the user is asked.
-- **The adapter is a request handler in WWTools**, the user's existing Revit add-in, already built and deployed for Revit 2024–2026. It is not a new add-in:
-  - QuickerPlaces chooses the Revit release under this section's rules.
-  - QuickerPlaces writes a small request file (central path, local folder, workset option) into its own local data folder, then launches that release's `Revit.exe`.
-  - Once Revit has started, WWTools picks up the request, makes the local with `CreateNewLocal` in the user's normal local folder, then opens and activates it with the requested workset configuration. The model stays open for the user.
-  - This keeps Autodesk assemblies out of QuickerPlaces, as the adapter bullets above require, and puts the per-release work in the project already maintained per release.
-- **Without WWTools**, QuickerPlaces falls back to launching the chosen `Revit.exe` with the central's path and letting Revit's own open behaviour apply. Whether a command-line open of a central creates a local, or opens the central itself, differs by release and must be verified on each supported release before this fallback is offered for centrals.
-- **RevitBatchProcessor (RBP) is not the opening mechanism**, and is not a requirement for opening Revit files. RBP is built for unattended batches: after its task script runs, it closes the document without saving and ends the Revit process. In its Create New Local mode it also deletes any existing file at `C:\REVIT_LOCAL20xx\<Model>_<username>.rvt` before making a new local there, which in a click-to-open launcher could destroy unsynchronised work. Its `OpenAndActivateNewLocal` (`CreateNewLocal`, then `OpenAndActivateDocument`) is the right call sequence, and WWTools should follow it.
-- **Reuse from Model Delta and RBP:** their discovery of installed Revit releases and `Revit.exe` paths (Model Delta's `BatchRvtInstallation.cs`, RBP's `RevitVersion.cs`) is the approach this section's "discover installed Revit releases" needs.
-- **Open question for that plan: reading the saved version.** RBP's `revit_file_version.py` reads a file's saved version without Revit, by parsing the file's internal BasicFileInfo stream. The bullets above currently forbid parsing undocumented RVT internals. Decide either to relax that for this one stream, or to read it through Autodesk's `BasicFileInfo.Extract` inside WWTools, as part of the same request.
-- **Out of scope:** cloud models (BIM 360 / ACC), which have no file path to launch.
+- **QuickerPlaces never deletes or overwrites an existing local.** It may hold unsynchronised work. A new local that would collide gets a timestamped name, or the user is asked. A handler that overwrites locals does not meet the contract.
+- **Never upgrade a central through QuickerPlaces.** The handler checks the central's saved release with `BasicFileInfo.Extract` and refuses when it differs from the running Revit release, even if QuickerPlaces chose that release.
+- **Out of scope:** cloud models (BIM 360 / ACC), which have no file path to launch, and detaching from central.
+
+Why an add-in is required: Revit has no out-of-process API. `CreateNewLocal` and `OpenAndActivateDocument` can only run inside a Revit session, so something must be loaded in Revit to receive the request. QuickerPlaces itself never references Autodesk assemblies.
+
+**The handler contract.** It uses files only: plain JSON in the current user's `%LocalAppData%\QuickerPlaces\revit\` folder. There is no shared assembly, so a handler built for .NET Framework 4.8 (Revit 2024) and one built for .NET 8 (Revit 2025 and 2026) implement it the same way. The full specification goes in `docs/revit-handler-protocol.md`, versioned by a `protocol` number starting at 1.
+
+- **Registration (what a handler can do).** When its add-in starts, a handler writes `handlers\<handlerId>-<release>.json` containing `protocol`, `handlerId`, `displayName`, `revitRelease` and `actions` (for now only `"open-new-local"`). QuickerPlaces lists these files in Settings, and the user picks one handler per Revit release, or none. A handler appears only after Revit has run once with it loaded; Settings says so.
+- **Instance (is it loaded right now).** A running handler also writes `instances\<release>-<processId>.json` and deletes it on shutdown. If a `Revit.exe` of that release is running but has no live instance file, QuickerPlaces reports at once that the handler is not loaded in that Revit, instead of waiting for a timeout. Instance files for processes that no longer exist are ignored.
+- **Request.** QuickerPlaces writes `requests\<release>\<requestId>.json` with `protocol`, `requestId`, `action`, `createdUtc`, `centralPath`, `localFolder` and `worksets` (`"lastViewed"`, `"all"` or `"none"`, mapped to Revit's `WorksetConfigurationOption`). It writes to a temporary name and renames, so a handler never reads a half-written file.
+- **Claiming.** A handler claims a request by renaming it to `<requestId>.claimed-<processId>`. Only one rename can succeed, so with two copies of the same release open, exactly one handles each request. Requests older than a few minutes (`createdUtc`) are discarded unclaimed: a request left behind must never open a model the next time Revit starts.
+- **Result.** The handler writes `<requestId>.result.json` with `ok`, `localPath` and, on failure, an `errorCode` and a readable `message`. QuickerPlaces shows the message and removes the request and result files.
+- **Running or not.** QuickerPlaces always writes the request first. If no `Revit.exe` of that release is running, it then launches one. A running handler watches its release's request folder; a starting handler checks the folder once Revit has initialised.
+
+What the handler does with a request (the sample handler is the reference):
+
+1. Check the request: supported `protocol` and `action`, not expired, and `centralPath` exists and is an `.rvt`.
+2. Read `BasicFileInfo.Extract(centralPath)`: the file must be workshared and central (not a local), and saved in the running release. Otherwise write an error result and stop.
+3. Choose the local path: `localFolder\<CentralName>_<Revit username>.rvt`. If that file exists, add a timestamp before the extension. Never overwrite.
+4. Call `WorksharingUtils.CreateNewLocal(central, local)`, then `UIApplication.OpenAndActivateDocument(local, openOptions, false)` with the requested worksets. This is the call sequence RBP's `OpenAndActivateNewLocal` uses. The model stays open for the user.
+5. Write the result.
+
+Revit only allows these calls in a valid API context. The handler does the work from an `ExternalEvent`, raised by its folder watcher, or by the first `Idling` event after `ApplicationInitialized` on a cold start. It never does the work in `OnStartup`.
+
+**QuickerPlaces side.**
+
+- The contract types, the request queue and the handler registry are UI-free services, the same boundary as `Services/Documents`, so `qp` and the portable tests can use them.
+- The local folder is a per-release setting. It defaults to Revit's own default (`Documents`) until the user changes it; the user's office uses `C:\REVIT_LOCAL20xx`.
+- QuickerPlaces can read `Central Model Path` from any local (below), so it can later offer "Open my existing local" when one for that central already exists in the local folder. This is a later option, not part of the first version.
+- **Without a handler**, QuickerPlaces falls back to launching the chosen `Revit.exe` with the central's path and letting Revit's own open behaviour apply. Whether a command-line open of a central creates a local, or opens the central itself, differs by release and must be verified on each supported release before this fallback is offered for centrals.
+
+**Reading the saved release (decided 2026-10-08).** QuickerPlaces must know a file's saved release before it can choose which `Revit.exe` to launch, so the handler cannot do this. QuickerPlaces reads it itself:
+
+- **Built 2026-10-08** as `Services/Revit/RevitFileInfoReader.cs` (UI-free, linked into `qp` and the tests) and `qp revit info <file>`.
+- An `.rvt`, `.rfa` or `.rte` file is an OLE compound file (Microsoft's published [MS-CFB] format). The reader opens it read-only, sharing with Revit (`FileShare.ReadWrite | Delete`), and reads only the `BasicFileInfo` stream through OpenMcdf 3.2.0 (MPL-2.0), the app's first third-party package. A compound file reads only the sectors it needs, so even a large central costs a few KB. Streams over 64 KB are refused.
+- The stream starts with fixed binary fields, parsed in order: `Int32` layout version (14 in Revit 2021 to 2026; it is not the release), a workshared byte, a worksharing-type byte (0 central, 1 local, 2 in progress, 3 local just created), then strings, each an `Int32` count of UTF-16 characters followed by the characters (a count of 0 or less means none): username, central model path, format year, build, last save path. Reading stops there. The format year exists from layout 12 (Revit 2019); an older layout is not parsed past its version. The layout follows dosymep.Revit.FileInfo (MIT), which the user pointed to; no code was copied.
+- The release comes only from the format year ("2025"), never from the build, which is a date (Revit 2025's builds are dated 2026). A missing or unreadable format year is reported as `ReleaseNotRecorded` and means ask, never "use the newest Revit".
+- **Only Revit 2022 and later are supported** (the user's decision, 2026-10-08). A file saved in 2019 to 2021 reports its release with the problem `TooOld`; a layout before 12 reports `TooOld` with no release. QuickerPlaces does not offer to open either in a newer Revit.
+- Worksharing comes from the two flag bytes: not workshared, central, local (types 1 and 3), or unknown (type 2). The earlier idea of comparing `Central Model Path` with `Last Save Path` is not needed for central or local. A central that has been moved or copied still says "central", so detecting one (by comparing the recorded path with the file's real path, after resolving mapped drives to UNC) is left to the plan that opens centrals.
+- Other problems the reader reports: `NotFound`, `InUse` (locked against reading), `Unreadable`, `NotRevitFile` (not a compound file, or no `BasicFileInfo`), `UnrecognisedLayout` (truncated, implausible lengths, or a layout version outside 1 to 255).
+- Evidence, 2026-10-08, with `qp revit info` on the user's machine: eight Revit 2025 locals in `C:\REVIT_LOCAL2025` read as 2025 local, and their eight centrals as 2025 central. Families or templates shipped with Revit 2022, 2023, 2024 and 2026 read as their release, not workshared, and the 2021 one as 2021 `TooOld`. A 2008-era sample file (layout 1) read as `TooOld`. One central (8 MB, on a local disk) took about 20 ms more than `qp describe`, process start included. Reading a central over the network is not measured yet.
+- Still to check: workshared centrals and locals saved in 2024 and 2026, and a central on the office network share. The test `RealSamples_WhenProvided` reads every `R20xx central.rvt` / `R20xx local.rvt` in the folder named by `QP_REVIT_SAMPLES` and checks the reader agrees; the files are never committed (they carry usernames and network paths). The unit tests use stand-in compound files built in the test.
+- Do not copy RBP's `revit_file_version.py`: RBP is GPL-3.0 and QuickerPlaces is MIT.
+- Phase 5's release selection can use this reader on its own. It does not need the handler. Callers run it off the UI thread with a timeout, since a network share can stall.
+- **Shown in the Library (2026-10-08).** The File viewer's Type column reads "Revit 2025", "Revit 2021 (old)", or "Revit ?" when the release can't be read, with a tooltip naming central or local (or why). `RevitReleaseCache`, one per app in `MainWindow`, answers from memory at once and checks files in the background: each file is read once per version (last write time and length), an answer is trusted for 30 seconds before the stamp is checked again, and a stalled read times out after 3 seconds and is left to finish without a second read starting. Checked in the real app with a session of a 2025 local, the Revit 2025 Snowdon sample, a 2024 and a 2021 family, and a missing file.
+
+**Sample handler add-in.** The sample is both a public guide and the user's template for adding the handler to WWTools.
+
+- It lives in `samples/RevitHandler/` with its own solution, outside `src/QuickerPlaces.sln`, so building and testing QuickerPlaces never needs the Revit API.
+- It uses the same build layout as WWTools: `Debug R24` to `Release R26` configurations that set `RevitVersion` and `TargetFramework` (`net48` for 2024, `net8.0-windows` for 2025 and 2026), and `Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI` package references at `$(RevitVersion).*`. It does not use Nice3point's Toolkit, so the sample stays small and readable. The handler classes can then be copied into WWTools without changing its build.
+- Contents: an `IExternalApplication` that writes the registration and instance files and starts the folder watcher; the claim, expiry and result logic; the `ExternalEvent` that runs the five steps above; a `.addin` manifest; and a README covering build, install into `%AppData%\Autodesk\Revit\Addins\<release>\`, and testing with a throwaway central.
+- Keep the request-handling logic (parse, validate, claim, choose the local name) free of Revit types where possible, so it can be unit-tested without Revit. Only the Revit calls in steps 2 and 4 need a running Revit.
+- Verification is manual, in each of Revit 2024, 2025 and 2026, with a throwaway central. Check a cold start, an already-running Revit, two copies of one release open, a local name that already exists, an expired request, a central saved in another release, a local passed as `centralPath`, and the handler not loaded.
+
+Reuse and non-reuse:
+
+- **Reuse from Model Delta and RBP:** their discovery of installed Revit releases and `Revit.exe` paths (Model Delta's `BatchRvtInstallation.cs`, RBP's `RevitVersion.cs`) is the approach this section's "discover installed Revit releases" needs. Reuse the approach, not RBP's code (GPL-3.0).
+- **RevitBatchProcessor (RBP) is not the opening mechanism**, and is not a requirement for opening Revit files. RBP is built for unattended batches: after its task script runs, it closes the document without saving and ends the Revit process. In its Create New Local mode it also deletes any existing file at `C:\REVIT_LOCAL20xx\<Model>_<username>.rvt` before making a new local there, which in a click-to-open launcher could destroy unsynchronised work.
 
 The generic custom-tab feature must ship independently of this optional adapter. `.trc` and other normally associated formats should work through Windows default handling without vendor-specific code.
 

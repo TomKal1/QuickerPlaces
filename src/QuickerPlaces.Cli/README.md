@@ -43,6 +43,7 @@ on Linux). Opening a place uses the system's default handler.
 | `files recent` | | PDF, Word and Excel files opened in a period (Recent Files, and the activity history for older days). |
 | `folders recent` | | Time spent per folder in a period (Recents, and the activity history for older days), each linked to its saved place. |
 | `activity days` | | Day by day: places opened, sessions reopened, files opened, folders worked in. Folders and files reach back through the activity history. |
+| `revit info <file>` | | The Revit release a `.rvt`, `.rfa` or `.rte` file was saved in, and whether it is a central or a local. Read without Revit. Revit 2022 and later; older files give `problem: "tooOld"`. |
 
 `<ref>` is an alias (any case) or an id. Every command also takes
 `--data-root <folder>` (or the `QUICKERPLACES_DATA_ROOT` variable) to use

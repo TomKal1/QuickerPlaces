@@ -13,6 +13,7 @@ using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.Library;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Revit;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.ViewModels;
@@ -73,7 +74,9 @@ public enum CalendarSelectionUnit
 ///
 /// The four sources stay separate, each with its own switch; this only reads
 /// them, except for Recent Files' own settings, which live here because this
-/// is where Recent Files is seen. UI-free and linked into the test project;
+/// is where Recent Files is seen. Revit rows name their release ("Revit
+/// 2025"), looked up in the background through a shared
+/// <see cref="RevitReleaseCache"/> when one is given. UI-free and linked into the test project;
 /// the views only bind and pass clicks in.
 /// </summary>
 public sealed class LibraryViewModel : ObservableObject
@@ -87,6 +90,7 @@ public sealed class LibraryViewModel : ObservableObject
     private readonly TimeProvider _time;
     private readonly CultureInfo _culture;
     private readonly IBackgroundWork _work;
+    private readonly RevitReleaseCache? _revitReleases;
     private LibrarySnapshot _snapshot;
     private readonly HistoryMonthCache? _history;
     private DateOnly? _historyReach;
@@ -115,7 +119,8 @@ public sealed class LibraryViewModel : ObservableObject
     private string? _errorMessage;
 
     public LibraryViewModel(PlacesService places, SessionStore sessions, ActivityStore activity, RecentFilesStore recentFiles,
-        PlaceLauncher placeLauncher, IShell shell, TimeProvider? time = null, CultureInfo? culture = null, IBackgroundWork? work = null)
+        PlaceLauncher placeLauncher, IShell shell, TimeProvider? time = null, CultureInfo? culture = null, IBackgroundWork? work = null,
+        RevitReleaseCache? revitReleases = null)
     {
         _places = places;
         _sessions = sessions;
@@ -126,6 +131,7 @@ public sealed class LibraryViewModel : ObservableObject
         _time = time ?? TimeProvider.System;
         _culture = culture ?? CultureInfo.CurrentCulture;
         _work = work ?? InlineBackgroundWork.Instance;
+        _revitReleases = revitReleases;
         _history = activity.HistoryReader is { } reader ? new HistoryMonthCache(reader) : null;
         _calendarYear = Today().Year;
         _calendarMonth = Today().Month;
@@ -1180,6 +1186,41 @@ public sealed class LibraryViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyText));
+        ShowRevitReleases();
+    }
+
+    /// <summary>The most Revit files one refresh looks up; rows past these keep what is already known.</summary>
+    private const int MaxRevitLookups = 200;
+
+    /// <summary>
+    /// Gives Revit rows the release already known at once, then checks their
+    /// files in the background (new or changed ones are read; a stalled share
+    /// times out) and updates the rows still shown when the answers arrive.
+    /// </summary>
+    private void ShowRevitReleases()
+    {
+        if (_revitReleases is not { } cache)
+            return;
+
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Rows.Where(r => r.Kind == LibraryKind.Revit))
+        {
+            row.RevitInfo = cache.Peek(row.Location);
+            if (paths.Count < MaxRevitLookups)
+                paths.Add(row.Location);
+        }
+        if (paths.Count == 0)
+            return;
+
+        _work.Run(() => cache.Refresh(paths), found =>
+        {
+            // A read that timed out leaves an earlier answer standing.
+            foreach (var row in Rows.Where(r => r.Kind == LibraryKind.Revit))
+            {
+                if (found.TryGetValue(row.Location, out var info))
+                    row.RevitInfo = cache.Peek(row.Location) ?? info;
+            }
+        });
     }
 
     /// <summary>Returns the folder at an absolute depth below a drive or UNC share root, or null when shallower.</summary>
@@ -1384,10 +1425,11 @@ internal sealed record CalendarSource(IReadOnlyDictionary<DateOnly, HeatDay> Hea
     (DateOnly From, DateOnly To)? Period, int Year);
 
 /// <summary>One Library row: an item, and the group it is shown in.</summary>
-public sealed class LibraryRowViewModel
+public sealed class LibraryRowViewModel : ObservableObject
 {
     private readonly TimeZoneInfo _zone;
     private readonly CultureInfo _culture;
+    private RevitFileInfo? _revitInfo;
 
     public LibraryRowViewModel(LibraryItem item, string groupName, int groupOrder, TimeZoneInfo zone, CultureInfo culture)
     {
@@ -1408,7 +1450,27 @@ public sealed class LibraryRowViewModel
     public string Name => Item.Name;
     /// <summary>Picks the row's icon: folder, globe, or a document for the three file kinds.</summary>
     public LibraryKind Kind => Item.Kind;
-    public string KindLabel => Item.Kind.Label();
+
+    /// <summary>The Type column: the kind, and for a Revit file its release once known ("Revit 2025").</summary>
+    public string KindLabel => Item.Kind == LibraryKind.Revit ? RevitLabels.Kind(_revitInfo) : Item.Kind.Label();
+
+    /// <summary>The Type column's tooltip: a Revit file's release and worksharing in words; "" otherwise.</summary>
+    public string KindToolTip => Item.Kind == LibraryKind.Revit ? RevitLabels.ToolTip(_revitInfo) : "";
+
+    /// <summary>What a Revit file says about itself, once read; null until then and for other kinds.</summary>
+    public RevitFileInfo? RevitInfo
+    {
+        get => _revitInfo;
+        set
+        {
+            if (Equals(_revitInfo, value))
+                return;
+            _revitInfo = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(KindLabel));
+            OnPropertyChanged(nameof(KindToolTip));
+        }
+    }
     public string Location => Item.Location;
     public string Folder => Item.Folder;
     public string TagsText => string.Join(", ", Item.Tags);
