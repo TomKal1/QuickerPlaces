@@ -1,7 +1,7 @@
 ---
-status: Revit release reading done and committed; next is the Revit handler add-in that opens centrals as new locals
+status: Revit release reading done and committed; dialog design and Thomas's four decisions recorded (RBP studied); next is the protocol spec, then the handler add-in that opens centrals as new locals
 branch: feature/revit-file-info
-head: 006043f
+head: the commit after e23ac46 that adds the dialog design (check git log)
 date: 2026-10-08
 ---
 
@@ -13,7 +13,7 @@ Read, in this order:
 
 1. `CLAUDE.md` (project workflow: focused branches, no commits unless Thomas asks, keep WPF/MVVM and UI-free boundaries).
 2. Roadmap [§4.21 "Revit-safe opening"](260901_Professional%20Improvements%20Plan.md), from "Opening workshared central models, through a Revit handler add-in" to the end of the section. It holds the settled design: the safety rules, the file-based handler contract, what the handler does with a request, the sample add-in, and "Reading the saved release".
-3. This handoff, for what is built, what Thomas asked for next, and the open decisions.
+3. This handoff, for what is built, what Thomas asked for next, the dialog design (including what RevitBatchProcessor does) and Thomas's decisions.
 
 Branch `feature/revit-file-info` was cut from `feature/more-file-kinds` (5ceda58, which added the Revit document kind) and is **not pushed**. Thomas sometimes pushes and merges himself; check `git log` and the remote before assuming.
 
@@ -37,13 +37,13 @@ On 2026-10-08 Thomas asked to:
 
 1. **Build a Revit add-in that drives this:** QuickerPlaces asks, the add-in opens a central as a new local inside Revit (`CreateNewLocal`, then `OpenAndActivateDocument`). It is the public sample handler in `samples/RevitHandler/` from §4.21, and must actually work, because it is both the guide for public users and Thomas's template for adding the same handler to his private WWTools add-in.
 2. **Keep routing open:** QuickerPlaces must still be able to send requests to *another* add-in that implements the contract (WWTools privately, or anyone else's). The public repo never names or depends on WWTools in code. This is the handler registry in §4.21: handlers register what they can do, the user picks one per Revit release.
-3. **Handle pop-ups when Revit opens.** The add-in, or QuickerPlaces around it, must get past dialogs that appear while Revit starts and while the model opens, including the **"load add-in" security prompts**. See "Dialogs" below. This part has a decision Thomas needs to make.
+3. **Handle pop-ups when Revit opens.** The add-in, or QuickerPlaces around it, must get past dialogs that appear while Revit starts and while the model opens, including the **"load add-in" security prompts**. See "Dialogs" below. Thomas decided the open questions on 2026-10-08 ("Decisions" below).
 
 ## Suggested order of work
 
 Each step is a small, reviewable change with tests where feasible. Use a new focused branch per step or per pair of steps (for example `feature/revit-handler-contract`, then `feature/revit-handler-sample`).
 
-1. **Protocol spec.** Write `docs/revit-handler-protocol.md`, version 1, from §4.21: folder layout under `%LocalAppData%\QuickerPlaces\revit\` (`handlers\`, `instances\`, `requests\<release>\`), JSON fields, temp-name-then-rename writes, claim by rename to `.claimed-<pid>`, request expiry, result file, error codes. Add the dialog-handling rules once Thomas decides them.
+1. **Protocol spec.** Write `docs/revit-handler-protocol.md`, version 1, from §4.21: folder layout under `%LocalAppData%\QuickerPlaces\revit\` (`handlers\`, `instances\`, `requests\<release>\`), JSON fields, temp-name-then-rename writes, claim by rename to `.claimed-<pid>`, request expiry, result file, error codes, the `QUICKERPLACES_REVIT_REQUEST` environment variable for cold starts, process identity as PID plus start time, and the dialog rules below (what the handler may answer, what it logs into the result).
 2. **QuickerPlaces side, UI-free, with tests:**
    - Contract records and JSON (System.Text.Json, like the stores).
    - Handler registry: read `handlers\*.json` and `instances\*.json`, ignore instances whose process is gone, report per release which handlers exist and which are live.
@@ -57,8 +57,11 @@ Each step is a small, reviewable change with tests where feasible. Use a new foc
    - The five steps in §4.21 (validate; check `BasicFileInfo.Extract` is a central saved in this release; choose a non-colliding local name; `CreateNewLocal` + `OpenAndActivateDocument` with the requested worksets; write the result).
    - Keep parsing, validation, claiming and local-name choice free of Revit types and unit-test them in a small test project inside `samples/`.
    - README: build, install to `%AppData%\Autodesk\Revit\Addins\<release>\`, signing, and testing with a throwaway central.
-4. **Dialog handling** (below), after Thomas decides.
-5. **App UI:** for a Revit row, "Open" does the right thing for its kind; a central gets "Open as new local" (and the other choices §4.21 allows). Settings: per release, the handler to use (from the registry, or none) and the local folder (default `Documents`; Thomas's office uses `C:\REVIT_LOCAL20xx`). Status while Revit starts ("Waiting for Revit 2025…", "Revit is waiting on a dialog", "The handler isn't loaded in Revit 2025").
+4. **Dialog handling** (below, decided):
+   - QuickerPlaces, UI-free: the dialog detector for a launched `Revit.exe` (enabled top-level `#32770` windows, title, static text, both kinds of buttons; progress windows without buttons are not "waiting"). First, record what each release's security prompt shows with UI Automation, so matching is built on evidence.
+   - QuickerPlaces, UI-free: the manifest reader and the Load Once list (see "Load Once list" below), with tests using stand-in manifests and DLLs.
+   - Handler: scoped `DialogBoxShowing` that logs every `DialogId` into the result and answers only the allowlist (empty at first, filled from observed opens).
+5. **App UI:** for a Revit row, "Open" does the right thing for its kind; a central gets "Open as new local" (and the other choices §4.21 allows). Settings: per release, the handler to use (from the registry, or none) and the local folder (default `C:\REVIT_LOCAL20xx`, decided); the "Allow Load Once" switch (off by default) and the add-ins already allowed, each with a Remove button. Status while Revit starts ("Waiting for Revit 2025…", "Revit is waiting on a dialog", "The handler isn't loaded in Revit 2025").
 6. **Manual verification** in 2022–2026 with a throwaway central: cold start; Revit already running; two copies of one release; existing local name; expired request; central saved in another release; a local passed as the central; handler not loaded; a second handler registered (routing); each dialog case below.
 
 ## Dialogs
@@ -90,12 +93,85 @@ Three kinds of dialog can stop an unattended open. They need different handling.
 
 RevitBatchProcessor solves the same problem for unattended batches with an external dialog-watching process; its approach is worth reading for knowledge (Thomas has the fork and `C:\Program Files\RevitBatchProcessor`), but its code is GPL-3.0 and must not be copied, and its batch behaviour (closing documents, deleting existing locals) is explicitly not what QuickerPlaces does.
 
-## Decisions waiting for Thomas
+### What RevitBatchProcessor does (read 2026-10-08, fork `TomKal1/RevitBatchProcessor` at 292bca4)
 
-1. Automatic clicking of add-in security prompts: no (detect and report, recommended) or opt-in Load Once allowlist.
-2. Whether the public sample handler is signed in the internal pipeline, or only WWTools is.
-3. Default local folder: Revit's `Documents` default, or a per-release folder like `C:\REVIT_LOCAL20xx`.
-4. Whether QuickerPlaces may open a local or non-workshared file directly in its release without a handler (likely yes; command-line opens of **centrals** stay off until verified per release, as §4.21 says).
+RBP handles pop-ups in two layers plus a launch handshake. Files: `BatchRvtUtil/Scripts/revit_dialog_detection.py`, `revit_dialog_util.py`, `revit_failure_handling.py`, `ui_automation_util.py`, `win32_user32.py`, `batch_rvt_monitor_util.py`, `monitor_revit_process.py`, `revit_process.py`, and `BatchRvtAddin20xx/BatchRvtAddinApplication.cs`.
+
+**Launch handshake.** `BatchRvt.exe` starts `Revit.exe` itself (`UseShellExecute = false`, stdout/stderr redirected, working folder = the Revit folder) and passes the job through environment variables (`BATCHRVT__SCRIPTS_FOLDER_PATH`, `BATCHRVT__SCRIPT_FILE_PATH`, …, `RVT_ORIGIN=RBP`). The add-in's `OnStartup` only creates an `ExternalEvent` and raises it; the script host reads the variables and does nothing when they are missing, so the add-in is inert in a normal Revit session. The host also checks that the `BatchRvt.exe` that launched it is still alive, identified by PID plus process start time (so a reused PID is not mistaken for it).
+
+**Layer 1, outside Revit (the "cheeky dialog dismisser").** Every 0.25 s while it waits, `BatchRvt.exe`:
+
+- lists enabled top-level windows of class `#32770` that belong to the Revit PID;
+- collects their buttons two ways: classic `Button` children (message boxes), and `DirectUIHWND` → `CtrlNotifySink` → `Button` (task dialogs, including command links such as "Always Load");
+- matches the dialog by exact title and button count against a hard-coded table (English and Spanish only), and sends `BM_CLICK` with `SendMessage` to the chosen button, or `WM_CLOSE` for the Customer Involvement Program window;
+- leaves progress windows alone ("Model Upgrade" with no buttons, "Load Link" with only "Cancel Link");
+- for **any unknown dialog**, logs title and buttons and then clicks the first match from a priority list: OK, Close, No, **Always Load**, "Rhino 7", Ignore, Don't save, Relinquish, …
+
+"Always Load" in that list is how RBP gets past the unsigned add-in security prompt, for its own add-in and for every other add-in, and it trusts the publisher permanently. The known-dialog table is mostly about closing documents: "Do not save the project", "Relinquish all elements and worksets", "Close the local file".
+
+**Layer 2, inside Revit.** Around each scripted action RBP subscribes to `UIApplication.DialogBoxShowing` and unsubscribes in `finally`. It logs `Message`, `DialogType` and `DialogId`, then answers **every** dialog with `IDOK` (1), except `TaskDialog_Missing_Third_Party_Updater` → 1001 ("continue working with the file") and `TaskDialog_Location_Position_Changed` → 1002 ("do not save"). It also subscribes to `Application.FailuresProcessing` (and sets an `IFailuresPreprocessor` with forced modal handling on its own transactions): it deletes all warnings, resolves errors with UnlockConstraints, DetachElements or SkipElements, and otherwise rolls back.
+
+**Watchdogs.** Timeouts for "script host never started", "file took too long" and "Revit did not exit", each of which kills Revit; an "unresponsive for more than 10 s" notice from polling the process.
+
+### What QuickerPlaces takes from it, and what it does not
+
+Use the approach (our own code, no GPL text):
+
+- **Environment-variable handshake on a cold start.** When QuickerPlaces launches `Revit.exe` for a request, it sets one variable naming the request (for example `QUICKERPLACES_REVIT_REQUEST=<request id>`). The handler still serves the file-based queue, but the variable lets it pick up its request on the first `Idling` without waiting for a folder scan, and lets QuickerPlaces know the launched PID is the one to watch.
+- **Process identity as PID plus start time** in instance files, so stale instance files are never matched to a reused PID.
+- **The external watcher's window scan, for detecting and reporting only:** top-level enabled `#32770` windows of the launched PID; title, static text and both kinds of buttons. This is what "Revit is waiting on a dialog: Security – Unsigned Add-In (MyAddin)" needs. Progress windows without buttons are not reported as waiting.
+- **Scoped `DialogBoxShowing`** in the handler, subscribed only for one request, logging every `DialogId`. Matches the plan above.
+- The two `DialogId`s RBP answers are candidates for our allowlist, to be confirmed by observation: `TaskDialog_Missing_Third_Party_Updater` → continue (1001) is safe for an interactive open; `TaskDialog_Location_Position_Changed` → do not save (1002) appears on close/save, which the handler never does.
+
+Do not take:
+
+- **The fallback click for unknown dialogs, and the `IDOK`-to-everything default.** A person is sitting at Revit; an unknown dialog is theirs to answer.
+- **Clicking "Always Load".** It bypasses the security check for any add-in and makes the trust permanent.
+- **The close-document answers** (don't save, relinquish, close the local file). The handler never closes, saves or relinquishes.
+- **Deleting warnings or detaching/skipping elements** in failure processing. Opening a local should leave failures to Revit's normal UI; the handler only logs them.
+- **Matching by title text** for anything that is clicked. RBP's table is English and Spanish only; inside Revit, `DialogId` is language-independent. Titles are fine for reporting.
+- **Killing Revit on a timeout.** It is the user's session. QuickerPlaces reports "still waiting" and lets the user cancel the request.
+
+## Decisions (Thomas, 2026-10-08)
+
+1. **Add-in security prompts: opt-in Load Once allowlist.** Off by default. Detect and report always runs. When the user turns it on, QuickerPlaces may press **Load Once** (never Always Load, never Do Not Load) on the security prompt only when the add-in in the prompt is on the user's allowlist (see "Load Once list" below), only for a `Revit.exe` QuickerPlaces launched, only until that launch's handler instance file appears (or the request ends), and it logs every click. Dialog title, text and buttons are verified per release with UI Automation before the click is enabled for that release; on any mismatch it reports instead of clicking.
+2. **Signing: only WWTools.** The public sample handler stays unsigned; its README says to sign your own build or answer the prompt once (or put it on the Load Once list).
+3. **Default local folder: per release, `C:\REVIT_LOCAL20xx`** (for example `C:\REVIT_LOCAL2025`), changeable per release in Settings.
+4. **Direct open: yes** for locals and non-workshared files, by launching that release's `Revit.exe` with the file. Centrals always go through a handler; command-line opens of centrals stay off until verified per release (§4.21).
+
+## Load Once list (designed and agreed 2026-10-08)
+
+**Scope: this is not a Revit add-in manager.** QuickerPlaces never changes what Revit loads. It only answers one security prompt, once, for a launch it started, when the user said yes in advance.
+
+In scope:
+
+- Reading `.addin` manifests and bundle `PackageContents.xml` files, read-only.
+- Checking the signature and SHA-256 hash of the DLL a manifest names.
+- Storing the user's "allow Load Once" choices in QuickerPlaces' own settings.
+
+Out of scope:
+
+- Writing, renaming or moving `.addin` files (so no enabling or disabling add-ins).
+- Installing, updating or uninstalling add-ins.
+- Load order, conflicts, or start-up timing of add-ins.
+- Anything for a `Revit.exe` that QuickerPlaces did not launch.
+
+**How the list is built: learned from prompts, not typed, no inventory screen (first version).**
+
+1. QuickerPlaces launches `Revit.exe` and its dialog detector sees a security prompt. The status line says "Revit is waiting: Unsigned Add-In 'DuctExporter'". The user answers the prompt in Revit, as today.
+2. When the launch is done, QuickerPlaces offers "Allow Load Once for DuctExporter next time?". Only a yes adds an entry.
+3. To fill the entry, QuickerPlaces finds the add-in's manifest for that release. Revit reads manifests from `%AppData%\Autodesk\Revit\Addins\<release>\`, `%ProgramData%\Autodesk\Revit\Addins\<release>\`, and `ApplicationPlugins\*.bundle\PackageContents.xml` under `%AppData%\Autodesk` and `%ProgramData%\Autodesk`. Each manifest gives `Name`, `Assembly`, `AddInId` and `VendorId`.
+4. An entry stores: release, `AddInId`, `Name`, the full DLL path, and the DLL's SHA-256 when the user said yes. If no manifest matches the prompt, or more than one does, no entry is offered.
+
+**When QuickerPlaces may click Load Once:** the "Allow Load Once" switch is on (off by default); the `Revit.exe` was launched by QuickerPlaces and that launch's handler instance file has not appeared yet; the prompt's title, text and buttons match what was recorded for that release; the add-in in the prompt matches an entry (name, DLL path and release); and the DLL's hash still matches. Every click is logged. Never Always Load, never Do Not Load.
+
+**When a DLL changes** (an update), the hash no longer matches: QuickerPlaces does not click, clears the entry, and after the launch asks again ("DuctExporter changed since you allowed it — allow Load Once again?").
+
+**Settings** shows only the switch and the entries already allowed, each with a Remove button. No list of every installed add-in. A read-only inventory can be added later if users ask for it.
+
+**Not verified yet:** what the security prompt shows in each release. It is believed to show the add-in's `Name` and DLL path; record it with UI Automation in 2022–2026 before building the matching. If a release shows only the name, matching in that release falls back to name plus release, and only when exactly one manifest has that name.
+
+Seen on Thomas's machine for Revit 2025 (2026-10-08), as test material: per-user manifests for WWTools, WWImport, DuctExporter, ModelDelta and BatchRvtAddin; all-user manifests for Autodesk add-ins, Bluebeam and BatchRvt; bundles ModelDelta and geeWiz.
 
 ## Constraints that still apply
 
