@@ -1,6 +1,6 @@
 ---
-status: Revit release reading done and committed; dialog design and Thomas's four decisions recorded (RBP studied); next is the protocol spec, then the handler add-in that opens centrals as new locals
-branch: feature/revit-file-info
+status: superseded by 261009_Revit Handler Verification Handoff.md (steps 1–5 built 2026-10-09); kept as the record of the design, the RBP findings and Thomas's decisions
+branch: feature/revit-handler-contract
 head: the commit after e23ac46 that adds the dialog design (check git log)
 date: 2026-10-08
 ---

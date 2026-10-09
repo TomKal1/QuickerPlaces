@@ -6,7 +6,7 @@ The protocol uses plain JSON files in one folder per Windows user. There is no s
 
 The repository's sample handler in `samples/RevitHandler/` is the reference implementation. Where this document and the sample disagree, this document wins and the sample is a bug.
 
-Status: version 1, draft (2026-10-08). Not yet implemented on either side.
+Status: version 1, draft (2026-10-08). Implemented on both sides on 2026-10-09 (QuickerPlaces in `src/QuickerPlaces/Services/Revit/Handlers/` and `Opening/`, the sample in `samples/RevitHandler/`), unit-tested without Revit; not yet run in a real Revit.
 
 ## Words used here
 

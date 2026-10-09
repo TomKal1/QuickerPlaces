@@ -412,7 +412,7 @@ What the handler does with a request (the sample handler is the reference):
 
 Revit only allows these calls in a valid API context. The handler does the work from an `ExternalEvent`, raised by its folder watcher, or by the first `Idling` event after `ApplicationInitialized` on a cold start. It never does the work in `OnStartup`.
 
-**QuickerPlaces side.**
+**QuickerPlaces side.** Built 2026-10-09 on `feature/revit-handler-contract` (contract, registry and queue in `Services/Revit/Handlers/`; installs, planner, runner and the Library's coordinator in `Services/Revit/Opening/`; dialog detector and Load Once rules in `Services/Revit/Dialogs/` and `AddIns/`; `qp revit installs|handlers|open|dialogs`; a Revit settings dialog). Not yet run against a real Revit; see the [handoff](261009_Revit%20Handler%20Verification%20Handoff.md).
 
 - The contract types, the request queue and the handler registry are UI-free services, the same boundary as `Services/Documents`, so `qp` and the portable tests can use them.
 - The local folder is a per-release setting. It defaults to `C:\REVIT_LOCAL20xx` for that release (for example `C:\REVIT_LOCAL2025`), as the user's office uses (decided 2026-10-08), and can be changed per release.
@@ -435,7 +435,7 @@ Revit only allows these calls in a valid API context. The handler does the work 
 - Phase 5's release selection can use this reader on its own. It does not need the handler. Callers run it off the UI thread with a timeout, since a network share can stall.
 - **Shown in the Library (2026-10-08).** The File viewer's Type column reads "Revit 2025", "Revit 2021 (old)", or "Revit ?" when the release can't be read, with a tooltip naming central or local (or why). `RevitReleaseCache`, one per app in `MainWindow`, answers from memory at once and checks files in the background: each file is read once per version (last write time and length), an answer is trusted for 30 seconds before the stamp is checked again, and a stalled read times out after 3 seconds and is left to finish without a second read starting. Checked in the real app with a session of a 2025 local, the Revit 2025 Snowdon sample, a 2024 and a 2021 family, and a missing file.
 
-**Sample handler add-in.** The sample is both a public guide and the user's template for adding the handler to WWTools.
+**Sample handler add-in.** The sample is both a public guide and the user's template for adding the handler to WWTools. **Built 2026-10-09** in `samples/RevitHandler/` (all ten configurations compile; its Revit-free core is unit-tested), not yet loaded in Revit.
 
 - It lives in `samples/RevitHandler/` with its own solution, outside `src/QuickerPlaces.sln`, so building and testing QuickerPlaces never needs the Revit API.
 - It uses the same build layout as WWTools: `Debug R22` to `Release R26` configurations that set `RevitVersion` and `TargetFramework` (`net48` for 2022 to 2024, `net8.0-windows` for 2025 and 2026), and `Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI` package references at `$(RevitVersion).*`. It does not use Nice3point's Toolkit, so the sample stays small and readable. The handler classes can then be copied into WWTools without changing its build.
