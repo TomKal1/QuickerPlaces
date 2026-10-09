@@ -360,6 +360,16 @@ public sealed class SessionRowViewModel
         }
     }
 
+    /// <summary>Session details shown when hovering its compact card.</summary>
+    public string ToolTipText
+    {
+        get
+        {
+            var details = DetailText;
+            return HasTags ? $"{details}{Environment.NewLine}Tags: {string.Join(", ", Tags)}" : details;
+        }
+    }
+
     /// <summary>The number on the card's badge ("3" for Ctrl+Shift+3), or null past the ninth card.</summary>
     public string? ShortcutText => Session.ShortcutDigit?.ToString(CultureInfo.InvariantCulture);
 

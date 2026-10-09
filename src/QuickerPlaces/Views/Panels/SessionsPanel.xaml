@@ -76,10 +76,12 @@
             <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
             <Setter Property="Background" Value="{DynamicResource Session}" />
             <Setter Property="Foreground" Value="{DynamicResource On.Session}" />
-            <Setter Property="Padding" Value="8,7,12,7" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="5,0,12,0" />
             <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
             <EventSetter Event="PreviewMouseLeftButtonDown" Handler="Card_PreviewMouseLeftButtonDown" />
             <EventSetter Event="PreviewMouseMove" Handler="Card_PreviewMouseMove" />
             <Setter Property="Template">
@@ -277,17 +279,8 @@
                                                    Foreground="{DynamicResource On.Session.Badge}"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14.5" TextTrimming="CharacterEllipsis" />
-                                        <ItemsControl ItemsSource="{Binding Tags}" ItemTemplate="{StaticResource TagPill}"
-                                                      Margin="0,4,0,0" Focusable="False"
-                                                      Visibility="{Binding HasTags, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                        </ItemsControl>
-                                        <TextBlock Text="{Binding DetailText}" FontSize="12" Margin="0,3,0,0" Opacity="0.85" TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" FontSize="14.5"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

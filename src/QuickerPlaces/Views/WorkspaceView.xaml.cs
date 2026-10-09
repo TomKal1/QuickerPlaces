@@ -422,7 +422,7 @@ public partial class WorkspaceView : UserControl
             FillRail();
     }
 
-    /// <summary>The rail's bubbles: a favourite's Ctrl+number, then a session's Ctrl+Shift+number, each opening it on a click.</summary>
+    /// <summary>The rail's bubbles: favourites, sessions and the action for saving a session.</summary>
     private void FillRail()
     {
         if (_railScroller.Visibility != Visibility.Visible)
@@ -441,14 +441,63 @@ public partial class WorkspaceView : UserControl
         }
 
         var sessions = _sessions?.Sessions.Take(SessionStore.ShortcutCount).ToList() ?? new List<SessionSnapshot>();
-        if (favourites.Count > 0 && sessions.Count > 0)
+        if (favourites.Count > 0)
             _rail.Children.Add(new Separator { Margin = new Thickness(4, 6, 4, 6) });
         for (var i = 0; i < sessions.Count; i++)
         {
-            var index = i;
-            _rail.Children.Add(RailBubble((i + 1).ToString(CultureInfo.InvariantCulture), sessions[i].Name,
-                $"Session: {sessions[i].Name} (Ctrl+Shift+{i + 1})", () => SessionShortcutRequested?.Invoke(index), session: true));
+            _rail.Children.Add(RailSessionBubble(i, sessions[i]));
         }
+
+        _rail.Children.Add(RailAddSessionButton());
+    }
+
+    private Button RailAddSessionButton()
+    {
+        var button = new Button
+        {
+            Width = 26,
+            Height = 26,
+            Margin = new Thickness(0, 0, 0, 6),
+            Padding = new Thickness(0),
+            ToolTip = "Save open files as a session",
+            Style = (Style)Application.Current.FindResource("Button.RailSession"),
+            Content = new System.Windows.Shapes.Path
+            {
+                Style = (Style)Application.Current.FindResource("Icon"),
+                Data = (System.Windows.Media.Geometry)Application.Current.FindResource("Icon.Plus"),
+            },
+        };
+        AutomationProperties.SetName(button, "Save open files as a session");
+        button.Click += (_, _) => SaveOpenFilesAsSession();
+        return button;
+    }
+
+    private Button RailSessionBubble(int index, SessionSnapshot session)
+    {
+        var button = RailBubble((index + 1).ToString(CultureInfo.InvariantCulture), session.Name,
+            $"Select session: {session.Name}. Double-click to open (Ctrl+Shift+{index + 1})", () =>
+            {
+                if (_sessionsPanel is not null)
+                    _sessionsPanel.SelectSession(session.Id);
+            }, session: true);
+        AutomationProperties.SetName(button, $"Select session {session.Name}; double-click to open");
+        button.MouseDoubleClick += (_, _) => SessionShortcutRequested?.Invoke(index);
+        return button;
+    }
+
+    /// <summary>Opens the standard review dialog to save the files currently open as a session.</summary>
+    private void SaveOpenFilesAsSession()
+    {
+        if (_sessions is null || _probe is null || Window.GetWindow(this) is not { } owner)
+            return;
+
+        var editor = new SessionEditorViewModel(_sessions, null);
+        if (!SessionEditorDialog.Show(owner, editor, _probe))
+            return;
+
+        _sessionsPanel?.NoteSaved(editor.SavedId!, editor.SavePersistenceMessage);
+        FillRail();
+        RequestReload();
     }
 
     private void ShowFoldButton(bool show)
