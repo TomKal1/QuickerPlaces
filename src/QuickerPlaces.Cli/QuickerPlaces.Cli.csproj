@@ -60,6 +60,7 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
     <Compile Include="..\QuickerPlaces\Services\Revit\RevitFileInfoReader.cs" Link="Linked\Services\Revit\RevitFileInfoReader.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitReleaseCache.cs" Link="Linked\Services\Revit\RevitReleaseCache.cs" />
     <Compile Include="..\QuickerPlaces\Services\Revit\Handlers\*.cs" LinkBase="Linked\Services\Revit\Handlers" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsHeldFiles.cs" Link="Linked\Services\Documents\WindowsHeldFiles.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsOpenDocumentProbe.cs" Link="Linked\Services\Documents\WindowsOpenDocumentProbe.cs" />

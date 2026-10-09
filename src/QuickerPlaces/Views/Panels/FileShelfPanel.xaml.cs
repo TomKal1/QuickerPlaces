@@ -312,6 +312,7 @@ public partial class FileShelfPanel : UserControl
             return;
         }
 
+        OpenAsNewLocalMenuItem.Visibility = SelectedRow.IsRevitCentral ? Visibility.Visible : Visibility.Collapsed;
         AddAsPlaceMenuItem.Visibility = ShowsTracking && SelectedRow.CanAddAsPlace ? Visibility.Visible : Visibility.Collapsed;
         // A link has no folder to show.
         OpenLocationMenuItem.Visibility = SelectedRow.Item.Kind == LibraryKind.Link ? Visibility.Collapsed : Visibility.Visible;
@@ -321,6 +322,10 @@ public partial class FileShelfPanel : UserControl
     }
 
     private void OpenMenu_Click(object sender, RoutedEventArgs e) => ViewModel?.Open(SelectedRow);
+
+    private void OpenAsNewLocal_Click(object sender, RoutedEventArgs e) => ViewModel?.OpenAsNewLocal(SelectedRow);
+
+    private void CancelRevitOpen_Click(object sender, RoutedEventArgs e) => ViewModel?.CancelRevitOpen();
 
     /// <summary>Shows the item in Explorer, selected in its folder (a folder's own parent, for a folder).</summary>
     private void OpenLocation_Click(object sender, RoutedEventArgs e)

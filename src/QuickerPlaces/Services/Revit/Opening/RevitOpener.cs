@@ -113,15 +113,20 @@ public sealed class RevitOpener
         _time = time ?? TimeProvider.System;
     }
 
+    /// <param name="whileWaiting">
+    /// Called on each poll of the wait that doesn't end it, with the id of the
+    /// Revit QuickerPlaces launched (not called when it launched none). This
+    /// is where the caller looks at that Revit's dialogs, on the wait's own rhythm.
+    /// </param>
     public async Task<RevitOpenOutcome> RunAsync(RevitOpenPlan plan, IProgress<RevitOpenStatus>? progress = null,
-        bool wait = true, CancellationToken cancellationToken = default)
+        bool wait = true, CancellationToken cancellationToken = default, Action<int>? whileWaiting = null)
     {
         switch (plan.Kind)
         {
             case RevitOpenKind.DirectOpen:
                 return DirectOpen(plan);
             case RevitOpenKind.HandlerRequest:
-                return await HandlerOpenAsync(plan, progress, wait, cancellationToken).ConfigureAwait(false);
+                return await HandlerOpenAsync(plan, progress, wait, whileWaiting, cancellationToken).ConfigureAwait(false);
             default:
                 return new RevitOpenOutcome(RevitOpenResult.Refused, plan.RefusalReason ?? "The file isn't opened.");
         }
@@ -140,7 +145,7 @@ public sealed class RevitOpener
         }
     }
 
-    private async Task<RevitOpenOutcome> HandlerOpenAsync(RevitOpenPlan plan, IProgress<RevitOpenStatus>? progress, bool wait, CancellationToken token)
+    private async Task<RevitOpenOutcome> HandlerOpenAsync(RevitOpenPlan plan, IProgress<RevitOpenStatus>? progress, bool wait, Action<int>? whileWaiting, CancellationToken token)
     {
         var release = plan.Release!;
         var handlerId = plan.HandlerId!;
@@ -185,6 +190,9 @@ public sealed class RevitOpener
 
         bool StopWhen(RequestStatus status)
         {
+            if (launched is { } watched)
+                whileWaiting?.Invoke(watched);
+
             if (status.State == RequestState.Claimed)
             {
                 claimer = status.ClaimedByProcessId;

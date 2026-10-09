@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.RecentFiles;
 using QuickerPlaces.Models.Workspace;
@@ -14,6 +16,7 @@ using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.Library;
 using QuickerPlaces.Services.RecentFiles;
 using QuickerPlaces.Services.Revit;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.ViewModels;
@@ -76,7 +79,11 @@ public enum CalendarSelectionUnit
 /// them, except for Recent Files' own settings, which live here because this
 /// is where Recent Files is seen. Revit rows name their release ("Revit
 /// 2025"), looked up in the background through a shared
-/// <see cref="RevitReleaseCache"/> when one is given. UI-free and linked into the test project;
+/// <see cref="RevitReleaseCache"/> when one is given. With an
+/// <see cref="IRevitOpenCoordinator"/>, Open on a Revit file goes through it
+/// (one open at a time; its status shows in <see cref="StatusMessage"/> and
+/// <see cref="CancelRevitOpen"/> stops it); without one, Revit rows open as any file.
+/// UI-free and linked into the test project;
 /// the views only bind and pass clicks in.
 /// </summary>
 public sealed class LibraryViewModel : ObservableObject
@@ -91,6 +98,8 @@ public sealed class LibraryViewModel : ObservableObject
     private readonly CultureInfo _culture;
     private readonly IBackgroundWork _work;
     private readonly RevitReleaseCache? _revitReleases;
+    private readonly IRevitOpenCoordinator? _revitOpener;
+    private CancellationTokenSource? _revitOpenCancel;
     private LibrarySnapshot _snapshot;
     private readonly HistoryMonthCache? _history;
     private DateOnly? _historyReach;
@@ -120,7 +129,7 @@ public sealed class LibraryViewModel : ObservableObject
 
     public LibraryViewModel(PlacesService places, SessionStore sessions, ActivityStore activity, RecentFilesStore recentFiles,
         PlaceLauncher placeLauncher, IShell shell, TimeProvider? time = null, CultureInfo? culture = null, IBackgroundWork? work = null,
-        RevitReleaseCache? revitReleases = null)
+        RevitReleaseCache? revitReleases = null, IRevitOpenCoordinator? revitOpener = null)
     {
         _places = places;
         _sessions = sessions;
@@ -132,6 +141,7 @@ public sealed class LibraryViewModel : ObservableObject
         _culture = culture ?? CultureInfo.CurrentCulture;
         _work = work ?? InlineBackgroundWork.Instance;
         _revitReleases = revitReleases;
+        _revitOpener = revitOpener;
         _history = activity.HistoryReader is { } reader ? new HistoryMonthCache(reader) : null;
         _calendarYear = Today().Year;
         _calendarMonth = Today().Month;
@@ -933,6 +943,16 @@ public sealed class LibraryViewModel : ObservableObject
         if (row is null)
             return;
 
+        // A Revit file is opened the Revit-safe way (roadmap §4.21), one at a time.
+        if (_revitOpener is not null && row.Item.Place is null && row.Kind == LibraryKind.Revit)
+        {
+            if (IsRevitOpening)
+                StatusMessage = "A Revit file is already opening. Wait for it, or cancel it first.";
+            else
+                RevitOpen = OpenRevitAsync(row);
+            return;
+        }
+
         StatusMessage = null;
         ErrorMessage = null;
         var item = row.Item;
@@ -974,6 +994,86 @@ public sealed class LibraryViewModel : ObservableObject
         {
             DiagnosticLog.Warn($"Opening a {item.Kind} from the Library failed ({ex.GetType().Name}).");
             ErrorMessage = $"Windows couldn't open \"{item.Name}\": {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// "Open as new local" for a central model: the same as <see cref="Open"/>,
+    /// which already does that for a central; a row that isn't a Revit central does nothing.
+    /// </summary>
+    public void OpenAsNewLocal(LibraryRowViewModel? row)
+    {
+        if (row is { IsRevitCentral: true })
+            Open(row);
+    }
+
+    /// <summary>True while a Revit file is opening (starting Revit, waiting for the handler); the Cancel button shows then.</summary>
+    public bool IsRevitOpening => _revitOpenCancel is not null;
+
+    /// <summary>The Revit open that is running or ran last; callers that need to wait for it, such as tests, await this.</summary>
+    public Task RevitOpen { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Asks the running Revit open to stop. A request the handler has already claimed carries on in Revit.</summary>
+    public void CancelRevitOpen()
+    {
+        if (_revitOpenCancel is not { } cancel)
+            return;
+        StatusMessage = "Cancelling…";
+        try
+        {
+            cancel.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // It finished at that moment.
+        }
+    }
+
+    private async Task OpenRevitAsync(LibraryRowViewModel row)
+    {
+        var cancel = new CancellationTokenSource();
+        _revitOpenCancel = cancel;
+        OnPropertyChanged(nameof(IsRevitOpening));
+        StatusMessage = null;
+        ErrorMessage = null;
+
+        // Status text arrives from the opener's thread; the context captured here is the UI thread's.
+        var progress = new ContextProgress(text =>
+        {
+            if (ReferenceEquals(_revitOpenCancel, cancel))
+                StatusMessage = text;
+        });
+
+        RevitOpenReport report;
+        try
+        {
+            report = await _revitOpener!.OpenAsync(row.Location, progress, cancel.Token);
+        }
+        catch (Exception ex)
+        {
+            // The coordinator reports its own problems; this is for one that escaped.
+            DiagnosticLog.Error("Opening a Revit file from the Library failed.", ex);
+            report = new RevitOpenReport(new RevitOpenOutcome(RevitOpenResult.Failed, ex.Message), $"Couldn't open \"{row.Name}\": {ex.Message}", true);
+        }
+
+        _revitOpenCancel = null;
+        cancel.Dispose();
+        OnPropertyChanged(nameof(IsRevitOpening));
+        StatusMessage = report.IsError ? null : report.Message;
+        ErrorMessage = report.IsError ? report.Message : null;
+    }
+
+    /// <summary>Hands a report to the context it was created on, or runs it at once when called from that same context.</summary>
+    private sealed class ContextProgress(Action<string> apply) : IProgress<string>
+    {
+        private readonly SynchronizationContext? _context = SynchronizationContext.Current;
+
+        public void Report(string value)
+        {
+            if (_context is null || ReferenceEquals(_context, SynchronizationContext.Current))
+                apply(value);
+            else
+                _context.Post(_ => apply(value), null);
         }
     }
 
@@ -1457,6 +1557,9 @@ public sealed class LibraryRowViewModel : ObservableObject
     /// <summary>The Type column's tooltip: a Revit file's release and worksharing in words; "" otherwise.</summary>
     public string KindToolTip => Item.Kind == LibraryKind.Revit ? RevitLabels.ToolTip(_revitInfo) : "";
 
+    /// <summary>True for a Revit file read as a central model: the row offers "Open as new local" (Open does the same).</summary>
+    public bool IsRevitCentral => _revitInfo is { Problem: RevitFileProblem.None, Worksharing: RevitWorksharing.Central };
+
     /// <summary>What a Revit file says about itself, once read; null until then and for other kinds.</summary>
     public RevitFileInfo? RevitInfo
     {
@@ -1469,6 +1572,7 @@ public sealed class LibraryRowViewModel : ObservableObject
             OnPropertyChanged();
             OnPropertyChanged(nameof(KindLabel));
             OnPropertyChanged(nameof(KindToolTip));
+            OnPropertyChanged(nameof(IsRevitCentral));
         }
     }
     public string Location => Item.Location;

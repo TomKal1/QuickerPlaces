@@ -116,8 +116,10 @@
                                 ToolTip="Move, hide or add panels, or pick another layout. Reset to Desk puts everything back." />
                         <Button x:Name="RecentFilesButton" Content="Recent files…" Style="{StaticResource Button.Compact}" Click="RecentFiles_Click" Margin="0,0,8,0"
                                 ToolTip="Record the PDF, Office, text, Revit and AutoCAD files you open, and which" />
-                        <Button x:Name="FolderActivityButton" Content="Folder activity…" Style="{StaticResource Button.Compact}" Click="FolderActivity_Click"
+                        <Button x:Name="FolderActivityButton" Content="Folder activity…" Style="{StaticResource Button.Compact}" Click="FolderActivity_Click" Margin="0,0,8,0"
                                 ToolTip="Record visits in target folders only, or in all folders." />
+                        <Button x:Name="RevitButton" Content="Revit…" Style="{StaticResource Button.Compact}" Click="Revit_Click"
+                                ToolTip="Choose how central models are opened, the folder for new locals, and the add-in prompts QuickerPlaces may answer." />
                     </WrapPanel>
                     <TextBlock x:Name="CustomiseLayoutHint" Text="Customise layout saves these settings first, then lets you rearrange the panels."
                                Style="{StaticResource TextBlock.Hint}" Margin="0,8,0,0" />

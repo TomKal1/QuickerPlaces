@@ -416,6 +416,34 @@ public sealed class RevitOpenerTests : IDisposable
         Assert.True(RequestFilesExist());
     }
 
+    [Fact]
+    public async Task WhileWaiting_IsCalledOnEachPoll_WithTheLaunchedProcess()
+    {
+        _launcher.OnLaunch = _ => RevitRuns(7000, Now);
+        var seen = new List<int>();
+        _script[2] = () => Claim(7000);
+        _script[3] = () => Finish(7000, ok: true, @"C:\L\x.rvt");
+
+        var outcome = await _opener.RunAsync(HandlerPlan(), whileWaiting: seen.Add);
+
+        Assert.Equal(RevitOpenResult.Opened, outcome.Result);
+        Assert.Equal(new[] { 7000, 7000, 7000 }, seen); // the first poll and two pauses; not the one that finds the result
+    }
+
+    [Fact]
+    public async Task WhileWaiting_IsNotCalled_WhenQuickerPlacesLaunchedNoRevit()
+    {
+        RevitRuns(4321, Now.AddHours(-1));
+        HandlerLoads(4321, ready: true);
+        var calls = 0;
+        _script[1] = () => Claim(4321);
+        _script[2] = () => Finish(4321, ok: true, @"C:\L\x.rvt");
+
+        await _opener.RunAsync(HandlerPlan(), whileWaiting: _ => calls++);
+
+        Assert.Equal(0, calls);
+    }
+
     private sealed class ListProgress : IProgress<RevitOpenStatus>
     {
         public List<RevitOpenStatus> Items { get; } = [];

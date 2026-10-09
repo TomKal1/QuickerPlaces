@@ -328,6 +328,8 @@
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Open" FontWeight="Bold" Click="OpenMenu_Click" />
+                        <MenuItem x:Name="OpenAsNewLocalMenuItem" Header="Open as new local" Click="OpenAsNewLocal_Click" Visibility="Collapsed"
+                                  ToolTip="Revit makes a new local copy of this central model and opens it. The central itself is never opened." />
                         <MenuItem x:Name="OpenLocationMenuItem" Header="Open file location" Click="OpenLocation_Click" />
                         <MenuItem Header="Copy path or link" Click="CopyMenu_Click" />
                         <MenuItem x:Name="AddAsPlaceMenuItem" Header="Add as place…" Click="AddAsPlace_Click" Visibility="Collapsed" />
@@ -425,8 +427,14 @@
         <StackPanel Grid.Row="2" Margin="0,8,0,0">
             <TextBlock Text="{Binding PeriodNotesText}" Foreground="{DynamicResource Text.Secondary}" FontSize="12" TextWrapping="Wrap"
                        Style="{StaticResource CollapsedWhenEmpty}" />
-            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}" TextWrapping="Wrap"
-                       Style="{StaticResource CollapsedWhenEmpty}" />
+            <!-- While a Revit file opens, its status (starting Revit, waiting on a dialog) shows here, with a way out. -->
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Cancel" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" VerticalAlignment="Center"
+                        Visibility="{Binding IsRevitOpening, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        AutomationProperties.Name="Cancel opening the Revit file" Click="CancelRevitOpen_Click" />
+                <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}" TextWrapping="Wrap"
+                           Style="{StaticResource CollapsedWhenEmpty}" AutomationProperties.LiveSetting="Polite" />
+            </DockPanel>
             <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,4,0,0"
                        Style="{StaticResource CollapsedWhenEmpty}" />
         </StackPanel>

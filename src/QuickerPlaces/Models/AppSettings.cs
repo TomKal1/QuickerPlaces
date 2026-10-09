@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using QuickerPlaces.Services.Revit.AddIns;
 
 namespace QuickerPlaces.Models;
 
@@ -42,8 +43,13 @@ public sealed class AppSettings
     /// handler choice and local folder. No migration needed: a version-5
     /// file lacks it, which reads as no handler chosen and the default
     /// local folder for every release.
+    ///
+    /// 7: added AllowLoadOnce and LoadOnceEntries (Revit handler plan, step
+    /// 5): the opt-in for pressing Load Once on a Revit add-in security
+    /// prompt, and the add-ins it may be pressed for. No migration needed: a
+    /// version-6 file lacks both, which reads as off with an empty list.
     /// </summary>
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -105,6 +111,17 @@ public sealed class AppSettings
     /// <c>RevitSettingsResolver</c>, which also copes with null.
     /// </summary>
     public Dictionary<string, RevitReleaseSettings>? RevitReleases { get; set; } = new();
+
+    /// <summary>
+    /// The "Allow Load Once" switch (off by default): QuickerPlaces may press
+    /// Load Once, never Always Load, on a Revit add-in security prompt for an
+    /// add-in in <see cref="LoadOnceEntries"/>, in a Revit it launched itself
+    /// (<c>LoadOnceClickPolicy</c> holds every condition).
+    /// </summary>
+    public bool AllowLoadOnce { get; set; }
+
+    /// <summary>The add-ins the user allowed Load Once for, learned from prompts they answered. Null reads as none.</summary>
+    public List<LoadOnceEntry>? LoadOnceEntries { get; set; } = new();
 }
 
 /// <summary>
