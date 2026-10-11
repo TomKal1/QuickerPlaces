@@ -49,7 +49,16 @@ On a machine without Windows (a build server, a Linux container) add `-p:EnableW
 
 ## Install
 
-Close Revit, then copy into the add-ins folder of the release you built for:
+On Windows, building in Visual Studio or with `dotnet build` automatically deploys the selected release. Close that Revit release before building so its loaded DLL is not locked.
+
+- **Debug R22–R26:** copies the manifest to `%AppData%\Autodesk\Revit\Addins\<release>\` and the DLL and supporting output files into its `QuickerPlaces.RevitHandler\` subfolder.
+- **Release R22–R26:** copies into `C:\QuickerPlaces.RevitHandler.bundle\Contents\QuickerPlaces.RevitHandler\<release>\`, with the manifest beside the `QuickerPlaces.RevitHandler\` DLL subfolder, and `PackageContents.xml` at the bundle root. Each build updates only its release folder, preserving other releases. Plain Debug/Release deploys 2025.
+
+The bundle follows the WWTools layout. Its package manifest lists 2022–2026; build each Release configuration before distributing the full bundle. `C:\QuickerPlaces.RevitHandler.bundle` is a packaging destination. To load the release bundle, place it in Autodesk's ApplicationPlugins folder; avoid installing the same handler through both the Debug `.addin` and the bundle.
+
+Override destinations with `-p:RevitAddinsRoot="<add-ins root>"` or `-p:RevitBundleRoot="<bundle path>"`. For a build without deployment, use `-p:DeployRevitHandler=false` (also the default on non-Windows machines).
+
+For manual installation from the build output, copy into the add-ins folder of the release you built for:
 
 ```
 %AppData%\Autodesk\Revit\Addins\2025\QuickerPlaces.RevitHandler.addin

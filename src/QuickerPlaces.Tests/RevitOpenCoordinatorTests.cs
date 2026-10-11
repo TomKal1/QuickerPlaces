@@ -83,7 +83,15 @@ public sealed class RevitOpenCoordinatorTests : IDisposable
         });
         var machine = new RevitMachine { InstallSource = _installs, Processes = _lister, Launcher = _launcher, Probe = _probe };
         return new RevitOpenCoordinator(machine, _folder, _cache, detector ?? _detector, _settings, _settingsService, _prompts, _time, queue,
-            () => _signatures, _ => _manifests, path => path == Dll ? Hash : null);
+            () => _signatures, _ => _manifests, path => path == Dll ? Hash : null,
+            (interval, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                _polls++;
+                _time.Advance(interval);
+                if (_script.TryGetValue(_polls, out var action)) action();
+                return Task.CompletedTask;
+            });
     }
 
     private Task<RevitOpenReport> Open(RevitOpenCoordinator coordinator, CancellationToken token = default)
@@ -202,15 +210,46 @@ public sealed class RevitOpenCoordinatorTests : IDisposable
     }
 
     [Fact]
-    public async Task ALocal_IsOpenedDirectly_AndNothingIsWatched()
+    public async Task ALocal_IsOpenedDirectly_AndStartupIsWatchedUntilTheMainWindowIsReady()
     {
         _info = new RevitFileInfo(2025, "b", RevitWorksharing.Local, Central, Central, 14, RevitFileProblem.None);
+        _script[1] = ShowReadyWindow;
 
         var report = await Open(NewCoordinator());
 
         Assert.Equal(RevitOpenResult.Launched, report.Outcome.Result);
         Assert.False(report.IsError);
         Assert.Contains("Revit 2025 is opening", report.Message);
+        Assert.Equal(1, _polls);
+    }
+
+    private void ShowReadyWindow() => _detector.Windows[Launched] = [new DialogWindow(123, "HwndWrapper[Revit]", true, true,
+        "Autodesk Revit 2025 - Project", [], [])];
+
+    [Fact]
+    public async Task DirectOpenPressesAllowedSecurityPrompt_AndStopsWhenTheMainWindowIsReady()
+    {
+        _info = new RevitFileInfo(2025, "b", RevitWorksharing.NotWorkshared, null, Central, 14, RevitFileProblem.None);
+        _signatures = DialogFixtures.Table(DialogFixtures.Signature());
+        _manifests = [Manifest()];
+        _settings.AllowLoadOnce = true;
+        _settings.LoadOnceEntries!.Add(Entry());
+        ShowPrompt(out _);
+        _script[1] = ShowReadyWindow;
+        var report = await Open(NewCoordinator());
+        Assert.Equal(RevitOpenResult.Launched, report.Outcome.Result);
+        Assert.Equal("Load Once", Assert.Single(_detector.Pressed).Text);
+    }
+
+    [Fact]
+    public async Task CancellingDirectStartupMonitoringLeavesRevitRunning()
+    {
+        _info = new RevitFileInfo(2025, "b", RevitWorksharing.Local, Central, Central, 14, RevitFileProblem.None);
+        using var cancel = new CancellationTokenSource();
+        _script[1] = cancel.Cancel;
+        var report = await Open(NewCoordinator(), cancel.Token);
+        Assert.Equal(RevitOpenResult.Cancelled, report.Outcome.Result);
+        Assert.Contains(Launched, _probe.Running.Keys);
     }
 
     [Fact]

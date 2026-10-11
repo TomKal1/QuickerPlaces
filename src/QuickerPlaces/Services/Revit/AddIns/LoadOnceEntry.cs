@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 
@@ -104,5 +105,16 @@ public static class LoadOnceOffers
         => a is not null && b is not null && NormalPath(a) == NormalPath(b);
 
     private static string NormalPath(string? path)
-        => (path ?? string.Empty).Replace('/', '\\').Trim().ToUpperInvariant();
+    {
+        var normal = (path ?? string.Empty).Trim();
+        try
+        {
+            if (Path.IsPathFullyQualified(normal)) normal = Path.GetFullPath(normal);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { }
+        // Revit's Location field can retain a manifest's .\ segment.
+        normal = normal.Replace('/', '\\');
+        while (normal.Contains("\\.\\", StringComparison.Ordinal)) normal = normal.Replace("\\.\\", "\\", StringComparison.Ordinal);
+        return normal.ToUpperInvariant();
+    }
 }

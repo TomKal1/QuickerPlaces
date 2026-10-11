@@ -229,4 +229,7 @@
     <Compile Include="..\QuickerPlaces\Services\Activity\NetworkDriveResolver.cs" Link="Linked\Services\Activity\NetworkDriveResolver.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\QuickerPlaces\Resources\revit-security-prompts.json" Link="revit-security-prompts.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

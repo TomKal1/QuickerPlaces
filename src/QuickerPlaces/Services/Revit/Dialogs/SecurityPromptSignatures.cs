@@ -10,7 +10,8 @@ namespace QuickerPlaces.Services.Revit.Dialogs;
 /// <summary>
 /// What one release's add-in security prompt ("Always Load / Load Once / Do
 /// Not Load") looks like, recorded from evidence (<c>qp revit dialogs</c>, or
-/// UI Automation). Nothing here is guessed: the table ships empty, and a
+/// UI Automation). Nothing here is guessed: the shipped table records the
+/// English Revit 2025 prompt observed on Windows on 2026-10-11, and a
 /// signature counts for clicking only when <see cref="Verified"/> is true,
 /// which Thomas sets after recording the prompt in that release.
 ///
@@ -49,9 +50,9 @@ public sealed class SecurityPromptSignature
 public sealed record SecurityPromptRecognition(SecurityPromptSignature Signature, string Name, string? DllPath);
 
 /// <summary>
-/// The recorded signatures, one or more per release. <see cref="Empty"/> is
-/// what ships. A file next to the app (<see cref="FileName"/>) can supply
-/// them: <c>{ "signatures": [ { "release": 2025, "verified": true, ... } ] }</c>
+/// The recorded signatures, one or more per release. A file next to the app
+/// (<see cref="FileName"/>) supplies them (currently English Revit 2025):
+/// <c>{ "signatures": [ { "release": 2025, "verified": true, ... } ] }</c>
 /// with the property names of <see cref="SecurityPromptSignature"/> in camel
 /// case. A damaged file gives an empty table and a problem, never an exception.
 /// </summary>

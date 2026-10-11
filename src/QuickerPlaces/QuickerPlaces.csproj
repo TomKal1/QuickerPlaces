@@ -46,6 +46,7 @@
     -->
     <Resource Include="Resources\Fonts\*.ttf" />
     <None Include="Resources\Fonts\OFL-*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Resources\revit-security-prompts.json" Link="revit-security-prompts.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

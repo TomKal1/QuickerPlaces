@@ -9,6 +9,7 @@ using QuickerPlaces.Models;
 using QuickerPlaces.Mvvm;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Revit.AddIns;
+using QuickerPlaces.Services.Revit.Dialogs;
 using QuickerPlaces.Services.Revit.Handlers;
 using QuickerPlaces.Services.Revit.Opening;
 
@@ -51,6 +52,7 @@ public sealed class RevitReleaseRowViewModel : ObservableObject
     public IReadOnlyList<RevitHandlerChoice> Choices { get; }
 
     public string HandlerHint { get; }
+    public string PromptStatus { get; init; } = "Not recorded";
 
     public RevitHandlerChoice SelectedChoice
     {
@@ -120,6 +122,65 @@ public sealed class LoadOnceEntryRowViewModel
     public string RemoveName { get; }
 }
 
+/// <summary>A compact display of saved/draft permissions across releases.</summary>
+public sealed class LoadOnceGroupRowViewModel
+{
+    public LoadOnceGroupRowViewModel(IReadOnlyList<LoadOnceEntryRowViewModel> entries)
+    {
+        Entries = entries;
+        Name = entries[0].Name;
+        ReleaseText = RevitAddinRowViewModel.FormatYears(entries.Select(e => e.Entry.Release));
+        DllDetails = string.Join(Environment.NewLine, entries.Select(e => $"{e.Entry.Release}: {e.DllPath}"));
+        var paths = entries.Select(e => e.DllPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        DllPath = paths.Count == 1 ? paths[0] : $"{paths.Count} DLLs across releases";
+    }
+    public IReadOnlyList<LoadOnceEntryRowViewModel> Entries { get; }
+    public string Name { get; }
+    public string ReleaseText { get; }
+    public string DllPath { get; }
+    public string DllDetails { get; }
+    public string RemoveName => $"Remove {Name} for all listed years";
+}
+
+/// <summary>One installed add-in across releases, with permission still stored per exact DLL and release.</summary>
+public sealed class RevitAddinRowViewModel : ObservableObject
+{
+    private readonly RevitSettingsViewModel _owner;
+    public RevitAddinRowViewModel(IReadOnlyList<AddInManifest> manifests, RevitSettingsViewModel owner)
+    {
+        Manifests = manifests;
+        _owner = owner;
+    }
+    public IReadOnlyList<AddInManifest> Manifests { get; }
+    public AddInManifest Manifest => Manifests[0];
+    public string Name => Manifest.Name;
+    public string Release => FormatYears(Manifests.Select(m => m.Release));
+    public string DllPath => Manifests.Select(m => m.Assembly).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1
+        ? Manifest.Assembly ?? "DLL not declared" : $"{Manifests.Select(m => m.Assembly).Distinct(StringComparer.OrdinalIgnoreCase).Count()} DLLs across releases";
+    public string DllDetails => string.Join(Environment.NewLine, Manifests.Select(m => $"{m.Release}: {m.Assembly ?? "DLL not declared"}"));
+    public bool Matches(LoadOnceEntry entry) => Manifests.Any(m => entry.Release == m.Release
+        && LoadOnceOffers.SameName(entry.Name, m.Name) && LoadOnceOffers.SamePath(entry.DllPath, m.Assembly));
+    private int AllowedCount => Manifests.Count(m => _owner.Entries.Any(e => e.Entry.Release == m.Release
+        && LoadOnceOffers.SameName(e.Name, m.Name) && LoadOnceOffers.SamePath(e.DllPath, m.Assembly)));
+    public bool IsAllowed => AllowedCount == Manifests.Count;
+    public string ActionText => IsAllowed ? "Remove" : "Allow all";
+    public string PermissionText => AllowedCount == 0 ? "Not allowed" : IsAllowed ? "All allowed" : "Some allowed";
+    public void Refresh() { OnPropertyChanged(nameof(IsAllowed)); OnPropertyChanged(nameof(ActionText)); OnPropertyChanged(nameof(PermissionText)); }
+
+    internal static string FormatYears(IEnumerable<int> releases)
+    {
+        var years = releases.Distinct().OrderBy(y => y).ToArray();
+        var ranges = new List<string>();
+        for (var i = 0; i < years.Length; i++)
+        {
+            var start = years[i];
+            while (i + 1 < years.Length && years[i + 1] == years[i] + 1) i++;
+            ranges.Add(start == years[i] ? start.ToString(CultureInfo.InvariantCulture) : $"{start}–{years[i]}");
+        }
+        return string.Join(", ", ranges);
+    }
+}
+
 /// <summary>
 /// The Revit settings dialog's draft (roadmap §4.21; handoff step 5): per
 /// release, which handler opens centrals and where the new locals go, and the
@@ -130,8 +191,8 @@ public sealed class LoadOnceEntryRowViewModel
 /// The releases listed are the installed ones (Revit 2022 and later) plus any
 /// with a registered handler, marked when not installed. A handler shows only
 /// once Revit has run with it loaded; the dialog says so. The list of allowed
-/// add-ins is only ever added to by a "yes" after a launch, never here, so
-/// this view model can remove entries but not add them. UI-free and linked
+/// add-ins can be explicitly allowed here from installed manifests, with a
+/// DLL fingerprint, or after a recognised prompt. UI-free and linked
 /// into the test project.
 /// </summary>
 public sealed class RevitSettingsViewModel : ObservableObject
@@ -144,18 +205,32 @@ public sealed class RevitSettingsViewModel : ObservableObject
     private readonly Action _saved;
     private readonly CultureInfo _culture;
     private readonly List<LoadOnceEntry> _baselineEntries;
-    private readonly bool _baselineAllow;
+    private bool _baselineAllow;
     private bool _allowLoadOnce;
     private bool _savedOnce;
     private string? _saveError;
+    private readonly Func<int, ManifestReadResult> _manifests;
+    private readonly Func<string, string?> _hashOf;
+    private readonly SecurityPromptSignatures _signatures;
+    private string _addinRelease = "All releases";
+    private int _skippedAddins;
+    private int _autodeskAddins;
+    private readonly List<AddInManifest> _installedManifests = [];
+    private readonly List<AddInManifest> _autodeskManifests = [];
+    private readonly Func<string, bool> _isAutodesk;
 
     public RevitSettingsViewModel(AppSettings settings, SettingsService service, RevitMachine machine, RevitHandlerRegistry registry,
-        Action? saved = null, CultureInfo? culture = null)
+        Action? saved = null, CultureInfo? culture = null, Func<int, ManifestReadResult>? manifests = null,
+        SecurityPromptSignatures? signatures = null, Func<string, string?>? hashOf = null, Func<string, bool>? isAutodesk = null)
     {
         _settings = settings;
         _service = service;
         _saved = saved ?? (() => { });
         _culture = culture ?? CultureInfo.CurrentCulture;
+        _manifests = manifests ?? (release => AddInManifestFinder.Find(release, AddInLocations.ForThisMachine()));
+        _signatures = signatures ?? SecurityPromptSignatures.Load(Path.Combine(AppContext.BaseDirectory, SecurityPromptSignatures.FileName));
+        _hashOf = hashOf ?? DllFingerprint.Sha256;
+        _isAutodesk = isAutodesk ?? AutodeskAddinClassifier.IsAutodeskSigned;
         _baselineAllow = _allowLoadOnce = settings.AllowLoadOnce;
         _baselineEntries = (settings.LoadOnceEntries ?? []).ToList();
         Entries = new ObservableCollection<LoadOnceEntryRowViewModel>(_baselineEntries.Select(e => new LoadOnceEntryRowViewModel(e, _culture)));
@@ -168,6 +243,8 @@ public sealed class RevitSettingsViewModel : ObservableObject
         Releases = releases.Select(release => BuildRow(release, installed.Contains(release),
             registered.FirstOrDefault(r => r.Release == release)?.Handlers ?? [])).ToList();
         _baseline = Releases.ToDictionary(r => r.Release, r => (r.SelectedChoice.HandlerId, r.StoredFolder));
+        AddinReleaseChoices = new[] { "All releases" }.Concat(releases).ToList();
+        RefreshAddins();
     }
 
     private readonly Dictionary<string, (string? HandlerId, string? Folder)> _baseline;
@@ -181,10 +258,99 @@ public sealed class RevitSettingsViewModel : ObservableObject
 
     public ObservableCollection<LoadOnceEntryRowViewModel> Entries { get; }
 
-    public bool HasEntries => Entries.Count > 0;
+    public IEnumerable<LoadOnceGroupRowViewModel> AllowedAddins => Entries
+        .Where(e => !_autodeskManifests.Any(m => m.Release == e.Entry.Release && LoadOnceOffers.SamePath(m.Assembly, e.DllPath)))
+        .GroupBy(e => e.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+        .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .Select(g => new LoadOnceGroupRowViewModel(g.OrderBy(e => e.Entry.Release).ToList()));
+    public bool HasEntries => AllowedAddins.Any();
+    public ObservableCollection<RevitAddinRowViewModel> InstalledAddins { get; } = [];
+    public IReadOnlyList<string> AddinReleaseChoices { get; }
+    public IEnumerable<RevitAddinRowViewModel> VisibleAddins => InstalledAddins.Where(r => _addinRelease == "All releases"
+        || r.Manifests.Any(m => m.Release.ToString(CultureInfo.InvariantCulture) == _addinRelease));
+    public string AddinRelease
+    {
+        get => _addinRelease;
+        set { if (SetProperty(ref _addinRelease, value)) AddinFilterChanged(); }
+    }
+    public string AddinScanStatus => $"{VisibleAddins.Count()} add-ins shown. {_autodeskAddins} Autodesk-signed entries excluded."
+        + (_skippedAddins == 0 ? "" : $" {_skippedAddins} manifest entries could not be read.");
+
+    private void AddinFilterChanged()
+    {
+        OnPropertyChanged(nameof(VisibleAddins));
+        OnPropertyChanged(nameof(AddinScanStatus));
+    }
+
+    public void RefreshAddins()
+    {
+        InstalledAddins.Clear();
+        _installedManifests.Clear();
+        _autodeskManifests.Clear();
+        _skippedAddins = 0;
+        _autodeskAddins = 0;
+        var thirdParty = new List<AddInManifest>();
+        var publishers = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var release in Releases)
+        {
+            var read = _manifests(int.Parse(release.Release, CultureInfo.InvariantCulture));
+            _skippedAddins += read.Skipped.Count;
+            foreach (var manifest in read.Manifests.GroupBy(m => (m.Name.ToUpperInvariant(), (m.Assembly ?? "").ToUpperInvariant(), m.AddInId)).Select(g => g.First()).OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                _installedManifests.Add(manifest);
+                var autodesk = false;
+                if (manifest.Assembly is { } dll)
+                {
+                    if (!publishers.TryGetValue(dll, out autodesk))
+                        publishers[dll] = autodesk = _isAutodesk(dll);
+                }
+                if (autodesk) { _autodeskAddins++; _autodeskManifests.Add(manifest); }
+                else thirdParty.Add(manifest);
+            }
+        }
+        foreach (var group in thirdParty.GroupBy(m => (m.Name.Trim().ToUpperInvariant(), (m.VendorId ?? "").Trim().ToUpperInvariant()))
+            .OrderBy(g => g.First().Name, StringComparer.OrdinalIgnoreCase))
+            InstalledAddins.Add(new RevitAddinRowViewModel(group.OrderBy(m => m.Release).ToList(), this));
+        AddinFilterChanged();
+        EntriesChanged();
+    }
+
+    /// <summary>Applies to all installed releases in the row, atomically; still a draft until Save.</summary>
+    public void ToggleAllowed(RevitAddinRowViewModel? row)
+    {
+        if (row is null || !InstalledAddins.Contains(row)) return;
+        if (row.IsAllowed)
+        {
+            foreach (var entry in Entries.Where(e => row.Matches(e.Entry)).ToList()) Entries.Remove(entry);
+        }
+        else
+        {
+            var additions = new List<LoadOnceEntry>();
+            foreach (var manifest in row.Manifests)
+            {
+                var offer = LoadOnceOffers.Offer(manifest.Release, manifest.Name, manifest.Assembly,
+                    _installedManifests, DateTimeOffset.UtcNow, _hashOf);
+                if (offer.Entry is not { } entry) { _saveError = $"Revit {manifest.Release}: {offer.Reason}"; NotifyState(); return; }
+                if (!additions.Any(e => e.Release == entry.Release && LoadOnceOffers.SameName(e.Name, entry.Name)
+                    && LoadOnceOffers.SamePath(e.DllPath, entry.DllPath))) additions.Add(entry);
+            }
+            foreach (var entry in Entries.Where(e => row.Matches(e.Entry)).ToList()) Entries.Remove(entry);
+            foreach (var entry in additions) Entries.Add(new LoadOnceEntryRowViewModel(entry, _culture));
+        }
+        EntriesChanged();
+        Edited();
+    }
+
+    private void EntriesChanged()
+    {
+        OnPropertyChanged(nameof(HasEntries));
+        OnPropertyChanged(nameof(AllowedAddins));
+        OnPropertyChanged(nameof(NoEntriesText));
+        foreach (var row in InstalledAddins) row.Refresh();
+    }
 
     /// <summary>Says how the list fills up while it is empty; "" otherwise.</summary>
-    public string NoEntriesText => HasEntries ? "" : "No add-ins are allowed yet. After a Revit that QuickerPlaces started shows an add-in security prompt that you answer yourself, you are asked whether to allow that add-in next time.";
+    public string NoEntriesText => HasEntries ? "" : "No add-ins are allowed yet. Choose Allow beside an installed add-in, then Save.";
 
     /// <summary>The Allow Load Once switch (off by default).</summary>
     public bool AllowLoadOnce
@@ -198,13 +364,13 @@ public sealed class RevitSettingsViewModel : ObservableObject
     }
 
     public string AllowLoadOnceHint =>
-        "When on, QuickerPlaces presses Load Once, never Always Load, on a Revit add-in security prompt, but only for an add-in listed here, "
-        + "only in a Revit that QuickerPlaces started, and only until the handler has loaded. It checks the add-in's DLL hasn't changed first, "
-        + "and logs every press.";
+        "Press Load Once, never Always Load, only in a Revit that QuickerPlaces started. "
+        + "Choose allowed add-ins below; a recorded prompt and an unchanged DLL are required.";
 
     public bool HasChanges =>
         _allowLoadOnce != _baselineAllow
-        || Entries.Count != _baselineEntries.Count
+        || !Entries.Select(e => LoadOnceJson.Serialise([e.Entry])).OrderBy(e => e, StringComparer.Ordinal)
+            .SequenceEqual(_baselineEntries.Select(e => LoadOnceJson.Serialise([e])).OrderBy(e => e, StringComparer.Ordinal))
         || Releases.Any(r => _baseline[r.Release] != (r.SelectedChoice.HandlerId, r.StoredFolder));
 
     public string? ErrorMessage => Releases.Any(r => r.FolderError.Length > 0)
@@ -221,8 +387,17 @@ public sealed class RevitSettingsViewModel : ObservableObject
     {
         if (row is null || !Entries.Remove(row))
             return;
-        OnPropertyChanged(nameof(HasEntries));
-        OnPropertyChanged(nameof(NoEntriesText));
+        EntriesChanged();
+        Edited();
+    }
+
+    public void RemoveGroup(LoadOnceGroupRowViewModel? row)
+    {
+        if (row is null) return;
+        var removed = false;
+        foreach (var entry in row.Entries) removed |= Entries.Remove(entry);
+        if (!removed) return;
+        EntriesChanged();
         Edited();
     }
 
@@ -258,6 +433,7 @@ public sealed class RevitSettingsViewModel : ObservableObject
             _baseline[row.Release] = (row.SelectedChoice.HandlerId, row.StoredFolder);
         _baselineEntries.Clear();
         _baselineEntries.AddRange(Entries.Select(e => e.Entry));
+        _baselineAllow = _allowLoadOnce;
         _savedOnce = true;
         _saveError = null;
         _saved();
@@ -302,7 +478,10 @@ public sealed class RevitSettingsViewModel : ObservableObject
         var selected = choices.First(c => c.HandlerId == effective.HandlerId);
         var stored = _settings.RevitReleases?.GetValueOrDefault(release)?.LocalFolder;
         return new RevitReleaseRowViewModel(release, installed, choices, selected, stored?.Trim() ?? "",
-            handlers.Any(h => h.Supports(HandlerProtocol.ActionOpenNewLocal)), Edited);
+            handlers.Any(h => h.Supports(HandlerProtocol.ActionOpenNewLocal)), Edited)
+        {
+            PromptStatus = _signatures.HasVerified(int.Parse(release, CultureInfo.InvariantCulture)) ? "Ready" : "Not recorded",
+        };
     }
 
     private string Label(RegisteredHandler handler)

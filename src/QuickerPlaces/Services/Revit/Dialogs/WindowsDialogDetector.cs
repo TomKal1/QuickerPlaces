@@ -16,15 +16,15 @@ namespace QuickerPlaces.Services.Revit.Dialogs;
 /// - For a <c>#32770</c> window, EnumChildWindows (which walks every
 ///   descendant) finds <c>Button</c> children, whether direct (message boxes)
 ///   or under <c>DirectUIHWND</c> and <c>CtrlNotifySink</c> (task dialogs), and
-///   <c>Static</c> children (message text; a task dialog's text sits under
-///   <c>CtrlNotifySink</c> too).
+///   readable child text. DirectUI labels are read through MSAA when there
+///   are no Static HWNDs for their text.
 /// - Child text is read with WM_GETTEXT, because GetWindowText doesn't return
 ///   the text of another process's controls. The message is sent with a
 ///   timeout, so a hung Revit can't hang QuickerPlaces.
 /// - <see cref="PressButton"/> sends BM_CLICK, also with a timeout.
 ///
-/// Not verified against a real Revit prompt; <c>qp revit dialogs</c> is how
-/// to see what each release actually shows.
+/// Text and buttons verified against the English Revit 2025 unsigned add-in
+/// prompt; use <c>qp revit dialogs</c> to record other releases.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WindowsDialogDetector : IDialogDetector
@@ -35,6 +35,62 @@ public sealed class WindowsDialogDetector : IDialogDetector
     private const uint SmtoAbortIfHung = 0x0002;
     private const uint MessageTimeoutMilliseconds = 500;
     private const int MaxText = 4096;
+
+    // Task dialogs render their labels inside DirectUI, without Static HWNDs.
+    // MSAA exposes those labels without adding a WPF/UIAutomation dependency.
+    [ComImport, Guid("618736E0-3C3D-11CF-810C-00AA00389B71"), InterfaceType(ComInterfaceType.InterfaceIsDual)]
+    private interface IAccessibleText
+    {
+        [DispId(-500)] object Parent { [return: MarshalAs(UnmanagedType.IDispatch)] get; }
+        [DispId(-501)] int ChildCount { get; }
+        [DispId(-502)] [return: MarshalAs(UnmanagedType.IDispatch)] object Child([In, MarshalAs(UnmanagedType.Struct)] object child);
+        [DispId(-503)] [return: MarshalAs(UnmanagedType.BStr)] string? Name([In, MarshalAs(UnmanagedType.Struct)] object child);
+    }
+
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromWindow(IntPtr window, uint objectId, ref Guid interfaceId,
+        [MarshalAs(UnmanagedType.Interface)] out IAccessibleText accessible);
+
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleChildren([MarshalAs(UnmanagedType.Interface)] IAccessibleText accessible,
+        int start, int count, [Out, MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.Struct, SizeParamIndex = 2)] object[] children,
+        out int obtained);
+
+    private static void AddAccessibleText(IntPtr hwnd, List<string> texts)
+    {
+        try
+        {
+            var id = typeof(IAccessibleText).GUID;
+            if (AccessibleObjectFromWindow(hwnd, unchecked((uint)-4), ref id, out var root) != 0)
+                return;
+            var remaining = 256;
+            void Read(IAccessibleText node, int depth)
+            {
+                if (depth > 12 || remaining-- <= 0) return;
+                var name = node.Name(0);
+                if (!string.IsNullOrWhiteSpace(name) && !texts.Contains(name)) texts.Add(name);
+                var count = Math.Min(node.ChildCount, Math.Max(0, remaining));
+                if (count == 0) return;
+                var children = new object[count];
+                if (AccessibleChildren(node, 0, count, children, out var obtained) < 0) return;
+                for (var i = 0; i < obtained && remaining > 0; i++)
+                {
+                    if (children[i] is IAccessibleText child) Read(child, depth + 1);
+                    else if (children[i] is int childId)
+                    {
+                        remaining--;
+                        name = node.Name(childId);
+                        if (!string.IsNullOrWhiteSpace(name) && !texts.Contains(name)) texts.Add(name);
+                    }
+                }
+            }
+            Read(root, 0);
+        }
+        catch (Exception ex) when (ex is ExternalException or InvalidCastException or NotSupportedException)
+        {
+            // A closing or inaccessible dialog still has its Win32 title/buttons.
+        }
+    }
 
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
@@ -128,12 +184,14 @@ public sealed class WindowsDialogDetector : IDialogDetector
                 var childClass = ClassOf(child);
                 if (childClass == "Button")
                     buttons.Add(new DialogButton(TextOf(child), child.ToInt64(), IsWindowVisible(child)));
-                else if (childClass == "Static" && TextOf(child) is { Length: > 0 } text)
+                else if (IsWindowVisible(child) && TextOf(child) is { Length: > 0 } text && !statics.Contains(text))
                     statics.Add(text);
                 return true;
             }, IntPtr.Zero);
         }
 
+        if (className == DialogWindow.DialogClassName && IsWindowVisible(hwnd))
+            AddAccessibleText(hwnd, statics);
         return new DialogWindow(hwnd.ToInt64(), className, IsWindowEnabled(hwnd), IsWindowVisible(hwnd), title.ToString(), statics, buttons);
     }
 

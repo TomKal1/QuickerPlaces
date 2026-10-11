@@ -30,7 +30,12 @@ public partial class RevitSettingsDialog : Window
         => (((FrameworkElement)sender).DataContext as RevitReleaseRowViewModel)?.ResetFolder();
 
     private void RemoveEntry_Click(object sender, RoutedEventArgs e)
-        => _editor.Remove(((FrameworkElement)sender).DataContext as LoadOnceEntryRowViewModel);
+        => _editor.RemoveGroup(((FrameworkElement)sender).DataContext as LoadOnceGroupRowViewModel);
+
+    private void ToggleAddin_Click(object sender, RoutedEventArgs e)
+        => _editor.ToggleAllowed(((FrameworkElement)sender).DataContext as RevitAddinRowViewModel);
+
+    private void RefreshAddins_Click(object sender, RoutedEventArgs e) => _editor.RefreshAddins();
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {

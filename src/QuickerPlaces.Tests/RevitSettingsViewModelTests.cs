@@ -6,6 +6,7 @@ using System.Linq;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Revit.AddIns;
+using QuickerPlaces.Services.Revit.Dialogs;
 using QuickerPlaces.Services.Revit.Handlers;
 using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Tests.Fakes;
@@ -37,13 +38,13 @@ public sealed class RevitSettingsViewModelTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private RevitSettingsViewModel New() => new(_settings, _service,
+    private RevitSettingsViewModel New(Func<int, ManifestReadResult>? manifests = null, Func<string, string?>? hashOf = null, Func<string, bool>? isAutodesk = null) => new(_settings, _service,
         new RevitMachine
         {
             InstallSource = _installs, Processes = new FakeProcessLister(), Launcher = new FakeLauncher(), Probe = _probe,
         },
         new RevitHandlerRegistry(_folder, _probe, new ManualTimeProvider(new DateTimeOffset(Start))),
-        () => _saved++, CultureInfo.InvariantCulture);
+        () => _saved++, CultureInfo.InvariantCulture, manifests ?? (_ => ManifestReadResult.Empty), SecurityPromptSignatures.Empty, hashOf, isAutodesk ?? (_ => false));
 
     private void Register(string release, string id, string name, string[]? actions = null, int? loadedPid = null, DateTime? lastSeen = null)
     {
@@ -275,6 +276,7 @@ public sealed class RevitSettingsViewModelTests : IDisposable
 
         Assert.True(_service.Load().AllowLoadOnce);
         Assert.True(_settings.AllowLoadOnce);
+        Assert.False(vm.HasChanges);
     }
 
     [Fact]
@@ -322,5 +324,151 @@ public sealed class RevitSettingsViewModelTests : IDisposable
         vm.Remove(new LoadOnceEntryRowViewModel(Entry("Tool"), CultureInfo.InvariantCulture));
 
         Assert.False(vm.HasChanges);
+    }
+
+    private static AddInManifest Manifest(string name, string dll, string id = "a") => new(2025, AddInKind.Application,
+        name, dll, id, "test", "App", "manifest.addin", ManifestSource.UserAddins);
+
+    [Fact]
+    public void AutodeskFilterUsesDllPublisher_NotManifestNameOrVendor_AndDoesNotEditPermissions()
+    {
+        var native = Manifest("Collaborate", @"C:\Autodesk\Native.dll");
+        var other = Manifest("Autodesk Tool", @"C:\Autodesk\Other.dll") with { VendorId = "ADSK" };
+        var permission = Entry("Collaborate");
+        permission.DllPath = native.Assembly!;
+        _settings.LoadOnceEntries!.Add(permission);
+        var checks = 0;
+        var vm = New(r => r == 2025 ? new ManifestReadResult([native, native with { Name = "Browser" }, other], []) : ManifestReadResult.Empty,
+            isAutodesk: dll => { checks++; return dll == native.Assembly; });
+
+        Assert.Equal(2, checks); // Shared DLLs are checked only once per scan.
+        Assert.Equal("Autodesk Tool", Assert.Single(vm.VisibleAddins).Name);
+        Assert.Contains("2 Autodesk-signed entries excluded", vm.AddinScanStatus);
+        Assert.Single(vm.Entries); // Existing permissions remain available in the allowed list.
+        Assert.Empty(vm.AllowedAddins); // Autodesk permissions are preserved without being displayed.
+        vm.AddinRelease = "2024";
+        Assert.Empty(vm.VisibleAddins);
+        Assert.Contains("0 add-ins shown", vm.AddinScanStatus);
+        vm.AddinRelease = "2025";
+        vm.RefreshAddins();
+        Assert.Single(vm.VisibleAddins);
+        Assert.False(vm.HasChanges);
+        Assert.DoesNotContain(vm.InstalledAddins, r => r.Name == "Collaborate");
+    }
+
+    [Fact]
+    public void UnsignedAndUnreadableDllsAreNotClassifiedAsAutodesk()
+    {
+        Assert.False(AutodeskAddinClassifier.IsAutodeskSigned(_dir.File("missing.dll")));
+        var dll = _dir.File("unsigned.dll");
+        File.WriteAllText(dll, "This is not a signed DLL.");
+        Assert.False(AutodeskAddinClassifier.IsAutodeskSigned(dll));
+    }
+
+    [Fact]
+    public void GroupedAllowCoversAllInstalledYears_EvenWhenFiltered_AndRemoveCoversThemAll()
+    {
+        _installs.AddDefault(2023);
+        _installs.AddDefault(2026);
+        var vm = New(r => new ManifestReadResult([Manifest("WWTools", $@"C:\Addins\{r}\WWTools.dll") with { Release = r }], []),
+            dll => "hash-" + dll);
+        var row = Assert.Single(vm.VisibleAddins);
+        Assert.Equal("2023–2026", row.Release);
+        vm.AddinRelease = "2024";
+        Assert.Same(row, Assert.Single(vm.VisibleAddins));
+        vm.ToggleAllowed(row);
+        Assert.True(row.IsAllowed);
+        Assert.Equal(4, vm.Entries.Count);
+        Assert.Equal("2023–2026", Assert.Single(vm.AllowedAddins).ReleaseText);
+        Assert.All(vm.Entries, e => Assert.Equal("hash-" + e.DllPath, e.Entry.DllSha256));
+        Assert.Empty(_settings.LoadOnceEntries!);
+        Assert.True(vm.Save());
+        Assert.Equal(new[] { 2023, 2024, 2025, 2026 }, _service.Load().LoadOnceEntries!.Select(e => e.Release));
+        vm.ToggleAllowed(row);
+        Assert.Empty(vm.Entries);
+        Assert.Equal("Not allowed", row.PermissionText);
+        vm.ToggleAllowed(row);
+        vm.RemoveGroup(Assert.Single(vm.AllowedAddins));
+        Assert.Empty(vm.Entries);
+        Assert.False(row.IsAllowed);
+    }
+
+    [Fact]
+    public void GroupedAllowIsAtomicWhenOneYearCannotBeRead_AndPreservesPartialPermissions()
+    {
+        var first = Manifest("Tool", @"C:\Addins\Tool.dll") with { Release = 2024 };
+        var second = first with { Release = 2025, Assembly = @"C:\Addins\2025\Tool.dll" };
+        _settings.LoadOnceEntries!.Add(Entry("Tool", 2024));
+        var vm = New(r => new ManifestReadResult([r == 2024 ? first : second], []), dll => dll == first.Assembly ? "aa" : null);
+        var row = Assert.Single(vm.VisibleAddins);
+        Assert.Equal("Some allowed", row.PermissionText);
+        Assert.Equal("Allow all", row.ActionText);
+        vm.ToggleAllowed(row);
+        Assert.Contains("Revit 2025", vm.ErrorMessage);
+        Assert.Single(vm.Entries);
+        Assert.False(vm.HasChanges);
+    }
+
+    [Fact]
+    public void GroupingKeepsDifferentVendorsSeparate_AndDoesNotInventMissingYears()
+    {
+        var vm = New(r => new ManifestReadResult([
+            Manifest("Tool", $@"C:\Addins\{r}\Tool.dll") with { Release = r },
+            Manifest("Tool", $@"C:\Other\{r}\Tool.dll") with { Release = r, VendorId = "other" }], []));
+        Assert.Equal(2, vm.VisibleAddins.Count());
+        Assert.Equal("2023, 2025–2026", RevitAddinRowViewModel.FormatYears([2026, 2023, 2025, 2025]));
+    }
+
+    [Fact]
+    public void InstalledAddinsAppearBeforeAnyPermission_AndAllowIsADraftWithTheExactDllHash()
+    {
+        var manifest = Manifest("Tool", @"C:\Addins\Tool.dll");
+        var vm = New(r => r == 2025 ? new ManifestReadResult([manifest, manifest], []) : ManifestReadResult.Empty, _ => "abcd");
+        var row = Assert.Single(vm.InstalledAddins);
+        Assert.False(row.IsAllowed);
+        Assert.False(vm.HasChanges);
+        vm.ToggleAllowed(row);
+        Assert.True(row.IsAllowed);
+        Assert.Empty(_settings.LoadOnceEntries!);
+        Assert.Equal("abcd", Assert.Single(vm.Entries).Entry.DllSha256);
+        Assert.True(vm.Save());
+        Assert.Equal("abcd", Assert.Single(_service.Load().LoadOnceEntries!).DllSha256);
+        Assert.False(vm.HasChanges);
+        vm.Remove(vm.Entries[0]);
+        Assert.False(row.IsAllowed);
+    }
+
+    [Fact]
+    public void AllowRefusesAmbiguousManifestIdentitiesAndUnreadableDlls()
+    {
+        var first = Manifest("Tool", @"C:\Addins\Tool.dll", "first");
+        var second = first with { AddInId = "second" };
+        var vm = New(r => r == 2025 ? new ManifestReadResult([first, second], []) : ManifestReadResult.Empty, _ => "abcd");
+        vm.ToggleAllowed(vm.InstalledAddins[0]);
+        Assert.Empty(vm.Entries);
+        Assert.Contains("different add-ins", vm.ErrorMessage);
+        vm = New(r => r == 2025 ? new ManifestReadResult([first], []) : ManifestReadResult.Empty, _ => null);
+        vm.ToggleAllowed(vm.InstalledAddins[0]);
+        Assert.Empty(vm.Entries);
+        Assert.Contains("can't be read", vm.ErrorMessage);
+    }
+
+    [Fact]
+    public void FilteringAndRefreshPreserveDraftPermissions_ReplacementOfEqualCountIsDetected()
+    {
+        _settings.LoadOnceEntries!.Add(Entry("Old"));
+        var manifest = Manifest("New", @"C:\Addins\New.dll");
+        var vm = New(r => r == 2025 ? new ManifestReadResult([manifest], []) : ManifestReadResult.Empty, _ => "abcd");
+        vm.Remove(vm.Entries[0]);
+        vm.ToggleAllowed(vm.InstalledAddins[0]);
+        Assert.True(vm.HasChanges);
+        vm.AddinRelease = "2024";
+        Assert.Empty(vm.VisibleAddins);
+        vm.AddinRelease = "2025";
+        Assert.Single(vm.VisibleAddins);
+        vm.RefreshAddins();
+        Assert.True(Assert.Single(vm.InstalledAddins).IsAllowed);
+        Assert.True(vm.Save());
+        Assert.Equal("New", Assert.Single(_service.Load().LoadOnceEntries!).Name);
     }
 }

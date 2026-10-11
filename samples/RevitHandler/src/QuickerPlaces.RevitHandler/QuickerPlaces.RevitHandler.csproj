@@ -20,6 +20,7 @@
   <PropertyGroup>
     <Configurations>Debug R22;Debug R23;Debug R24;Debug R25;Debug R26;Release R22;Release R23;Release R24;Release R25;Release R26</Configurations>
     <Platforms>AnyCPU</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>QuickerPlaces.RevitHandler</RootNamespace>
     <AssemblyName>QuickerPlaces.RevitHandler</AssemblyName>
     <Version>1.0.0</Version>
@@ -86,5 +87,36 @@
   <ItemGroup>
     <None Include="QuickerPlaces.RevitHandler.addin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- Windows builds deploy locally; CI and build-only workflows can opt out. -->
+  <PropertyGroup>
+    <DeployRevitHandler Condition="'$(DeployRevitHandler)' == '' And '$(OS)' == 'Windows_NT'">true</DeployRevitHandler>
+    <RevitAddinsRoot Condition="'$(RevitAddinsRoot)' == ''">$(AppData)\Autodesk\Revit\Addins</RevitAddinsRoot>
+    <RevitBundleRoot Condition="'$(RevitBundleRoot)' == ''">C:\QuickerPlaces.RevitHandler.bundle</RevitBundleRoot>
+  </PropertyGroup>
+
+  <Target Name="DeployRevitHandlerBuild" AfterTargets="Build"
+          Condition="'$(DeployRevitHandler)' == 'true' And '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_RevitDeployDirectory Condition="$(Configuration.StartsWith('Debug'))">$(RevitAddinsRoot)\$(RevitVersion)</_RevitDeployDirectory>
+      <_RevitDeployDirectory Condition="$(Configuration.StartsWith('Release'))">$(RevitBundleRoot)\Contents\QuickerPlaces.RevitHandler\$(RevitVersion)</_RevitDeployDirectory>
+    </PropertyGroup>
+    <Error Condition="'$(_RevitDeployDirectory)' == ''" Text="No Revit deployment path for configuration $(Configuration)." />
+    <Error Condition="$(Configuration.StartsWith('Debug')) And '$(AppData)' == '' And '$(RevitAddinsRoot)' == '\Autodesk\Revit\Addins'"
+           Text="AppData is unavailable. Set RevitAddinsRoot or build with DeployRevitHandler=false." />
+    <ItemGroup>
+      <_RevitDeployFiles Include="$(TargetDir)**\*" Exclude="$(TargetDir)QuickerPlaces.RevitHandler.addin" />
+    </ItemGroup>
+    <MakeDir Directories="$(_RevitDeployDirectory)\QuickerPlaces.RevitHandler" />
+    <Copy SourceFiles="@(_RevitDeployFiles)"
+          DestinationFiles="@(_RevitDeployFiles->'$(_RevitDeployDirectory)\QuickerPlaces.RevitHandler\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(TargetDir)QuickerPlaces.RevitHandler.addin"
+          DestinationFolder="$(_RevitDeployDirectory)" SkipUnchangedFiles="true" />
+    <Copy Condition="$(Configuration.StartsWith('Release'))"
+          SourceFiles="$(MSBuildProjectDirectory)\PackageContents.xml"
+          DestinationFolder="$(RevitBundleRoot)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Revit $(RevitVersion) handler deployed to $(_RevitDeployDirectory)" />
+  </Target>
 
 </Project>

@@ -19,6 +19,18 @@ Everything below was built and unit-tested in a Linux container (`dotnet test` o
 
 ## What is built
 
+### Local verification and settings update (2026-10-11)
+
+Thomas verified opening a central as a new local and direct file opening in Revit 2025 on Windows. The English 2025 unsigned add-in prompt was recorded live (BatchRvtAddin and DeltaStatics). Its text is in DirectUI, not Static HWNDs: the detector now reads it through MSAA, and the observed signature ships with both the app and CLI. Other releases still need recording. Actual automatic button delivery still needs an end-to-end launch check after selecting allowed add-ins.
+
+Revit settings now uses a compact release table and separately discovers installed add-ins from manifests/bundles, with filtering, Refresh and explicit Allow/Remove actions saved as a draft until Save. Allow fingerprints the selected DLL; it does not grant permission to every discovered add-in. This replaces the earlier requirement that permissions could only be added through a follow-up offer after a launch. Direct opens now monitor startup dialogs too, until Revit's main window is ready, cancellation, exit or a ten-minute monitoring limit. The handler-request rule still stops clicking once that handler appears.
+
+App and CLI builds passed without warnings; 1917 main tests passed after the grouped settings change. One run hit the previously documented `AfterAStalledReadFinishes_ANewOneCanStart` timing failure; the solution rerun passed. The compact table and installed inventory were inspected in a separate app using scratch settings before the grouping update. The existing sample request-claim concurrency test previously failed on Windows and remains a separate follow-up.
+
+Both add-in lists exclude DLLs identified by valid Autodesk Authenticode signatures, with no show-Autodesk toggle. Existing permissions are preserved in storage. Unknown, unsigned or unverifiable publishers remain visible. Verification uses cached trust information without UI or network retrieval and checks each DLL once per scan. A local scan across 2022–2026 identified 54 Autodesk entries, including Collaborate, Batch Print, Views For A360 and Worksharing Monitor; third-party add-ins stayed visible. This is a display filter only, not a change to Load Once permission checks.
+
+Installed third-party add-ins are grouped by name and vendor across releases. Years are shown as ranges (e.g. WWTools 2023–2026); missing years remain explicit gaps. Filtering by one release finds groups available in that release; Allow all still covers every installed year shown in the row. Each DLL retains its own per-release SHA-256 permission. All offers are validated before any draft permission changes, so an unreadable/ambiguous year leaves the whole draft unchanged. Partially allowed groups are marked; fully allowed groups offer Remove for all listed years. Saved/draft permissions also display once per add-in name with grouped years and a single Remove action. Changes still require Save.
+
 | Commit | Step | What |
 |---|---|---|
 | 5926947 | 1 | Protocol spec, version 1 (unchanged since). |

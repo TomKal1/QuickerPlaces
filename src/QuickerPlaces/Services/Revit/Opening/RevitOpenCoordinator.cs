@@ -71,6 +71,7 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
     private readonly Func<string, string?> _hashOf;
     private readonly LoadOnceClicker _clicker;
     private readonly TimeProvider _time;
+    private readonly Func<TimeSpan, CancellationToken, Task> _pause;
 
     /// <param name="queue">Optional, for tests that control the poll rhythm; its folder and clock must be the ones given here.</param>
     /// <param name="signatures">Defaults to the table next to the app (<see cref="SecurityPromptSignatures.FileName"/>).</param>
@@ -79,7 +80,8 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
     public RevitOpenCoordinator(RevitMachine machine, RevitProtocolFolder folder, RevitReleaseCache cache, IDialogDetector detector,
         AppSettings settings, SettingsService settingsService, IRevitOpenPrompts prompts, TimeProvider? time = null,
         RevitRequestQueue? queue = null, Func<SecurityPromptSignatures>? signatures = null,
-        Func<int, IReadOnlyList<AddInManifest>>? manifests = null, Func<string, string?>? hashOf = null)
+        Func<int, IReadOnlyList<AddInManifest>>? manifests = null, Func<string, string?>? hashOf = null,
+        Func<TimeSpan, CancellationToken, Task>? pause = null)
     {
         _machine = machine;
         _cache = cache;
@@ -88,6 +90,7 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
         _settingsService = settingsService;
         _prompts = prompts;
         _time = time ?? TimeProvider.System;
+        _pause = pause ?? ((interval, token) => Task.Delay(interval, _time, token));
         _hashOf = hashOf ?? DllFingerprint.Sha256;
         _registry = new RevitHandlerRegistry(folder, machine.Probe, _time);
         _opener = new RevitOpener(folder, queue ?? new RevitRequestQueue(folder, _time), _registry, machine, _time);
@@ -123,6 +126,8 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
             var outcome = await Task.Run(async () =>
             {
                 var result = await _opener.RunAsync(plan, watch, wait: true, cancellationToken, watch.Poll);
+                if (plan.Kind == RevitOpenKind.DirectOpen && result.LaunchedProcessId is { } directPid && result.Ok)
+                    result = await WatchDirectStartup(result, directPid, watch, cancellationToken);
                 watch.Settle();
                 return result;
             }, CancellationToken.None);
@@ -136,6 +141,30 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
         {
             DiagnosticLog.Error($"Opening the Revit file {name} failed.", ex);
             return new RevitOpenReport(new RevitOpenOutcome(RevitOpenResult.Failed, ex.Message), $"Couldn't open {name}: {ex.Message}", true);
+        }
+    }
+
+    private async Task<RevitOpenOutcome> WatchDirectStartup(RevitOpenOutcome launched, int pid, Watch watch, CancellationToken token)
+    {
+        watch.Report(new RevitOpenStatus(RevitOpenPhase.WaitingForRevit, "Waiting for Revit to finish starting…", pid, null));
+        var started = _machine.Probe.GetStartTimeUtc(pid);
+        var until = _time.GetUtcNow() + TimeSpan.FromMinutes(10);
+        try
+        {
+            while (_time.GetUtcNow() < until)
+            {
+                token.ThrowIfCancellationRequested();
+                if (_machine.Probe.GetStartTimeUtc(pid) != started || started is null)
+                    return new RevitOpenOutcome(RevitOpenResult.RevitExited, "The Revit process ended during startup.", LaunchedProcessId: pid);
+                watch.Poll(pid);
+                if (watch.Stopped) return launched;
+                await _pause(TimeSpan.FromMilliseconds(500), token).ConfigureAwait(false);
+            }
+            return launched with { Message = launched.Message + " Startup monitoring timed out; answer any remaining dialogs in Revit." };
+        }
+        catch (OperationCanceledException)
+        {
+            return new RevitOpenOutcome(RevitOpenResult.Cancelled, "Cancelled startup monitoring. Revit is still running.", LaunchedProcessId: pid);
         }
     }
 
@@ -284,6 +313,7 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
         private string? _shown;
         private int? _pid;
         private bool _stopped;
+        public bool Stopped => _stopped;
 
         public Watch(RevitOpenCoordinator owner, RevitOpenPlan plan, IProgress<string>? status)
         {
@@ -330,11 +360,14 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
             {
                 _pid = processId;
                 var windows = _owner._detector.ListWindows(processId);
-                var handlerAppeared = HandlerAppeared(processId);
+                var handlerAppeared = _plan.Kind == RevitOpenKind.HandlerRequest && HandlerAppeared(processId);
+                var directReady = _plan.Kind == RevitOpenKind.DirectOpen && windows.Any(w => w.Visible && w.Enabled
+                    && w.ClassName.StartsWith("HwndWrapper", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(w.Title))
+                    && !windows.Any(w => RevitDialogClassifier.Judge(w) == DialogVerdict.Waiting);
                 _dialogText = handlerAppeared ? null : RevitDialogClassifier.Classify(windows, Release, Signatures).StatusText;
                 Show();
 
-                if (handlerAppeared)
+                if (handlerAppeared || directReady)
                 {
                     // The launch is over: no more pressing, and the last look at what the user answered.
                     Note(windows);

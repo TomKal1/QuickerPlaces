@@ -170,7 +170,7 @@ public sealed class LoadOnceClicker
                 continue;
 
             var delivered = _detector.PressButton(decision.Button!);
-            clicked = true;
+            clicked = delivered;
             _log($"Load Once: pressed \"{decision.Button!.Text}\" for \"{decision.Entry!.Name}\" in Revit {context.Release} (process {processId}); "
                 + $"DLL {decision.Entry.DllPath}, SHA-256 {decision.Entry.DllSha256}; delivered: {delivered}.");
         }

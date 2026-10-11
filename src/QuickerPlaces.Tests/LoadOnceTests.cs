@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using QuickerPlaces.Services.Revit.AddIns;
@@ -272,6 +273,33 @@ public sealed class LoadOnceTests
         Assert.Empty(detector.Pressed);
         Assert.Empty(log);
         Assert.Single(result.Decisions);
+    }
+
+    [Fact]
+    public void FailedButtonDeliveryIsNotReportedAsAClick()
+    {
+        var (clicker, detector, log) = Clicker();
+        detector.Windows[42] = [Prompt()];
+        detector.PressSucceeds = false;
+        Assert.False(clicker.Poll(42, Context()).Clicked);
+        Assert.Contains("delivered: False", Assert.Single(log));
+    }
+
+    [Fact]
+    public void RecordedRevit2025DirectUiPromptRecognisesNameAndNormalisesTheManifestDotSegment()
+    {
+        var table = SecurityPromptSignatures.Load(Path.Combine(AppContext.BaseDirectory, SecurityPromptSignatures.FileName));
+        var window = DialogFixtures.Dialog("Security - Unsigned Add-In", ["Always Load", "Load Once", "Do Not Load"],
+            ["The publisher of this add-in could not be verified. What do you want to do?",
+             "Name:                Tool\nPublisher:           Unknown Publisher\nLocation:            C:\\Addins\\.\\Tool.dll\nIssuer:                 None\nDate:                   2026-07-10 21:51:06\n\nMake sure that this add-in comes from a trusted source."]);
+        var recognised = Assert.IsType<SecurityPromptRecognition>(table.Recognise(2025, window, verifiedOnly: true));
+        Assert.Equal("Tool", recognised.Name);
+        Assert.Equal(@"C:\Addins\.\Tool.dll", recognised.DllPath);
+        var decision = LoadOnceClickPolicy.Decide(Context() with { Signatures = table }, window, _ => Hash);
+        Assert.True(decision.MayClick);
+        Assert.Equal("Load Once", decision.Button!.Text);
+        Assert.Null(table.Recognise(2026, window, verifiedOnly: true));
+        Assert.False(LoadOnceClickPolicy.Decide(Context() with { Signatures = table }, window with { Buttons = [new DialogButton("Always Load", 5)] }, _ => Hash).MayClick);
     }
 
     [Fact]
