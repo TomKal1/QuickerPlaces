@@ -313,6 +313,20 @@ public partial class FileShelfPanel : UserControl
         }
 
         OpenAsNewLocalMenuItem.Visibility = SelectedRow.IsRevitCentral ? Visibility.Visible : Visibility.Collapsed;
+        OpenLocalModelMenuItem.Visibility = SelectedRow.IsRevitCentral ? Visibility.Visible : Visibility.Collapsed;
+        OpenLocalModelMenuItem.Items.Clear();
+        var central = SelectedRow;
+        foreach (var local in ViewModel?.LocalModelsFor(central) ?? Array.Empty<RevitLocalModel>())
+        {
+            // TextBlock preserves underscores in Revit filenames instead of interpreting them as menu mnemonics.
+            var option = new MenuItem { Header = new TextBlock { Text = local.Name }, ToolTip = local.Location };
+            option.Click += (_, _) => ViewModel?.OpenLocalModel(central, local.Location);
+            OpenLocalModelMenuItem.Items.Add(option);
+        }
+        OpenLocalModelMenuItem.IsEnabled = OpenLocalModelMenuItem.Items.Count > 0 && ViewModel is { IsRevitOpening: false };
+        OpenLocalModelMenuItem.ToolTip = OpenLocalModelMenuItem.Items.Count > 0
+            ? "Choose an existing saved local copy of this central model. Most recently opened first."
+            : "No existing saved local copies are available. Use Open as new local to create one.";
         AddAsPlaceMenuItem.Visibility = ShowsTracking && SelectedRow.CanAddAsPlace ? Visibility.Visible : Visibility.Collapsed;
         // A link has no folder to show.
         OpenLocationMenuItem.Visibility = SelectedRow.Item.Kind == LibraryKind.Link ? Visibility.Collapsed : Visibility.Visible;

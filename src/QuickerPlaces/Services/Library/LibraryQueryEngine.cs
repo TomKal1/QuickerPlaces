@@ -141,13 +141,13 @@ public static class LibraryQueryEngine
         if (period is { } p && p.From > p.To)
             period = (p.To, p.From);
 
-        var inPeriod = LibraryIndex.Build(PlacesIn(data, period), SessionsIn(data, period), FoldersIn(data, period), FilesIn(data, period));
+        var inPeriod = LibraryIndex.Build(PlacesIn(data, period), SessionsIn(data, period), FoldersIn(data, period), FilesIn(data, period), data.RevitCentrals);
         var items = inPeriod.Where(i => Passes(i, filter, ignoreKind: true)).ToList();
 
         // Every item known across all kept history, loaded history months included, to tie heat evidence to items.
         var allItems = period is null && data.HistoryFrom is null
             ? inPeriod
-            : LibraryIndex.Build(data.Places, data.Sessions, FoldersIn(data, null, everything: true), FilesIn(data, null, everything: true));
+            : LibraryIndex.Build(data.Places, data.Sessions, FoldersIn(data, null, everything: true), FilesIn(data, null, everything: true), data.RevitCentrals);
         var everything = allItems.ToDictionary(i => i.Key, ResourceIdentity.Comparer);
 
         var heat = new Dictionary<DateOnly, HeatDay>();
@@ -389,7 +389,7 @@ public static class LibraryQueryEngine
             var kind = LibraryKinds.From(file.Kind);
             if (filter.Kind is { } only && only != kind)
                 continue;
-            if (!filter.OnlyKind && !(everything.TryGetValue(ResourceIdentity.Key(kind, file.Path), out var item) && Passes(item, filter)))
+            if (!filter.OnlyKind && !(everything.TryGetValue(ResourceIdentity.Key(kind, data.RecentFilePath(file.Path)), out var item) && Passes(item, filter)))
                 continue;
 
             foreach (var open in file.Opens)

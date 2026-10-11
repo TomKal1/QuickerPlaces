@@ -330,6 +330,8 @@
                         <MenuItem Header="Open" FontWeight="Bold" Click="OpenMenu_Click" />
                         <MenuItem x:Name="OpenAsNewLocalMenuItem" Header="Open as new local" Click="OpenAsNewLocal_Click" Visibility="Collapsed"
                                   ToolTip="Revit makes a new local copy of this central model and opens it. The central itself is never opened." />
+                        <MenuItem x:Name="OpenLocalModelMenuItem" Header="Open local model" Visibility="Collapsed"
+                                  ToolTip="Choose an existing saved local copy of this central model." />
                         <MenuItem x:Name="OpenLocationMenuItem" Header="Open file location" Click="OpenLocation_Click" />
                         <MenuItem Header="Copy path or link" Click="CopyMenu_Click" />
                         <MenuItem x:Name="AddAsPlaceMenuItem" Header="Add as place…" Click="AddAsPlace_Click" Visibility="Collapsed" />
@@ -356,11 +358,19 @@
                     <DataGridTemplateColumn Header="NAME" Width="2*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid VerticalAlignment="Center" ToolTip="{Binding NameToolTip}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <Path Style="{StaticResource Icon.LibraryKind}" />
-                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Location}" />
-                                </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="2" Text="{Binding LocalCopiesText}" Margin="12,0,0,0" MaxWidth="110"
+                                               Style="{StaticResource Cell.Secondary}" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding HasLocalCopies, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               AutomationProperties.HelpText="{Binding NameToolTip}" />
+                                </Grid>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

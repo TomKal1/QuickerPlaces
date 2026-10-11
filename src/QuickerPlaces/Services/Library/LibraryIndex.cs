@@ -113,6 +113,9 @@ public sealed record LibraryItem(
     /// <summary>Time spent in a folder in the period (Recents); zero for anything else.</summary>
     public TimeSpan RecentTime { get; init; }
 
+    /// <summary>Local copies contributing recent activity to this central model, within the selected period.</summary>
+    public IReadOnlyList<string> LocalCopies { get; init; } = Array.Empty<string>();
+
     /// <summary>What places it among tracked folders: a folder itself, or the folder a file is in; "" for a link.</summary>
     public string TreePath => Kind == LibraryKind.Folder ? Location : Folder;
 
@@ -173,7 +176,8 @@ public static class LibraryIndex
         IEnumerable<Place> places,
         IEnumerable<SessionSnapshot> sessions,
         IEnumerable<FolderActivity> recentFolders,
-        IEnumerable<RecentFileSummary> recentFiles)
+        IEnumerable<RecentFileSummary> recentFiles,
+        IReadOnlyDictionary<string, string>? revitCentrals = null)
     {
         var items = new Dictionary<string, Builder>(ResourceIdentity.Comparer);
 
@@ -215,7 +219,11 @@ public static class LibraryIndex
 
         foreach (var file in recentFiles)
         {
-            var item = Get(LibraryKinds.From(file.Kind), file.Path);
+            var central = file.Kind == DocumentKind.Revit && revitCentrals is not null &&
+                revitCentrals.TryGetValue(file.Path, out var target) ? target : null;
+            var item = Get(LibraryKinds.From(file.Kind), central ?? file.Path);
+            if (central is not null)
+                item.LocalCopies.Add(file.Path);
             item.RecentCount += file.Opens;
             item.Use(file.LastOpenedAt);
         }
@@ -234,6 +242,7 @@ public static class LibraryIndex
         return words.All(word =>
             item.Name.Contains(word, StringComparison.CurrentCultureIgnoreCase) ||
             item.Location.Contains(word, StringComparison.CurrentCultureIgnoreCase) ||
+            item.LocalCopies.Any(p => p.Contains(word, StringComparison.CurrentCultureIgnoreCase)) ||
             item.Tags.Any(t => t.Contains(word, StringComparison.CurrentCultureIgnoreCase)) ||
             item.Sessions.Any(s => s.Contains(word, StringComparison.CurrentCultureIgnoreCase)));
     }
@@ -254,6 +263,7 @@ public static class LibraryIndex
         public Place? Place { get; set; }
         public int RecentCount { get; set; }
         public TimeSpan RecentTime { get; set; }
+        public HashSet<string> LocalCopies { get; } = new(StringComparer.OrdinalIgnoreCase);
         public DateTimeOffset? LastUsedAt { get; private set; }
 
         public void Use(DateTimeOffset? at)
@@ -281,6 +291,7 @@ public static class LibraryIndex
             return new LibraryItem(Kind, name, location, Place, _sessions.ToArray(), _tags.ToArray(), RecentCount, LastUsedAt)
             {
                 RecentTime = RecentTime,
+                LocalCopies = LocalCopies.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray(),
             };
         }
     }

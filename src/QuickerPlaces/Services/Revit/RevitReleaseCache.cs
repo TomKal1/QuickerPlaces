@@ -65,7 +65,9 @@ public sealed class RevitReleaseCache
     /// every path. Blocks for up to the timeout per stalled file; call it off
     /// the UI thread.
     /// </summary>
-    public IReadOnlyDictionary<string, RevitFileInfo> Refresh(IEnumerable<string> paths)
+    /// <param name="paths">The files to check.</param>
+    /// <param name="force">Check file stamps even within the freshness window, for validating a chosen local before opening it.</param>
+    public IReadOnlyDictionary<string, RevitFileInfo> Refresh(IEnumerable<string> paths, bool force = false)
     {
         var answers = new Dictionary<string, RevitFileInfo>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in paths)
@@ -73,7 +75,7 @@ public sealed class RevitReleaseCache
             if (answers.ContainsKey(path))
                 continue;
 
-            if (_entries.TryGetValue(path, out var known) && _time.GetUtcNow() - known.CheckedAt < Freshness)
+            if (!force && _entries.TryGetValue(path, out var known) && _time.GetUtcNow() - known.CheckedAt < Freshness)
             {
                 answers[path] = known.Info;
                 continue;

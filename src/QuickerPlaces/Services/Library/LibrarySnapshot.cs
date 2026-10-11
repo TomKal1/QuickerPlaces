@@ -7,6 +7,7 @@ using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Revit;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.Services.Library;
@@ -56,6 +57,29 @@ public sealed record LibrarySnapshot(
     DateOnly FilesDetailFrom = default,
     IReadOnlySet<(int Year, int Month)>? HistoryMonths = null)
 {
+    /// <summary>Confirmed local/copy-to-central paths for presenting Recent Files; recorded history stays untouched.</summary>
+    public IReadOnlyDictionary<string, string> RevitCentrals { get; init; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    public string RecentFilePath(string path) => RevitCentrals.TryGetValue(path, out var central) ? central : path;
+
+    /// <summary>Only valid filesystem .rvt central paths are eligible. Unreadable or ambiguous copies remain separate.</summary>
+    public LibrarySnapshot WithRevitInfo(IReadOnlyDictionary<string, RevitFileInfo> files)
+    {
+        var centrals = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, info) in files)
+        {
+            if (!path.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase) ||
+                info is not { Problem: RevitFileProblem.None, Worksharing: RevitWorksharing.Local or RevitWorksharing.Central } ||
+                DocumentPaths.Normalize(info.CentralModelPath) is not { } central ||
+                !central.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase) || DocumentPaths.Same(path, central))
+                continue;
+            // A copied central can retain the Central flag until Revit saves it as a local.
+            // Its recorded central path still identifies the original; never infer this from the filename.
+            centrals[path] = central;
+        }
+        return this with { RevitCentrals = centrals };
+    }
+
     public static LibrarySnapshot Capture(PlacesService places, SessionStore sessions, ActivityStore activity,
         RecentFilesStore recentFiles, TimeProvider time)
     {
