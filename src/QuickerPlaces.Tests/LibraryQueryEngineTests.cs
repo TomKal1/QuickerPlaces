@@ -312,7 +312,7 @@ public sealed class LibraryQueryEngineTests
         var folders = Run(data).Coverage.Single(c => c.Source == LibraryQueryEngine.FolderSource);
 
         Assert.Equal(CoverageState.Partial, folders.State);
-        Assert.Contains("Tracking is off", folders.Reason);
+        Assert.Contains("Folder tracking is off", folders.Reason);
     }
 
     [Fact]

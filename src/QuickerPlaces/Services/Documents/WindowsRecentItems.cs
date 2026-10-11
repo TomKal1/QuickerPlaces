@@ -10,7 +10,7 @@ using System.Runtime.Versioning;
 namespace QuickerPlaces.Services.Documents;
 
 /// <summary>
-/// Reads the PDF, Word and Excel entries in Windows' Recent Items: the
+/// Reads the document entries in Windows' Recent Items: the
 /// documented FOLDERID_Recent folder of shortcuts that Windows and programs
 /// add to when a document is opened (SHAddToRecentDocs). Each shortcut's
 /// target is its document, and its last-write time is when that document

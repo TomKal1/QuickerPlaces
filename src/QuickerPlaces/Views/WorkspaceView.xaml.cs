@@ -1184,7 +1184,7 @@ public partial class WorkspaceView : UserControl
     }
 
     /// <summary>
-    /// The shelf's Save as session (M3): its PDF, Word and Excel files, each
+    /// The shelf's Save as session (M3): its PDF, Office, text, Revit and AutoCAD files, each
     /// once, reviewed in the usual Save Session dialog before anything is
     /// saved. The Sessions panel then shows the new session selected.
     /// </summary>

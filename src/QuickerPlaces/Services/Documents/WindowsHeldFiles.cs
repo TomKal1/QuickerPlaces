@@ -14,7 +14,7 @@ using System.Runtime.Versioning;
 namespace QuickerPlaces.Services.Documents;
 
 /// <summary>
-/// Lists the PDF, Word and Excel files that running programs hold open
+/// Lists the PDF, Office, text, Revit and AutoCAD files that running programs hold open
 /// (held-files plan), by asking Windows for those programs' file handles
 /// rather than guessing paths and asking about each: every tab Revu or
 /// Acrobat has open and every document Word or Excel has open, with its

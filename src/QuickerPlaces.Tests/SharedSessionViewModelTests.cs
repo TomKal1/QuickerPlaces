@@ -236,9 +236,9 @@ public sealed class SharedSessionViewModelTests
     {
         var open = Open(SharedFromAlice(@"C:\Users\alice\Desktop\A.pdf"), new FakeShell());
 
-        Assert.Equal(0, open.Locate(open.Rows[0], @"C:\Temp\notes.txt"));
+        Assert.Equal(0, open.Locate(open.Rows[0], @"C:\Temp\notes.zip"));
         Assert.False(open.Rows[0].IsFound);
-        Assert.Contains("isn't a PDF, Word or Excel file", open.ErrorMessage);
+        Assert.Contains("isn't a PDF, Office, text, Revit or AutoCAD file", open.ErrorMessage);
     }
 
     [Fact]

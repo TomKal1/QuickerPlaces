@@ -9,7 +9,7 @@ using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.Services.Library;
 
-/// <summary>What a Library item is: the five kinds the Library splits by.</summary>
+/// <summary>What a Library item is: a folder, a link, or one of the document kinds (in <see cref="DocumentKind"/>'s order).</summary>
 public enum LibraryKind
 {
     Folder,
@@ -17,17 +17,26 @@ public enum LibraryKind
     Pdf,
     Word,
     Excel,
+    PowerPoint,
+    Text,
+    Revit,
+    AutoCad,
 }
 
 public static class LibraryKinds
 {
-    public static IReadOnlyList<LibraryKind> All { get; } = new[] { LibraryKind.Folder, LibraryKind.Link, LibraryKind.Pdf, LibraryKind.Word, LibraryKind.Excel };
+    public static IReadOnlyList<LibraryKind> All { get; } = new[] { LibraryKind.Folder, LibraryKind.Link }
+        .Concat(DocumentKinds.All.Select(From)).ToArray();
 
     public static LibraryKind From(DocumentKind kind) => kind switch
     {
         DocumentKind.Pdf => LibraryKind.Pdf,
         DocumentKind.Word => LibraryKind.Word,
-        _ => LibraryKind.Excel,
+        DocumentKind.Excel => LibraryKind.Excel,
+        DocumentKind.PowerPoint => LibraryKind.PowerPoint,
+        DocumentKind.Text => LibraryKind.Text,
+        DocumentKind.Revit => LibraryKind.Revit,
+        _ => LibraryKind.AutoCad,
     };
 
     /// <summary>The document kind, or null for a folder or link.</summary>
@@ -36,27 +45,28 @@ public static class LibraryKinds
         LibraryKind.Pdf => DocumentKind.Pdf,
         LibraryKind.Word => DocumentKind.Word,
         LibraryKind.Excel => DocumentKind.Excel,
+        LibraryKind.PowerPoint => DocumentKind.PowerPoint,
+        LibraryKind.Text => DocumentKind.Text,
+        LibraryKind.Revit => DocumentKind.Revit,
+        LibraryKind.AutoCad => DocumentKind.AutoCad,
         _ => null,
     };
 
-    /// <summary>"Folders", "Links", "PDFs", "Word", "Excel": filter chips and group headings.</summary>
+    /// <summary>"Folders", "Links", "PDFs", "Word", "Excel", "PowerPoint", "Text", "Revit", "AutoCAD": filter chips and group headings.</summary>
     public static string PluralLabel(this LibraryKind kind) => kind switch
     {
         LibraryKind.Folder => "Folders",
         LibraryKind.Link => "Links",
         LibraryKind.Pdf => "PDFs",
-        LibraryKind.Word => "Word",
-        _ => "Excel",
+        _ => kind.ToDocumentKind()!.Value.Label(),
     };
 
-    /// <summary>"Folder", "Link", "PDF", "Word", "Excel": the Type column.</summary>
+    /// <summary>"Folder", "Link", "PDF", "Word", "Excel" and so on: the Type column.</summary>
     public static string Label(this LibraryKind kind) => kind switch
     {
         LibraryKind.Folder => "Folder",
         LibraryKind.Link => "Link",
-        LibraryKind.Pdf => "PDF",
-        LibraryKind.Word => "Word",
-        _ => "Excel",
+        _ => kind.ToDocumentKind()!.Value.Label(),
     };
 }
 
@@ -102,6 +112,9 @@ public sealed record LibraryItem(
 
     /// <summary>Time spent in a folder in the period (Recents); zero for anything else.</summary>
     public TimeSpan RecentTime { get; init; }
+
+    /// <summary>Local copies contributing recent activity to this central model, within the selected period.</summary>
+    public IReadOnlyList<string> LocalCopies { get; init; } = Array.Empty<string>();
 
     /// <summary>What places it among tracked folders: a folder itself, or the folder a file is in; "" for a link.</summary>
     public string TreePath => Kind == LibraryKind.Folder ? Location : Folder;
@@ -163,7 +176,8 @@ public static class LibraryIndex
         IEnumerable<Place> places,
         IEnumerable<SessionSnapshot> sessions,
         IEnumerable<FolderActivity> recentFolders,
-        IEnumerable<RecentFileSummary> recentFiles)
+        IEnumerable<RecentFileSummary> recentFiles,
+        IReadOnlyDictionary<string, string>? revitCentrals = null)
     {
         var items = new Dictionary<string, Builder>(ResourceIdentity.Comparer);
 
@@ -205,7 +219,11 @@ public static class LibraryIndex
 
         foreach (var file in recentFiles)
         {
-            var item = Get(LibraryKinds.From(file.Kind), file.Path);
+            var central = file.Kind == DocumentKind.Revit && revitCentrals is not null &&
+                revitCentrals.TryGetValue(file.Path, out var target) ? target : null;
+            var item = Get(LibraryKinds.From(file.Kind), central ?? file.Path);
+            if (central is not null)
+                item.LocalCopies.Add(file.Path);
             item.RecentCount += file.Opens;
             item.Use(file.LastOpenedAt);
         }
@@ -224,6 +242,7 @@ public static class LibraryIndex
         return words.All(word =>
             item.Name.Contains(word, StringComparison.CurrentCultureIgnoreCase) ||
             item.Location.Contains(word, StringComparison.CurrentCultureIgnoreCase) ||
+            item.LocalCopies.Any(p => p.Contains(word, StringComparison.CurrentCultureIgnoreCase)) ||
             item.Tags.Any(t => t.Contains(word, StringComparison.CurrentCultureIgnoreCase)) ||
             item.Sessions.Any(s => s.Contains(word, StringComparison.CurrentCultureIgnoreCase)));
     }
@@ -244,6 +263,7 @@ public static class LibraryIndex
         public Place? Place { get; set; }
         public int RecentCount { get; set; }
         public TimeSpan RecentTime { get; set; }
+        public HashSet<string> LocalCopies { get; } = new(StringComparer.OrdinalIgnoreCase);
         public DateTimeOffset? LastUsedAt { get; private set; }
 
         public void Use(DateTimeOffset? at)
@@ -271,6 +291,7 @@ public static class LibraryIndex
             return new LibraryItem(Kind, name, location, Place, _sessions.ToArray(), _tags.ToArray(), RecentCount, LastUsedAt)
             {
                 RecentTime = RecentTime,
+                LocalCopies = LocalCopies.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray(),
             };
         }
     }

@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using QuickerPlaces.Models;
 using QuickerPlaces.Services;
+using QuickerPlaces.Services.Revit.AddIns;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Tests.Fakes;
 using Xunit;
 
@@ -85,7 +87,7 @@ public sealed class SettingsServiceTests : IDisposable
 
         var loaded = NewService().Load();
 
-        Assert.Equal(5, AppSettings.CurrentSchemaVersion);
+        Assert.Equal(7, AppSettings.CurrentSchemaVersion);
         Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
         Assert.Equal("LastOpened", loaded.PlacesSortKey);
         Assert.Equal("descending", loaded.PlacesSortDirection);
@@ -192,5 +194,92 @@ public sealed class SettingsServiceTests : IDisposable
         Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
         Assert.Equal(AppTheme.Dark, ThemePreference.ParseTheme(loaded.Theme));
         Assert.Equal(HighlightPreset.Green, ThemePreference.ParseHighlight(loaded.Highlight));
+    }
+
+    [Fact]
+    public void Revit_settings_round_trip_per_release()
+    {
+        var settings = new AppSettings();
+        settings.RevitReleases!["2025"] = new RevitReleaseSettings { HandlerId = "contoso.tools", LocalFolder = @"D:\Locals" };
+        settings.RevitReleases["2024"] = new RevitReleaseSettings { HandlerId = "other" };
+        NewService().Save(settings);
+
+        var loaded = NewService().Load();
+
+        Assert.Equal("contoso.tools", loaded.RevitReleases!["2025"].HandlerId);
+        Assert.Equal(@"D:\Locals", loaded.RevitReleases["2025"].LocalFolder);
+        Assert.Equal("other", loaded.RevitReleases["2024"].HandlerId);
+        Assert.Null(loaded.RevitReleases["2024"].LocalFolder);
+        Assert.Contains("\"revitReleases\"", File.ReadAllText(_temp.File("settings.json")));
+    }
+
+    [Fact]
+    public void Load_once_choices_round_trip()
+    {
+        var allowed = new DateTimeOffset(2026, 10, 9, 8, 30, 0, TimeSpan.Zero);
+        var settings = new AppSettings { AllowLoadOnce = true };
+        settings.LoadOnceEntries!.Add(new LoadOnceEntry
+        {
+            Release = 2025, AddInId = "9C0C6B3E-0000-0000-0000-000000000001", Name = "DuctExporter",
+            DllPath = @"C:\Addins\DuctExporter.dll", DllSha256 = "ab12", AllowedUtc = allowed,
+        });
+        NewService().Save(settings);
+
+        var loaded = NewService().Load();
+
+        Assert.True(loaded.AllowLoadOnce);
+        var entry = Assert.Single(loaded.LoadOnceEntries!);
+        Assert.Equal(2025, entry.Release);
+        Assert.Equal("DuctExporter", entry.Name);
+        Assert.Equal(@"C:\Addins\DuctExporter.dll", entry.DllPath);
+        Assert.Equal("ab12", entry.DllSha256);
+        Assert.Equal(allowed, entry.AllowedUtc);
+        Assert.Contains("\"allowLoadOnce\": true", File.ReadAllText(_temp.File("settings.json")));
+    }
+
+    [Fact]
+    public void A_version_6_file_reads_as_load_once_off_with_no_entries()
+    {
+        File.WriteAllText(_temp.File("settings.json"),
+            """{ "schemaVersion": 6, "globalHotkey": "Ctrl+Shift+Q", "revitReleases": { "2025": { "handlerId": "contoso" } } }""");
+
+        var loaded = NewService().Load();
+
+        Assert.False(loaded.AllowLoadOnce);
+        Assert.Empty(loaded.LoadOnceEntries ?? []);
+        Assert.Equal("contoso", loaded.RevitReleases!["2025"].HandlerId);
+    }
+
+    [Fact]
+    public void A_version_5_file_without_revit_settings_reads_as_the_defaults()
+    {
+        File.WriteAllText(_temp.File("settings.json"), """{ "schemaVersion": 5, "globalHotkey": "Ctrl+Shift+Q" }""");
+
+        var loaded = NewService().Load();
+
+        Assert.Equal("Ctrl+Shift+Q", loaded.GlobalHotkey);
+        var effective = RevitSettingsResolver.For(loaded, "2025");
+        Assert.Null(effective.HandlerId);
+        Assert.Equal(@"C:\REVIT_LOCAL2025", effective.LocalFolder);
+    }
+
+    [Fact]
+    public void Resolver_fills_in_defaults_for_blank_values_and_a_null_dictionary()
+    {
+        var settings = new AppSettings { RevitReleases = new() { ["2025"] = new RevitReleaseSettings { HandlerId = "  ", LocalFolder = "" } } };
+
+        Assert.Equal(new EffectiveRevitSettings("2025", null, @"C:\REVIT_LOCAL2025"), RevitSettingsResolver.For(settings, "2025"));
+        Assert.Equal(new EffectiveRevitSettings("2026", null, @"C:\REVIT_LOCAL2026"), RevitSettingsResolver.For(settings, "2026"));
+
+        settings.RevitReleases = null;
+        Assert.Equal(@"C:\REVIT_LOCAL2024", RevitSettingsResolver.For(settings, "2024").LocalFolder);
+    }
+
+    [Fact]
+    public void Resolver_trims_the_chosen_handler_and_keeps_a_chosen_folder()
+    {
+        var settings = new AppSettings { RevitReleases = new() { ["2025"] = new RevitReleaseSettings { HandlerId = " contoso ", LocalFolder = @"E:\L" } } };
+
+        Assert.Equal(new EffectiveRevitSettings("2025", "contoso", @"E:\L"), RevitSettingsResolver.For(settings, "2025"));
     }
 }

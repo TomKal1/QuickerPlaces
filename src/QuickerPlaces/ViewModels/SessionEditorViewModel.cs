@@ -190,7 +190,7 @@ public sealed class SessionEditorViewModel : ObservableObject
         }
 
         if (refused.Count > 0)
-            ErrorMessage = $"Only PDF, Word and Excel files can be added: {string.Join(", ", refused.Select(DocumentPaths.FileName))}.";
+            ErrorMessage = $"Only PDF, Office, text, Revit and AutoCAD files can be added: {string.Join(", ", refused.Select(DocumentPaths.FileName))}.";
         OnPropertyChanged(nameof(IncludedText));
     }
 

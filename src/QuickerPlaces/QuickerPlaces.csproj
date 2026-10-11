@@ -46,6 +46,15 @@
     -->
     <Resource Include="Resources\Fonts\*.ttf" />
     <None Include="Resources\Fonts\OFL-*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Resources\revit-security-prompts.json" Link="revit-security-prompts.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      OpenMcdf (MPL-2.0) reads OLE compound files: Services/Revit uses it to
+      read a Revit file's BasicFileInfo stream, read-only (roadmap 4.21).
+    -->
+    <PackageReference Include="OpenMcdf" Version="3.2.0" />
   </ItemGroup>
 
 </Project>

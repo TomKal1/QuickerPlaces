@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using QuickerPlaces.Models;
 using QuickerPlaces.Models.RecentFiles;
 using QuickerPlaces.Models.Workspace;
@@ -13,6 +15,8 @@ using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.History;
 using QuickerPlaces.Services.Library;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Revit;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.ViewModels;
@@ -73,7 +77,13 @@ public enum CalendarSelectionUnit
 ///
 /// The four sources stay separate, each with its own switch; this only reads
 /// them, except for Recent Files' own settings, which live here because this
-/// is where Recent Files is seen. UI-free and linked into the test project;
+/// is where Recent Files is seen. Revit rows name their release ("Revit
+/// 2025"), looked up in the background through a shared
+/// <see cref="RevitReleaseCache"/> when one is given. With an
+/// <see cref="IRevitOpenCoordinator"/>, Open on a Revit file goes through it
+/// (one open at a time; its status shows in <see cref="StatusMessage"/> and
+/// <see cref="CancelRevitOpen"/> stops it); without one, Revit rows open as any file.
+/// UI-free and linked into the test project;
 /// the views only bind and pass clicks in.
 /// </summary>
 public sealed class LibraryViewModel : ObservableObject
@@ -87,6 +97,9 @@ public sealed class LibraryViewModel : ObservableObject
     private readonly TimeProvider _time;
     private readonly CultureInfo _culture;
     private readonly IBackgroundWork _work;
+    private readonly RevitReleaseCache? _revitReleases;
+    private readonly IRevitOpenCoordinator? _revitOpener;
+    private CancellationTokenSource? _revitOpenCancel;
     private LibrarySnapshot _snapshot;
     private readonly HistoryMonthCache? _history;
     private DateOnly? _historyReach;
@@ -115,7 +128,8 @@ public sealed class LibraryViewModel : ObservableObject
     private string? _errorMessage;
 
     public LibraryViewModel(PlacesService places, SessionStore sessions, ActivityStore activity, RecentFilesStore recentFiles,
-        PlaceLauncher placeLauncher, IShell shell, TimeProvider? time = null, CultureInfo? culture = null, IBackgroundWork? work = null)
+        PlaceLauncher placeLauncher, IShell shell, TimeProvider? time = null, CultureInfo? culture = null, IBackgroundWork? work = null,
+        RevitReleaseCache? revitReleases = null, IRevitOpenCoordinator? revitOpener = null)
     {
         _places = places;
         _sessions = sessions;
@@ -126,6 +140,8 @@ public sealed class LibraryViewModel : ObservableObject
         _time = time ?? TimeProvider.System;
         _culture = culture ?? CultureInfo.CurrentCulture;
         _work = work ?? InlineBackgroundWork.Instance;
+        _revitReleases = revitReleases;
+        _revitOpener = revitOpener;
         _history = activity.HistoryReader is { } reader ? new HistoryMonthCache(reader) : null;
         _calendarYear = Today().Year;
         _calendarMonth = Today().Month;
@@ -701,7 +717,7 @@ public sealed class LibraryViewModel : ObservableObject
     {
         LibraryKind.Folder => "Folder visits from Recents",
         LibraryKind.Link => "Links keep no history, only when each was last opened",
-        LibraryKind.Pdf or LibraryKind.Word or LibraryKind.Excel => $"{_selectedKind.Value.PluralLabel()} opened (Recent Files), and sessions saved or reopened",
+        { } kind when kind.ToDocumentKind() is not null => $"{kind.PluralLabel()} opened (Recent Files), and sessions saved or reopened",
         _ => "Recorded activity: folder visits, files opened, and sessions saved or reopened",
     };
 
@@ -807,6 +823,10 @@ public sealed class LibraryViewModel : ObservableObject
     public bool TrackPdf { get => Tracks(DocumentKind.Pdf); set => SetTracked(DocumentKind.Pdf, value); }
     public bool TrackWord { get => Tracks(DocumentKind.Word); set => SetTracked(DocumentKind.Word, value); }
     public bool TrackExcel { get => Tracks(DocumentKind.Excel); set => SetTracked(DocumentKind.Excel, value); }
+    public bool TrackPowerPoint { get => Tracks(DocumentKind.PowerPoint); set => SetTracked(DocumentKind.PowerPoint, value); }
+    public bool TrackText { get => Tracks(DocumentKind.Text); set => SetTracked(DocumentKind.Text, value); }
+    public bool TrackRevit { get => Tracks(DocumentKind.Revit); set => SetTracked(DocumentKind.Revit, value); }
+    public bool TrackAutoCad { get => Tracks(DocumentKind.AutoCad); set => SetTracked(DocumentKind.AutoCad, value); }
 
     /// <summary>Selects Anywhere. Radio-button uncheck notifications never change the scope.</summary>
     public bool TrackEverywhere
@@ -834,6 +854,38 @@ public sealed class LibraryViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// What is being recorded right now, in one line for the Activity panel:
+    /// "Recording visits to all folders · opens of PDF and Word files".
+    /// </summary>
+    public string RecordingStatus
+    {
+        get
+        {
+            var tracked = _activity.IsAvailable ? _activity.EnabledRoots().Count : 0;
+            var folders = !_activity.IsAvailable || tracked == 0 ? null
+                : _activity.TrackAllFolders ? "visits to all folders"
+                : $"visits to {tracked} tracked {(tracked == 1 ? "folder" : "folders")}";
+
+            var settings = _recentFiles.Settings;
+            string? files = null;
+            if (_recentFiles.IsAvailable && settings.Enabled)
+            {
+                var labels = DocumentKinds.All.Where(settings.Kinds.Contains).Select(k => k.Label()).ToList();
+                var list = labels.Count == 1 ? labels[0] : $"{string.Join(", ", labels.Take(labels.Count - 1))} and {labels[^1]}";
+                files = $"opens of {list} files";
+            }
+
+            return (folders, files) switch
+            {
+                (null, null) => "Not recording: folder tracking and Recent Files are off.",
+                (not null, not null) => $"Recording {folders} · {files}",
+                (not null, null) => $"Recording {folders} · Recent Files is off",
+                _ => $"Recording {files} · Folder tracking is off",
+            };
+        }
+    }
+
     /// <summary>One line about what Recent Files is doing.</summary>
     public string RecentFilesStatus
     {
@@ -844,7 +896,7 @@ public sealed class LibraryViewModel : ObservableObject
 
             var settings = _recentFiles.Settings;
             if (!settings.Enabled)
-                return "Recent Files is off. When on, it lists the PDF, Word and Excel files you open, from Windows' Recent Items, on this computer only.";
+                return "Recent Files is off. When on, it lists the PDF, Office, text, Revit and AutoCAD files you open, from Windows' Recent Items, on this computer only.";
 
             var kinds = string.Join(", ", settings.Kinds.Select(k => k.PluralLabel()));
             var where = settings.Scope == RecentFilesScope.Everywhere
@@ -891,6 +943,16 @@ public sealed class LibraryViewModel : ObservableObject
         if (row is null)
             return;
 
+        // A Revit file is opened the Revit-safe way (roadmap §4.21), one at a time.
+        if (_revitOpener is not null && row.Item.Place is null && row.Kind == LibraryKind.Revit)
+        {
+            if (IsRevitOpening)
+                StatusMessage = "A Revit file is already opening. Wait for it, or cancel it first.";
+            else
+                RevitOpen = OpenRevitAsync(row);
+            return;
+        }
+
         StatusMessage = null;
         ErrorMessage = null;
         var item = row.Item;
@@ -932,6 +994,143 @@ public sealed class LibraryViewModel : ObservableObject
         {
             DiagnosticLog.Warn($"Opening a {item.Kind} from the Library failed ({ex.GetType().Name}).");
             ErrorMessage = $"Windows couldn't open \"{item.Name}\": {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// "Open as new local" for a central model: the same as <see cref="Open"/>,
+    /// which already does that for a central; a row that isn't a Revit central does nothing.
+    /// </summary>
+    public void OpenAsNewLocal(LibraryRowViewModel? row)
+    {
+        if (row is { IsRevitCentral: true })
+            Open(row);
+    }
+
+    /// <summary>Existing, saved locals of this central, most recently opened first; copied centrals are not valid locals.</summary>
+    public IReadOnlyList<RevitLocalModel> LocalModelsFor(LibraryRowViewModel? row)
+    {
+        if (row is not { IsRevitCentral: true } || _revitReleases is not { } cache)
+            return Array.Empty<RevitLocalModel>();
+        var paths = new Dictionary<string, DateTimeOffset?>(StringComparer.OrdinalIgnoreCase);
+        void Add(string path, DateTimeOffset? at)
+        {
+            if (!paths.TryGetValue(path, out var known) || (at is not null && (known is null || at > known)))
+                paths[path] = at;
+        }
+        foreach (var path in row.Item.LocalCopies)
+            Add(path, null);
+        foreach (var file in _snapshot.Files.Where(f => f.Kind == DocumentKind.Revit))
+            Add(file.Path, file.Opens.Count > 0 ? file.Opens.Max() : null);
+        foreach (var file in _snapshot.FileSummaries ?? Array.Empty<RecentFileSummary>())
+            if (file.Kind == DocumentKind.Revit)
+                Add(file.Path, file.LastOpenedAt);
+        foreach (var path in _snapshot.Sessions.SelectMany(s => s.Files))
+            Add(path, null);
+        return paths.Where(p => cache.Peek(p.Key) is { Problem: RevitFileProblem.None, Worksharing: RevitWorksharing.Local, CentralModelPath: { } central } &&
+                DocumentPaths.Same(central, row.Location) && !DocumentPaths.Same(p.Key, row.Location) && _shell.FileExists(p.Key))
+            .Select(p => new RevitLocalModel(p.Key, p.Value))
+            .OrderByDescending(p => p.LastOpenedAt ?? DateTimeOffset.MinValue)
+            .ThenBy(p => p.Location, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    /// <summary>Opens a chosen existing local through the Revit coordinator after rechecking its association.</summary>
+    public void OpenLocalModel(LibraryRowViewModel? central, string path)
+    {
+        if (central is not { IsRevitCentral: true })
+            return;
+        if (IsRevitOpening)
+        {
+            StatusMessage = "A Revit file is already opening. Wait for it, or cancel it first.";
+            return;
+        }
+        if (_revitOpener is null || !LocalModelsFor(central).Any(m => DocumentPaths.Same(m.Location, path)))
+        {
+            StatusMessage = null;
+            ErrorMessage = "This local model is no longer available for this central. Refresh the list and choose another local.";
+            return;
+        }
+        var item = new LibraryItem(LibraryKind.Revit, DocumentPaths.FileName(path), path, null,
+            Array.Empty<string>(), Array.Empty<string>(), 0, null);
+        RevitOpen = OpenRevitAsync(new LibraryRowViewModel(item, "Revit", 0, _time.LocalTimeZone, _culture), central.Location);
+    }
+
+    /// <summary>True while a Revit file is opening (starting Revit, waiting for the handler); the Cancel button shows then.</summary>
+    public bool IsRevitOpening => _revitOpenCancel is not null;
+
+    /// <summary>The Revit open that is running or ran last; callers that need to wait for it, such as tests, await this.</summary>
+    public Task RevitOpen { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Asks the running Revit open to stop. A request the handler has already claimed carries on in Revit.</summary>
+    public void CancelRevitOpen()
+    {
+        if (_revitOpenCancel is not { } cancel)
+            return;
+        StatusMessage = "Cancelling…";
+        try
+        {
+            cancel.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // It finished at that moment.
+        }
+    }
+
+    private async Task OpenRevitAsync(LibraryRowViewModel row, string? expectedCentral = null)
+    {
+        var cancel = new CancellationTokenSource();
+        _revitOpenCancel = cancel;
+        OnPropertyChanged(nameof(IsRevitOpening));
+        StatusMessage = null;
+        ErrorMessage = null;
+
+        // Status text arrives from the opener's thread; the context captured here is the UI thread's.
+        var progress = new ContextProgress(text =>
+        {
+            if (ReferenceEquals(_revitOpenCancel, cancel))
+                StatusMessage = text;
+        });
+
+        RevitOpenReport report;
+        try
+        {
+            if (expectedCentral is not null && !await Task.Run(() =>
+                _revitReleases!.Refresh(new[] { row.Location }, force: true)[row.Location] is
+                    { Problem: RevitFileProblem.None, Worksharing: RevitWorksharing.Local, CentralModelPath: { } recorded } &&
+                    DocumentPaths.Same(recorded, expectedCentral)))
+            {
+                var message = $"\"{row.Name}\" is no longer a readable local of this central. Refresh the list and choose another local.";
+                report = new RevitOpenReport(new RevitOpenOutcome(RevitOpenResult.Refused, message), message, true);
+            }
+            else
+                report = await _revitOpener!.OpenAsync(row.Location, progress, cancel.Token);
+        }
+        catch (Exception ex)
+        {
+            // The coordinator reports its own problems; this is for one that escaped.
+            DiagnosticLog.Error("Opening a Revit file from the Library failed.", ex);
+            report = new RevitOpenReport(new RevitOpenOutcome(RevitOpenResult.Failed, ex.Message), $"Couldn't open \"{row.Name}\": {ex.Message}", true);
+        }
+
+        _revitOpenCancel = null;
+        cancel.Dispose();
+        OnPropertyChanged(nameof(IsRevitOpening));
+        StatusMessage = report.IsError ? null : report.Message;
+        ErrorMessage = report.IsError ? report.Message : null;
+    }
+
+    /// <summary>Hands a report to the context it was created on, or runs it at once when called from that same context.</summary>
+    private sealed class ContextProgress(Action<string> apply) : IProgress<string>
+    {
+        private readonly SynchronizationContext? _context = SynchronizationContext.Current;
+
+        public void Report(string value)
+        {
+            if (_context is null || ReferenceEquals(_context, SynchronizationContext.Current))
+                apply(value);
+            else
+                _context.Post(_ => apply(value), null);
         }
     }
 
@@ -1015,7 +1214,7 @@ public sealed class LibraryViewModel : ObservableObject
         _work.Run(() =>
         {
             if (history is null)
-                return (Result: LibraryQueryEngine.Run(snapshot, filter, period, culture), Reach: (DateOnly?)null);
+                return (Result: LibraryQueryEngine.Run(ResolveRecentRevitCopies(snapshot), filter, period, culture), Reach: (DateOnly?)null);
 
             // The strip needs day totals and counts (a year held by the stores); any filter but the kind, or a period, needs each folder and open (62 days).
             var cutoffs = HistoryCutoffs.For(snapshot.Today);
@@ -1025,7 +1224,7 @@ public sealed class LibraryViewModel : ObservableObject
             if (period is { } p)
                 months.AddRange(HistoryMonthCache.Needed(index, p.From, p.To, cutoffs.DetailFrom));
             var data = snapshot.WithHistory(history.Load(months, cutoffs));
-            return (Result: LibraryQueryEngine.Run(data, filter, period, culture), Reach: index.FirstOrDefault()?.First);
+            return (Result: LibraryQueryEngine.Run(ResolveRecentRevitCopies(data), filter, period, culture), Reach: index.FirstOrDefault()?.First);
         }, outcome =>
         {
             if (generation != _generation)
@@ -1043,9 +1242,27 @@ public sealed class LibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(Coverage));
             OnPropertyChanged(nameof(CoverageNotes));
             OnPropertyChanged(nameof(CoverageNotesText));
+            OnPropertyChanged(nameof(RecordingStatus));
             OnPropertyChanged(nameof(PeriodNotes));
             OnPropertyChanged(nameof(PeriodNotesText));
         });
+    }
+
+    /// <summary>Run off the UI thread before filtering, so local activity follows the central's name, folder and tags.</summary>
+    private LibrarySnapshot ResolveRecentRevitCopies(LibrarySnapshot data)
+    {
+        if (_revitReleases is not { } cache)
+            return data;
+        var paths = data.Files.Where(f => f.Kind == DocumentKind.Revit).Select(f => f.Path)
+            .Concat((data.FileSummaries ?? Array.Empty<RecentFileSummary>()).Where(f => f.Kind == DocumentKind.Revit).Select(f => f.Path))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // Bound new disk lookups per query; reuse known answers for the rest.
+        var found = new Dictionary<string, RevitFileInfo>(cache.Refresh(paths.Take(MaxRevitLookups)), StringComparer.OrdinalIgnoreCase);
+        // As with the Type column, a timed-out refresh keeps the last known answer standing.
+        foreach (var path in paths)
+            if (cache.Peek(path) is { } info)
+                found[path] = info;
+        return data.WithRevitInfo(found);
     }
 
     private void BuildRows()
@@ -1053,11 +1270,17 @@ public sealed class LibraryViewModel : ObservableObject
         var passing = _result?.Items ?? Array.Empty<LibraryItem>();
         var selected = _selectedKind;
         UpdateKindFilter(0, null, $"All ({passing.Count})", selected is null);
-        for (var index = 0; index < LibraryKinds.All.Count; index++)
+        var chips = 1;
+        foreach (var kind in LibraryKinds.All)
         {
-            var kind = LibraryKinds.All[index];
-            UpdateKindFilter(index + 1, kind, $"{kind.PluralLabel()} ({passing.Count(i => i.Kind == kind)})", selected == kind);
+            // A kind gets a chip only when there is something to show, so the strip stays short; the selected chip always stays.
+            var count = passing.Count(i => i.Kind == kind);
+            if (count == 0 && selected != kind)
+                continue;
+            UpdateKindFilter(chips++, kind, $"{kind.PluralLabel()} ({count})", selected == kind);
         }
+        while (KindFilters.Count > chips)
+            KindFilters.RemoveAt(KindFilters.Count - 1);
 
         var shown = passing.Where(i => selected is null || i.Kind == selected).ToList();
         var rows = new List<LibraryRowViewModel>();
@@ -1131,12 +1354,48 @@ public sealed class LibraryViewModel : ObservableObject
                 Rows.Add(row);
 
             // The same item keeps the selection, wherever the refresh put it; the key survives a row that is gone for now.
-            SelectedRow = keep is null ? null : Rows.FirstOrDefault(r => ResourceIdentity.Comparer.Equals(r.Item.Key, keep));
-            _selectedKey = keep;
+            SelectedRow = keep is null ? null : Rows.FirstOrDefault(r => ResourceIdentity.Comparer.Equals(r.Item.Key, keep)) ??
+                Rows.FirstOrDefault(r => r.Item.LocalCopies.Any(path => ResourceIdentity.Comparer.Equals(ResourceIdentity.Key(LibraryKind.Revit, path), keep)));
+            _selectedKey = SelectedRow?.Item.Key ?? keep;
         }
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyText));
+        ShowRevitReleases();
+    }
+
+    /// <summary>The most Revit files one refresh looks up; rows past these keep what is already known.</summary>
+    private const int MaxRevitLookups = 200;
+
+    /// <summary>
+    /// Gives Revit rows the release already known at once, then checks their
+    /// files in the background (new or changed ones are read; a stalled share
+    /// times out) and updates the rows still shown when the answers arrive.
+    /// </summary>
+    private void ShowRevitReleases()
+    {
+        if (_revitReleases is not { } cache)
+            return;
+
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Rows.Where(r => r.Kind == LibraryKind.Revit))
+        {
+            row.RevitInfo = cache.Peek(row.Location);
+            if (paths.Count < MaxRevitLookups)
+                paths.Add(row.Location);
+        }
+        if (paths.Count == 0)
+            return;
+
+        _work.Run(() => cache.Refresh(paths), found =>
+        {
+            // A read that timed out leaves an earlier answer standing.
+            foreach (var row in Rows.Where(r => r.Kind == LibraryKind.Revit))
+            {
+                if (found.TryGetValue(row.Location, out var info))
+                    row.RevitInfo = cache.Peek(row.Location) ?? info;
+            }
+        });
     }
 
     /// <summary>Returns the folder at an absolute depth below a drive or UNC share root, or null when shallower.</summary>
@@ -1302,9 +1561,14 @@ public sealed class LibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(TrackPdf));
         OnPropertyChanged(nameof(TrackWord));
         OnPropertyChanged(nameof(TrackExcel));
+        OnPropertyChanged(nameof(TrackPowerPoint));
+        OnPropertyChanged(nameof(TrackText));
+        OnPropertyChanged(nameof(TrackRevit));
+        OnPropertyChanged(nameof(TrackAutoCad));
         OnPropertyChanged(nameof(TrackEverywhere));
         OnPropertyChanged(nameof(TrackUnderTrackedFolders));
         OnPropertyChanged(nameof(RecentFilesStatus));
+        OnPropertyChanged(nameof(RecordingStatus));
     }
 
     private void NotifySource()
@@ -1335,11 +1599,18 @@ public sealed class LibraryViewModel : ObservableObject
 internal sealed record CalendarSource(IReadOnlyDictionary<DateOnly, HeatDay> Heat, DateOnly TrackingStartedOn, DateOnly Today,
     (DateOnly From, DateOnly To)? Period, int Year);
 
+/// <summary>A saved local offered in a central model's context menu.</summary>
+public sealed record RevitLocalModel(string Location, DateTimeOffset? LastOpenedAt)
+{
+    public string Name => DocumentPaths.FileName(Location);
+}
+
 /// <summary>One Library row: an item, and the group it is shown in.</summary>
-public sealed class LibraryRowViewModel
+public sealed class LibraryRowViewModel : ObservableObject
 {
     private readonly TimeZoneInfo _zone;
     private readonly CultureInfo _culture;
+    private RevitFileInfo? _revitInfo;
 
     public LibraryRowViewModel(LibraryItem item, string groupName, int groupOrder, TimeZoneInfo zone, CultureInfo culture)
     {
@@ -1358,9 +1629,39 @@ public sealed class LibraryRowViewModel
     public int GroupOrder { get; }
 
     public string Name => Item.Name;
+    public bool HasLocalCopies => Item.LocalCopies.Count > 0;
+    public string LocalCopiesText => Item.LocalCopies.Count == 1 ? "1 local copy" : $"{Item.LocalCopies.Count.ToString(_culture)} local copies";
+    public string NameToolTip => !HasLocalCopies ? Location :
+        Location + "\n\nVisits and Last used include activity from these local copies:\n" +
+        string.Join("\n", Item.LocalCopies.Take(10)) +
+        (Item.LocalCopies.Count > 10 ? $"\n… and {Item.LocalCopies.Count - 10} more" : "");
     /// <summary>Picks the row's icon: folder, globe, or a document for the three file kinds.</summary>
     public LibraryKind Kind => Item.Kind;
-    public string KindLabel => Item.Kind.Label();
+
+    /// <summary>The Type column: the kind, and for a Revit file its release once known ("Revit 2025").</summary>
+    public string KindLabel => Item.Kind == LibraryKind.Revit ? RevitLabels.Kind(_revitInfo) : Item.Kind.Label();
+
+    /// <summary>The Type column's tooltip: a Revit file's release and worksharing in words; "" otherwise.</summary>
+    public string KindToolTip => Item.Kind == LibraryKind.Revit ? RevitLabels.ToolTip(_revitInfo) : "";
+
+    /// <summary>True for a Revit file read as a central model: the row offers "Open as new local" (Open does the same).</summary>
+    public bool IsRevitCentral => _revitInfo is { Problem: RevitFileProblem.None, Worksharing: RevitWorksharing.Central };
+
+    /// <summary>What a Revit file says about itself, once read; null until then and for other kinds.</summary>
+    public RevitFileInfo? RevitInfo
+    {
+        get => _revitInfo;
+        set
+        {
+            if (Equals(_revitInfo, value))
+                return;
+            _revitInfo = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(KindLabel));
+            OnPropertyChanged(nameof(KindToolTip));
+            OnPropertyChanged(nameof(IsRevitCentral));
+        }
+    }
     public string Location => Item.Location;
     public string Folder => Item.Folder;
     public string TagsText => string.Join(", ", Item.Tags);
@@ -1383,12 +1684,12 @@ public sealed class LibraryRowViewModel
     public string VisitsText => Item.RecentCount > 0 ? Item.RecentCount.ToString(_culture) : "";
 
     /// <summary>"3 visits", "1 visit": the Visits cell's tooltip; "" with none.</summary>
-    public string VisitsToolTip => Item.RecentCount switch
+    public string VisitsToolTip => (Item.RecentCount switch
     {
         <= 0 => "",
         1 => "1 visit",
         var count => $"{count.ToString(_culture)} visits",
-    };
+    }) + (HasLocalCopies ? " (central model and local copies combined)" : "");
 
     /// <summary>Time spent in the folder in the period (Recents); "" otherwise.</summary>
     public string TimeText => Item.Kind == LibraryKind.Folder && Item.RecentTime > TimeSpan.Zero ? ActivityFormat.Duration(Item.RecentTime) : "";
@@ -1417,6 +1718,7 @@ public sealed class LibraryRowViewModel
         => ResourceIdentity.Comparer.Equals(Item.Key, other.Item.Key) && GroupName == other.GroupName && Name == other.Name &&
            SourceText == other.SourceText && TagsText == other.TagsText && LastUsedText == other.LastUsedText &&
            VisitsText == other.VisitsText && TimeText == other.TimeText && SessionsText == other.SessionsText &&
+           Item.LocalCopies.SequenceEqual(other.Item.LocalCopies, StringComparer.OrdinalIgnoreCase) &&
            ReferenceEquals(Item.Place, other.Item.Place);
 }
 

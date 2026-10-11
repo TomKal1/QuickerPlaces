@@ -59,6 +59,9 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitFileInfoReader.cs" Link="Linked\Services\Revit\RevitFileInfoReader.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitReleaseCache.cs" Link="Linked\Services\Revit\RevitReleaseCache.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\Handlers\*.cs" LinkBase="Linked\Services\Revit\Handlers" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsHeldFiles.cs" Link="Linked\Services\Documents\WindowsHeldFiles.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsOpenDocumentProbe.cs" Link="Linked\Services\Documents\WindowsOpenDocumentProbe.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\WindowsRecentItems.cs" Link="Linked\Services\Documents\WindowsRecentItems.cs" />
@@ -68,4 +71,36 @@
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Reads Revit files' BasicFileInfo stream (Services/Revit); MPL-2.0. -->
+    <PackageReference Include="OpenMcdf" Version="3.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Revit dialog detection and the Load Once rules (ai/261008_Revit Handler
+      Handoff.md): UI-free. The Windows detector compiles everywhere and
+      returns nothing off Windows.
+    -->
+    <Compile Include="..\QuickerPlaces\Services\Revit\Dialogs\*.cs" LinkBase="Linked\Services\Revit\Dialogs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\AddIns\*.cs" LinkBase="Linked\Services\Revit\AddIns" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Opening Revit files (roadmap §4.21): installs, running processes, the
+      open planner and runner. UI-free; Windows-only parts are guarded.
+    -->
+    <Compile Include="..\QuickerPlaces\Services\Revit\Opening\*.cs" LinkBase="Linked\Services\Revit\Opening" />
+    <Compile Include="..\QuickerPlaces\Models\AppSettings.cs" Link="Linked\Models\AppSettings.cs" />
+    <Compile Include="..\QuickerPlaces\Models\HotkeyGesture.cs" Link="Linked\Models\HotkeyGesture.cs" />
+    <Compile Include="..\QuickerPlaces\Models\ThemePreference.cs" Link="Linked\Models\ThemePreference.cs" />
+    <Compile Include="..\QuickerPlaces\Services\SettingsService.cs" Link="Linked\Services\SettingsService.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\INetworkDriveResolver.cs" Link="Linked\Services\Activity\INetworkDriveResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\NetworkDriveResolver.cs" Link="Linked\Services\Activity\NetworkDriveResolver.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\QuickerPlaces\Resources\revit-security-prompts.json" Link="revit-security-prompts.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>QuickerPlaces sample handler</Name>
+    <!--
+      Path of the DLL. A relative path is relative to this .addin file's folder.
+      Install layout (see README.md):
+        %AppData%\Autodesk\Revit\Addins\<release>\QuickerPlaces.RevitHandler.addin
+        %AppData%\Autodesk\Revit\Addins\<release>\QuickerPlaces.RevitHandler\QuickerPlaces.RevitHandler.dll
+      Use a full path instead if you keep the DLL somewhere else.
+    -->
+    <Assembly>QuickerPlaces.RevitHandler\QuickerPlaces.RevitHandler.dll</Assembly>
+    <!-- Fixed for this sample. If you adapt the sample into your own add-in, generate your own GUID. -->
+    <AddInId>d3a42712-c2b5-4e60-89d7-3e4d24a149d2</AddInId>
+    <FullClassName>QuickerPlaces.RevitHandler.App</FullClassName>
+    <VendorId>QuickerPlaces</VendorId>
+    <VendorDescription>QuickerPlaces sample Revit handler (https://github.com/TomKal1/QuickerPlaces)</VendorDescription>
+  </AddIn>
+</RevitAddIns>

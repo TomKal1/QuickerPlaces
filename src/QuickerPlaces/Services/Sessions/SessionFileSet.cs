@@ -7,7 +7,7 @@ namespace QuickerPlaces.Services.Sessions;
 
 /// <summary>
 /// The documents the File shelf lists, ready to review as a new session
-/// (configurable canvas plan M3): PDF, Word and Excel files only, each once,
+/// (configurable canvas plan M3): PDF, Office, text, Revit and AutoCAD files only, each once,
 /// in the shelf's order. Folders and links are counted and left out, because
 /// a session is a set of documents; the review step then decides what is
 /// saved. Pure logic; UI-free and linked into the test project.
@@ -58,12 +58,12 @@ public sealed record SessionFileSet(IReadOnlyList<string> Files, int FoldersLeft
                 (0, _) => Count(LinksLeftOut, "link"),
                 _ => $"{Count(FoldersLeftOut, "folder")} and {Count(LinksLeftOut, "link")}",
             };
-            return left is null ? lead : $"{lead}\nLeft out: {left}. Sessions hold PDF, Word and Excel files.";
+            return left is null ? lead : $"{lead}\nLeft out: {left}. Sessions hold PDF, Office, text, Revit and AutoCAD files.";
         }
     }
 
     /// <summary>Why nothing can be saved, when the shelf lists no documents.</summary>
-    public const string NothingToSave = "The File shelf lists no PDF, Word or Excel files to save as a session. Choose another period or clear a filter.";
+    public const string NothingToSave = "The File shelf lists no PDF, Office, text, Revit or AutoCAD files to save as a session. Choose another period or clear a filter.";
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 }

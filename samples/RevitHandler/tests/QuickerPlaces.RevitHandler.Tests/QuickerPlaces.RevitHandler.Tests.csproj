@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the Revit-free Core of the sample handler.
+
+    Like QuickerPlaces' own tests, this targets plain net10.0 and compiles the source files in directly
+    (the Compile link below) instead of referencing the add-in project. The add-in project needs the Revit
+    API packages and a release-specific target framework; the Core does not, so the tests run on any OS
+    with `dotnet test`, with no Revit installed.
+
+    If a Core file stops compiling here, it has picked up a Revit (or other) dependency it should not have.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>QuickerPlaces.RevitHandler.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\QuickerPlaces.RevitHandler\Core\*.cs" Link="Core\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+</Project>

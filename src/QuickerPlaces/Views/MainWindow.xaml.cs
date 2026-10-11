@@ -12,6 +12,10 @@ using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Revit;
+using QuickerPlaces.Services.Revit.Dialogs;
+using QuickerPlaces.Services.Revit.Handlers;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
@@ -29,6 +33,14 @@ public partial class MainWindow : Window
     private readonly WindowsRecentItems _recentItems;
     private readonly PlacesService _placesService;
     private readonly RecentFilesStore _recentFilesStore;
+
+    /// <summary>Revit files' releases, read once per version of each file and shared by every Library view (roadmap §4.21).</summary>
+    private readonly RevitReleaseCache _revitReleases = new();
+
+    /// <summary>Opens Revit files the Revit-safe way for every Library view (roadmap §4.21).</summary>
+    private readonly RevitOpenCoordinator _revitOpener;
+    private readonly RevitMachine _revitMachine = RevitMachine.ForThisMachine();
+    private readonly RevitProtocolFolder _revitFolder = RevitProtocolFolder.ForDataRoot(AppDataFolders.Root);
     private readonly RecentFilesHost _recentFilesHost;
     private readonly ThemeManager _themeManager;
     private TrayIcon? _trayIcon;
@@ -57,6 +69,8 @@ public partial class MainWindow : Window
         _recentFilesStore = recentFilesStore;
         _recentFilesHost = recentFilesHost;
         _themeManager = themeManager;
+        _revitOpener = new RevitOpenCoordinator(_revitMachine, _revitFolder, _revitReleases, DialogDetectors.ForThisMachine(),
+            settings, settingsService, new MessageFormRevitPrompts());
         RestoreWindowState(settings);
         UpdateActivityIndicator();
         AddSessionShortcuts();
@@ -74,7 +88,7 @@ public partial class MainWindow : Window
         // windows' content in panels, so their buttons go.
         var shell = new WindowsShell();
         var library = new LibraryViewModel(placesService, sessionStore, activityStore, recentFilesStore,
-            new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+            new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher), revitReleases: _revitReleases, revitOpener: _revitOpener);
         InputBindings.Add(new KeyBinding(new RelayCommand(library.ClearPeriod, () => library.HasPeriod), Key.Escape, ModifierKeys.None));
         _workspaceView = new WorkspaceView();
         var workspace = new WorkspaceViewModel(workspaceLayout, library);
@@ -154,7 +168,7 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel viewModel) return;
         var shell = new WindowsShell();
         var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
-            new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+            new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher), revitReleases: _revitReleases, revitOpener: _revitOpener);
         LibraryWindow.Show(this, library, _recentFilesHost, _activityHost, viewModel.NotePlaceOpened);
     }
 
@@ -248,6 +262,10 @@ public partial class MainWindow : Window
             }
         });
 
+    private void ShowRevitSettings(Window owner)
+        => RevitSettingsDialog.Show(owner, new RevitSettingsViewModel(_settings, _settingsService, _revitMachine,
+            new RevitHandlerRegistry(_revitFolder, _revitMachine.Probe)));
+
     private void SetGlobalHotkeyText(string? text)
     {
         if (DataContext is MainViewModel viewModel)
@@ -266,7 +284,7 @@ public partial class MainWindow : Window
             _themeManager.Apply, ApplySettingsChoice,
             _workspaceView is null ? null : _workspaceView.ShowRecentFiles,
             _workspaceView is null ? null : _workspaceView.BeginCustomise,
-            ShowFolderActivitySettings);
+            ShowFolderActivitySettings, ShowRevitSettings);
         if (saved is null)
         {
             // The app is exiting (tray Exit, session end) and closed this

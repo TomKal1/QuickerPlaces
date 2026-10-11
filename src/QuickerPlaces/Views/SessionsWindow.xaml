@@ -19,7 +19,7 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,14">
             <TextBlock Text="Project Sessions" Style="{StaticResource TextBlock.WindowTitle}" />
-            <TextBlock Text="Save the PDF, Word and Excel files you have open as a tagged session, then reopen them together later."
+            <TextBlock Text="Save the PDF, Office, text, Revit and AutoCAD files you have open as a tagged session, then reopen them together later."
                        Foreground="{DynamicResource Text.Secondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
             <Control Style="{StaticResource TrimBand}" Margin="-20,14,-20,0" />
         </StackPanel>

@@ -54,15 +54,22 @@
     <Border Background="{DynamicResource Bg.Panel}" BorderBrush="{DynamicResource Border.Default}" BorderThickness="1"
             CornerRadius="8" Padding="14,12" IsEnabled="{Binding RecentFilesAvailable}">
         <StackPanel>
-            <CheckBox Content="Record the PDF, Word and Excel files I open" IsChecked="{Binding RecentFilesEnabled}" FontWeight="SemiBold" />
+            <CheckBox Content="Record the documents and drawings I open" IsChecked="{Binding RecentFilesEnabled}" FontWeight="SemiBold" />
             <TextBlock Style="{StaticResource TextBlock.Hint}" Margin="28,4,0,10"
                        Text="Read once a minute from Windows' own Recent Items while QuickerPlaces is running, from the moment you turn this on. It records which file and when — never what's in it — and keeps a year on this computer only. Programs that don't tell Windows about the files they open won't show here." />
             <TextBlock Text="File types" Style="{StaticResource TextBlock.FieldLabel}" Margin="28,2,0,8" />
-            <StackPanel Orientation="Horizontal" Margin="28,0,0,16">
-                <CheckBox Content="PDF" IsChecked="{Binding TrackPdf}" Margin="0,0,16,0" />
-                <CheckBox Content="Word" IsChecked="{Binding TrackWord}" Margin="0,0,16,0" />
-                <CheckBox Content="Excel" IsChecked="{Binding TrackExcel}" />
-            </StackPanel>
+            <WrapPanel Orientation="Horizontal" Margin="28,0,0,16">
+                <CheckBox Content="PDF" IsChecked="{Binding TrackPdf}" Margin="0,0,16,4" />
+                <CheckBox Content="Word" IsChecked="{Binding TrackWord}" Margin="0,0,16,4" />
+                <CheckBox Content="Excel" IsChecked="{Binding TrackExcel}" Margin="0,0,16,4" />
+                <CheckBox Content="PowerPoint" IsChecked="{Binding TrackPowerPoint}" Margin="0,0,16,4" />
+                <CheckBox Content="Revit" IsChecked="{Binding TrackRevit}" Margin="0,0,16,4"
+                          ToolTip="Revit models and families (.rvt, .rfa)." />
+                <CheckBox Content="AutoCAD" IsChecked="{Binding TrackAutoCad}" Margin="0,0,16,4"
+                          ToolTip="AutoCAD drawings (.dwg, .dxf)." />
+                <CheckBox Content="Text" IsChecked="{Binding TrackText}" Margin="0,0,16,4"
+                          ToolTip="Plain text files (.txt). Off by default: logs and notes can crowd the list." />
+            </WrapPanel>
             <TextBlock Text="Where to record" Style="{StaticResource TextBlock.FieldLabel}" Margin="28,0,0,8" />
             <UniformGrid Columns="2" Margin="28,0,0,0">
                 <RadioButton Style="{StaticResource ScopeChoice}" Margin="0,0,5,0"

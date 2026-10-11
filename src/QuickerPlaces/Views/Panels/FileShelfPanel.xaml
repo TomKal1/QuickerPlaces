@@ -225,7 +225,7 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
                 <Button x:Name="SaveAsSessionButton" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" Visibility="Collapsed"
                         Click="SaveAsSession_Click" AutomationProperties.Name="Save listed files as a session"
-                        ToolTip="Review the PDF, Word and Excel files listed here, and save them as a session">
+                        ToolTip="Review the PDF, Office, text, Revit and AutoCAD files listed here, and save them as a session">
                     <StackPanel Orientation="Horizontal">
                         <Path Style="{StaticResource Icon}" Data="{StaticResource Icon.Sessions}" />
                         <TextBlock Text="Save as session…" Margin="7,0,0,0" VerticalAlignment="Center" />
@@ -328,6 +328,10 @@
                 <DataGrid.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Open" FontWeight="Bold" Click="OpenMenu_Click" />
+                        <MenuItem x:Name="OpenAsNewLocalMenuItem" Header="Open as new local" Click="OpenAsNewLocal_Click" Visibility="Collapsed"
+                                  ToolTip="Revit makes a new local copy of this central model and opens it. The central itself is never opened." />
+                        <MenuItem x:Name="OpenLocalModelMenuItem" Header="Open local model" Visibility="Collapsed"
+                                  ToolTip="Choose an existing saved local copy of this central model." />
                         <MenuItem x:Name="OpenLocationMenuItem" Header="Open file location" Click="OpenLocation_Click" />
                         <MenuItem Header="Copy path or link" Click="CopyMenu_Click" />
                         <MenuItem x:Name="AddAsPlaceMenuItem" Header="Add as place…" Click="AddAsPlace_Click" Visibility="Collapsed" />
@@ -354,15 +358,35 @@
                     <DataGridTemplateColumn Header="NAME" Width="2*">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid VerticalAlignment="Center" ToolTip="{Binding NameToolTip}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <Path Style="{StaticResource Icon.LibraryKind}" />
-                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Location}" />
-                                </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="2" Text="{Binding LocalCopiesText}" Margin="12,0,0,0" MaxWidth="110"
+                                               Style="{StaticResource Cell.Secondary}" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding HasLocalCopies, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               AutomationProperties.HelpText="{Binding NameToolTip}" />
+                                </Grid>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="70" ElementStyle="{StaticResource Cell.Secondary}" />
+                    <!-- A Revit file's release arrives in the background ("Revit 2025"); its tooltip says central or local, or why the release isn't known. -->
+                    <DataGridTextColumn Header="TYPE" Binding="{Binding KindLabel}" Width="100">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Cell.Secondary}">
+                                <Setter Property="ToolTip" Value="{Binding KindToolTip}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding KindToolTip}" Value="">
+                                        <Setter Property="ToolTip" Value="{x:Null}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn x:Name="WhereFromColumn" Header="WHERE FROM" Binding="{Binding WhereFromText}" Width="2*" ElementStyle="{StaticResource Cell.Secondary}" />
                     <!-- Visits: a folder's visits or a file's opens, one number and one name on the All and Recent tabs, centred as Saved places' count is. -->
                     <DataGridTextColumn x:Name="VisitsColumn" Header="VISITS" Binding="{Binding VisitsText}" Width="70"
@@ -413,8 +437,14 @@
         <StackPanel Grid.Row="2" Margin="0,8,0,0">
             <TextBlock Text="{Binding PeriodNotesText}" Foreground="{DynamicResource Text.Secondary}" FontSize="12" TextWrapping="Wrap"
                        Style="{StaticResource CollapsedWhenEmpty}" />
-            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}" TextWrapping="Wrap"
-                       Style="{StaticResource CollapsedWhenEmpty}" />
+            <!-- While a Revit file opens, its status (starting Revit, waiting on a dialog) shows here, with a way out. -->
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Cancel" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" VerticalAlignment="Center"
+                        Visibility="{Binding IsRevitOpening, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        AutomationProperties.Name="Cancel opening the Revit file" Click="CancelRevitOpen_Click" />
+                <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}" TextWrapping="Wrap"
+                           Style="{StaticResource CollapsedWhenEmpty}" AutomationProperties.LiveSetting="Polite" />
+            </DockPanel>
             <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,4,0,0"
                        Style="{StaticResource CollapsedWhenEmpty}" />
         </StackPanel>

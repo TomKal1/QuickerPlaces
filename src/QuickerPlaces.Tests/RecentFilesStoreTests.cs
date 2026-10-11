@@ -60,7 +60,7 @@ public sealed class RecentFilesStoreTests
         Assert.True(store.IsTracking);
         Assert.Equal(_time.UtcNow, store.Settings.TrackingStartedAt);
         Assert.Equal(_time.UtcNow, store.Settings.ResumedAt);
-        Assert.Equal(DocumentKinds.All, store.Settings.Kinds);
+        Assert.Equal(DocumentKinds.Defaults, store.Settings.Kinds);
         Assert.Equal(RecentFilesScope.TrackedFolders, store.Settings.Scope);
     }
 
@@ -111,7 +111,7 @@ public sealed class RecentFilesStoreTests
         var result = store.TrySetKinds(Array.Empty<DocumentKind>(), out _);
 
         Assert.False(result.Success);
-        Assert.Equal(DocumentKinds.All, store.Settings.Kinds);
+        Assert.Equal(DocumentKinds.Defaults, store.Settings.Kinds);
     }
 
     [Fact]
@@ -253,6 +253,42 @@ public sealed class RecentFilesStoreTests
     }
 
     [Fact]
+    public void ASavedChoiceFromBeforeTheNewKinds_KeepsThemOff()
+    {
+        _storage.ContentsToReturn = @"{""schemaVersion"":2,
+            ""settings"":{""enabled"":false,""kinds"":[""pdf"",""word"",""excel""],""scope"":""everywhere""},""files"":[]}";
+
+        var store = NewStore();
+
+        Assert.Equal(StoreLoadOutcome.Ok, store.LoadOutcome);
+        Assert.Equal(new[] { DocumentKind.Pdf, DocumentKind.Word, DocumentKind.Excel }, store.Settings.Kinds);
+    }
+
+    [Fact]
+    public void PowerPointTextRevitAndAutoCadOpens_AreRecorded_AndCountedPerDay_AfterTheirOpensAgeOut()
+    {
+        var store = Enabled();
+        Assert.True(store.TrySetKinds(DocumentKinds.All, out _).Success);
+        var openedOn = store.Today();
+
+        Assert.Equal(4, store.Record(new[]
+        {
+            At(@"C:\Jobs\Deck.pptx", 1), At(@"C:\Jobs
+otes.txt", 1),
+            At(@"C:\Jobs\Tower.rvt", 1), At(@"C:\Jobs\Site.dwg", 1),
+        }, Anywhere));
+        Assert.Equal(new[] { DocumentKind.AutoCad, DocumentKind.PowerPoint, DocumentKind.Revit, DocumentKind.Text },
+            store.QueryFiles().Select(f => f.Kind).OrderBy(k => k.ToString()));
+
+        _time.Advance(TimeSpan.FromDays(RecentFilesStore.DetailDays + 1));
+        Assert.True(store.Flush().Saved);
+
+        var counts = store.QueryDayCounts()[openedOn];
+        foreach (var kind in new[] { DocumentKind.PowerPoint, DocumentKind.Text, DocumentKind.Revit, DocumentKind.AutoCad })
+            Assert.Equal(1, counts[kind]);
+    }
+
+    [Fact]
     public void AHandEditedFile_IsMadeSafe()
     {
         _storage.ContentsToReturn = @"{""schemaVersion"":1,
@@ -266,7 +302,7 @@ public sealed class RecentFilesStoreTests
         Assert.Equal(StoreLoadOutcome.Ok, store.LoadOutcome);
         // Enabled without a ResumedAt can't say where tracking restarted, so it is off.
         Assert.False(store.Settings.Enabled);
-        Assert.Equal(DocumentKinds.All, store.Settings.Kinds);
+        Assert.Equal(DocumentKinds.Defaults, store.Settings.Kinds);
         Assert.Equal(RecentFilesScope.Everywhere, store.Settings.Scope);
         var row = Assert.Single(store.QueryFiles());
         Assert.Equal(3, row.Opens);

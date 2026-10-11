@@ -165,7 +165,7 @@ public sealed class OpenDocumentResolverTests
     [Fact]
     public void RecentItemsThatAreNotPdfPaths_AreIgnored()
     {
-        var scan = Resolve(Array.Empty<ViewerWindow>(), new[] { Recent("relative.pdf", 1), Recent(@"C:\notes.txt", 1) });
+        var scan = Resolve(Array.Empty<ViewerWindow>(), new[] { Recent("relative.pdf", 1), Recent(@"C:\notes.zip", 1) });
 
         Assert.Empty(scan.Candidates);
     }
@@ -255,6 +255,28 @@ public sealed class OpenDocumentResolverTests
 
         Assert.Equal(new[] { Budget }, OpenPaths(scan));
         Assert.Equal(new[] { "Book1 (Microsoft Excel)" }, scan.UnmatchedTitles);
+    }
+
+    [Fact]
+    public void APowerPointTitle_WithoutItsExtension_IsMatched()
+    {
+        const string deck = @"C:\Jobs\Tower B\Kickoff.pptx";
+
+        var scan = Resolve(new[] { new ViewerWindow("Kickoff - PowerPoint", "Microsoft PowerPoint", null, DocumentKind.PowerPoint) },
+            new[] { Recent(deck, 2), Recent(Report, 1) });
+
+        Assert.Equal(new[] { deck }, OpenPaths(scan));
+    }
+
+    [Theory]
+    [InlineData("Autodesk Revit 2025 - [Tower.rvt - 3D View: {3D}]", @"C:\Jobs\Tower.rvt", "Autodesk Revit")]
+    [InlineData("Autodesk AutoCAD 2025 - [Site.dwg]", @"C:\Jobs\Site.dwg", "AutoCAD")]
+    [InlineData("notes.txt - Notepad", @"C:\Jobs\notes.txt", "Notepad")]
+    public void RevitAutoCadAndNotepadTitles_AreMatchedByTheirExtension(string title, string path, string app)
+    {
+        var scan = Resolve(new[] { Window(title, app) }, new[] { Recent(path, 1) });
+
+        Assert.Equal(new[] { path }, OpenPaths(scan));
     }
 
     [Fact]

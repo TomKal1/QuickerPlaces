@@ -1,0 +1,14 @@
+{
+  "signatures": [
+    {
+      "release": 2025,
+      "verified": true,
+      "title": "Security - Unsigned Add-In",
+      "buttonTexts": ["Always Load", "Load Once", "Do Not Load"],
+      "loadOnceButtonText": "Load Once",
+      "namePattern": "^Name:[ \\t]*(?<name>[^\\r\\n]+)\\r?\\nPublisher:",
+      "pathPattern": "^Location:[ \\t]*(?<path>[^\\r\\n]+\\.dll)[ \\t]*\\r?$",
+      "notes": "Recorded on Windows in English Revit 2025 on 2026-10-11, BatchRvtAddin unsigned prompt. DirectUI content read using MSAA; Win32 Button children expose all three actions."
+    }
+  ]
+}

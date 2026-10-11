@@ -98,6 +98,10 @@
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\OpenDocumentResolver.cs" Link="Linked\Services\Documents\OpenDocumentResolver.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitFileInfoReader.cs" Link="Linked\Services\Revit\RevitFileInfoReader.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitReleaseCache.cs" Link="Linked\Services\Revit\RevitReleaseCache.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\RevitLabels.cs" Link="Linked\Services\Revit\RevitLabels.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\Handlers\*.cs" LinkBase="Linked\Services\Revit\Handlers" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionStore.cs" Link="Linked\Services\Sessions\SessionStore.cs" />
     <Compile Include="..\QuickerPlaces\Models\RecentFiles\RecentFilesDocument.cs" Link="Linked\Models\RecentFiles\RecentFilesDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\RecentFiles\RecentFilesStore.cs" Link="Linked\Services\RecentFiles\RecentFilesStore.cs" />
@@ -109,6 +113,7 @@
     <Compile Include="..\QuickerPlaces\Services\Library\LibraryQueryEngine.cs" Link="Linked\Services\Library\LibraryQueryEngine.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\LibraryViewModel.cs" Link="Linked\ViewModels\LibraryViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\RecentFilesSettingsViewModel.cs" Link="Linked\ViewModels\RecentFilesSettingsViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\RevitSettingsViewModel.cs" Link="Linked\ViewModels\RevitSettingsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\FolderTrackingSettingsViewModel.cs" Link="Linked\ViewModels\FolderTrackingSettingsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionsViewModel.cs" Link="Linked\ViewModels\SessionsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\SessionEditorViewModel.cs" Link="Linked\ViewModels\SessionEditorViewModel.cs" />
@@ -171,6 +176,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="OpenMcdf" Version="3.2.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -204,4 +210,26 @@
     <None Include="..\QuickerPlaces\Resources\Palette.Light.xaml" Link="Palettes\Palette.Light.xaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Revit dialog detection and the Load Once rules (ai/261008_Revit Handler
+      Handoff.md): UI-free. The Windows detector compiles everywhere and
+      returns nothing off Windows.
+    -->
+    <Compile Include="..\QuickerPlaces\Services\Revit\Dialogs\*.cs" LinkBase="Linked\Services\Revit\Dialogs" />
+    <Compile Include="..\QuickerPlaces\Services\Revit\AddIns\*.cs" LinkBase="Linked\Services\Revit\AddIns" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Opening Revit files (roadmap §4.21): installs, running processes, the
+      open planner and runner. UI-free; Windows-only parts are guarded.
+    -->
+    <Compile Include="..\QuickerPlaces\Services\Revit\Opening\*.cs" LinkBase="Linked\Services\Revit\Opening" />
+    <Compile Include="..\QuickerPlaces\Services\Activity\NetworkDriveResolver.cs" Link="Linked\Services\Activity\NetworkDriveResolver.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\QuickerPlaces\Resources\revit-security-prompts.json" Link="revit-security-prompts.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

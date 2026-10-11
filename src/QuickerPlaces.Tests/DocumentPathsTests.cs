@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using QuickerPlaces.Services.Documents;
 using Xunit;
 
@@ -22,7 +24,7 @@ public sealed class DocumentPathsTests
     [InlineData(@"Jobs\A-101.pdf")]
     [InlineData(@"\Jobs\A-101.pdf")]
     [InlineData(@"C:A-101.pdf")]
-    [InlineData(@"C:\Jobs\A-101.txt")]
+    [InlineData(@"C:\Jobs\A-101.zip")]
     [InlineData(@"C:\Jobs\A-101.pdf.lnk")]
     [InlineData(@"C:\Jobs\notes.csv")]
     [InlineData(@"C:\Jobs\.docx")]
@@ -44,17 +46,33 @@ public sealed class DocumentPathsTests
     [InlineData(@"C:\A.xlsm", DocumentKind.Excel)]
     [InlineData(@"C:\A.xls", DocumentKind.Excel)]
     [InlineData(@"C:\A.xlsb", DocumentKind.Excel)]
+    [InlineData(@"C:\A.pptx", DocumentKind.PowerPoint)]
+    [InlineData(@"C:\A.ppt", DocumentKind.PowerPoint)]
+    [InlineData(@"C:\A.ppsx", DocumentKind.PowerPoint)]
+    [InlineData(@"C:\A.txt", DocumentKind.Text)]
+    [InlineData(@"C:\A.RVT", DocumentKind.Revit)]
+    [InlineData(@"C:\A.rfa", DocumentKind.Revit)]
+    [InlineData(@"C:\A.dwg", DocumentKind.AutoCad)]
+    [InlineData(@"C:\A.dxf", DocumentKind.AutoCad)]
     public void Kinds_AreDecidedByExtension(string path, DocumentKind kind)
         => Assert.Equal(kind, DocumentKinds.FromPath(path));
 
     [Theory]
-    [InlineData(@"C:\A.txt")]
-    [InlineData(@"C:\A.pptx")]
+    [InlineData(@"C:\A.csv")]
+    [InlineData(@"C:\A.rvt.bak")]
     [InlineData(@"C:\docx")]
     [InlineData(@"C:\Jobs.pdf\readme")]
     [InlineData(null)]
     public void OtherFiles_HaveNoKind(string? path)
         => Assert.Null(DocumentKinds.FromPath(path));
+
+    [Fact]
+    public void Defaults_AreEveryKindButText()
+        => Assert.Equal(DocumentKinds.All.Where(k => k != DocumentKind.Text), DocumentKinds.Defaults);
+
+    [Fact]
+    public void Extensions_ListLongerOnesFirst_SoPptxIsTriedBeforePpt()
+        => Assert.True(Array.IndexOf(DocumentKinds.Extensions.ToArray(), ".pptx") < Array.IndexOf(DocumentKinds.Extensions.ToArray(), ".ppt"));
 
     [Fact]
     public void Stem_DropsTheExtension()

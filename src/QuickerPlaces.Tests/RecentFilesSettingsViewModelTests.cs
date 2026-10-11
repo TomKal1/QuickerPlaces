@@ -45,6 +45,7 @@ public sealed class RecentFilesSettingsViewModelTests
         editor.RecentFilesEnabled = true;
         editor.TrackEverywhere = true;
         editor.TrackWord = false;
+        editor.TrackPowerPoint = editor.TrackRevit = editor.TrackAutoCad = false;
 
         Assert.True(editor.CanSave);
         Assert.True(editor.Save());
@@ -116,7 +117,7 @@ public sealed class RecentFilesSettingsViewModelTests
         Assert.False(editor.Save());
         Assert.False(store.IsTracking);
         Assert.Equal(RecentFilesScope.TrackedFolders, store.Settings.Scope);
-        Assert.Equal(DocumentKinds.All, store.Settings.Kinds);
+        Assert.Equal(DocumentKinds.Defaults, store.Settings.Kinds);
         Assert.Null(store.Settings.TrackingStartedAt);
         Assert.False(store.HasUnsavedChanges);
         Assert.True(store.Flush().Saved);
@@ -156,7 +157,7 @@ public sealed class RecentFilesSettingsViewModelTests
     public void EmptyFileTypes_ShowValidationAndCannotBeSaved()
     {
         var editor = new RecentFilesSettingsViewModel(NewStore());
-        editor.TrackPdf = editor.TrackWord = editor.TrackExcel = false;
+        editor.TrackPdf = editor.TrackWord = editor.TrackExcel = editor.TrackPowerPoint = editor.TrackRevit = editor.TrackAutoCad = false;
         Assert.False(editor.CanSave);
         Assert.Equal("Choose at least one file type.", editor.ErrorMessage);
         Assert.False(editor.Save());

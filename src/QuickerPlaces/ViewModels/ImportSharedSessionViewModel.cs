@@ -214,7 +214,7 @@ public sealed class ImportSharedSessionViewModel : ObservableObject
         var path = DocumentPaths.Normalize(chosenPath);
         if (path is null)
         {
-            ErrorMessage = $"\"{chosenPath}\" isn't a PDF, Word or Excel file, so it can't be saved in a session.";
+            ErrorMessage = $"\"{chosenPath}\" isn't a PDF, Office, text, Revit or AutoCAD file, so it can't be saved in a session.";
             return 0;
         }
 

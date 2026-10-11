@@ -1,0 +1,129 @@
+<Window x:Class="QuickerPlaces.Views.RevitSettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Revit" Width="960" Height="760" MinWidth="800" MinHeight="520"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner" Closing="Window_Closing">
+    <Grid Margin="20,18,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="Revit" Style="{StaticResource TextBlock.WindowTitle}" />
+            <TextBlock Text="Choose a central-model handler, local folders and add-ins allowed to load. Save applies your changes."
+                       Foreground="{DynamicResource Text.Secondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
+            <Control Style="{StaticResource TrimBand}" Margin="-20,14,-20,14" />
+        </StackPanel>
+        <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Width="{Binding ViewportWidth, ElementName=ContentScroll}">
+                <TextBlock Text="CENTRAL MODELS" Style="{StaticResource TextBlock.Caps}" />
+                <TextBlock Style="{StaticResource TextBlock.Hint}" Margin="0,6,0,8"
+                           Text="Handlers open centrals as new locals. Only add-ins implementing the handler protocol appear in this dropdown; other installed add-ins are listed below." />
+                <TextBlock Text="{Binding NoReleasesText}" Style="{StaticResource CollapsedWhenEmpty}" TextWrapping="Wrap" />
+                <DataGrid ItemsSource="{Binding Releases}" AutoGenerateColumns="False" IsReadOnly="True" RowHeight="42"
+                          CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" CanUserReorderColumns="False"
+                          SelectionMode="Single" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Revit release settings">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Revit" Width="74">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                <TextBlock Text="{Binding Release}" ToolTip="{Binding InstalledNote}" />
+                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Central-model handler" Width="2*">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" DisplayMemberPath="Label"
+                                          ToolTip="{Binding HandlerHint}" AutomationProperties.Name="{Binding Title, StringFormat=Handler for {0}}" />
+                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="New local folder" Width="2*">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                <Grid ToolTip="{Binding FolderError}">
+                                    <TextBox Text="{Binding LocalFolder, UpdateSourceTrigger=PropertyChanged}"
+                                             AutomationProperties.Name="{Binding Title, StringFormat=Local folder for {0}}"
+                                             AutomationProperties.HelpText="{Binding DefaultFolder, StringFormat=Leave empty to use {0}}" />
+                                    <TextBlock Text="{Binding DefaultFolder}" IsHitTestVisible="False" Margin="9,0,0,0"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource Text.Secondary}">
+                                        <TextBlock.Style><Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers><DataTrigger Binding="{Binding LocalFolder}" Value="">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger></Style.Triggers>
+                                        </Style></TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Width="84">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                <Button Content="Reset" Style="{StaticResource Button.Compact}" IsEnabled="{Binding CanReset}" Click="ResetFolder_Click"
+                                        AutomationProperties.Name="{Binding Title, StringFormat=Reset local folder for {0}}" />
+                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Load Once" Width="112">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                <TextBlock Text="{Binding PromptStatus}" ToolTip="Ready means this release's security prompt has been recorded. Other releases require recording before automatic Load Once can work." />
+                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <Separator Margin="0,14,0,14" />
+                <TextBlock Text="ADD-IN SECURITY PROMPTS" Style="{StaticResource TextBlock.Caps}" />
+                <CheckBox Content="Allow Load Once" IsChecked="{Binding AllowLoadOnce}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBlock Text="{Binding AllowLoadOnceHint}" Style="{StaticResource TextBlock.Hint}" Margin="28,4,0,8" />
+                <DockPanel Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Content="Refresh" Style="{StaticResource Button.Compact}" Click="RefreshAddins_Click" />
+                    <ComboBox DockPanel.Dock="Right" Width="140" Margin="8,0,8,0" ItemsSource="{Binding AddinReleaseChoices}"
+                              SelectedItem="{Binding AddinRelease}" AutomationProperties.Name="Filter installed add-ins by Revit release" />
+                    <TextBlock Text="Installed add-ins" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Text="Allow all applies to every installed year shown for that add-in. Autodesk add-ins are excluded."
+                           Style="{StaticResource TextBlock.Hint}" Margin="0,0,0,6" />
+                <DataGrid ItemsSource="{Binding VisibleAddins}" AutoGenerateColumns="False" IsReadOnly="True" MaxHeight="220" MinHeight="80" RowHeight="36"
+                          CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False" SelectionMode="Single"
+                          HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Installed Revit add-ins">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Revit years" Binding="{Binding Release}" Width="140" />
+                        <DataGridTextColumn Header="Add-in" Binding="{Binding Name}" Width="210" />
+                        <DataGridTemplateColumn Header="DLL" Width="*">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                <TextBlock Text="{Binding DllPath}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DllDetails}" />
+                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Permission" Binding="{Binding PermissionText}" Width="110" />
+                        <DataGridTemplateColumn Header="Load Once" Width="90">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                <Button Content="{Binding ActionText}" Style="{StaticResource Button.Compact}" Click="ToggleAddin_Click"
+                                        AutomationProperties.Name="{Binding Name, StringFormat=Change Load Once permission for {0}}" />
+                            </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="{Binding AddinScanStatus}" Style="{StaticResource TextBlock.Hint}" Margin="0,4,0,8" />
+                <TextBlock Text="Allowed add-ins" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <TextBlock Text="{Binding NoEntriesText}" Style="{StaticResource CollapsedWhenEmpty}" Foreground="{DynamicResource Text.Secondary}" />
+                <ItemsControl ItemsSource="{Binding AllowedAddins}" Focusable="False">
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                        <Grid Margin="0,2,0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="210" /><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /><ColumnDefinition Width="90" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="{Binding ReleaseText}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding DllPath}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DllDetails}" VerticalAlignment="Center" />
+                            <Button Grid.Column="3" Content="Remove" Style="{StaticResource Button.Compact}" Click="RemoveEntry_Click" AutomationProperties.Name="{Binding RemoveName}" />
+                        </Grid>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,10,0,0"
+                           Style="{StaticResource CollapsedWhenEmpty}" AutomationProperties.LiveSetting="Assertive" />
+            </StackPanel>
+        </ScrollViewer>
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding SaveStatus}" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}" AutomationProperties.LiveSetting="Polite" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="Close" MinWidth="84" Margin="0,0,8,0" IsCancel="True" />
+                <Button Content="Save" Style="{StaticResource Button.Primary}" MinWidth="84" IsDefault="True" IsEnabled="{Binding CanSave}" Click="Save_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

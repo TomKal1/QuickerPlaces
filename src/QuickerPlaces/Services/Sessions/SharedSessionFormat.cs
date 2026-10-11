@@ -174,7 +174,7 @@ public static class SharedSessionFormat
         }
 
         if (files.Count == 0)
-            return SharedSessionReadResult.Fail("That shared session lists no PDF, Word or Excel files QuickerPlaces can use.");
+            return SharedSessionReadResult.Fail("That shared session lists no PDF, Office, text, Revit or AutoCAD files QuickerPlaces can use.");
 
         return SharedSessionReadResult.Ok(new SharedSessionDocument
         {

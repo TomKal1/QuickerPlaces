@@ -7,7 +7,7 @@ using System.Text;
 namespace QuickerPlaces.Services.Documents;
 
 /// <summary>
-/// Decides which PDF, Word and Excel files are open from what Windows will
+/// Decides which PDF, Office, text, Revit and AutoCAD files are open from what Windows will
 /// tell an ordinary program (sessions plan §4, D6–D9). No documented Windows
 /// API lists the documents another application has open, so the answer is
 /// assembled from best-effort clues and handed to the user to review, never

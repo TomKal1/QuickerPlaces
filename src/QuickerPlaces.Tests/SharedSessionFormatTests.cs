@@ -91,7 +91,7 @@ public sealed class SharedSessionFormatTests
         const string json = """
             {"format":"quickerplaces-session","schemaVersion":1,"name":"X","files":[
               {"path":"relative\\a.pdf"},
-              {"path":"C:\\Jobs\\notes.txt"},
+              {"path":"C:\\Jobs\\notes.zip"},
               {"path":"","url":"http://insecure.example.com/a.pdf"},
               null
             ]}
@@ -100,7 +100,7 @@ public sealed class SharedSessionFormatTests
         var read = SharedSessionFormat.Parse(json);
 
         Assert.Null(read.Document);
-        Assert.Contains("lists no PDF, Word or Excel files", read.ErrorMessage);
+        Assert.Contains("lists no PDF, Office, text, Revit or AutoCAD files", read.ErrorMessage);
     }
 
     [Fact]
