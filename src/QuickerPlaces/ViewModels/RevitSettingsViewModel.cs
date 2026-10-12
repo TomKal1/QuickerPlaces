@@ -230,7 +230,7 @@ public sealed class RevitSettingsViewModel : ObservableObject
         _manifests = manifests ?? (release => AddInManifestFinder.Find(release, AddInLocations.ForThisMachine()));
         _signatures = signatures ?? SecurityPromptSignatures.Load(Path.Combine(AppContext.BaseDirectory, SecurityPromptSignatures.FileName));
         _hashOf = hashOf ?? DllFingerprint.Sha256;
-        _isAutodesk = isAutodesk ?? AutodeskAddinClassifier.IsAutodeskSigned;
+        _isAutodesk = isAutodesk ?? AddinPublisherCache.Shared.IsAutodeskSigned;
         _baselineAllow = _allowLoadOnce = settings.AllowLoadOnce;
         _baselineEntries = (settings.LoadOnceEntries ?? []).ToList();
         Entries = new ObservableCollection<LoadOnceEntryRowViewModel>(_baselineEntries.Select(e => new LoadOnceEntryRowViewModel(e, _culture)));

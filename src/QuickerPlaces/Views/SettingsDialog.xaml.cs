@@ -49,11 +49,11 @@ public partial class SettingsDialog : Window
         _showFolderActivity = showFolderActivity;
         _showRevit = showRevit;
         _customiseLayout = customiseLayout;
-        WorkspaceSection.Visibility = showRecentFiles is null && customiseLayout is null && showFolderActivity is null && showRevit is null ? Visibility.Collapsed : Visibility.Visible;
+        WorkspaceSection.Visibility = showRecentFiles is null && showFolderActivity is null && showRevit is null ? Visibility.Collapsed : Visibility.Visible;
         RecentFilesButton.Visibility = showRecentFiles is null ? Visibility.Collapsed : Visibility.Visible;
         FolderActivityButton.Visibility = showFolderActivity is null ? Visibility.Collapsed : Visibility.Visible;
         RevitButton.Visibility = showRevit is null ? Visibility.Collapsed : Visibility.Visible;
-        CustomiseLayoutButton.Visibility = CustomiseLayoutHint.Visibility = customiseLayout is null ? Visibility.Collapsed : Visibility.Visible;
+        LayoutArea.Visibility = customiseLayout is null ? Visibility.Collapsed : Visibility.Visible;
         _hotkeyText = HotkeyGesture.IsDisabled(currentHotkey) ? Disabled : currentHotkey!.Trim();
         ShowHotkey(_hotkeyText);
         MinimizeToTrayCheck.IsChecked = minimizeToTray;

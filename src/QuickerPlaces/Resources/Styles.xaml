@@ -1130,7 +1130,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- A row's kind: folder, globe or document, in the table-row icon colours. -->
+    <!-- A row's kind: folder, globe, document, or a Revit model, central model or family, in the table-row icon colours. -->
     <Style x:Key="Icon.LibraryKind" TargetType="Path" BasedOn="{StaticResource Icon.Row}">
         <Setter Property="Data" Value="{StaticResource Icon.Document}" />
         <Style.Triggers>
@@ -1139,6 +1139,15 @@
             </DataTrigger>
             <DataTrigger Binding="{Binding Kind}" Value="Link">
                 <Setter Property="Data" Value="{StaticResource Icon.Globe}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding RevitGlyph}" Value="Model">
+                <Setter Property="Data" Value="{StaticResource Icon.RevitModel}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding RevitGlyph}" Value="Central">
+                <Setter Property="Data" Value="{StaticResource Icon.RevitCentral}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding RevitGlyph}" Value="Family">
+                <Setter Property="Data" Value="{StaticResource Icon.RevitFamily}" />
             </DataTrigger>
         </Style.Triggers>
     </Style>

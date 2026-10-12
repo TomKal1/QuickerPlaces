@@ -91,9 +91,11 @@
                             </DataTemplate></DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Permission" Binding="{Binding PermissionText}" Width="110" />
-                        <DataGridTemplateColumn Header="Load Once" Width="90">
+                        <!-- Wide enough for "Allow all" and "Remove" in full, at the button's own padding. -->
+                        <DataGridTemplateColumn Header="Load Once" Width="104">
                             <DataGridTemplateColumn.CellTemplate><DataTemplate>
                                 <Button Content="{Binding ActionText}" Style="{StaticResource Button.Compact}" Click="ToggleAddin_Click"
+                                        MinWidth="84" HorizontalAlignment="Left"
                                         AutomationProperties.Name="{Binding Name, StringFormat=Change Load Once permission for {0}}" />
                             </DataTemplate></DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -105,11 +107,12 @@
                 <ItemsControl ItemsSource="{Binding AllowedAddins}" Focusable="False">
                     <ItemsControl.ItemTemplate><DataTemplate>
                         <Grid Margin="0,2,0,2">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="210" /><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /><ColumnDefinition Width="90" /></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="210" /><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /><ColumnDefinition Width="104" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                             <TextBlock Grid.Column="1" Text="{Binding ReleaseText}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="2" Text="{Binding DllPath}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DllDetails}" VerticalAlignment="Center" />
-                            <Button Grid.Column="3" Content="Remove" Style="{StaticResource Button.Compact}" Click="RemoveEntry_Click" AutomationProperties.Name="{Binding RemoveName}" />
+                            <Button Grid.Column="3" Content="Remove" Style="{StaticResource Button.Compact}" Click="RemoveEntry_Click"
+                                    MinWidth="84" HorizontalAlignment="Left" AutomationProperties.Name="{Binding RemoveName}" />
                         </Grid>
                     </DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>

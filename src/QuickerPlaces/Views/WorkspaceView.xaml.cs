@@ -927,7 +927,7 @@ public partial class WorkspaceView : UserControl
         Dispatcher.BeginInvoke(DispatcherPriority.Input, () => DoneButton.Focus());
     }
 
-    /// <summary>Customise layout… (in Settings): shows the layout controls and starts Arrange mode.</summary>
+    /// <summary>Customise layout (in Settings): shows the layout controls and starts Arrange mode.</summary>
     public void BeginCustomise()
     {
         if (_workspace is null)

@@ -218,7 +218,7 @@ public partial class App : Application
     /// <summary>
     /// The workspace's layouts. Someone starting for the first time (no layouts file
     /// yet) begins on Desk, the layout the app is built around; the layout picker is
-    /// tucked away (Customise layout…), so the first screen has to be the right one.
+    /// tucked away (Customise layout), so the first screen has to be the right one.
     /// After that the last layout shown is resumed, as before.
     /// </summary>
     private static WorkspaceLayoutService CreateWorkspaceLayout()

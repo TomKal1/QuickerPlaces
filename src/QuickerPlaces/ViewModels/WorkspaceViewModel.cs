@@ -255,7 +255,7 @@ public sealed class WorkspaceViewModel : ObservableObject
     /// <summary>
     /// True while the layout controls are shown: the layout picker, Arrange, Add
     /// panel, Reset to Desk and each panel's Hide. Otherwise the screen is Desk
-    /// with nothing to rearrange. Started by Customise layout… in the Options
+    /// with nothing to rearrange. Started by Customise layout in the Options
     /// menu; ended by Done, Revert, a save, Reset to Desk or the toolbar's Done.
     /// Never saved: QuickerPlaces always starts plain.
     /// </summary>

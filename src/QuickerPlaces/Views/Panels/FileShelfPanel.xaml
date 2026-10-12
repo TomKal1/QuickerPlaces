@@ -437,7 +437,13 @@
         <StackPanel Grid.Row="2" Margin="0,8,0,0">
             <TextBlock Text="{Binding PeriodNotesText}" Foreground="{DynamicResource Text.Secondary}" FontSize="12" TextWrapping="Wrap"
                        Style="{StaticResource CollapsedWhenEmpty}" />
-            <!-- While a Revit file opens, its status (starting Revit, waiting on a dialog) shows here, with a way out. -->
+            <!-- While a Revit file opens, a busy bar and its status (starting Revit, waiting on a dialog) show here, with a way out. -->
+            <!-- IsIndeterminate follows visibility too, so the animation stops when no Revit file is opening. -->
+            <ProgressBar Height="4" Margin="0,0,0,6" Minimum="0" Maximum="1"
+                         IsIndeterminate="{Binding IsRevitOpening}"
+                         Foreground="{DynamicResource Highlight.Text}" Background="{DynamicResource Highlight.Soft}" BorderThickness="0"
+                         Visibility="{Binding IsRevitOpening, Converter={StaticResource BooleanToVisibilityConverter}}"
+                         AutomationProperties.Name="Opening the Revit file" />
             <DockPanel>
                 <Button DockPanel.Dock="Right" Content="Cancel" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" VerticalAlignment="Center"
                         Visibility="{Binding IsRevitOpening, Converter={StaticResource BooleanToVisibilityConverter}}"

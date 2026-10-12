@@ -172,7 +172,7 @@
             </Border>
 
             <StackPanel x:Name="PanelTools" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <!-- The layout controls (Customise layout… in Settings): Reset to Desk, Arrange, Add panel and Done. -->
+                <!-- The layout controls (Customise layout in Settings): Reset to Desk, Arrange, Add panel and Done. -->
                 <Button x:Name="ResetDeskButton" Click="ResetDesk_Click" Margin="0,0,8,0" AutomationProperties.Name="Reset to Desk"
                         ToolTip="Show the Desk layout as it comes, with all its panels, and leave Customise">
                     <Button.Style>
@@ -366,7 +366,7 @@
             </ScrollViewer>
             <TextBlock x:Name="EmptyCanvasText" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
                        TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource Text.Tertiary}" Margin="16,48,16,0"
-                       Text="No panels are shown. Open Settings at the top right, choose Customise layout…, then Reset to Desk."
+                       Text="No panels are shown. Open Settings at the top right, choose Customise layout, then Reset to Desk."
                        Visibility="Collapsed" />
         </Grid>
     </Grid>

@@ -1647,6 +1647,15 @@ public sealed class LibraryRowViewModel : ObservableObject
     /// <summary>True for a Revit file read as a central model: the row offers "Open as new local" (Open does the same).</summary>
     public bool IsRevitCentral => _revitInfo is { Problem: RevitFileProblem.None, Worksharing: RevitWorksharing.Central };
 
+    /// <summary>
+    /// Picks a Revit row's icon: "Family" for an .rfa, "Central" for a model read as
+    /// a central, "Model" for any other .rvt (until read, too); "" for other kinds.
+    /// </summary>
+    public string RevitGlyph => Item.Kind != LibraryKind.Revit ? ""
+        : Item.Location.EndsWith(".rfa", StringComparison.OrdinalIgnoreCase) ? "Family"
+        : IsRevitCentral ? "Central"
+        : "Model";
+
     /// <summary>What a Revit file says about itself, once read; null until then and for other kinds.</summary>
     public RevitFileInfo? RevitInfo
     {
@@ -1660,6 +1669,7 @@ public sealed class LibraryRowViewModel : ObservableObject
             OnPropertyChanged(nameof(KindLabel));
             OnPropertyChanged(nameof(KindToolTip));
             OnPropertyChanged(nameof(IsRevitCentral));
+            OnPropertyChanged(nameof(RevitGlyph));
         }
     }
     public string Location => Item.Location;
