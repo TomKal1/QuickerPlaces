@@ -6,7 +6,7 @@ The protocol uses plain JSON files in one folder per Windows user. There is no s
 
 The repository's sample handler in `samples/RevitHandler/` is the reference implementation. Where this document and the sample disagree, this document wins and the sample is a bug.
 
-Status: version 1, draft (2026-10-08). Implemented on both sides on 2026-10-09 (QuickerPlaces in `src/QuickerPlaces/Services/Revit/Handlers/` and `Opening/`, the sample in `samples/RevitHandler/`), unit-tested without Revit; not yet run in a real Revit.
+Status: version 1, draft (2026-10-08). Implemented on both sides on 2026-10-09 (QuickerPlaces in `src/QuickerPlaces/Services/Revit/Handlers/` and `Opening/`, the sample in `samples/RevitHandler/`), unit-tested without Revit; not yet run in a real Revit. 2026-10-12: added the optional `existingLocal` (requests and registrations), `previousLocal` and `previousLocalPath` (results) and the `localInUse` error code, so a new local can replace or set aside the old one as Revit's own "Create New Local" does; a handler or request without them behaves as before.
 
 ## Words used here
 
@@ -21,7 +21,7 @@ Status: version 1, draft (2026-10-08). Implemented on both sides on 2026-10-09 (
 A handler that breaks any of these does not implement the protocol.
 
 1. A handler MUST NOT copy a central file to make a local. Locals are made only by `WorksharingUtils.CreateNewLocal`.
-2. A handler MUST NOT overwrite, delete, rename or move an existing local, or any other existing file, outside the protocol folder.
+2. A handler MUST NOT overwrite, delete, rename or move an existing local, or any other existing file, outside the protocol folder. The one exception is step 4 of "Handling a request": when the request's `existingLocal` asks for it, the old local at the new local's own path, and its `_backup` folder, are deleted (`"overwrite"`) or renamed (`"appendTimestamp"`), as Revit's own "Create New Local" does. Nothing else is touched.
 3. A handler MUST NOT upgrade a model. It refuses a central saved in a different release than the running Revit.
 4. A handler MUST NOT save, synchronise with central, relinquish, detach from central, or close a document while handling a request. The opened local stays open for the user.
 5. A handler MUST NOT act on a request that has expired, or that it has not claimed.
@@ -97,6 +97,7 @@ When the add-in starts (in `IExternalApplication.OnStartup` is fine, since it on
 | `handlerVersion` | no | The add-in's own version, for display and logs. |
 | `revitRelease` | yes | The release this handler is loaded in. |
 | `actions` | yes | Actions supported. Version 1 defines only `"open-new-local"`. |
+| `existingLocal` | no | The `existingLocal` values the handler understands, for example `["overwrite", "appendTimestamp"]`. Missing means none: QuickerPlaces then leaves `existingLocal` out of its requests. |
 | `writtenUtc` | yes | When the file was written. |
 
 The registration file stays after Revit closes. It means "this handler has run in this release at least once". QuickerPlaces lists registrations in Settings, and says that a handler appears there only after Revit has run once with it loaded. Uninstalling a handler leaves its registration behind; QuickerPlaces shows a registration with no recent instance as "not seen since <date>".
@@ -156,6 +157,7 @@ QuickerPlaces writes `requests\<release>\<handlerId>\<requestId>.json`:
 | `centralPath` | yes | The central model, as the user sees it in QuickerPlaces. The handler uses it as given and does not map drives. |
 | `localFolder` | yes | Folder for the new local. QuickerPlaces' default is `C:\REVIT_LOCAL<release>`, changeable per release. |
 | `worksets` | yes | `"lastViewed"`, `"all"` or `"none"`; see "Worksets". |
+| `existingLocal` | no | What to do when the new local's path is taken by an old local: `"overwrite"` or `"appendTimestamp"`; see step 4. Missing or `null`: keep the old local and give the new one a timestamp, as before this property existed. QuickerPlaces sends only a value the handler's registration lists. |
 
 QuickerPlaces writes a request before it launches Revit, so a starting handler finds it.
 
@@ -174,9 +176,14 @@ The handler MUST NOT do any work in `OnStartup`, from the watcher's thread, or f
 ### Steps, inside `Execute`
 
 1. **Claim.** Rename `<requestId>.json` to `<requestId>.claimed-<processId>`, without overwriting. If the rename fails because the source is gone, another instance claimed it or QuickerPlaces cancelled it: stop, with no result. Claiming inside `Execute`, not in the watcher, means a claimed request is one Revit is actually working on. With two copies of one release running, exactly one rename succeeds.
-2. **Check the request.** Read the claimed file. Refuse with a result (see "Error codes") if: the file cannot be read or is not valid JSON; `protocol` is higher than the handler supports; `action` is unknown; `handlerId` or `revitRelease` is not this handler's; the time now is after `expiresUtc`; `centralPath` is not an absolute path to an existing `.rvt` file; `worksets` is unknown.
+2. **Check the request.** Read the claimed file. Refuse with a result (see "Error codes") if: the file cannot be read or is not valid JSON; `protocol` is higher than the handler supports; `action` is unknown; `handlerId` or `revitRelease` is not this handler's; the time now is after `expiresUtc`; `centralPath` is not an absolute path to an existing `.rvt` file; `worksets` is unknown; `existingLocal` is present and is not a value the handler lists.
 3. **Check the central.** Call `BasicFileInfo.Extract(centralPath)`. Refuse if the file is not workshared, is a local (`IsLocal`), or is not central (`IsCentral` false), or if its saved release (`BasicFileInfo.Format`) differs from the running Revit's (`Application.VersionNumber`).
-4. **Choose the local path.** `<localFolder>\<central file name without extension>_<Application.Username>.rvt`. Characters not valid in a file name are replaced by `_`. If that file exists, insert `_<yyyyMMdd-HHmmss>` (local time) before `.rvt`; if that exists too, add `-2`, `-3`, and so on. Never overwrite. Create `localFolder` if it does not exist; refuse if it cannot be created.
+4. **Choose the local path.** Create `localFolder` if it does not exist; refuse if it cannot be created. The local's own path is `<localFolder>\<central file name without extension>_<Application.Username>.rvt`, with characters not valid in a file name replaced by `_`. Its backup folder is that path without `.rvt`, plus `_backup`, as Revit names it. When no file is at the local's own path, the new local goes there. When one is, `existingLocal` decides:
+   - **`"overwrite"`** (Revit's "Overwrite existing file"). Refuse with `localInUse` if a document open in this Revit has that path. Otherwise delete the old local, then its backup folder if there is one, and the new local goes at the local's own path. If either cannot be deleted (most often because another Revit has it open), refuse with `localInUse` and leave both as they were: move the old local aside first, and put it back if the backup folder cannot be deleted. Changes in the old local that were never synchronised are lost, as with Revit's own Overwrite.
+   - **`"appendTimestamp"`** (Revit's "Append timestamp to existing file name"). Refuse with `localInUse` if a document open in this Revit has that path. Otherwise rename the old local to `<central file name without extension>_<Application.Username>_<ddMMMyyyy_HHmmss>.rvt`, from the old local's last-write time in local time with English month names (for example `_11Oct2026_233201`), adding `-2`, `-3`, and so on if that name is taken; rename its backup folder to match (`..._11Oct2026_233201_backup`) if there is one. The new local goes at the local's own path. If either rename fails, put back what was renamed and refuse with `localInUse`.
+   - **missing or `null`.** Keep the old local. Insert `_<yyyyMMdd-HHmmss>` (local time now) before the new local's `.rvt`; if that exists too, add `-2`, `-3`, and so on.
+
+   In every case the new local's path is one at which no file exists.
 5. **Make and open the local.** `WorksharingUtils.CreateNewLocal(ModelPathUtils.ConvertUserVisiblePathToModelPath(centralPath), localModelPath)`, then `UIApplication.OpenAndActivateDocument(localModelPath, openOptions, false)` with the worksets option. Dialog handling (below) is active for this step only.
 6. **Write the result**, then delete the claimed file.
 
@@ -225,6 +232,8 @@ The handler writes `<requestId>.result.json` (atomically) next to the claimed fi
 | `errorCode` | when not ok | See below. |
 | `message` | when not ok | Readable, for the user, in the handler's language. At most 1000 characters. |
 | `dialogs` | yes | Every dialog Revit raised during step 5, in order; empty if none. See "Dialogs inside Revit". |
+| `previousLocal` | no | What step 4 did with an old local at the new local's path: `"overwritten"` or `"renamed"`; missing or `null` when there was none or it was kept. |
+| `previousLocalPath` | no | Where the old local now is, when `previousLocal` is `"renamed"`. |
 
 QuickerPlaces reads the result, shows it, and deletes the result and any claimed file. QuickerPlaces deletes results and claimed files older than one day that it is no longer waiting for.
 
@@ -240,6 +249,7 @@ QuickerPlaces reads the result, shows it, and deletes the result and any claimed
 | `notCentral` | Not workshared, or a local, or not central. |
 | `releaseMismatch` | Saved in a different release from the running Revit. `message` names both. |
 | `localFolderUnavailable` | `localFolder` cannot be created or written. |
+| `localInUse` | Step 4: the old local at the new local's path is open in Revit, or it or its backup folder cannot be deleted or renamed. Nothing was changed. |
 | `createLocalFailed` | `CreateNewLocal` threw. `message` has Revit's message. |
 | `openFailed` | `OpenAndActivateDocument` threw, or the user cancelled a dialog that stopped the open. `localPath` is set. |
 | `internalError` | Anything else. |
@@ -280,13 +290,14 @@ These are QuickerPlaces' responsibilities. A handler does not need them, but han
 - **"Handler not loaded".** If a `Revit.exe` of the release is running but has no live instance of the chosen handler, QuickerPlaces says so at once instead of waiting.
 - **Status while waiting.** "Waiting for Revit 2025 to start" (no instance yet); "Revit 2025 is busy" (instance live and ready, request not claimed after 10 seconds); "Opening in Revit 2025" (claimed); "Revit is waiting on a dialog: <title>" (see next point).
 - **Dialogs outside an add-in's reach.** While Revit starts, and for a `Revit.exe` QuickerPlaces launched, QuickerPlaces looks for enabled top-level dialog windows (class `#32770`) of that process and reports their title and buttons. Progress windows with no buttons are not reported as waiting. It does not click anything, with one exception the user must turn on: pressing **Load Once** on an add-in security prompt for an add-in the user has allowed beforehand. That exception is QuickerPlaces' own behaviour, not part of this protocol; see the QuickerPlaces roadmap §4.21.
+- **An old local.** The user chooses once, in Settings, what happens when a new local's path is taken: overwrite it (the default, as most Revit users choose) or keep it with a timestamp. QuickerPlaces sends that choice as `existingLocal` when the handler lists it, and says while the open runs that an existing local will be replaced and where to change that.
 - **Timeout.** When `expiresUtc` passes without a claim, QuickerPlaces deletes the request and tells the user. It never ends a Revit process.
 
 ## Testing a handler
 
 - Use a throwaway central, never a project model.
 - Set `QUICKERPLACES_REVIT_ROOT` to a scratch folder for the Revit process, so tests never touch the real protocol folder.
-- Cases to check in each release: cold start; Revit already running; two copies of one release (exactly one handles the request); a local name that already exists; an expired request; a central saved in another release; a local passed as `centralPath`; a non-workshared file; a missing `localFolder`; a request naming another handler.
+- Cases to check in each release: cold start; Revit already running; two copies of one release (exactly one handles the request); a local name that already exists (with each `existingLocal`, and with the old local open in this Revit and in another); an expired request; a central saved in another release; a local passed as `centralPath`; a non-workshared file; a missing `localFolder`; a request naming another handler.
 
 ## Changes from the roadmap design
 

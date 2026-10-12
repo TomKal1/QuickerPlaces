@@ -74,6 +74,12 @@ public sealed record RevitOpenOutcome(
 {
     public bool Ok => Result is RevitOpenResult.Opened or RevitOpenResult.Launched;
 
+    /// <summary>What the handler did with an old local at the new local's path (<see cref="HandlerProtocol.PreviousLocal"/>), if anything.</summary>
+    public string? PreviousLocal { get; init; }
+
+    /// <summary>Where the old local now is, when it was renamed.</summary>
+    public string? PreviousLocalPath { get; init; }
+
     public IReadOnlyList<HandlerDialog> DialogList => Dialogs ?? [];
 }
 
@@ -151,7 +157,7 @@ public sealed class RevitOpener
         var handlerId = plan.HandlerId!;
 
         // The request goes first: a handler that is just starting finds it.
-        var creation = _queue.CreateOpenNewLocal(release, handlerId, plan.FilePath, plan.LocalFolder!, plan.Worksets!);
+        var creation = _queue.CreateOpenNewLocal(release, handlerId, plan.FilePath, plan.LocalFolder!, plan.Worksets!, plan.ExistingLocal);
         if (creation.Request is not { } request)
             return new RevitOpenOutcome(RevitOpenResult.LaunchFailed, creation.Problem ?? "The request couldn't be written.");
 
@@ -235,11 +241,14 @@ public sealed class RevitOpener
         }
         catch (OperationCanceledException)
         {
+            // Cancel never ends Revit: one QuickerPlaces started is left running, empty, and the user is told.
             var cancelled = _queue.Cancel(request);
             return new RevitOpenOutcome(RevitOpenResult.Cancelled,
                 cancelled == RequestCancellation.AlreadyClaimed
                     ? $"Cancelled. Revit {release} had already started opening the file, so that carries on."
-                    : "Cancelled.",
+                    : launched is not null
+                        ? $"Cancelled. Revit {release} is still running without the file; close it or open the file yourself."
+                        : "Cancelled.",
                 RequestId: request.RequestId, LaunchedProcessId: launched);
         }
 
@@ -284,7 +293,11 @@ public sealed class RevitOpener
     private static RevitOpenOutcome FromResult(HandlerResult result, string release, string requestId, int? launched)
     {
         if (result.Ok)
-            return new RevitOpenOutcome(RevitOpenResult.Opened, $"Opened in Revit {release}.", result.LocalPath, null, requestId, launched, result.Dialogs);
+            return new RevitOpenOutcome(RevitOpenResult.Opened, $"Opened in Revit {release}.", result.LocalPath, null, requestId, launched, result.Dialogs)
+            {
+                PreviousLocal = result.PreviousLocal,
+                PreviousLocalPath = result.PreviousLocalPath,
+            };
 
         var code = result.EffectiveErrorCode!;
         var detail = string.IsNullOrWhiteSpace(result.Message) ? "" : " " + result.Message.Trim();
@@ -297,6 +310,8 @@ public sealed class RevitOpener
             HandlerProtocol.ErrorCodes.NotCentral => "Revit says this isn't a central model." + detail,
             HandlerProtocol.ErrorCodes.ReleaseMismatch => $"The file was saved in a different release from the running Revit.{detail}",
             HandlerProtocol.ErrorCodes.LocalFolderUnavailable => "The local folder can't be created or written." + detail,
+            HandlerProtocol.ErrorCodes.LocalInUse =>
+                "Your existing local is open in Revit or locked, so it wasn't replaced and no new local was made." + detail + " Close it in Revit and try again.",
             HandlerProtocol.ErrorCodes.CreateLocalFailed => "Revit couldn't create the local." + detail,
             _ => $"The handler couldn't open the file ({code})." + detail,
         };

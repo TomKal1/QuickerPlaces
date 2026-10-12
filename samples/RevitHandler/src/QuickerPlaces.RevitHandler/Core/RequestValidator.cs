@@ -8,8 +8,10 @@ namespace QuickerPlaces.RevitHandler.Core
     /// <summary>A request that passed step 2 of "Handling a request".</summary>
     public sealed class ValidRequest
     {
-        public ValidRequest(string requestId, string centralPath, string localFolder, WorksetsChoice worksets, DateTime expiresUtc)
+        public ValidRequest(string requestId, string centralPath, string localFolder, WorksetsChoice worksets, DateTime expiresUtc,
+            ExistingLocalMode existingLocal = ExistingLocalMode.Keep)
         {
+            ExistingLocal = existingLocal;
             RequestId = requestId;
             CentralPath = centralPath;
             LocalFolder = localFolder;
@@ -22,6 +24,7 @@ namespace QuickerPlaces.RevitHandler.Core
         public string LocalFolder { get; }
         public WorksetsChoice Worksets { get; }
         public DateTime ExpiresUtc { get; }
+        public ExistingLocalMode ExistingLocal { get; }
     }
 
     public sealed class ValidationResult
@@ -114,10 +117,13 @@ namespace QuickerPlaces.RevitHandler.Core
             if (!TryParseWorksets(request.Worksets, out WorksetsChoice worksets))
                 return Invalid("\"worksets\" must be \"lastViewed\", \"all\" or \"none\".");
 
+            if (!TryParseExistingLocal(request.ExistingLocal, out ExistingLocalMode existingLocal))
+                return Invalid("\"existingLocal\" must be \"overwrite\" or \"appendTimestamp\" when present.");
+
             if (!fileExists(central!))
                 return ValidationResult.Refused(ErrorCodes.CentralNotFound, "The central model does not exist or cannot be reached: " + central);
 
-            return ValidationResult.Valid(new ValidRequest(fileRequestId, central!, localFolder!, worksets, expiresUtc));
+            return ValidationResult.Valid(new ValidRequest(fileRequestId, central!, localFolder!, worksets, expiresUtc, existingLocal));
         }
 
         public static bool TryParseWorksets(string? text, out WorksetsChoice worksets)
@@ -128,6 +134,18 @@ namespace QuickerPlaces.RevitHandler.Core
                 case "all": worksets = WorksetsChoice.All; return true;
                 case "none": worksets = WorksetsChoice.None; return true;
                 default: worksets = WorksetsChoice.LastViewed; return false;
+            }
+        }
+
+        /// <summary>Missing or null is <see cref="ExistingLocalMode.Keep"/>; a value this handler doesn't list is refused.</summary>
+        public static bool TryParseExistingLocal(string? text, out ExistingLocalMode mode)
+        {
+            switch (text)
+            {
+                case null: mode = ExistingLocalMode.Keep; return true;
+                case ExistingLocalValues.Overwrite: mode = ExistingLocalMode.Overwrite; return true;
+                case ExistingLocalValues.AppendTimestamp: mode = ExistingLocalMode.AppendTimestamp; return true;
+                default: mode = ExistingLocalMode.Keep; return false;
             }
         }
 

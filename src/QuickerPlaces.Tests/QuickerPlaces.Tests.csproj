@@ -94,6 +94,7 @@
     <Compile Include="..\QuickerPlaces\Models\Sessions\ProjectSession.cs" Link="Linked\Models\Sessions\ProjectSession.cs" />
     <Compile Include="..\QuickerPlaces\Models\Sessions\SessionsDocument.cs" Link="Linked\Models\Sessions\SessionsDocument.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionLauncher.cs" Link="Linked\Services\Sessions\SessionLauncher.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\SessionRevitPaths.cs" Link="Linked\Services\Sessions\SessionRevitPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentKind.cs" Link="Linked\Services\Documents\DocumentKind.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\DocumentPaths.cs" Link="Linked\Services\Documents\DocumentPaths.cs" />
     <Compile Include="..\QuickerPlaces\Services\Documents\HeldFilePaths.cs" Link="Linked\Services\Documents\HeldFilePaths.cs" />
@@ -125,6 +126,7 @@
       four are free of System.Windows.*.
     -->
     <Compile Include="..\QuickerPlaces\Mvvm\ObservableObject.cs" Link="Linked\Mvvm\ObservableObject.cs" />
+    <Compile Include="..\QuickerPlaces\Mvvm\ContextProgress.cs" Link="Linked\Mvvm\ContextProgress.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\PlaceViewModel.cs" Link="Linked\ViewModels\PlaceViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedRowViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedRowViewModel.cs" />
     <Compile Include="..\QuickerPlaces\ViewModels\RecentlyDeletedViewModel.cs" Link="Linked\ViewModels\RecentlyDeletedViewModel.cs" />

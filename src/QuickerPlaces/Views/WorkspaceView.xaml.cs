@@ -15,6 +15,8 @@ using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.RecentFiles;
+using QuickerPlaces.Services.Revit;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
@@ -76,6 +78,8 @@ public partial class WorkspaceView : UserControl
     private MainViewModel? _places;
     private SessionStore? _sessions;
     private WindowsOpenDocumentProbe? _probe;
+    private IRevitOpenCoordinator? _revitOpener;
+    private RevitReleaseCache? _revitReleases;
     private RecentFilesHost? _recentFilesHost;
     private LibraryRefresh? _refresh;
     /// <summary>The Library grids made so far: a Recents panel's and the File viewer's (File viewer design §7).</summary>
@@ -116,8 +120,11 @@ public partial class WorkspaceView : UserControl
     /// <summary>Connects the view to the workspace, the places and the stores the panels need. Call once, before it is shown.</summary>
     public void Attach(WorkspaceViewModel workspace, MainViewModel places, SessionStore sessions, WindowsOpenDocumentProbe probe,
         RecentFilesHost recentFilesHost, ActivityTrackingHost activityHost, ActivityStore activityStore,
-        INetworkDriveResolver networkDrives, Action trackingChanged)
+        INetworkDriveResolver networkDrives, Action trackingChanged,
+        IRevitOpenCoordinator? revitOpener = null, RevitReleaseCache? revitReleases = null)
     {
+        _revitOpener = revitOpener;
+        _revitReleases = revitReleases;
         _workspace = workspace;
         _places = places;
         _sessions = sessions;
@@ -1109,7 +1116,7 @@ public partial class WorkspaceView : UserControl
 
             case PanelTypes.Sessions:
                 var sessionsPanel = _sessionsPanel = new SessionsPanel { AllowsNoSelection = true, ShowsSearch = false };
-                sessionsPanel.Attach(_sessions!, new WindowsShell(), _probe!);
+                sessionsPanel.Attach(_sessions!, new WindowsShell(), _probe!, _revitOpener, _revitReleases);
                 sessionsPanel.SessionsChanged += RequestReload;
                 sessionsPanel.ViewFilesRequested += id => _filesPanel?.ShowSession(id);
 

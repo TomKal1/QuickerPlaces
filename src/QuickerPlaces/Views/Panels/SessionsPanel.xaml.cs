@@ -9,6 +9,8 @@ using QuickerPlaces.Models;
 using QuickerPlaces.Services;
 using QuickerPlaces.Services.Activity;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.Revit;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
 using QuickerPlaces.ViewModels;
 
@@ -62,13 +64,15 @@ public partial class SessionsPanel : UserControl
     /// </summary>
     public bool AllowsNoSelection { get; set; }
 
-    /// <summary>Connects the panel to the sessions store; until then it shows nothing.</summary>
-    public void Attach(SessionStore store, IShell shell, WindowsOpenDocumentProbe probe)
+    /// <summary>Connects the panel to the sessions store; until then it shows nothing. With <paramref name="revitOpener"/>, Revit files open the Revit-safe way.</summary>
+    public void Attach(SessionStore store, IShell shell, WindowsOpenDocumentProbe probe,
+        IRevitOpenCoordinator? revitOpener = null, RevitReleaseCache? revitReleases = null)
     {
         _store = store;
         _shell = shell;
         _probe = probe;
-        _viewModel = new SessionsViewModel(store, new SessionLauncher(store, shell), allowsNoSelection: AllowsNoSelection);
+        _viewModel = new SessionsViewModel(store, new SessionLauncher(store, shell), allowsNoSelection: AllowsNoSelection,
+            revitOpener: revitOpener, revitReleases: revitReleases);
         _notifiedId = _viewModel.SelectedRow?.Id;
         _viewModel.PropertyChanged += (_, e) =>
         {
@@ -385,6 +389,8 @@ public partial class SessionsPanel : UserControl
     }
 
     private void OpenAll_Click(object sender, RoutedEventArgs e) => OpenSelected();
+
+    private void CancelRevitOpen_Click(object sender, RoutedEventArgs e) => _viewModel?.CancelRevitOpen();
 
     private void OpenSelected()
     {

@@ -97,12 +97,13 @@ public sealed class RevitOpenCoordinatorTests : IDisposable
     private Task<RevitOpenReport> Open(RevitOpenCoordinator coordinator, CancellationToken token = default)
         => coordinator.OpenAsync(Central, new ListStatus(_status), token);
 
-    private void Register()
+    private void Register(params string[] existingLocal)
     {
         var registration = new HandlerRegistration
         {
             Protocol = 1, HandlerId = Handler, DisplayName = "Contoso", RevitRelease = Release,
             Actions = [HandlerProtocol.ActionOpenNewLocal], WrittenUtc = Now,
+            ExistingLocal = existingLocal.Length == 0 ? null : existingLocal,
         };
         RevitProtocolFolder.WriteAtomic(_folder.RegistrationFile(Release, Handler), HandlerJson.ToUtf8(registration));
     }
@@ -132,13 +133,15 @@ public sealed class RevitOpenCoordinatorTests : IDisposable
         File.Move(_folder.RequestFile(Release, Handler, id), _folder.ClaimedFile(Release, Handler, id, pid));
     }
 
-    private void Finish(int pid, string? localPath, params HandlerDialog[] dialogs)
+    private void Finish(int pid, string? localPath, params HandlerDialog[] dialogs) => Finish(pid, localPath, null, dialogs);
+
+    private void Finish(int pid, string? localPath, string? previousLocal, params HandlerDialog[] dialogs)
     {
         var id = Directory.EnumerateFiles(_folder.RequestFolder(Release, Handler), "*.claimed-*").Select(f => Path.GetFileName(f)[..32]).Single();
         var result = new HandlerResult
         {
             Protocol = 1, RequestId = id, HandlerId = Handler, RevitRelease = Release, ProcessId = pid, FinishedUtc = Now,
-            Ok = true, LocalPath = localPath, Dialogs = dialogs,
+            Ok = true, LocalPath = localPath, Dialogs = dialogs, PreviousLocal = previousLocal,
         };
         RevitProtocolFolder.WriteAtomic(_folder.ResultFile(Release, Handler, id), HandlerJson.ToUtf8(result));
     }
@@ -183,6 +186,29 @@ public sealed class RevitOpenCoordinatorTests : IDisposable
         Assert.Equal("Opened Tower_Central_me.rvt in Revit 2025.", report.Message);
         Assert.Single(_launcher.Launches);
         Assert.Equal(new[] { "Checking Tower_Central.rvt…", "Waiting for Revit 2025 to start", "Opening in Revit 2025" }, _status);
+    }
+
+    [Fact]
+    public async Task AnExistingLocal_IsNamedWithTheProgress_AndTheEndSaysItWasReplaced()
+    {
+        Register(HandlerProtocol.ExistingLocal.Overwrite, HandlerProtocol.ExistingLocal.AppendTimestamp);
+        var locals = Directory.CreateDirectory(Path.Combine(_dir.Path, "locals")).FullName;
+        File.WriteAllText(Path.Combine(locals, "Tower_Central_me.rvt"), "old local");
+        _settings.RevitReleases!["2025"].LocalFolder = locals;
+        _script[2] = () => HandlerLoads(Launched);
+        string? sent = null;
+        _script[3] = () =>
+        {
+            sent = File.ReadAllText(_folder.RequestFile(Release, Handler, RequestId()));
+            Claim(Launched);
+        };
+        _script[4] = () => Finish(Launched, Path.Combine(locals, "Tower_Central_me.rvt"), HandlerProtocol.PreviousLocal.Overwritten);
+
+        var report = await Open(NewCoordinator());
+
+        Assert.Equal("Opened Tower_Central_me.rvt in Revit 2025. Your old local was replaced.", report.Message);
+        Assert.Contains("Waiting for Revit 2025 to start\nYour existing local Tower_Central_me.rvt will be replaced with a new copy.", string.Join("|", _status));
+        Assert.Contains("\"existingLocal\": \"overwrite\"", sent);
     }
 
     [Fact]
@@ -275,7 +301,7 @@ public sealed class RevitOpenCoordinatorTests : IDisposable
 
         Assert.Equal(RevitOpenResult.Cancelled, report.Outcome.Result);
         Assert.False(report.IsError);
-        Assert.Equal("Cancelled.", report.Message);
+        Assert.Contains("is still running without the file", report.Message);
     }
 
     [Fact]

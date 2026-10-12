@@ -87,7 +87,7 @@ public sealed class SettingsServiceTests : IDisposable
 
         var loaded = NewService().Load();
 
-        Assert.Equal(7, AppSettings.CurrentSchemaVersion);
+        Assert.Equal(8, AppSettings.CurrentSchemaVersion);
         Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
         Assert.Equal("LastOpened", loaded.PlacesSortKey);
         Assert.Equal("descending", loaded.PlacesSortDirection);

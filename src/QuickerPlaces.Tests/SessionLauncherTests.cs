@@ -114,6 +114,49 @@ public sealed class SessionLauncherTests
     }
 
     [Fact]
+    public void HoldingRevit_LeavesRevitFilesForTheCaller_AndOpensTheRest()
+    {
+        const string central = @"C:\Jobs\Tower_Central.rvt";
+        const string family = @"C:\Jobs\Door.rfa";
+        Assert.True(_store.TryCreate("Mixed", null, new[] { A101, central, family }, out var mixed, out _).Success);
+        _shell.ExistingFiles.UnionWith(new[] { A101, central, family });
+
+        var outcome = _launcher.Open(mixed!, holdRevit: true);
+
+        Assert.Equal(new[] { A101 }, _shell.Opened);
+        Assert.Equal(new[] { A101 }, outcome.Launched);
+        Assert.Equal(new[] { central, family }, outcome.HeldRevit);
+        Assert.Null(outcome.Summary);
+        Assert.Equal(_time.UtcNow, _store.Find(mixed!.Id)!.LastOpenedAt);
+    }
+
+    [Fact]
+    public void HoldingRevit_AMissingRevitFile_IsReportedMissing_NotHeld()
+    {
+        const string central = @"C:\Jobs\Tower_Central.rvt";
+        Assert.True(_store.TryCreate("Gone", null, new[] { central }, out var gone, out _).Success);
+
+        var outcome = _launcher.Open(gone!, holdRevit: true);
+
+        Assert.Empty(outcome.HeldRevit);
+        Assert.Equal(new[] { central }, outcome.Missing);
+        Assert.Null(_store.Find(gone!.Id)!.LastOpenedAt);
+    }
+
+    [Fact]
+    public void NotHoldingRevit_RevitFilesOpenThroughWindows_AsBefore()
+    {
+        const string central = @"C:\Jobs\Tower_Central.rvt";
+        Assert.True(_store.TryCreate("Old", null, new[] { central }, out var old, out _).Success);
+        _shell.ExistingFiles.Add(central);
+
+        var outcome = _launcher.Open(old!);
+
+        Assert.Equal(new[] { central }, _shell.Opened);
+        Assert.Empty(outcome.HeldRevit);
+    }
+
+    [Fact]
     public void FakeShell_RefusesLikeWindows()
         => Assert.IsType<Win32Exception>(Record.Exception(() => { _shell.RefusedTargets.Add("x"); _shell.Open("x"); }));
 }

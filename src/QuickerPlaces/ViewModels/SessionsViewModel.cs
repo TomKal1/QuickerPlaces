@@ -3,16 +3,23 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using QuickerPlaces.Mvvm;
+using QuickerPlaces.Services;
 using QuickerPlaces.Services.Documents;
+using QuickerPlaces.Services.Revit;
+using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.ViewModels;
 
 /// <summary>
 /// Backs the Sessions window (sessions plan §5): the saved sessions, the
-/// search box and tag filter over them, the selected session's PDFs, and the
-/// open and delete actions. SessionsWindow is a thin view over this, as
+/// search box and tag filter over them, the selected session's files, and the
+/// open and delete actions. With a Revit open coordinator, a session's Revit
+/// files open the Revit-safe way (a central as a new local, roadmap §4.21),
+/// one at a time, after its other files, as the Library opens them. SessionsWindow is a thin view over this, as
 /// RecentlyDeletedDialog is over its view model (Phase 2 D21): it binds,
 /// asks before deleting, and shows the editor dialog.
 ///
@@ -29,6 +36,9 @@ public sealed class SessionsViewModel : ObservableObject
     private readonly SessionStore _store;
     private readonly SessionLauncher _launcher;
     private readonly TimeZoneInfo _localZone;
+    private readonly IRevitOpenCoordinator? _revitOpener;
+    private readonly RevitReleaseCache? _revitReleases;
+    private CancellationTokenSource? _revitOpenCancel;
     private string _searchText = "";
     private string? _selectedTag;
     private SessionRowViewModel? _selectedRow;
@@ -38,10 +48,15 @@ public sealed class SessionsViewModel : ObservableObject
 
     /// <param name="localZone">The zone dates are shown in; null for the machine's own. Tests pass a fixed one.</param>
     /// <param name="allowsNoSelection">See <see cref="AllowsNoSelection"/>; given here so the first card isn't selected before it is known.</param>
-    public SessionsViewModel(SessionStore store, SessionLauncher launcher, TimeZoneInfo? localZone = null, bool allowsNoSelection = false)
+    /// <param name="revitOpener">Opens Revit files the Revit-safe way; null hands them to Windows like any other file.</param>
+    /// <param name="revitReleases">Reads which Revit files are centrals, for <see cref="SessionFileViewModel.IsRevitCentral"/>; null marks none.</param>
+    public SessionsViewModel(SessionStore store, SessionLauncher launcher, TimeZoneInfo? localZone = null, bool allowsNoSelection = false,
+        IRevitOpenCoordinator? revitOpener = null, RevitReleaseCache? revitReleases = null)
     {
         _store = store;
         _launcher = launcher;
+        _revitOpener = revitOpener;
+        _revitReleases = revitReleases;
         _localZone = localZone ?? TimeZoneInfo.Local;
         AllowsNoSelection = allowsNoSelection;
         Reload(null);
@@ -53,7 +68,10 @@ public sealed class SessionsViewModel : ObservableObject
     /// <summary>"All tags" and then every tag in use, for the filter.</summary>
     public ObservableCollection<TagFilterViewModel> TagFilters { get; } = new();
 
-    /// <summary>The selected session's PDFs, in the session's order.</summary>
+    /// <summary>Shown when a Revit open is asked for while another is still running.</summary>
+    public const string RevitBusyMessage = "A Revit file is already opening. Wait for it, or cancel it first.";
+
+    /// <summary>The selected session's files, in the session's order.</summary>
     public ObservableCollection<SessionFileViewModel> SelectedFiles { get; } = new();
 
     /// <summary>The store's one line about loading, if any.</summary>
@@ -118,6 +136,7 @@ public sealed class SessionsViewModel : ObservableObject
             SelectedFiles.Clear();
             foreach (var file in value?.Session.Files ?? Array.Empty<string>())
                 SelectedFiles.Add(new SessionFileViewModel(file));
+            RevitKindsRead = ReadRevitKindsAsync(SelectedFiles.ToArray());
 
             OnPropertyChanged(nameof(HasSelection));
             OnPropertyChanged(nameof(CanEditSelection));
@@ -153,22 +172,150 @@ public sealed class SessionsViewModel : ObservableObject
         ? ""
         : $"Delete the session \"{_selectedRow.Name}\"?\n\nOnly the session is deleted. Its files stay where they are.";
 
-    /// <summary>Opens every PDF in the selected session.</summary>
+    /// <summary>Opens every file in the selected session: Revit files last, one at a time, when a coordinator is given.</summary>
     public void OpenSelected()
     {
         if (_selectedRow is not { } row)
             return;
 
-        Report(row, _launcher.Open(row.Session));
+        Open(row, null);
     }
 
-    /// <summary>Opens one PDF of the selected session.</summary>
+    /// <summary>Opens one file of the selected session.</summary>
     public void OpenFile(SessionFileViewModel? file)
     {
         if (_selectedRow is not { } row || file is null)
             return;
 
-        Report(row, _launcher.Open(row.Session, new[] { file.Path }));
+        Open(row, new[] { file.Path });
+    }
+
+    /// <summary>True while a Revit file is opening (starting Revit, waiting for the handler); Cancel shows then.</summary>
+    public bool IsRevitOpening => _revitOpenCancel is not null;
+
+    /// <summary>The Revit opens that are running or ran last; tests await this.</summary>
+    public Task RevitOpen { get; private set; } = Task.CompletedTask;
+
+    /// <summary>The read of the selected files' Revit kinds that is running or ran last; tests await this.</summary>
+    public Task RevitKindsRead { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Asks the running Revit opens to stop. A request the handler has already claimed carries on in Revit.</summary>
+    public void CancelRevitOpen()
+    {
+        if (_revitOpenCancel is not { } cancel)
+            return;
+        StatusMessage = "Cancelling…";
+        try
+        {
+            cancel.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // It finished at that moment.
+        }
+    }
+
+    private void Open(SessionRowViewModel row, IEnumerable<string>? files)
+    {
+        var outcome = _launcher.Open(row.Session, files, holdRevit: _revitOpener is not null);
+        Report(row, outcome);
+        if (outcome.HeldRevit.Count == 0)
+            return;
+
+        if (IsRevitOpening)
+        {
+            ErrorMessage = Join(outcome.Summary, RevitBusyMessage);
+            return;
+        }
+
+        RevitOpen = OpenRevitAsync(outcome.HeldRevit, StatusMessage, ErrorMessage);
+    }
+
+    /// <summary>
+    /// Opens each held Revit file through the coordinator in turn. A failure is
+    /// reported and the next still opens; a cancel stops the rest. The status
+    /// and error lines the other files left are kept in front of the Revit result.
+    /// </summary>
+    private async Task OpenRevitAsync(IReadOnlyList<string> files, string? earlierStatus, string? earlierError)
+    {
+        var cancel = new CancellationTokenSource();
+        _revitOpenCancel = cancel;
+        OnPropertyChanged(nameof(IsRevitOpening));
+
+        // Status text arrives from the opener's thread; the context captured here is the UI thread's.
+        var progress = new ContextProgress(text =>
+        {
+            if (ReferenceEquals(_revitOpenCancel, cancel))
+                StatusMessage = text;
+        });
+
+        var opened = new List<RevitOpenReport>();
+        var errors = new List<string>();
+        RevitOpenReport? last = null;
+        foreach (var file in files)
+        {
+            RevitOpenReport report;
+            try
+            {
+                report = await _revitOpener!.OpenAsync(file, progress, cancel.Token);
+            }
+            catch (Exception ex)
+            {
+                // The coordinator reports its own problems; this is for one that escaped.
+                DiagnosticLog.Error("Opening a Revit file from a session failed.", ex);
+                report = new RevitOpenReport(new RevitOpenOutcome(RevitOpenResult.Failed, ex.Message),
+                    $"Couldn't open \"{DocumentPaths.FileName(file)}\": {ex.Message}", true);
+            }
+
+            last = report;
+            if (report.IsError)
+                errors.Add(report.Message);
+            else if (report.Outcome.Result != RevitOpenResult.Cancelled)
+                opened.Add(report);
+            if (report.Outcome.Result == RevitOpenResult.Cancelled || cancel.IsCancellationRequested)
+                break;
+        }
+
+        _revitOpenCancel = null;
+        cancel.Dispose();
+        OnPropertyChanged(nameof(IsRevitOpening));
+
+        string? revitStatus;
+        if (last?.Outcome.Result == RevitOpenResult.Cancelled)
+            revitStatus = last.Message;
+        else if (files.Count == 1)
+            revitStatus = opened.Count == 1 ? opened[0].Message : null;
+        else
+            revitStatus = opened.Count == 0 ? null
+                : opened.Count == files.Count ? $"Opened {files.Count} Revit files."
+                : $"Opened {opened.Count} of {files.Count} Revit files.";
+
+        StatusMessage = Join(earlierStatus, revitStatus);
+        ErrorMessage = Join(earlierError, errors.Count == 0 ? null : string.Join(" ", errors));
+    }
+
+    private static string? Join(string? first, string? second) =>
+        first is null ? second : second is null ? first : $"{first} {second}";
+
+    /// <summary>Marks which of <paramref name="files"/> are Revit centrals, read off the calling thread.</summary>
+    private async Task ReadRevitKindsAsync(IReadOnlyList<SessionFileViewModel> files)
+    {
+        var revit = files.Where(f => DocumentKinds.FromPath(f.Path) == DocumentKind.Revit).ToArray();
+        if (_revitReleases is not { } cache || revit.Length == 0)
+            return;
+
+        try
+        {
+            var infos = await Task.Run(() => cache.Refresh(revit.Select(f => f.Path)));
+            foreach (var file in revit)
+                file.IsRevitCentral = infos.TryGetValue(file.Path, out var info) &&
+                    info is { Problem: RevitFileProblem.None, Worksharing: RevitWorksharing.Central };
+        }
+        catch (Exception ex)
+        {
+            // Only the badge is lost; opening still reads the file itself.
+            DiagnosticLog.Warn($"Reading a session's Revit files failed ({ex.GetType().Name}).");
+        }
     }
 
     /// <summary>Deletes the selected session (the view asks first) and selects the next one.</summary>
@@ -383,9 +530,18 @@ public sealed class SessionRowViewModel
 }
 
 /// <summary>One PDF of the selected session.</summary>
-public sealed class SessionFileViewModel
+public sealed class SessionFileViewModel : ObservableObject
 {
+    private bool _isRevitCentral;
+
     public SessionFileViewModel(string path) => Path = path;
+
+    /// <summary>True once the file has been read as a Revit central: it opens as a new local.</summary>
+    public bool IsRevitCentral
+    {
+        get => _isRevitCentral;
+        set => SetProperty(ref _isRevitCentral, value);
+    }
 
     public string Path { get; }
 

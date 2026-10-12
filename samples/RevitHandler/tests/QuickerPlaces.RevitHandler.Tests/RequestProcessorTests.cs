@@ -265,6 +265,56 @@ namespace QuickerPlaces.RevitHandler.Tests
             Assert.Matches(@"1234_Arch_Central_tkal_\d{8}-\d{6}\.rvt$", local);
         }
 
+        [Fact]
+        public void Overwrite_ReplacesTheOldLocal_AndSaysSoInTheResult()
+        {
+            Directory.CreateDirectory(_localFolder);
+            string existing = Path.Combine(_localFolder, "1234_Arch_Central_tkal.rvt");
+            File.WriteAllText(existing, "old local");
+            Directory.CreateDirectory(Path.Combine(_localFolder, "1234_Arch_Central_tkal_backup"));
+            Submit(Requests.For(_central, _localFolder, existingLocal: "overwrite"));
+
+            NewProcessor().ProcessWaiting();
+
+            Assert.False(File.Exists(existing), "the old local was deleted before CreateNewLocal");
+            Assert.False(Directory.Exists(Path.Combine(_localFolder, "1234_Arch_Central_tkal_backup")));
+            Assert.Contains("create " + _central + " -> " + existing, _revit.Calls);
+            using JsonDocument result = ReadResult();
+            Assert.True(result.RootElement.GetProperty("ok").GetBoolean());
+            Assert.Equal(existing, Str(result.RootElement, "localPath"));
+            Assert.Equal("overwritten", Str(result.RootElement, "previousLocal"));
+        }
+
+        [Fact]
+        public void AnOldLocalOpenInThisRevit_IsLocalInUse_AndRevitIsNotAskedToMakeOne()
+        {
+            Directory.CreateDirectory(_localFolder);
+            string existing = Path.Combine(_localFolder, "1234_Arch_Central_tkal.rvt");
+            File.WriteAllText(existing, "open in Revit");
+            _revit.OpenDocuments.Add(existing);
+            Submit(Requests.For(_central, _localFolder, existingLocal: "overwrite"));
+
+            NewProcessor().ProcessWaiting();
+
+            Assert.Equal("open in Revit", File.ReadAllText(existing));
+            Assert.DoesNotContain(_revit.Calls, c => c.StartsWith("create", StringComparison.Ordinal));
+            using JsonDocument result = ReadResult();
+            Assert.Equal("localInUse", Str(result.RootElement, "errorCode"));
+            Assert.False(_revit.CaptureEverStarted);
+        }
+
+        [Fact]
+        public void AnUnknownExistingLocal_IsAnInvalidRequest()
+        {
+            Submit(Requests.For(_central, _localFolder, existingLocal: "shred"));
+
+            NewProcessor().ProcessWaiting();
+
+            using JsonDocument result = ReadResult();
+            Assert.Equal("invalidRequest", Str(result.RootElement, "errorCode"));
+            Assert.Contains("existingLocal", Str(result.RootElement, "message"));
+        }
+
         [Theory]
         [InlineData("lastViewed", WorksetsChoice.LastViewed)]
         [InlineData("all", WorksetsChoice.All)]

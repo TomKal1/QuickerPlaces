@@ -29,6 +29,9 @@ public sealed record RegisteredHandler(
     public bool IsReady => Instances.Any(i => i.IsReady);
 
     public bool Supports(string action) => Actions.Contains(action, StringComparer.Ordinal);
+
+    /// <summary>True when the registration lists <paramref name="mode"/> among its <c>existingLocal</c> values.</summary>
+    public bool SupportsExistingLocal(string mode) => Registration.ExistingLocal?.Contains(mode, StringComparer.Ordinal) == true;
 }
 
 /// <summary>The handlers registered for one release, by display name.</summary>

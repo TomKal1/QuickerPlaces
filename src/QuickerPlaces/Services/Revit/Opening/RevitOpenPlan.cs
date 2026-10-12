@@ -56,6 +56,13 @@ public sealed record RevitOpenPlan
 
     public string? Worksets { get; init; }
 
+    /// <summary>
+    /// What the handler does with an old local at the new local's path
+    /// (<see cref="Handlers.HandlerProtocol.ExistingLocal"/>); null when the
+    /// handler doesn't list the setting's choice, so it keeps old locals as before.
+    /// </summary>
+    public string? ExistingLocal { get; init; }
+
     public HandlerAvailability Availability { get; init; }
 
     /// <summary>Revit processes of the release running now (ids), for the report.</summary>

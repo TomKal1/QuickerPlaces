@@ -45,6 +45,18 @@ namespace QuickerPlaces.RevitHandler
             };
         }
 
+        public bool IsOpen(string path)
+        {
+            string full = Path.GetFullPath(path);
+            foreach (Document document in _uiApp.Application.Documents)
+            {
+                string open = document.PathName;
+                if (!string.IsNullOrEmpty(open) && string.Equals(Path.GetFullPath(open), full, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         public IDisposable BeginDialogCapture(DialogRecorder recorder) => new DialogScope(_uiApp, recorder, _log);
 
         public void CreateNewLocal(string centralPath, string localPath)

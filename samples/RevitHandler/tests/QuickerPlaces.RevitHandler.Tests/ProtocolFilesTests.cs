@@ -31,6 +31,7 @@ namespace QuickerPlaces.RevitHandler.Tests
             Assert.Equal("1.0.0", root.GetProperty("handlerVersion").GetString());
             Assert.Equal("2025", root.GetProperty("revitRelease").GetString());
             Assert.Equal(new[] { "open-new-local" }, root.GetProperty("actions").EnumerateArray().Select(a => a.GetString()).ToArray());
+            Assert.Equal(new[] { "overwrite", "appendTimestamp" }, root.GetProperty("existingLocal").EnumerateArray().Select(a => a.GetString()).ToArray());
             Assert.Equal("2026-10-08T21:15:00.0000000Z", root.GetProperty("writtenUtc").GetString());
         }
 

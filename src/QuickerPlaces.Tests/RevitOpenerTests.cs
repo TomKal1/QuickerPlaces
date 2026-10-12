@@ -118,12 +118,17 @@ public sealed class RevitOpenerTests : IDisposable
     }
 
     private void Finish(int pid, bool ok, string? localPath, string? code = null, string? message = null, params HandlerDialog[] dialogs)
+        => Finish(pid, ok, localPath, code, message, null, null, dialogs);
+
+    private void Finish(int pid, bool ok, string? localPath, string? code, string? message, string? previousLocal, string? previousLocalPath,
+        params HandlerDialog[] dialogs)
     {
         var id = Directory.EnumerateFiles(_folder.RequestFolder(Release, Handler), "*.claimed-*").Select(f => Path.GetFileName(f)[..32]).Single();
         var result = new HandlerResult
         {
             Protocol = 1, RequestId = id, HandlerId = Handler, RevitRelease = Release, ProcessId = pid, FinishedUtc = Now,
             Ok = ok, LocalPath = localPath, ErrorCode = code, Message = message, Dialogs = dialogs,
+            PreviousLocal = previousLocal, PreviousLocalPath = previousLocalPath,
         };
         RevitProtocolFolder.WriteAtomic(_folder.ResultFile(Release, Handler, id), HandlerJson.ToUtf8(result));
     }
@@ -328,6 +333,47 @@ public sealed class RevitOpenerTests : IDisposable
         Assert.Contains("Dialog cancelled.", outcome.Message);
     }
 
+    [Fact]
+    public async Task TheRequest_CarriesThePlansExistingLocal()
+    {
+        _launcher.OnLaunch = _ => RevitRuns(7000, Now);
+
+        await _opener.RunAsync(HandlerPlan() with { ExistingLocal = HandlerProtocol.ExistingLocal.Overwrite }, wait: false);
+        var sent = File.ReadAllText(WaitingFile(OnlyRequestId()));
+
+        Assert.Contains("\"existingLocal\": \"overwrite\"", sent);
+    }
+
+    [Theory]
+    [InlineData("overwritten", null)]
+    [InlineData("renamed", @"C:\REVIT_LOCAL2025\Tower_me_11Oct2026_233201.rvt")]
+    public async Task WhatHappenedToTheOldLocal_IsOnTheOutcome(string previous, string? previousPath)
+    {
+        _launcher.OnLaunch = _ => RevitRuns(7000, Now);
+        _script[2] = () => Claim(7000);
+        _script[3] = () => Finish(7000, true, @"C:\REVIT_LOCAL2025\Tower_me.rvt", null, null, previous, previousPath);
+
+        var outcome = await _opener.RunAsync(HandlerPlan());
+
+        Assert.Equal(RevitOpenResult.Opened, outcome.Result);
+        Assert.Equal(previous, outcome.PreviousLocal);
+        Assert.Equal(previousPath, outcome.PreviousLocalPath);
+    }
+
+    [Fact]
+    public async Task LocalInUse_SaysTheOldLocalIsOpen_AndNothingChanged()
+    {
+        _launcher.OnLaunch = _ => RevitRuns(7000, Now);
+        _script[2] = () => Claim(7000);
+        _script[3] = () => Finish(7000, false, null, "localInUse", "Tower_me.rvt is open in Revit.");
+
+        var outcome = await _opener.RunAsync(HandlerPlan());
+
+        Assert.Equal(RevitOpenResult.Failed, outcome.Result);
+        Assert.StartsWith("Your existing local is open in Revit or locked, so it wasn't replaced and no new local was made.", outcome.Message);
+        Assert.Contains("Tower_me.rvt is open in Revit.", outcome.Message);
+    }
+
     [Theory]
     [InlineData("notCentral", "isn't a central")]
     [InlineData("releaseMismatch", "different release")]
@@ -387,7 +433,7 @@ public sealed class RevitOpenerTests : IDisposable
     }
 
     [Fact]
-    public async Task CallerCancellation_CancelsAnUnclaimedRequest()
+    public async Task CallerCancellation_CancelsAnUnclaimedRequest_AndSaysTheLaunchedRevitStillRuns()
     {
         _launcher.OnLaunch = _ => RevitRuns(7000, Now);
         using var cts = new CancellationTokenSource();
@@ -396,9 +442,25 @@ public sealed class RevitOpenerTests : IDisposable
         var outcome = await _opener.RunAsync(HandlerPlan(), cancellationToken: cts.Token);
 
         Assert.Equal(RevitOpenResult.Cancelled, outcome.Result);
-        Assert.Equal("Cancelled.", outcome.Message);
+        Assert.Equal("Cancelled. Revit 2025 is still running without the file; close it or open the file yourself.", outcome.Message);
         Assert.False(RequestFilesExist());
         Assert.Equal(7000, outcome.LaunchedProcessId);
+    }
+
+    [Fact]
+    public async Task CallerCancellation_WithARevitThatWasAlreadyRunning_JustSaysCancelled()
+    {
+        RevitRuns(4321, Now.AddHours(-1));
+        HandlerLoads(4321, ready: true);
+        using var cts = new CancellationTokenSource();
+        _script[1] = cts.Cancel;
+
+        var outcome = await _opener.RunAsync(HandlerPlan(), cancellationToken: cts.Token);
+
+        Assert.Equal(RevitOpenResult.Cancelled, outcome.Result);
+        Assert.Equal("Cancelled.", outcome.Message);
+        Assert.False(RequestFilesExist());
+        Assert.Null(outcome.LaunchedProcessId);
     }
 
     [Fact]

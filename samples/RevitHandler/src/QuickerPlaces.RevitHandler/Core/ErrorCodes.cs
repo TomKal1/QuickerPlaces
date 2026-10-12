@@ -11,6 +11,7 @@ namespace QuickerPlaces.RevitHandler.Core
         public const string NotCentral = "notCentral";
         public const string ReleaseMismatch = "releaseMismatch";
         public const string LocalFolderUnavailable = "localFolderUnavailable";
+        public const string LocalInUse = "localInUse";
         public const string CreateLocalFailed = "createLocalFailed";
         public const string OpenFailed = "openFailed";
         public const string InternalError = "internalError";

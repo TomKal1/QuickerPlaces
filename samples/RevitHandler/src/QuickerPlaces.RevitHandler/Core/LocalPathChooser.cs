@@ -7,6 +7,10 @@ namespace QuickerPlaces.RevitHandler.Core
     /// <summary>Step 4: choose the path of the new local. Never returns a path that exists.</summary>
     public static class LocalPathChooser
     {
+        /// <summary>The local's own path: <c>&lt;localFolder&gt;\&lt;central name&gt;_&lt;username&gt;.rvt</c>, invalid file-name characters as '_'.</summary>
+        public static string PlainPath(string localFolder, string centralPath, string username)
+            => Path.Combine(localFolder, PathRules.SanitizeFileName(PathRules.GetFileNameWithoutExtension(centralPath) + "_" + username) + ".rvt");
+
         /// <summary>
         /// <c>&lt;localFolder&gt;\&lt;central name&gt;_&lt;username&gt;.rvt</c>; invalid file-name characters become '_'.
         /// If that exists: <c>..._&lt;yyyyMMdd-HHmmss&gt;.rvt</c> (<paramref name="localNow"/>), then <c>...-2.rvt</c>, <c>-3</c>, and so on.

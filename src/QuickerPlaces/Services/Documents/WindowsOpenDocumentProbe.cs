@@ -9,6 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.Versioning;
+using QuickerPlaces.Services.Revit;
+using QuickerPlaces.Services.Sessions;
 
 namespace QuickerPlaces.Services.Documents;
 
@@ -61,8 +63,14 @@ public sealed class WindowsOpenDocumentProbe
     private static readonly TimeSpan HeldFilesBudget = TimeSpan.FromSeconds(3);
 
     private readonly WindowsRecentItems _recentItems;
+    private readonly RevitReleaseCache? _revitReleases;
 
-    public WindowsOpenDocumentProbe(WindowsRecentItems recentItems) => _recentItems = recentItems;
+    /// <param name="revitReleases">When given, an open Revit local is listed as its central (<see cref="SessionRevitPaths"/>).</param>
+    public WindowsOpenDocumentProbe(WindowsRecentItems recentItems, RevitReleaseCache? revitReleases = null)
+    {
+        _recentItems = recentItems;
+        _revitReleases = revitReleases;
+    }
 
     /// <summary>Processes that open a document only to preview, index or scan it.</summary>
     private static readonly HashSet<string> IgnoredHolders = new(StringComparer.OrdinalIgnoreCase)
@@ -72,7 +80,23 @@ public sealed class WindowsOpenDocumentProbe
     };
 
     /// <summary>Scans on a worker thread. Never throws: a failure becomes the scan's Warning.</summary>
-    public Task<OpenDocumentScan> ScanAsync() => Task.Run(Scan);
+    public Task<OpenDocumentScan> ScanAsync() => Task.Run(() => PreferCentral(Scan()));
+
+    private OpenDocumentScan PreferCentral(OpenDocumentScan scan)
+    {
+        if (_revitReleases is null)
+            return scan;
+        try
+        {
+            return SessionRevitPaths.PreferCentral(scan, _revitReleases, File.Exists);
+        }
+        catch (Exception ex)
+        {
+            // The locals stay listed; only the swap to their centrals is lost.
+            DiagnosticLog.Warn($"Listing open Revit locals as their centrals failed ({ex.GetType().Name}).");
+            return scan;
+        }
+    }
 
     private OpenDocumentScan Scan()
     {

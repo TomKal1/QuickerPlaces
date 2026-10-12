@@ -7,11 +7,15 @@ using QuickerPlaces.Services.Documents;
 namespace QuickerPlaces.Services.Sessions;
 
 /// <summary>
-/// Reopens a saved session's PDFs (sessions plan §5): each file is checked,
+/// Reopens a saved session's files (sessions plan §5): each file is checked,
 /// then handed to Windows to open with its default application, as a place
 /// is. A missing file is skipped and reported, and one Windows refuses does
 /// not stop the rest. The session's Last opened time is recorded when at
-/// least one file opened.
+/// least one file opened or was held.
+///
+/// With <c>holdRevit</c>, a Revit file that exists is not handed to Windows
+/// but returned in <see cref="SessionOpenOutcome.HeldRevit"/>, for the caller
+/// to open the Revit-safe way (a central as a new local, roadmap §4.21).
 ///
 /// Deliberately not PlaceLauncher: a session's files are not places, so
 /// reopening one never counts as opening a place (Phase 3 D23 keeps
@@ -32,9 +36,10 @@ public sealed class SessionLauncher
 
     /// <summary>
     /// Opens <paramref name="files"/> from <paramref name="session"/>, or all
-    /// of its files when null, in the session's order.
+    /// of its files when null, in the session's order. With
+    /// <paramref name="holdRevit"/>, existing Revit files are held for the caller instead of opened.
     /// </summary>
-    public SessionOpenOutcome Open(SessionSnapshot session, IEnumerable<string>? files = null)
+    public SessionOpenOutcome Open(SessionSnapshot session, IEnumerable<string>? files = null, bool holdRevit = false)
     {
         var chosen = files is null
             ? session.Files
@@ -43,12 +48,19 @@ public sealed class SessionLauncher
         var launched = new List<string>();
         var missing = new List<string>();
         var failed = new List<SessionFileFailure>();
+        var heldRevit = new List<string>();
 
         foreach (var file in chosen)
         {
             if (!_shell.FileExists(file))
             {
                 missing.Add(file);
+                continue;
+            }
+
+            if (holdRevit && DocumentKinds.FromPath(file) == DocumentKind.Revit)
+            {
+                heldRevit.Add(file);
                 continue;
             }
 
@@ -65,8 +77,8 @@ public sealed class SessionLauncher
             }
         }
 
-        var persistence = launched.Count > 0 ? _store.MarkOpened(session.Id) : PersistenceResult.Ok();
-        return new SessionOpenOutcome(launched, missing, failed, persistence);
+        var persistence = launched.Count > 0 || heldRevit.Count > 0 ? _store.MarkOpened(session.Id) : PersistenceResult.Ok();
+        return new SessionOpenOutcome(launched, missing, failed, persistence) { HeldRevit = heldRevit };
     }
 }
 
@@ -81,6 +93,9 @@ public sealed record SessionOpenOutcome(
     IReadOnlyList<SessionFileFailure> Failed,
     PersistenceResult Persistence)
 {
+    /// <summary>Revit files that exist and were held for the caller to open, in the session's order; empty unless asked for.</summary>
+    public IReadOnlyList<string> HeldRevit { get; init; } = Array.Empty<string>();
+
     /// <summary>
     /// One line for the Sessions window, or null when every file opened and
     /// was recorded. Names at most three files of each kind.

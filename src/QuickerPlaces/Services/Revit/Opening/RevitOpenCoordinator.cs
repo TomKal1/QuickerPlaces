@@ -122,7 +122,7 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
                 return Report(refused, plan);
             }
 
-            var watch = new Watch(this, plan, status);
+            var watch = new Watch(this, plan, status, ExistingLocalNote.For(plan, ListRevitFiles));
             var outcome = await Task.Run(async () =>
             {
                 var result = await _opener.RunAsync(plan, watch, wait: true, cancellationToken, watch.Poll);
@@ -168,6 +168,8 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
         }
     }
 
+    private static IEnumerable<string> ListRevitFiles(string folder) => Directory.EnumerateFiles(folder, "*.rvt");
+
     private RevitOpenPlan Plan(string filePath)
     {
         var info = _cache.Refresh([filePath]).TryGetValue(filePath, out var read) ? read : RevitFileInfo.Failed(RevitFileProblem.Unreadable);
@@ -183,7 +185,13 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
         if (outcome.Result == RevitOpenResult.Opened)
         {
             var local = outcome.LocalPath is { Length: > 0 } path ? NameOf(path) : NameOf(plan?.FilePath ?? "");
-            return new RevitOpenReport(outcome, $"Opened {local} in Revit {plan?.Release}.", false);
+            var previous = outcome.PreviousLocal switch
+            {
+                HandlerProtocol.PreviousLocal.Overwritten => " Your old local was replaced.",
+                HandlerProtocol.PreviousLocal.Renamed when outcome.PreviousLocalPath is { Length: > 0 } kept => $" Your old local was kept as {NameOf(kept)}.",
+                _ => "",
+            };
+            return new RevitOpenReport(outcome, $"Opened {local} in Revit {plan?.Release}.{previous}", false);
         }
 
         return new RevitOpenReport(outcome, outcome.Message, !outcome.Ok && outcome.Result != RevitOpenResult.Cancelled);
@@ -311,12 +319,15 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
         private string? _openerText;
         private string? _dialogText;
         private string? _shown;
+        private readonly string? _note;
         private int? _pid;
         private bool _stopped;
         public bool Stopped => _stopped;
 
-        public Watch(RevitOpenCoordinator owner, RevitOpenPlan plan, IProgress<string>? status)
+        /// <param name="note">A line shown under every status while the open runs (<see cref="ExistingLocalNote"/>), or null.</param>
+        public Watch(RevitOpenCoordinator owner, RevitOpenPlan plan, IProgress<string>? status, string? note = null)
         {
+            _note = note;
             _owner = owner;
             _plan = plan;
             _status = status;
@@ -460,6 +471,8 @@ public sealed class RevitOpenCoordinator : IRevitOpenCoordinator
         private void Show()
         {
             var text = _dialogText ?? _openerText;
+            if (text is not null && _note is not null)
+                text = text + "\n" + _note;
             if (text is null || text == _shown)
                 return;
             _shown = text;
