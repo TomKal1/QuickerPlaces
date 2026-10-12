@@ -10,7 +10,7 @@ supersedes: ai/260925_Phase 3 Handoff.md (for where to work and what next; its �
 
 ## 1. Where to work
 
-- **Branch `claude/phase-9-folder-activity`**, taken from `main` at `556497c` (PR #7, Phase 3 merged), plus three commits: the WWTools direction in roadmap §4.21, the roadmap reorder (§1.1), and the Phase 9 plan refresh. **Not pushed.** The user sometimes pushes and merges PRs themselves, so check `git log` and the remote before assuming anything.
+- **Branch `claude/phase-9-folder-activity`**, taken from `main` at `556497c` (PR #7, Phase 3 merged), plus three commits: the private add-in direction in roadmap §4.21, the roadmap reorder (§1.1), and the Phase 9 plan refresh. **Not pushed.** The user sometimes pushes and merges PRs themselves, so check `git log` and the remote before assuming anything.
 - **Phase 9 is next** (roadmap §1.1; the release split was withdrawn). The plan is [`260914_Folder Activity Tracking Plan.md`](260914_Folder%20Activity%20Tracking%20Plan.md). Read **§0.1** first (the 2026-09-25 refresh and the user's answers), then **§4** (D1–D26), then **§5.1**, **§7** and **§9**.
 - State: all 329 tests pass; the solution builds with 0 warnings on Windows.
 

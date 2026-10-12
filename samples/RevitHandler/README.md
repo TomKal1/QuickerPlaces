@@ -54,7 +54,7 @@ On Windows, building in Visual Studio or with `dotnet build` automatically deplo
 - **Debug R22–R26:** copies the manifest to `%AppData%\Autodesk\Revit\Addins\<release>\` and the DLL and supporting output files into its `QuickerPlaces.RevitHandler\` subfolder.
 - **Release R22–R26:** copies into `C:\QuickerPlaces.RevitHandler.bundle\Contents\QuickerPlaces.RevitHandler\<release>\`, with the manifest beside the `QuickerPlaces.RevitHandler\` DLL subfolder, and `PackageContents.xml` at the bundle root. Each build updates only its release folder, preserving other releases. Plain Debug/Release deploys 2025.
 
-The bundle follows the WWTools layout. Its package manifest lists 2022–2026; build each Release configuration before distributing the full bundle. `C:\QuickerPlaces.RevitHandler.bundle` is a packaging destination. To load the release bundle, place it in Autodesk's ApplicationPlugins folder; avoid installing the same handler through both the Debug `.addin` and the bundle.
+The bundle uses Autodesk's `.bundle` layout: one `Contents\QuickerPlaces.RevitHandler\<release>\` folder per release, each listed in `PackageContents.xml`. The package manifest lists 2022–2026; build each Release configuration before distributing the full bundle. `C:\QuickerPlaces.RevitHandler.bundle` is a packaging destination. To load the release bundle, place it in Autodesk's ApplicationPlugins folder; avoid installing the same handler through both the Debug `.addin` and the bundle.
 
 Override destinations with `-p:RevitAddinsRoot="<add-ins root>"` or `-p:RevitBundleRoot="<bundle path>"`. For a build without deployment, use `-p:DeployRevitHandler=false` (also the default on non-Windows machines).
 
@@ -120,6 +120,8 @@ Cases to check in each release (from "Testing a handler" in the protocol documen
 - A request naming another handler: result `invalidRequest`.
 
 ## Make it your own
+
+The short version is below. For a full walkthrough, including merging the handler into an add-in that already exists and a checklist for an AI agent, see [PORTING.md](PORTING.md).
 
 1. In `Revit/App.cs`, change `HandlerId` (1 to 64 characters of `a-z`, `0-9`, `.` and `-`, stable across versions, for example `contoso.revittools`) and `DisplayName` (at most 80 characters, shown in QuickerPlaces' Settings).
 2. In the `.addin` file, give the add-in your own `AddInId` GUID, `Name`, `VendorId` and `FullClassName`.

@@ -29,7 +29,7 @@ App and CLI builds passed without warnings; 1917 main tests passed after the gro
 
 Both add-in lists exclude DLLs identified by valid Autodesk Authenticode signatures, with no show-Autodesk toggle. Existing permissions are preserved in storage. Unknown, unsigned or unverifiable publishers remain visible. Verification uses cached trust information without UI or network retrieval and checks each DLL once per scan. A local scan across 2022–2026 identified 54 Autodesk entries, including Collaborate, Batch Print, Views For A360 and Worksharing Monitor; third-party add-ins stayed visible. This is a display filter only, not a change to Load Once permission checks.
 
-Installed third-party add-ins are grouped by name and vendor across releases. Years are shown as ranges (e.g. WWTools 2023–2026); missing years remain explicit gaps. Filtering by one release finds groups available in that release; Allow all still covers every installed year shown in the row. Each DLL retains its own per-release SHA-256 permission. All offers are validated before any draft permission changes, so an unreadable/ambiguous year leaves the whole draft unchanged. Partially allowed groups are marked; fully allowed groups offer Remove for all listed years. Saved/draft permissions also display once per add-in name with grouped years and a single Remove action. Changes still require Save.
+Installed third-party add-ins are grouped by name and vendor across releases. Years are shown as ranges (e.g. ContosoTools 2023–2026); missing years remain explicit gaps. Filtering by one release finds groups available in that release; Allow all still covers every installed year shown in the row. Each DLL retains its own per-release SHA-256 permission. All offers are validated before any draft permission changes, so an unreadable/ambiguous year leaves the whole draft unchanged. Partially allowed groups are marked; fully allowed groups offer Remove for all listed years. Saved/draft permissions also display once per add-in name with grouped years and a single Remove action. Changes still require Save.
 
 | Commit | Step | What |
 |---|---|---|
@@ -73,4 +73,4 @@ Use a throwaway central, never a project model. Set `QUICKERPLACES_REVIT_ROOT` o
 
 ## Constraints that still apply
 
-As in the 261008 handoff: never copy a central or overwrite a local, never upgrade, no Autodesk assemblies in `src/QuickerPlaces.sln`, no WWTools name in public code, UI-free services linked into `qp` and the tests, Revit 2022 and later only.
+As in the 261008 handoff: never copy a central or overwrite a local, never upgrade, no Autodesk assemblies in `src/QuickerPlaces.sln`, no private add-in name in public code, UI-free services linked into `qp` and the tests, Revit 2022 and later only.
