@@ -370,7 +370,7 @@ public sealed class RevitSettingsViewModelTests : IDisposable
     {
         _installs.AddDefault(2023);
         _installs.AddDefault(2026);
-        var vm = New(r => new ManifestReadResult([Manifest("WWTools", $@"C:\Addins\{r}\WWTools.dll") with { Release = r }], []),
+        var vm = New(r => new ManifestReadResult([Manifest("ContosoTools", $@"C:\Addins\{r}\ContosoTools.dll") with { Release = r }], []),
             dll => "hash-" + dll);
         var row = Assert.Single(vm.VisibleAddins);
         Assert.Equal("2023–2026", row.Release);
