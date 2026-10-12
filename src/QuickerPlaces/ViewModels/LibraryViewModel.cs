@@ -1120,20 +1120,6 @@ public sealed class LibraryViewModel : ObservableObject
         ErrorMessage = report.IsError ? report.Message : null;
     }
 
-    /// <summary>Hands a report to the context it was created on, or runs it at once when called from that same context.</summary>
-    private sealed class ContextProgress(Action<string> apply) : IProgress<string>
-    {
-        private readonly SynchronizationContext? _context = SynchronizationContext.Current;
-
-        public void Report(string value)
-        {
-            if (_context is null || ReferenceEquals(_context, SynchronizationContext.Current))
-                apply(value);
-            else
-                _context.Post(_ => apply(value), null);
-        }
-    }
-
     /// <summary>Reads all four sources again and refreshes the rows and the year strip: after a launch, a change to a source, or new tracking.</summary>
     public void Reload()
     {

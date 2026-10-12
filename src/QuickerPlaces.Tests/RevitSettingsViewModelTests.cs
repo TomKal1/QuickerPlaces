@@ -280,6 +280,33 @@ public sealed class RevitSettingsViewModelTests : IDisposable
     }
 
     [Fact]
+    public void AnExistingLocal_IsOverwrittenByDefault()
+    {
+        var vm = New();
+
+        Assert.True(vm.OverwriteExistingLocal);
+        Assert.False(vm.KeepExistingLocal);
+        Assert.Contains("like Revit's own Overwrite", vm.ExistingLocalHint);
+    }
+
+    [Fact]
+    public void KeepingOldLocals_IsSavedWithTheSettings_AndCanBeUndone()
+    {
+        var vm = New();
+
+        vm.KeepExistingLocal = true;
+        Assert.False(vm.OverwriteExistingLocal);
+        Assert.True(vm.HasChanges);
+        vm.Save();
+        Assert.Equal("appendTimestamp", _service.Load().RevitExistingLocal);
+
+        vm.OverwriteExistingLocal = true;
+        vm.Save();
+        Assert.Equal("overwrite", _service.Load().RevitExistingLocal);
+        Assert.False(vm.HasChanges);
+    }
+
+    [Fact]
     public void Entries_AreListedWithTheirDetails_AndRemovedOnSave()
     {
         _settings.LoadOnceEntries!.Add(Entry("DuctExporter"));

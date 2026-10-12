@@ -22,11 +22,12 @@ public sealed class RevitOpenPlannerTests
     private readonly AppSettings _settings = new() { RevitReleases = new() { ["2025"] = new() { HandlerId = "contoso" } } };
     private readonly FakeNetworkDrives _network = new();
 
-    private static RegisteredHandler Handler(string id, int? loadedIn, bool supportsAction = true, bool ready = true) =>
+    private static RegisteredHandler Handler(string id, int? loadedIn, bool supportsAction = true, bool ready = true, string[]? existingLocal = null) =>
         new(new HandlerRegistration
         {
             Protocol = 1, HandlerId = id, DisplayName = id + " name", RevitRelease = "2025",
             Actions = supportsAction ? [HandlerProtocol.ActionOpenNewLocal] : ["other"], WrittenUtc = Now,
+            ExistingLocal = existingLocal,
         },
         loadedIn is { } pid ? [new LiveHandlerInstance(pid, Now, ready ? Now : null)] : [], null);
 
@@ -324,5 +325,45 @@ public sealed class RevitOpenPlannerTests
         _running.Add(Revit(2, TimeSpan.FromSeconds(20)));
 
         Assert.Equal(HandlerAvailability.Starting, Plan(Info()).Availability);
+    }
+
+    // --- An old local at the new local's path ------------------------------------
+
+    private static readonly string[] BothModes = [HandlerProtocol.ExistingLocal.Overwrite, HandlerProtocol.ExistingLocal.AppendTimestamp];
+
+    [Fact]
+    public void ByDefault_AHandlerThatCanOverwrite_IsAskedToOverwrite()
+    {
+        _handlers2025[0] = Handler("contoso", loadedIn: null, existingLocal: BothModes);
+
+        Assert.Equal(HandlerProtocol.ExistingLocal.Overwrite, Plan(Info()).ExistingLocal);
+    }
+
+    [Fact]
+    public void TheSettingCanAskToKeepTheOldLocalWithATimestamp()
+    {
+        _handlers2025[0] = Handler("contoso", loadedIn: null, existingLocal: BothModes);
+        _settings.RevitExistingLocal = HandlerProtocol.ExistingLocal.AppendTimestamp;
+
+        Assert.Equal(HandlerProtocol.ExistingLocal.AppendTimestamp, Plan(Info()).ExistingLocal);
+    }
+
+    [Fact]
+    public void AHandlerThatDoesntListTheChoice_IsSentNone_AndKeepsOldLocalsAsBefore()
+    {
+        _handlers2025[0] = Handler("contoso", loadedIn: null, existingLocal: [HandlerProtocol.ExistingLocal.AppendTimestamp]);
+
+        Assert.Null(Plan(Info()).ExistingLocal);
+        _handlers2025[0] = Handler("contoso", loadedIn: null);
+        Assert.Null(Plan(Info()).ExistingLocal);
+    }
+
+    [Fact]
+    public void AnUnknownSetting_ReadsAsOverwrite()
+    {
+        _handlers2025[0] = Handler("contoso", loadedIn: null, existingLocal: BothModes);
+        _settings.RevitExistingLocal = "shred";
+
+        Assert.Equal(HandlerProtocol.ExistingLocal.Overwrite, Plan(Info()).ExistingLocal);
     }
 }

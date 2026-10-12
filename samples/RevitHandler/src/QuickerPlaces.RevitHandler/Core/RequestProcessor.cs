@@ -10,7 +10,9 @@ namespace QuickerPlaces.RevitHandler.Core
     /// Revit is reached only through <see cref="IRevitSession"/>.
     ///
     /// Safety rules (protocol): this class never copies, overwrites, renames, deletes (apart from its own claimed
-    /// request file), saves, synchronises, relinquishes or closes anything.
+    /// request file), saves, synchronises, relinquishes or closes anything. The one exception is step 4's old local at the
+    /// new local's own path and its _backup folder, deleted or renamed only when the request's existingLocal asks
+    /// (<see cref="ExistingLocalPreparer"/>).
     /// </summary>
     public sealed class RequestProcessor
     {
@@ -123,9 +125,19 @@ namespace QuickerPlaces.RevitHandler.Core
                 return Refuse(requestId, ErrorCodes.LocalFolderUnavailable, "The local folder cannot be created: " + request.LocalFolder + " (" + ex.Message + ")");
             }
 
-            string localPath = LocalPathChooser.Choose(
-                request.LocalFolder, request.CentralPath, _revit.Username, _context.UtcNow().ToLocalTime(),
-                p => File.Exists(p) || Directory.Exists(p));
+            PreparedLocal prepared;
+            try
+            {
+                prepared = ExistingLocalPreparer.Prepare(request.LocalFolder, request.CentralPath, _revit.Username, request.ExistingLocal,
+                    _context.UtcNow().ToLocalTime(), _revit.IsOpen);
+            }
+            catch (LocalInUseException ex)
+            {
+                return Refuse(requestId, ErrorCodes.LocalInUse, ex.Message);
+            }
+            string localPath = prepared.LocalPath;
+            if (prepared.PreviousLocal != null)
+                _log.Write("Request " + requestId + ": old local " + prepared.PreviousLocal + (prepared.PreviousLocalPath == null ? "" : " to " + prepared.PreviousLocalPath) + ".");
 
             // Step 5: make and open the local, with dialog handling active for this step only.
             var dialogs = new DialogRecorder(_context.Allowlist);
@@ -137,7 +149,7 @@ namespace QuickerPlaces.RevitHandler.Core
                 }
                 catch (Exception ex)
                 {
-                    return NewResult(requestId, false, ErrorCodes.CreateLocalFailed, ex.Message, null, dialogs);
+                    return With(prepared, NewResult(requestId, false, ErrorCodes.CreateLocalFailed, ex.Message, null, dialogs));
                 }
 
                 try
@@ -147,11 +159,19 @@ namespace QuickerPlaces.RevitHandler.Core
                 catch (Exception ex)
                 {
                     // The local exists but is not open: report its path so the user can open it.
-                    return NewResult(requestId, false, ErrorCodes.OpenFailed, ex.Message, localPath, dialogs);
+                    return With(prepared, NewResult(requestId, false, ErrorCodes.OpenFailed, ex.Message, localPath, dialogs));
                 }
             }
 
-            return NewResult(requestId, true, null, null, localPath, dialogs);
+            return With(prepared, NewResult(requestId, true, null, null, localPath, dialogs));
+        }
+
+        /// <summary>Says in the result what step 4 did with an old local, once it has been done.</summary>
+        private static ResultFile With(PreparedLocal prepared, ResultFile result)
+        {
+            result.PreviousLocal = prepared.PreviousLocal;
+            result.PreviousLocalPath = prepared.PreviousLocalPath;
+            return result;
         }
 
         private ResultFile Refuse(string requestId, string errorCode, string message)

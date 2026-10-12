@@ -41,6 +41,29 @@ public static class HandlerProtocol
         public static bool IsKnown(string? value) => value is LastViewed or All or None;
     }
 
+    /// <summary>
+    /// What the handler does with an old local at the new local's path (request
+    /// <c>existingLocal</c>, step 4): as Revit's own "Create New Local" offers.
+    /// Sent only to a handler whose registration lists the value.
+    /// </summary>
+    public static class ExistingLocal
+    {
+        /// <summary>Delete the old local and its _backup folder (Revit's "Overwrite existing file").</summary>
+        public const string Overwrite = "overwrite";
+
+        /// <summary>Rename the old local and its _backup folder with the old local's date (Revit's "Append timestamp").</summary>
+        public const string AppendTimestamp = "appendTimestamp";
+
+        public static bool IsKnown(string? value) => value is Overwrite or AppendTimestamp;
+    }
+
+    /// <summary>The <c>previousLocal</c> values of a result: what step 4 did with an old local.</summary>
+    public static class PreviousLocal
+    {
+        public const string Overwritten = "overwritten";
+        public const string Renamed = "renamed";
+    }
+
     /// <summary>The <c>errorCode</c> values of a failed result.</summary>
     public static class ErrorCodes
     {
@@ -52,6 +75,7 @@ public static class HandlerProtocol
         public const string NotCentral = "notCentral";
         public const string ReleaseMismatch = "releaseMismatch";
         public const string LocalFolderUnavailable = "localFolderUnavailable";
+        public const string LocalInUse = "localInUse";
         public const string CreateLocalFailed = "createLocalFailed";
         public const string OpenFailed = "openFailed";
         public const string InternalError = "internalError";
@@ -59,7 +83,7 @@ public static class HandlerProtocol
         public static IReadOnlyList<string> All { get; } =
         [
             InvalidRequest, UnsupportedProtocol, UnsupportedAction, Expired, CentralNotFound, NotCentral,
-            ReleaseMismatch, LocalFolderUnavailable, CreateLocalFailed, OpenFailed, InternalError,
+            ReleaseMismatch, LocalFolderUnavailable, LocalInUse, CreateLocalFailed, OpenFailed, InternalError,
         ];
 
         private static readonly HashSet<string> Known = new(All, StringComparer.Ordinal);

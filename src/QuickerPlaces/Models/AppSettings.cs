@@ -48,8 +48,12 @@ public sealed class AppSettings
     /// 5): the opt-in for pressing Load Once on a Revit add-in security
     /// prompt, and the add-ins it may be pressed for. No migration needed: a
     /// version-6 file lacks both, which reads as off with an empty list.
+    ///
+    /// 8: added RevitExistingLocal: what a new local does to an old one at
+    /// its path. No migration needed: a version-7 file lacks it, which reads
+    /// as overwrite, the default (Thomas, 2026-10-12).
     /// </summary>
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -122,6 +126,14 @@ public sealed class AppSettings
 
     /// <summary>The add-ins the user allowed Load Once for, learned from prompts they answered. Null reads as none.</summary>
     public List<LoadOnceEntry>? LoadOnceEntries { get; set; } = new();
+
+    /// <summary>
+    /// For every release: what opening a central as a new local does to an
+    /// old local at the new local's path, "overwrite" or "appendTimestamp"
+    /// (HandlerProtocol.ExistingLocal), as Revit's own Create New Local asks.
+    /// Null or anything else reads as overwrite (RevitSettingsResolver).
+    /// </summary>
+    public string? RevitExistingLocal { get; set; }
 }
 
 /// <summary>

@@ -239,9 +239,9 @@ public sealed class HandlerJsonTests
     }
 
     [Fact]
-    public void KnownErrorCodes_AreAllTheSpecsEleven()
+    public void KnownErrorCodes_AreAllTheSpecsTwelve()
     {
-        Assert.Equal(11, HandlerProtocol.ErrorCodes.All.Count);
+        Assert.Equal(12, HandlerProtocol.ErrorCodes.All.Count);
         foreach (var code in HandlerProtocol.ErrorCodes.All)
             Assert.Equal(code, HandlerProtocol.ErrorCodes.Effective(code));
     }

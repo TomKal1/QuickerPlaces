@@ -33,6 +33,10 @@ public sealed record HandlerRegistration : IHandlerDocument
 
     public DateTime WrittenUtc { get; init; }
 
+    /// <summary>The <see cref="HandlerProtocol.ExistingLocal"/> values the handler understands; null or empty for none (an older handler).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? ExistingLocal { get; init; }
+
     public string? Problem() =>
         HandlerDocumentRules.Protocol(Protocol)
         ?? HandlerDocumentRules.HandlerId(HandlerId)
@@ -86,6 +90,10 @@ public sealed record HandlerRequest : IHandlerDocument
     /// <summary>One of <see cref="HandlerProtocol.Worksets"/>.</summary>
     public string Worksets { get; init; } = "";
 
+    /// <summary>One of <see cref="HandlerProtocol.ExistingLocal"/>, or null to keep an old local (left out of the file).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExistingLocal { get; init; }
+
     public string? Problem() =>
         HandlerDocumentRules.Protocol(Protocol)
         ?? HandlerDocumentRules.RequestId(RequestId)
@@ -96,7 +104,8 @@ public sealed record HandlerRequest : IHandlerDocument
         ?? HandlerDocumentRules.Time(ExpiresUtc, "expiresUtc")
         ?? (string.IsNullOrWhiteSpace(CentralPath) ? "centralPath is missing" : null)
         ?? (string.IsNullOrWhiteSpace(LocalFolder) ? "localFolder is missing" : null)
-        ?? (HandlerProtocol.Worksets.IsKnown(Worksets) ? null : "worksets is not lastViewed, all or none");
+        ?? (HandlerProtocol.Worksets.IsKnown(Worksets) ? null : "worksets is not lastViewed, all or none")
+        ?? (ExistingLocal is null || HandlerProtocol.ExistingLocal.IsKnown(ExistingLocal) ? null : "existingLocal is not overwrite or appendTimestamp");
 }
 
 /// <summary>A dialog Revit raised while a request was being handled, and whether the handler answered it.</summary>
@@ -142,6 +151,14 @@ public sealed record HandlerResult : IHandlerDocument
     }
 
     /// <summary>Null when <see cref="Ok"/>; otherwise a known error code, with unknown, missing or empty ones read as <c>internalError</c>.</summary>
+    /// <summary>What step 4 did with an old local: one of <see cref="HandlerProtocol.PreviousLocal"/>, or null when there was none or it was kept.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PreviousLocal { get; init; }
+
+    /// <summary>Where the old local now is, when it was renamed.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PreviousLocalPath { get; init; }
+
     [JsonIgnore]
     public string? EffectiveErrorCode => Ok ? null : HandlerProtocol.ErrorCodes.Effective(ErrorCode);
 

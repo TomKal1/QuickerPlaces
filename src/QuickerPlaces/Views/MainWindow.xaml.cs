@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -94,8 +96,8 @@ public partial class MainWindow : Window
         var workspace = new WorkspaceViewModel(workspaceLayout, library);
         _workspaceView.SessionShortcutRequested += OpenSessionAt;
         _workspaceView.Attach(workspace, viewModel, sessionStore,
-            new WindowsOpenDocumentProbe(recentItems), recentFilesHost, activityHost,
-            activityStore, new NetworkDriveResolver(), UpdateActivityIndicator);
+            new WindowsOpenDocumentProbe(recentItems, _revitReleases), recentFilesHost, activityHost,
+            activityStore, new NetworkDriveResolver(), UpdateActivityIndicator, _revitOpener, _revitReleases);
 
         // Desk shows favourites as a panel; the strip is for layouts that don't (Desk layout design §5).
         void ShowFavouritesStrip() => FavouritesStrip.Visibility = workspace.ShowsFavouritesPanel ? Visibility.Collapsed : Visibility.Visible;
@@ -154,14 +156,46 @@ public partial class MainWindow : Window
         if (_workspaceView?.TryOpenInSessionsPanel(session.Id) == true)
             return;
 
-        var outcome = new SessionLauncher(_sessionStore, new WindowsShell()).Open(session);
+        var outcome = new SessionLauncher(_sessionStore, new WindowsShell()).Open(session, holdRevit: true);
         if (outcome.Summary is { } problem)
             MessageForm.Show(problem, AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
         _workspaceView?.NoteSessionOpened();
+        if (outcome.HeldRevit.Count > 0)
+            _ = OpenHeldRevitAsync(outcome.HeldRevit);
+    }
+
+    private bool _openingHeldRevit;
+
+    /// <summary>A session's Revit files, opened the Revit-safe way one at a time; a problem is shown as the launcher's are.</summary>
+    private async Task OpenHeldRevitAsync(IReadOnlyList<string> files)
+    {
+        if (_openingHeldRevit)
+        {
+            MessageForm.Show(SessionsViewModel.RevitBusyMessage, AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
+            return;
+        }
+
+        _openingHeldRevit = true;
+        try
+        {
+            foreach (var file in files)
+            {
+                var report = await _revitOpener.OpenAsync(file);
+                if (report.IsError)
+                    MessageForm.Show(report.Message, AppInfo.Name, MessageFormButtons.OK, MessageFormIcon.Warning);
+                if (report.Outcome.Result == RevitOpenResult.Cancelled)
+                    break;
+            }
+        }
+        finally
+        {
+            _openingHeldRevit = false;
+        }
     }
 
     private void SessionsButton_Click(object sender, RoutedEventArgs e)
-        => SessionsWindow.Show(this, _sessionStore, new WindowsShell(), new WindowsOpenDocumentProbe(_recentItems));
+        => SessionsWindow.Show(this, _sessionStore, new WindowsShell(), new WindowsOpenDocumentProbe(_recentItems, _revitReleases),
+            _revitOpener, _revitReleases);
 
     private void LibraryButton_Click(object sender, RoutedEventArgs e)
     {

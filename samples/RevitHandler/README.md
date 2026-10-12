@@ -7,8 +7,9 @@ QuickerPlaces never references the Revit API. Revit has no out-of-process API, s
 What the handler does, and does not do:
 
 - It registers itself (`handlers\`), announces that it is running (`instances\`), and watches `requests\<release>\quickerplaces.sample\`.
-- For each request it checks the request, checks that the file is a central model saved in this Revit release, picks a free local file name, calls `CreateNewLocal`, and opens the local with the requested worksets.
-- It **never** copies a central, overwrites or deletes a local, upgrades a model, saves, synchronises, relinquishes or closes a document. With no request waiting it does nothing.
+- For each request it checks the request, checks that the file is a central model saved in this Revit release, chooses the local's path, calls `CreateNewLocal`, and opens the local with the requested worksets.
+- When a local is already at that path it does what the request's `existingLocal` says, as Revit's own Create New Local does: `"overwrite"` deletes the old local and its `_backup` folder; `"appendTimestamp"` renames both with the old local's date (`_11Oct2026_233201`); without it, the old local stays and the new one gets a timestamp. If the old local is open in Revit or locked, it refuses with `localInUse` and changes nothing.
+- Apart from that, it **never** copies a central, overwrites or deletes a local, upgrades a model, saves, synchronises, relinquishes or closes a document. With no request waiting it does nothing.
 - During the open it records every Revit dialog in the result file. It answers only dialogs on its allowlist, which ships **empty**. See "Dialogs" below.
 
 ## Layout

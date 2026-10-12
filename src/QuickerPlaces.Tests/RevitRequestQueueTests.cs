@@ -116,6 +116,25 @@ public sealed class RevitRequestQueueTests : IDisposable
     }
 
     [Fact]
+    public void Create_WithExistingLocal_WritesIt_AndLeavesItOutWhenNull()
+    {
+        var overwrite = _queue.CreateOpenNewLocal(Release, Handler, "c", "l", "all", HandlerProtocol.ExistingLocal.Overwrite).Request!;
+        var none = _queue.CreateOpenNewLocal(Release, Handler, "c", "l", "all").Request!;
+
+        Assert.Contains("\"existingLocal\": \"overwrite\"", File.ReadAllText(_folder.RequestFile(Release, Handler, overwrite.RequestId)));
+        Assert.DoesNotContain("existingLocal", File.ReadAllText(_folder.RequestFile(Release, Handler, none.RequestId)));
+    }
+
+    [Fact]
+    public void Create_WithAnUnknownExistingLocal_FailsWithAReason()
+    {
+        var creation = _queue.CreateOpenNewLocal(Release, Handler, "c", "l", "all", "shred");
+
+        Assert.False(creation.Succeeded);
+        Assert.Contains("existingLocal", creation.Problem);
+    }
+
+    [Fact]
     public void Create_WhenTheFolderCannotBeMade_FailsWithAReason()
     {
         File.WriteAllText(Path.Combine(_dir.Path, "requests"), "a file where the folder should go");

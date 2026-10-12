@@ -24,6 +24,7 @@ namespace QuickerPlaces.RevitHandler.Core
                 RevitRelease = _context.Release,
                 Actions = new List<string> { HandlerContext.OpenNewLocalAction },
                 WrittenUtc = ProtocolFile.FormatUtc(_context.UtcNow()),
+                ExistingLocal = new List<string> { ExistingLocalValues.Overwrite, ExistingLocalValues.AppendTimestamp },
             };
             ProtocolFile.WriteAtomic(_context.RegistrationPath, ProtocolFile.ToJson(file), replace: true);
         }

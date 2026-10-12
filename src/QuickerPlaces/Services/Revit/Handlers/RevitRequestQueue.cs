@@ -85,7 +85,8 @@ public sealed class RevitRequestQueue
     /// <c>requests\&lt;release&gt;\&lt;handlerId&gt;\&lt;requestId&gt;.json</c>. Does not
     /// throw: bad arguments or a failed write come back as <see cref="RequestCreation.Problem"/>.
     /// </summary>
-    public RequestCreation CreateOpenNewLocal(string release, string handlerId, string centralPath, string localFolder, string worksets)
+    public RequestCreation CreateOpenNewLocal(string release, string handlerId, string centralPath, string localFolder, string worksets,
+        string? existingLocal = null)
     {
         var now = _time.GetUtcNow().UtcDateTime;
         var request = new HandlerRequest
@@ -100,6 +101,7 @@ public sealed class RevitRequestQueue
             CentralPath = centralPath,
             LocalFolder = localFolder,
             Worksets = worksets,
+            ExistingLocal = existingLocal,
         };
 
         if (request.Problem() is { } problem)

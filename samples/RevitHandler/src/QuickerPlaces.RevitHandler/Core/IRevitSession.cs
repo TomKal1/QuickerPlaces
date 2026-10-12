@@ -33,6 +33,9 @@ namespace QuickerPlaces.RevitHandler.Core
         /// <summary>Subscribes <c>DialogBoxShowing</c> until the returned object is disposed.</summary>
         IDisposable BeginDialogCapture(DialogRecorder recorder);
 
+        /// <summary>True when a document open in this Revit has <paramref name="path"/> (<c>Document.PathName</c>, ignoring case).</summary>
+        bool IsOpen(string path);
+
         /// <summary><c>WorksharingUtils.CreateNewLocal</c>.</summary>
         void CreateNewLocal(string centralPath, string localPath);
 

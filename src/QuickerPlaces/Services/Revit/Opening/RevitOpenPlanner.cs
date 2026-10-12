@@ -94,6 +94,7 @@ public static class RevitOpenPlanner
             return RevitOpenPlan.Refused(filePath, release,
                 $"The handler \"{registered.DisplayName}\" doesn't support opening a central as a new local. Choose another handler for Revit {release} in Settings.");
 
+        var existingLocal = RevitSettingsResolver.ExistingLocal(settings);
         var mine = running.Where(r => r.Release == releaseNumber).ToList();
         return new RevitOpenPlan
         {
@@ -105,6 +106,7 @@ public static class RevitOpenPlanner
             HandlerName = registered.DisplayName,
             LocalFolder = localFolder,
             Worksets = worksets,
+            ExistingLocal = registered.SupportsExistingLocal(existingLocal) ? existingLocal : null,
             Availability = Assess(registered, mine, nowUtc),
             RunningProcessIds = mine.Select(r => r.ProcessId).ToList(),
         };

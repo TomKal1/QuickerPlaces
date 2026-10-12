@@ -71,10 +71,12 @@ namespace QuickerPlaces.RevitHandler.Tests
 
         /// <summary>A request that points at real scratch paths (so that "exists" checks work on any OS).</summary>
         public static string For(string centralPath, string localFolder, string worksets = "lastViewed",
-                                 string expiresUtc = "2026-10-08T21:24:00.0000000Z", string requestId = Scratch.RequestId)
+                                 string expiresUtc = "2026-10-08T21:24:00.0000000Z", string requestId = Scratch.RequestId,
+                                 string? existingLocal = null)
             => "{\"protocol\":1,\"requestId\":\"" + requestId + "\",\"action\":\"open-new-local\",\"handlerId\":\"quickerplaces.sample\","
              + "\"revitRelease\":\"2025\",\"createdUtc\":\"2026-10-08T21:14:00.0000000Z\",\"expiresUtc\":\"" + expiresUtc + "\","
-             + "\"centralPath\":" + Quote(centralPath) + ",\"localFolder\":" + Quote(localFolder) + ",\"worksets\":\"" + worksets + "\"}";
+             + "\"centralPath\":" + Quote(centralPath) + ",\"localFolder\":" + Quote(localFolder) + ",\"worksets\":\"" + worksets + "\""
+             + (existingLocal == null ? "" : ",\"existingLocal\":\"" + existingLocal + "\"") + "}";
 
         private static string Quote(string s) => "\"" + s.Replace("\\", "\\\\") + "\"";
     }
@@ -93,6 +95,10 @@ namespace QuickerPlaces.RevitHandler.Tests
         public List<string> Calls { get; } = new();
         public bool CaptureActive { get; private set; }
         public bool CaptureEverStarted { get; private set; }
+        /// <summary>Paths of documents "open" in this Revit.</summary>
+        public List<string> OpenDocuments { get; } = new();
+
+        public bool IsOpen(string path) => OpenDocuments.Exists(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
 
         private DialogRecorder? _recorder;
 

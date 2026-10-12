@@ -232,6 +232,7 @@ public sealed class RevitSettingsViewModel : ObservableObject
         _hashOf = hashOf ?? DllFingerprint.Sha256;
         _isAutodesk = isAutodesk ?? AddinPublisherCache.Shared.IsAutodeskSigned;
         _baselineAllow = _allowLoadOnce = settings.AllowLoadOnce;
+        _baselineOverwrite = _overwriteExistingLocal = RevitSettingsResolver.ExistingLocal(settings) == HandlerProtocol.ExistingLocal.Overwrite;
         _baselineEntries = (settings.LoadOnceEntries ?? []).ToList();
         Entries = new ObservableCollection<LoadOnceEntryRowViewModel>(_baselineEntries.Select(e => new LoadOnceEntryRowViewModel(e, _culture)));
 
@@ -363,12 +364,51 @@ public sealed class RevitSettingsViewModel : ObservableObject
         }
     }
 
+    private bool _overwriteExistingLocal;
+    private bool _baselineOverwrite;
+
+    /// <summary>
+    /// A new local replaces an old one at its path (the default), as Revit's
+    /// own "Overwrite existing file". The two radio buttons bind this and
+    /// <see cref="KeepExistingLocal"/>; one setting for every release.
+    /// </summary>
+    public bool OverwriteExistingLocal
+    {
+        get => _overwriteExistingLocal;
+        set
+        {
+            if (!value || !SetProperty(ref _overwriteExistingLocal, true))
+                return;
+            OnPropertyChanged(nameof(KeepExistingLocal));
+            Edited();
+        }
+    }
+
+    /// <summary>The old local is kept, renamed with its date, as Revit's own "Append timestamp".</summary>
+    public bool KeepExistingLocal
+    {
+        get => !_overwriteExistingLocal;
+        set
+        {
+            if (!value || !SetProperty(ref _overwriteExistingLocal, false, nameof(OverwriteExistingLocal)))
+                return;
+            OnPropertyChanged(nameof(KeepExistingLocal));
+            Edited();
+        }
+    }
+
+    public string ExistingLocalHint =>
+        "When you open a central and a local of it is already in the local folder: replace it with a new copy, like Revit's own Overwrite "
+        + "(changes in it that were never synchronised are lost), or keep it, renamed with its date (old locals then use disk space until you delete them). "
+        + "The handler must support this; an older one keeps old locals.";
+
     public string AllowLoadOnceHint =>
         "Press Load Once, never Always Load, only in a Revit that QuickerPlaces started. "
         + "Choose allowed add-ins below; a recorded prompt and an unchanged DLL are required.";
 
     public bool HasChanges =>
         _allowLoadOnce != _baselineAllow
+        || _overwriteExistingLocal != _baselineOverwrite
         || !Entries.Select(e => LoadOnceJson.Serialise([e.Entry])).OrderBy(e => e, StringComparer.Ordinal)
             .SequenceEqual(_baselineEntries.Select(e => LoadOnceJson.Serialise([e])).OrderBy(e => e, StringComparer.Ordinal))
         || Releases.Any(r => _baseline[r.Release] != (r.SelectedChoice.HandlerId, r.StoredFolder));
@@ -426,6 +466,7 @@ public sealed class RevitSettingsViewModel : ObservableObject
         }
 
         _settings.AllowLoadOnce = _allowLoadOnce;
+        _settings.RevitExistingLocal = _overwriteExistingLocal ? HandlerProtocol.ExistingLocal.Overwrite : HandlerProtocol.ExistingLocal.AppendTimestamp;
         _settings.LoadOnceEntries = Entries.Select(e => e.Entry).ToList();
         _service.Save(_settings);
 
@@ -434,6 +475,7 @@ public sealed class RevitSettingsViewModel : ObservableObject
         _baselineEntries.Clear();
         _baselineEntries.AddRange(Entries.Select(e => e.Entry));
         _baselineAllow = _allowLoadOnce;
+        _baselineOverwrite = _overwriteExistingLocal;
         _savedOnce = true;
         _saveError = null;
         _saved();

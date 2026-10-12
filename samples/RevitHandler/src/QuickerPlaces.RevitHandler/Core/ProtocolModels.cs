@@ -20,6 +20,8 @@ namespace QuickerPlaces.RevitHandler.Core
         [DataMember(Name = "revitRelease", Order = 5)] public string? RevitRelease { get; set; }
         [DataMember(Name = "actions", Order = 6)] public List<string>? Actions { get; set; }
         [DataMember(Name = "writtenUtc", Order = 7)] public string? WrittenUtc { get; set; }
+        /// <summary>The existingLocal values this handler understands (optional; added 2026-10-12).</summary>
+        [DataMember(Name = "existingLocal", Order = 8, EmitDefaultValue = false)] public List<string>? ExistingLocal { get; set; }
     }
 
     [DataContract]
@@ -52,6 +54,8 @@ namespace QuickerPlaces.RevitHandler.Core
         [DataMember(Name = "centralPath", Order = 8)] public string? CentralPath { get; set; }
         [DataMember(Name = "localFolder", Order = 9)] public string? LocalFolder { get; set; }
         [DataMember(Name = "worksets", Order = 10)] public string? Worksets { get; set; }
+        /// <summary>Optional: "overwrite", "appendTimestamp", or missing to keep an old local.</summary>
+        [DataMember(Name = "existingLocal", Order = 11, EmitDefaultValue = false)] public string? ExistingLocal { get; set; }
     }
 
     [DataContract]
@@ -69,6 +73,10 @@ namespace QuickerPlaces.RevitHandler.Core
         [DataMember(Name = "errorCode", Order = 9)] public string? ErrorCode { get; set; }
         [DataMember(Name = "message", Order = 10)] public string? Message { get; set; }
         [DataMember(Name = "dialogs", Order = 11)] public List<DialogRecord> Dialogs { get; set; } = new List<DialogRecord>();
+        /// <summary>Optional: "overwritten" or "renamed" when step 4 dealt with an old local; left out otherwise.</summary>
+        [DataMember(Name = "previousLocal", Order = 12, EmitDefaultValue = false)] public string? PreviousLocal { get; set; }
+        /// <summary>Optional: where the old local now is, when renamed.</summary>
+        [DataMember(Name = "previousLocalPath", Order = 13, EmitDefaultValue = false)] public string? PreviousLocalPath { get; set; }
     }
 
     [DataContract]

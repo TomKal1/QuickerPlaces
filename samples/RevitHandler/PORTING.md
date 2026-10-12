@@ -39,9 +39,9 @@ From `src/QuickerPlaces.RevitHandler/`:
 
 | Source | Contains | Copy? |
 |---|---|---|
-| `Core/*.cs` (15 files) | Protocol logic with no Revit types: paths, JSON, claiming, validation, local name, results, dialog allowlist, log. | Yes, unchanged except the namespace. |
+| `Core/*.cs` (16 files) | Protocol logic with no Revit types: paths, JSON, claiming, validation, local name, the old local (overwrite or rename), results, dialog allowlist, log. | Yes, unchanged except the namespace. |
 | `Revit/OpenNewLocalHandler.cs` | The `IExternalEventHandler`. All Revit work starts here. | Yes. |
-| `Revit/RevitSession.cs` | The only Revit API calls: `BasicFileInfo.Extract`, `CreateNewLocal`, `OpenAndActivateDocument`, `DialogBoxShowing`. | Yes. |
+| `Revit/RevitSession.cs` | The only Revit API calls: `BasicFileInfo.Extract`, the open documents' `PathName`, `CreateNewLocal`, `OpenAndActivateDocument`, `DialogBoxShowing`. | Yes. |
 | `Revit/App.cs` | The `IExternalApplication`: start-up, watcher, timer, shutdown. | Route B: yes. Route A: copy its fields and method bodies into your application class (step 4). |
 | `QuickerPlaces.RevitHandler.addin`, `PackageContents.xml` | Manifests. | Route B only, then edit. Route A keeps the target's own manifests. |
 | `tests/QuickerPlaces.RevitHandler.Tests/` | xUnit tests of `Core`. | Yes, recommended. |
@@ -120,7 +120,7 @@ If the sample handler is also installed, both handlers load and both register. T
 A port that breaks any of these is not a handler. They come from the protocol's "Safety rules" and "Handling a request" sections.
 
 - Make locals only with `WorksharingUtils.CreateNewLocal`. Never copy a central.
-- Never overwrite, delete, rename or move an existing local or any other file outside the protocol folder.
+- Never overwrite, delete, rename or move an existing local or any other file outside the protocol folder, with one exception: when a request carries `existingLocal`, the old local at the new local's own path and its `_backup` folder are deleted (`"overwrite"`) or renamed with their date (`"appendTimestamp"`), only through `Core/ExistingLocal.cs`, and refused with `localInUse` when that local is open in Revit or locked. Keep that file unchanged.
 - Never upgrade a model. Refuse a central saved in another release.
 - Never save, synchronise, relinquish, detach or close a document while handling a request.
 - No work in `OnStartup` except writing the registration and instance files. The watcher and timer threads only call `ExternalEvent.Raise()`. All Revit API calls run inside `IExternalEventHandler.Execute`.
@@ -133,11 +133,11 @@ A port that breaks any of these is not a handler. They come from the protocol's 
 1. Build every configuration you ship. For example: `dotnet build -c "Release R24"`, then R25 and R26.
 2. Run the moved tests: `dotnet test <your test project>`.
 3. Install the build for one release, set `QUICKERPLACES_REVIT_ROOT` to a scratch folder, and start that Revit. Check that the scratch folder now holds:
-   - `handlers\<HandlerId>-<release>.json`, with your `displayName` and `"actions": ["open-new-local"]`;
+   - `handlers\<HandlerId>-<release>.json`, with your `displayName`, `"actions": ["open-new-local"]` and `"existingLocal": ["overwrite", "appendTimestamp"]`;
    - `instances\<HandlerId>-<release>-<processId>.json`, with a `readyUtc` once Revit has started;
    - `logs\<HandlerId>-<release>.log`, ending in `Ready.`
 4. Write a request by hand, as in the README's "Testing in Revit", with `"handlerId"` set to your `HandlerId` and placed in `requests\<release>\<HandlerId>\`. Use a throwaway central model, never a project model. Check the result file and that the local opened.
-5. Run the other cases in the README's "Testing in Revit" list in each release you ship.
+5. Run the other cases in the README's "Testing in Revit" list in each release you ship, including a request with `"existingLocal": "overwrite"` and one with `"appendTimestamp"` when the local already exists (its `_backup` folder must be deleted or renamed with it), and both with that local open in Revit (the result must be `localInUse`, with nothing changed).
 6. Without `QUICKERPLACES_REVIT_ROOT`, start Revit once, open QuickerPlaces' Settings and pick your handler for that release. Open a central from the Library.
 7. Use your add-in's existing features. They must work as before, with and without a request waiting.
 
@@ -152,7 +152,8 @@ Use this as the task definition. Ask the user for any value in "Before you start
 - [ ] Route A: merge the start-up, shutdown and event code into the existing application class, with handler failures caught and logged.
 - [ ] Route B: new `AddInId` GUID; rename the manifest, bundle and deploy paths.
 - [ ] Check language version, target framework per release, Revit API references (not copied to output) and `x64`.
-- [ ] Move the tests and update `HandlerId` in them. All tests pass.
+- [ ] Move the tests and update `HandlerId` in them. All tests pass. (`QueueTests.TwoClaimersExactlyOneWins` also fails in the sample itself on Windows as of 2026-10-12; note it rather than chase it in the port.)
+- [ ] A port made before 2026-10-12: also copy `Core/ExistingLocal.cs`, the `existingLocal`, `previousLocal` and `previousLocalPath` members of `Core/ProtocolModels.cs`, `ErrorCodes.LocalInUse`, the registration's `ExistingLocal` list (`Core/HandlerPresence.cs`), `RequestValidator.TryParseExistingLocal`, step 4 of `Core/RequestProcessor.cs`, and `IRevitSession.IsOpen` with its `RevitSession` body.
 - [ ] Every shipped configuration builds.
 - [ ] Search the target repository for `quickerplaces.sample`, `QuickerPlaces sample handler` and the sample's `AddInId` `d3a42712-c2b5-4e60-89d7-3e4d24a149d2`. None remains, except as a reference to this guide.
 - [ ] List what the user must check in Revit (steps 3 to 7 of "Verify"). Do not claim the handler works in Revit until those checks pass.

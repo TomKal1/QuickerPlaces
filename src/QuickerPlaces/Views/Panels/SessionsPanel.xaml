@@ -334,6 +334,11 @@
                                                 <Path Style="{StaticResource Icon.Row}" Data="{StaticResource Icon.Document}" />
                                                 <TextBlock Text="{Binding FileName}" VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                                <!-- A Revit central opens as a new local, so it is marked. -->
+                                                <TextBlock Text="Central" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
+                                                           Foreground="{DynamicResource Text.Secondary}"
+                                                           ToolTip="Revit central: opens as a new local copy"
+                                                           Visibility="{Binding IsRevitCentral, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
@@ -374,10 +379,20 @@
             </Border>
         </Grid>
 
-        <!-- What the last action did, then what went wrong with it. -->
+        <!-- What the last action did, then what went wrong with it. While a Revit file opens, a busy bar and its status show, with a way out. -->
         <StackPanel Grid.Row="2" Margin="0,12,0,0">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}"
-                       TextWrapping="Wrap" Style="{StaticResource CollapsedWhenEmpty}" />
+            <ProgressBar Height="4" Margin="0,0,0,6" Minimum="0" Maximum="1"
+                         IsIndeterminate="{Binding IsRevitOpening}"
+                         Foreground="{DynamicResource Highlight.Text}" Background="{DynamicResource Highlight.Soft}" BorderThickness="0"
+                         Visibility="{Binding IsRevitOpening, Converter={StaticResource BooleanToVisibilityConverter}}"
+                         AutomationProperties.Name="Opening the Revit file" />
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Cancel" Style="{StaticResource Button.Compact}" Margin="12,0,0,0" VerticalAlignment="Center"
+                        Visibility="{Binding IsRevitOpening, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        AutomationProperties.Name="Cancel opening the Revit file" Click="CancelRevitOpen_Click" />
+                <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource Highlight.Text}"
+                           TextWrapping="Wrap" Style="{StaticResource CollapsedWhenEmpty}" AutomationProperties.LiveSetting="Polite" />
+            </DockPanel>
             <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource Danger}"
                        TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource CollapsedWhenEmpty}" />
         </StackPanel>
