@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Session suggestions from files opened together
-status: proposed (2026-10-14), revised the same day for the hour-long rule (§5) and the Suggestions panel (§7); not started. Open questions in §12
+status: proposed (2026-10-14), revised the same day for the hour-long rule (§5), the Suggestions panel (§7) and user-chosen sensitivity (§6.1); not started. Open questions in §12
 created: 2026-10-14
 parent: ai/260928_PDF Project Sessions Plan.md
 ---
@@ -11,10 +11,11 @@ parent: ai/260928_PDF Project Sessions Plan.md
 
 On 2026-10-14 the user asked: *"what if we add session suggestions based on files that the user opens together over a short period of time"*.
 
-Later the same day they added two requirements:
+Later the same day they added three requirements:
 
 - *"if files are open together at any time longer than an hour might be another rule"*.
 - *"I want these session suggestions to be in a separate suggestions panel that opens by the sessions and lets the user quickly add them to a session"*.
+- *"If the rules for suggested sessions can also be user adjusted in sensitivity. Giving the user some high and low sensitivity choices"*.
 
 Today a session is made by hand: open the files, then **Save open files** (the on-demand scan), or **Save files as session** from the File shelf. People who open the same four drawings and a spec every morning still build that session themselves, or never build it. QuickerPlaces already records when each file is opened, so it can notice those groups and offer them.
 
@@ -37,11 +38,11 @@ Today a session is made by hand: open the files, then **Save open files** (the o
 
 | # | Decision | Why |
 |---|---|---|
-| G1 | **Two rules make a pair; either is enough.** **Rule A (opened together):** opened in the same burst on several different days. **Rule B (open together):** both seen open at the same time for an hour or more without a break, on any one day. | Rule A catches the morning set someone opens in a hurry. Rule B catches the files someone works across for a long stretch, even if it happened only once. |
+| G1 | **Two rules make a pair; either is enough.** **Rule A (opened together):** opened in the same burst on several different days. **Rule B (open together):** both seen open at the same time for an hour or more without a break, on any one day (at Balanced; §6.1). | Rule A catches the morning set someone opens in a hurry. Rule B catches the files someone works across for a long stretch, even if it happened only once. |
 | G2 | **Off by default, and only offered while Recent Files is on.** One switch for suggestions; under it, a second switch for rule B, ticked by default when suggestions are turned on, whose wording says it checks open windows every 5 minutes. | Same consent model as everything else that reads what the user opens. Rule B is a new kind of observation (§5), so the user sees what it does and can keep rule A alone. Both rules resolve paths through Recent Items, so neither works without it. |
-| G3 | **Rule A:** a burst ends after a 15-minute gap with no open. Pairs are counted by **days**, not bursts; at least 3 days. | One busy morning re-opening two files is not a habit; the same files together on three separate days is. |
+| G3 | **Rule A:** a burst ends after a 15-minute gap with no open. Pairs are counted by **days**, not bursts; at least 3 days at Balanced (§6.1). | One busy morning re-opening two files is not a habit; the same files together on three separate days is. |
 | G4 | **Files that go with everything are left out.** Rule A: a pair counts only when its days together are at least half of the rarer file's active days (share ≥ 0.5). Rule B: a file seen open for more than 6 hours on most days it is seen at all is "always open" and makes no rule-B pairs. | A daily timesheet or a standards PDF left open all day would otherwise join every group. |
-| G5 | **Thresholds are named constants in `SessionSuggestionOptions`, not user settings.** Defaults: burst gap 15 min, 3 days, share ≥ 0.5, together-open 60 min, sample interval 5 min, always-open 6 h, 2–15 files per group, at most 10 suggestions. | They need tuning against real data first; exposing them now would freeze guesses. Tests pass their own options. |
+| G5 | **The user picks a sensitivity — Low, Balanced or High — not individual thresholds.** Each level is a fixed set of thresholds in `SessionSuggestionOptions` (§6.1); Balanced is the default. Tests can still pass any options. | Five numbers with units mean little to a user; "fewer, surer suggestions" against "more, sooner" does. Fixed levels can be tuned in code against real data without breaking anyone's saved choice. |
 | G6 | **Rule B samples window titles only, never file handles, in the background.** Every 5 minutes, off the UI thread, it lists document windows and resolves them as the scan does, with an empty `HeldFiles`. | The handle list (`WindowsHeldFiles`) is system-wide, can stall on some handles (held-files plan H4), and stays on-demand only, as the sessions plan decided. Window titles are cheap and never block on a file server. |
 | G7 | **Suggestions are worked out on demand** (when the Suggestions panel is shown, or on Refresh), cached until Recent Files records or the sampler closes a span, and never in a tracking tick. | Keeps the tracking ticks unchanged. Showing a count on the Sessions panel's button uses the cached result. |
 | G8 | **A group that matches an existing session is not suggested. A group that overlaps one becomes an "add to session" suggestion.** Overlap: at least half of the group's files are already in the session, and at least one isn't. | The user asked to add suggestions *to* a session, so overlap is the most useful case, not noise. |
@@ -51,16 +52,17 @@ Today a session is made by hand: open the files, then **Save open files** (the o
 | G12 | **Files that no longer exist are left out at display time**, and a group that drops below 2 files is not shown. | Projects get archived; a suggestion with dead paths is worse than none. Checked through `IShell.FileExists`, so tests use `FakeShell`. |
 | G13 | **Suggestions get their own panel type, `suggestions`, opened from a button on the Sessions panel.** It opens directly after the Sessions panel, in the same column, at the same width, without entering Arrange mode. Closing it hides it. | "A separate suggestions panel that opens by the sessions." Using the workspace's own panel model means it can still be moved, resized or added from Add panel like any other, and the layout remembers it. |
 | G14 | **One new machine-local file, `session-suggestions.json`, holds the switches, the dismissals and rule B's open spans.** Nothing is added to `settings.json`, `recent-files.json` or `sessions.json`. | `sessions.json` is the user's data and is what gets shared; this is local observation. Keeping the switches here avoids a schema bump in `recent-files.json`. |
+| G15 | **Sensitivity changes only how pairs are judged, never what is recorded.** The sample interval (5 min), the 62-day retention and the 40-file burst cap are the same at every level. Changing it re-ranks at once from data already held, and keeps dismissals. | Background cost and what is stored don't depend on a preference, so High is no more expensive than Low, and moving the slider back and forth loses nothing. |
 
 ## 4. Rule A: opened together (from recorded opens)
 
 Input: `IReadOnlyList<RecentFileHistory>`.
 
 1. **Flatten and sort** every `(path, openUtc)` by time.
-2. **Split into bursts**: a new burst starts when the gap since the previous open exceeds `BurstGap`. A burst is its distinct paths and the local date of its first open. Bursts of fewer than 2 paths are dropped, and so are bursts of more than `MaxBurstFiles` (40; a batch print is not a working set).
+2. **Split into bursts**: a new burst starts when the gap since the previous open exceeds `BurstGap` (15 min at Balanced; §6.1). A burst is its distinct paths and the local date of its first open. Bursts of fewer than 2 paths are dropped, and so are bursts of more than `MaxBurstFiles` (40; a batch print is not a working set).
 3. **Active days per file**: distinct local dates with at least one open.
 4. **Days together per pair**: each burst adds its date to the day set of every pair in it.
-5. **Strong pair (A)**: `daysTogether ≥ MinDaysTogether` and `daysTogether / min(activeDays(a), activeDays(b)) ≥ MinShare`.
+5. **Strong pair (A)**: `daysTogether ≥ MinDaysTogether` and `daysTogether / min(activeDays(a), activeDays(b)) ≥ MinShare` (3 days and 0.5 at Balanced).
 
 ## 5. Rule B: open together for an hour (from window samples)
 
@@ -71,7 +73,7 @@ Input: `IReadOnlyList<RecentFileHistory>`.
 - `OpenSpanRecorder.Observe(now, paths)` extends each path's open span when it was also seen in the previous sample, and starts a new span otherwise. A path not seen, or a missed sample (sleep, pause, away), closes its span.
 - Spans are kept 62 days, like Recent Files' detail, and written to `session-suggestions.json` when a span closes and at most every 15 minutes.
 
-**The rule**: two files make a **strong pair (B)** when one of their spans overlaps for at least `TogetherOpen` (60 min), and neither file is "always open" (G4). The pair's evidence is the longest overlap and its day.
+**The rule**: two files make a **strong pair (B)** when one of their spans overlaps for at least `TogetherOpen` on at least `TogetherOpenDays` different days (60 min on 1 day at Balanced; §6.1), and neither file is "always open" (G4). The pair's evidence is the longest overlap and its day.
 
 **Precision and limits, said plainly in the setting's hint:**
 
@@ -83,7 +85,7 @@ Input: `IReadOnlyList<RecentFileHistory>`.
 
 Input: rule A and rule B strong pairs, the existing sessions, the dismissed hashes, `SessionSuggestionOptions`, the local `TimeZoneInfo`, and now from a `TimeProvider`. A pure static function.
 
-1. **Grow groups greedily.** Take the strongest remaining pair (rule B pairs rank by overlap length, rule A pairs by days together; most recent breaks ties). Add any file that makes a strong pair, by either rule, with at least `ceil(2/3 × group size)` of the group's members, strongest first, up to `MaxGroupFiles`. Repeat until no strong pair is left. A file can be in more than one group.
+1. **Grow groups greedily.** Take the strongest remaining pair (rule B pairs rank by overlap length, rule A pairs by days together; most recent breaks ties). Add any file that makes a strong pair, by either rule, with enough of the group's members (⅔ at Balanced; §6.1), strongest first, up to `MaxGroupFiles`. Repeat until no strong pair is left. A file can be in more than one group.
 2. **Match against sessions** (G8): equal to, or inside, a session → dropped; overlapping a session → an add suggestion for the session with the most overlap, listing only the missing files; otherwise → a new-session suggestion.
 3. **Drop** dismissed groups (G9) and groups inside a larger group already kept.
 4. **Rank**: add suggestions first (they finish something the user started), then by strength, then by recency. Keep the top `MaxSuggestions`.
@@ -100,6 +102,27 @@ public sealed record SessionSuggestion(
 ```
 
 Days are local dates through the given `TimeZoneInfo`, matching `RecentFilesStore.LocalDate`, so a burst at 23:55–00:05 belongs to the day it started.
+
+### 6.1 Sensitivity levels
+
+`SessionSuggestionOptions.For(SuggestionSensitivity level)` returns one of three fixed sets. The starting values are below; step 9's Windows trial against real data may tune them, and any change is recorded here.
+
+| Threshold | Low — fewer, surer | **Balanced** (default) | High — more, sooner |
+|---|---|---|---|
+| Rule A: burst gap | 10 min | 15 min | 30 min |
+| Rule A: days together | 4 | 3 | 2 |
+| Rule A: share of the rarer file's days (G4) | ≥ 0.6 | ≥ 0.5 | ≥ 0.35 |
+| Rule B: open together | 90 min | 60 min | 30 min |
+| Rule B: on how many days | 2 | 1 | 1 |
+| Rule B: "always open" above (G4) | 5 h | 6 h | 8 h |
+| Grouping: links needed to join a group | all members | ⅔ of members | ½ of members |
+| Suggestions shown | 5 | 10 | 15 |
+
+Fixed at every level (G15): sample interval 5 min, 2–15 files per group, bursts over 40 files ignored, 62 days of history.
+
+Rule B at High (30 min) is 7 consecutive samples, so a single missed sample matters more; that is the accepted cost of "sooner".
+
+The level is stored as `"low"`, `"balanced"` or `"high"`; anything else reads as Balanced, the same lenient rule `settings.json` uses for its strings.
 
 ## 7. UI
 
@@ -135,6 +158,8 @@ The panel's own **Close** button hides it. In the separate Sessions window (`Ses
 - **Drag a card** onto a session row in the Sessions panel to add its files there. The Sessions panel already handles drops for reordering (`CardDropPreview`), so this reuses that path.
 - Single files can be dragged out of a card onto a session row too, for the "just this one" case.
 
+**Sensitivity in the panel**: the panel header has a compact **Sensitivity: Balanced ▾** menu (Low · Balanced · High, each with its one-line meaning), so the user can adjust it where they see the result. The list re-ranks at once (G15). With nothing found, the empty state adds "Try High sensitivity" when the level isn't already High; with more than 10 suggestions at High, the footer offers "Too many? Try Balanced".
+
 **Empty and off states**: with suggestions off, the panel says so and has a **Turn on** link to Recent Files settings. With none found: "No suggestions yet. They appear when the same files are opened together on a few days, or kept open together for an hour."
 
 Styling uses the existing panel frame, card, caption and hint styles and the highlight colour; no new palette entries.
@@ -145,6 +170,12 @@ In `Views/Panels/RecentFilesSettings.xaml`, under "Record the documents and draw
 
 - ☐ **Suggest sessions from files I use together**
   - ☑ **Include files I keep open together for over an hour** — *"Checks which documents are open every 5 minutes while QuickerPlaces is running. Only the document in front is seen in Revu, Acrobat and Revit. Nothing leaves this PC."*
+  - **Sensitivity:** ( ) Low ( • ) Balanced ( ) High — three radio buttons, as the Theme choice in Settings is laid out, each with a hint:
+    - *Low:* "Fewer suggestions. Files must be used together often, or open together for an hour and a half on two days."
+    - *Balanced:* "Files used together on three days, or open together for an hour."
+    - *High:* "More suggestions, sooner. Files used together on two days, or open together for half an hour. Expect some you'll dismiss."
+
+  The rule-B hint follows the level ("…for over an hour" at Balanced, "…for half an hour" at High).
 
 Saved with the rest of the Recent Files settings, written to the suggestions store, not `recent-files.json`. Turning rule B off stops the sampler and deletes the recorded spans; turning suggestions off stops everything and keeps dismissals.
 
@@ -157,6 +188,7 @@ In `AppDataFolders.Local`, loaded with `JsonStoreLoader.Load<SessionSuggestionsD
   "schemaVersion": 1,
   "enabled": false,
   "openTogether": true,
+  "sensitivity": "balanced",
   "dismissed": [
     { "key": "b1946ac92492d2347c6235b4d2611184", "files": 4, "dismissedAt": "2026-10-14T09:12:00Z" }
   ],
@@ -180,7 +212,7 @@ New, UI-free, linked into `QuickerPlaces.Tests`:
 | `Services/Sessions/Suggestions/OpenSpanRecorder.cs` | Rule B's span keeping (§5) |
 | `Services/Sessions/Suggestions/OpenTogetherRule.cs` | Rule B's pairs, including always-open (§5, G4) |
 | `Services/Sessions/Suggestions/SessionSuggester.cs` | Groups, session matching, ranking (§6) |
-| `Services/Sessions/Suggestions/SessionSuggestionOptions.cs` | G5 constants |
+| `Services/Sessions/Suggestions/SessionSuggestionOptions.cs` Thresholds and `For(SuggestionSensitivity)` (§6.1) |
 | `Services/Sessions/Suggestions/SessionSuggestion.cs` | Output records |
 | `Services/Sessions/Suggestions/SessionSuggestionKey.cs` | G9 hashing |
 | `Services/Sessions/Suggestions/SessionSuggestionStore.cs` | §8 load/save, switches, dismissals, spans |
@@ -222,9 +254,11 @@ Not changed: `RecentFilesStore`, `RecentFilesHost`'s tick, `SessionStore`, `Wind
 
 **Suggester** (`SessionSuggesterTests`): three strongly linked files plus one weak → three; two projects in the same weeks → two groups; one rule-A pair and one rule-B pair sharing a file → one group of three; equal to a session → dropped; half inside a session → add suggestion with only the missing files; dismissed → dropped, grown → shown again; ranking puts add suggestions first; names from shared folder, from `240015`, and the fallback; a name clash gets " (2)".
 
-**Store** (`SessionSuggestionStoreTests`): missing file → off; round trip; damaged and newer files left untouched with a notice; turning rule B off deletes spans.
+**Store** (`SessionSuggestionStoreTests`): missing file → off; round trip; damaged and newer files left untouched with a notice; turning rule B off deletes spans; sensitivity round-trips; a missing or unknown sensitivity reads as Balanced.
 
 **View models** (`SuggestionsViewModelTests`, `SessionsViewModelTests`, `SessionEditorViewModelTests`): New session creates and Undo deletes; Add adds and Undo restores the old file list; Dismiss persists; missing files dropped (G12) via `FakeShell`; the count on the Sessions button.
+
+**Sensitivity** (`SessionSuggestionOptionsTests`, `SessionSuggesterTests`): each level returns §6.1's values; one fixture of files together on exactly 2 days and open together for 45 minutes gives a suggestion at High and none at Balanced or Low; a pair open together 70 minutes on one day appears at Balanced and High but not Low; Low never shows more than High for the same data (monotonic); changing the level keeps dismissals; the sampler's interval is the same at every level (G15).
 
 **Layout** (`WorkspaceLayoutServiceTests`): `ShowBeside` inserts after Sessions in its column at its span; shows a hidden panel in its remembered place; is a no-op when visible; is undoable; works in rows and columns layouts; a layout without Sessions puts it last.
 
@@ -244,7 +278,7 @@ Each step is one small reviewable commit:
 2. `SessionSuggester` (groups, session matching, ranking), with tests, using rule A only.
 3. `SessionSuggestionStore` and document (switches, dismissals), with tests.
 4. `SessionSuggestionSource` with quick New/Add and Undo, with tests.
-5. `PanelTypes.Suggestions`, `ShowBeside`, `SuggestionsViewModel`, `SuggestionsPanel`, the Sessions panel button; the settings switch for suggestions. Rule A is usable end to end here.
+5. `PanelTypes.Suggestions`, `ShowBeside`, `SuggestionsViewModel`, `SuggestionsPanel`, the Sessions panel button; the settings switch for suggestions and the sensitivity choice (settings and panel menu). Rule A is usable end to end here.
 6. Drag cards and files onto session rows; the Sessions window side pane.
 7. Rule B: `OpenSpanRecorder` and `OpenTogetherRule` with tests; spans in the store.
 8. `DocumentWindows` extracted (probe behaviour unchanged, its tests still pass); `OpenDocumentSampler`; the rule-B switch.
@@ -261,9 +295,11 @@ Rule B comes after rule A works end to end because it is the part with new backg
 
 ## 12. Open questions
 
-1. **Rule A threshold:** 3 days together (default here) or 2, so suggestions appear sooner at the cost of more noise?
-2. **Rule B, one hour once:** is a single hour-long overlap enough, or should it need two different days, like rule A needs three?
-3. **Burst gap:** 15 minutes fits "open my morning set"; should it be shorter (5–10 min) for people who switch projects often?
+The earlier questions on the day threshold, the burst gap and whether one hour-long overlap is enough are now answered by the sensitivity levels (§6.1): each choice exists at some level, and Balanced is the starting point.
+
+1. **Levels:** are three levels right, or would five (Lowest … Highest) be wanted? Three is proposed: each is easy to describe, and five would differ by amounts too small to notice.
+2. **Balanced values:** are §6.1's Balanced values the right default, given that they are guesses until step 9's trial?
+3. **Per rule:** one sensitivity for both rules (proposed), or separate choices for "used together" and "open together"?
 4. **Default layout:** should any built-in layout include the Suggestions panel, or is opening it from the Sessions panel enough?
 
 ## 13. Windows checklist
@@ -283,4 +319,7 @@ Rule B comes after rule A works end to end because it is the part with new backg
 - [ ] Pause tracking from the tray stops the sampler; resuming starts it.
 - [ ] Turning rule B off deletes its spans; turning suggestions off hides the button and panel content and keeps dismissals.
 - [ ] A damaged `session-suggestions.json` is left untouched and shows a notice; sessions still work.
+- [ ] Switching Low → Balanced → High in the panel menu shows more suggestions each time, at once; the choice is kept after restarting; dismissals survive the change.
+- [ ] The settings radio buttons and the panel menu stay in step.
+- [ ] Note how many suggestions each level gives on real data after a week; tune §6.1 if Balanced is noisy or empty.
 - [ ] §10 measurements recorded.
