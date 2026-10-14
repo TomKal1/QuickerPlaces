@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Session suggestions from files opened together
-status: proposed (2026-10-14); not started. Open questions in §10
+status: proposed (2026-10-14), revised the same day for the hour-long rule (§5) and the Suggestions panel (§7); not started. Open questions in §12
 created: 2026-10-14
 parent: ai/260928_PDF Project Sessions Plan.md
 ---
@@ -11,67 +11,144 @@ parent: ai/260928_PDF Project Sessions Plan.md
 
 On 2026-10-14 the user asked: *"what if we add session suggestions based on files that the user opens together over a short period of time"*.
 
+Later the same day they added two requirements:
+
+- *"if files are open together at any time longer than an hour might be another rule"*.
+- *"I want these session suggestions to be in a separate suggestions panel that opens by the sessions and lets the user quickly add them to a session"*.
+
 Today a session is made by hand: open the files, then **Save open files** (the on-demand scan), or **Save files as session** from the File shelf. People who open the same four drawings and a spec every morning still build that session themselves, or never build it. QuickerPlaces already records when each file is opened, so it can notice those groups and offer them.
 
 ## 2. What already exists
 
 | Piece | Where | What it gives this feature |
 |---|---|---|
-| Recorded opens with real times | `RecentFilesStore.Record`; times come from the Recent Items shortcut's `LastWriteTimeUtc` (`WindowsRecentItems.cs`), not from the one-minute poll | When each file was opened, to within Windows' own resolution |
+| Recorded opens with real times | `RecentFilesStore.Record`; times come from the Recent Items shortcut's `LastWriteTimeUtc` (`WindowsRecentItems.cs`), not from the one-minute poll | When each file was opened (rule A) |
 | 62 days of opens per file | `RecentFileRecord.Opens`, `RecentFilesStore.DetailDays`, `MaxOpensPerFile = 500` | Enough history to see a pattern repeat over weeks |
-| A read of all of it | `RecentFilesStore.QueryHistory()` → `RecentFileHistory(Path, Kind, Opens)` | The only input the suggester needs |
+| A read of all of it | `RecentFilesStore.QueryHistory()` → `RecentFileHistory(Path, Kind, Opens)` | Rule A's only input |
+| Window-title evidence | `WindowsOpenDocumentProbe.FindViewerWindows` (EnumWindows, Word/Excel window classes, process names) and `OpenDocumentResolver.Resolve(OpenDocumentEvidence, …)` | Which documents are open right now, from window titles matched against Recent Items (rule B) |
 | Path rules | `DocumentPaths.Normalize` / `DocumentPaths.Equal` (case-insensitive) | The same file identity sessions and the Library already use |
-| Existing sessions | `SessionStore.Sessions` → `SessionSnapshot` | So suggestions never repeat a session the user already has |
-| A review-before-save editor | `SessionEditorViewModel.ForFileSet(store, SessionFileSet)`, `SessionEditorDialog` | Save as session with the files ticked and the user free to change them |
+| Sessions | `SessionStore.Sessions`, `TryCreate`, `TryUpdate` | Filtering out what the user already has; one-click create and add |
+| A review-before-save editor | `SessionEditorViewModel.ForFileSet(store, SessionFileSet)`, `SessionEditorDialog` | The optional Review… path |
+| Workspace panels | `PanelTypes`, `PanelInstance` (span, dock, hidden), `WorkspaceLayoutService`, `WorkspaceView` | The new Suggestions panel |
+| Pause and presence | `RecentFilesHost`'s `isPaused`, `IUserPresence` | Rule B's sampler stops when tracking is paused or the user is away |
 | Store loading | `JsonStoreLoader.Load<T>` with `FilePlacesStorage` | Damaged/unreadable/newer-version handling for the one new file |
-
-No new tracking, Windows API or background watcher is needed.
 
 ## 3. Decisions
 
 | # | Decision | Why |
 |---|---|---|
-| G1 | **Suggestions come only from Recent Files' recorded opens.** No new tracking, no use of the open-documents scan. | Recent Files is already opt-in, scoped (tracked folders by default) and consented to. The scan runs only when the user asks (sessions plan §4) and stays that way. |
-| G2 | **Off by default, and only offered while Recent Files is on.** The switch sits under Recent Files' own settings. | Same consent model as everything else that reads what the user opens. With Recent Files off there is no input, so the switch says why it's disabled. |
-| G3 | **A group is files opened in the same burst on several different days.** A burst ends after a 15-minute gap with no open. Pairs are counted by **days**, not bursts. | One busy morning re-opening two files is not a habit; the same files together on three separate days is. |
-| G4 | **Files that go with everything are left out of pairs.** A pair counts only when its days together are at least half of the rarer file's active days (share ≥ 0.5). | A daily timesheet or standards PDF would otherwise join every group. |
-| G5 | **Thresholds are named constants in `SessionSuggestionOptions`, not user settings.** Defaults: burst gap 15 min, at least 3 days together, share ≥ 0.5, 2–15 files per group, show at most 5. | They need tuning against real data first; exposing them now would freeze guesses. Tests pass their own options. |
-| G6 | **Suggestions are worked out on demand** (when the Sessions panel or window is shown, or the user selects Refresh), cached until Recent Files records again, and never in the tracking tick. | Keeps the one-minute tick unchanged. The input is small (§8), but there is no reason to pay for it while nobody is looking. |
-| G7 | **Never suggest what the user already has.** A group equal to, or contained in, an existing session's files is dropped. A group that only adds to an existing session is not offered as "add to session" in this version. | Avoids noise. "Add to session" is a follow-up (§9). |
-| G8 | **Dismiss is remembered; Save is not.** Dismissal stores a hash of the sorted, normalised paths. A dismissed group comes back only if it grows to include a file it didn't have. | A saved group is filtered by G7 anyway. Hashing keeps paths out of the new file. |
-| G9 | **One new machine-local file, `session-suggestions.json`, holds the switch and the dismissals.** Nothing is added to `settings.json`, `recent-files.json` or `sessions.json`. | `sessions.json` is the user's data and is what gets shared; dismissals are local noise. Putting the switch here avoids a schema bump in `recent-files.json`. |
-| G10 | **Save goes through the editor, never straight to the store.** The user sees the files ticked and a suggested name, and can untick or rename before `TryCreate`. | The suggester can be wrong; the user decides what a session is. |
-| G11 | **The suggested name is the files' deepest shared folder name**, or the first project-number-like segment (5–6 digits, e.g. `240015`) if they share none, or blank. | Matches how projects are laid out (`C:\X\2024\240015\…`). `AliasSuggestion.FromFolderPath` already gives the deepest folder name. |
-| G12 | **Files that no longer exist are left out at display time**, and a group that drops below 2 files is not shown. | Projects get archived; a suggestion with dead paths is worse than none. Checked through `IShell`, so tests use `FakeShell`. |
+| G1 | **Two rules make a pair; either is enough.** **Rule A (opened together):** opened in the same burst on several different days. **Rule B (open together):** both seen open at the same time for an hour or more without a break, on any one day. | Rule A catches the morning set someone opens in a hurry. Rule B catches the files someone works across for a long stretch, even if it happened only once. |
+| G2 | **Off by default, and only offered while Recent Files is on.** One switch for suggestions; under it, a second switch for rule B, ticked by default when suggestions are turned on, whose wording says it checks open windows every 5 minutes. | Same consent model as everything else that reads what the user opens. Rule B is a new kind of observation (§5), so the user sees what it does and can keep rule A alone. Both rules resolve paths through Recent Items, so neither works without it. |
+| G3 | **Rule A:** a burst ends after a 15-minute gap with no open. Pairs are counted by **days**, not bursts; at least 3 days. | One busy morning re-opening two files is not a habit; the same files together on three separate days is. |
+| G4 | **Files that go with everything are left out.** Rule A: a pair counts only when its days together are at least half of the rarer file's active days (share ≥ 0.5). Rule B: a file seen open for more than 6 hours on most days it is seen at all is "always open" and makes no rule-B pairs. | A daily timesheet or a standards PDF left open all day would otherwise join every group. |
+| G5 | **Thresholds are named constants in `SessionSuggestionOptions`, not user settings.** Defaults: burst gap 15 min, 3 days, share ≥ 0.5, together-open 60 min, sample interval 5 min, always-open 6 h, 2–15 files per group, at most 10 suggestions. | They need tuning against real data first; exposing them now would freeze guesses. Tests pass their own options. |
+| G6 | **Rule B samples window titles only, never file handles, in the background.** Every 5 minutes, off the UI thread, it lists document windows and resolves them as the scan does, with an empty `HeldFiles`. | The handle list (`WindowsHeldFiles`) is system-wide, can stall on some handles (held-files plan H4), and stays on-demand only, as the sessions plan decided. Window titles are cheap and never block on a file server. |
+| G7 | **Suggestions are worked out on demand** (when the Suggestions panel is shown, or on Refresh), cached until Recent Files records or the sampler closes a span, and never in a tracking tick. | Keeps the tracking ticks unchanged. Showing a count on the Sessions panel's button uses the cached result. |
+| G8 | **A group that matches an existing session is not suggested. A group that overlaps one becomes an "add to session" suggestion.** Overlap: at least half of the group's files are already in the session, and at least one isn't. | The user asked to add suggestions *to* a session, so overlap is the most useful case, not noise. |
+| G9 | **Dismiss is remembered; Add is not.** A dismissal stores a hash of the sorted, normalised paths. A dismissed group comes back only if it grows to include a file it didn't have. | An added group is filtered by G8 anyway. |
+| G10 | **Quick actions save at once, with Undo.** **New session** creates it with the suggested name; **Add to ‹session›** adds the missing files. Both show "Saved · Undo" in the panel's status line. **Review…** opens the editor for anyone who wants to untick files or rename first. | "Quickly add them to a session." The editor stays one click away, and Undo covers a wrong guess. |
+| G11 | **The suggested name is the files' deepest shared folder name**, or the first project-number-like segment (5–6 digits, e.g. `240015`) if they share none, or "Suggested session" with the date. An existing session name gets " (2)", as the store requires unique names. | Matches how projects are laid out (`C:\X\2024\240015\…`). `AliasSuggestion.FromFolderPath` already gives the deepest folder name. |
+| G12 | **Files that no longer exist are left out at display time**, and a group that drops below 2 files is not shown. | Projects get archived; a suggestion with dead paths is worse than none. Checked through `IShell.FileExists`, so tests use `FakeShell`. |
+| G13 | **Suggestions get their own panel type, `suggestions`, opened from a button on the Sessions panel.** It opens directly after the Sessions panel, in the same column, at the same width, without entering Arrange mode. Closing it hides it. | "A separate suggestions panel that opens by the sessions." Using the workspace's own panel model means it can still be moved, resized or added from Add panel like any other, and the layout remembers it. |
+| G14 | **One new machine-local file, `session-suggestions.json`, holds the switches, the dismissals and rule B's open spans.** Nothing is added to `settings.json`, `recent-files.json` or `sessions.json`. | `sessions.json` is the user's data and is what gets shared; this is local observation. Keeping the switches here avoids a schema bump in `recent-files.json`. |
 
-## 4. The algorithm (`SessionSuggester`)
+## 4. Rule A: opened together (from recorded opens)
 
-Input: `IReadOnlyList<RecentFileHistory>`, the existing sessions' file lists, the dismissed hashes, `SessionSuggestionOptions`, the local `TimeZoneInfo`, and "now" from a `TimeProvider`.
+Input: `IReadOnlyList<RecentFileHistory>`.
 
-1. **Flatten and sort.** Every `(path, openUtc)` from the history, sorted by time. Paths are already normalised by the store.
-2. **Split into bursts.** Walk in order; start a new burst when the gap since the previous open exceeds `BurstGap`. A burst is the set of distinct paths in it, plus the local date of its first open. Bursts with fewer than 2 paths are dropped. A burst larger than `MaxBurstFiles` (default 40, e.g. a batch-print) is dropped as not a working set.
-3. **Count active days per file**: distinct local dates with at least one open.
-4. **Count days together per pair**: for each burst, every unordered pair of its paths adds its date to that pair's day set.
-5. **Keep strong pairs**: `daysTogether ≥ MinDaysTogether` and `daysTogether / min(activeDays(a), activeDays(b)) ≥ MinShare`.
-6. **Grow groups greedily.** Take the strongest remaining pair (most days together, then most recent day). Add any file that is a strong pair with at least `ceil(2/3 × group size)` of the group's members, strongest first, up to `MaxGroupFiles`. Mark those pairs used; repeat until no strong pair is left. A file can be in more than one group.
-7. **Filter**: drop groups that are a subset of an existing session (G7), whose hash is dismissed (G8), or that are a subset of a larger group already kept.
-8. **Score and rank**: days together (the minimum across the group's strong pairs), then the most recent day together. Keep the top `MaxSuggestions`.
-9. **Describe**: the suggested name (G11), the number of days together, and the last day together.
+1. **Flatten and sort** every `(path, openUtc)` by time.
+2. **Split into bursts**: a new burst starts when the gap since the previous open exceeds `BurstGap`. A burst is its distinct paths and the local date of its first open. Bursts of fewer than 2 paths are dropped, and so are bursts of more than `MaxBurstFiles` (40; a batch print is not a working set).
+3. **Active days per file**: distinct local dates with at least one open.
+4. **Days together per pair**: each burst adds its date to the day set of every pair in it.
+5. **Strong pair (A)**: `daysTogether ≥ MinDaysTogether` and `daysTogether / min(activeDays(a), activeDays(b)) ≥ MinShare`.
 
-Output: `IReadOnlyList<SessionSuggestion>`:
+## 5. Rule B: open together for an hour (from window samples)
+
+**The sampler** (`OpenDocumentSampler`, app-only like the probe; its logic in a UI-free `OpenSpanRecorder`):
+
+- Runs every `SampleInterval` (5 min) while rule B is on, Recent Files is on, tracking isn't paused, and the user is present (`IUserPresence`).
+- Lists document windows as `WindowsOpenDocumentProbe.FindViewerWindows` does (extracted so both share it) and resolves them with `OpenDocumentResolver.Resolve`, giving it the windows and Recent Items but no held files (G6). Only candidates marked `IsLikelyOpen` and in Recent Files' scope count.
+- `OpenSpanRecorder.Observe(now, paths)` extends each path's open span when it was also seen in the previous sample, and starts a new span otherwise. A path not seen, or a missed sample (sleep, pause, away), closes its span.
+- Spans are kept 62 days, like Recent Files' detail, and written to `session-suggestions.json` when a span closes and at most every 15 minutes.
+
+**The rule**: two files make a **strong pair (B)** when one of their spans overlaps for at least `TogetherOpen` (60 min), and neither file is "always open" (G4). The pair's evidence is the longest overlap and its day.
+
+**Precision and limits, said plainly in the setting's hint:**
+
+- A 5-minute sample means overlaps are measured to within about 5 minutes, so "an hour" is 13 consecutive samples with both files open.
+- Window titles show the document that is in front: every Word and Excel document has its own window, but in Revu, Acrobat and Revit only the active tab or view is seen. A background PDF tab is not "open" to rule B. The on-demand scan, which also reads file handles, sees more, and stays on-demand (G6).
+- A title has to match a file in Recent Items to become a path, so a file opened in a way Windows doesn't record is missed, as with rule A.
+
+## 6. Building and ranking suggestions (`SessionSuggester`)
+
+Input: rule A and rule B strong pairs, the existing sessions, the dismissed hashes, `SessionSuggestionOptions`, the local `TimeZoneInfo`, and now from a `TimeProvider`. A pure static function.
+
+1. **Grow groups greedily.** Take the strongest remaining pair (rule B pairs rank by overlap length, rule A pairs by days together; most recent breaks ties). Add any file that makes a strong pair, by either rule, with at least `ceil(2/3 × group size)` of the group's members, strongest first, up to `MaxGroupFiles`. Repeat until no strong pair is left. A file can be in more than one group.
+2. **Match against sessions** (G8): equal to, or inside, a session → dropped; overlapping a session → an add suggestion for the session with the most overlap, listing only the missing files; otherwise → a new-session suggestion.
+3. **Drop** dismissed groups (G9) and groups inside a larger group already kept.
+4. **Rank**: add suggestions first (they finish something the user started), then by strength, then by recency. Keep the top `MaxSuggestions`.
+5. **Describe**: the suggested name (G11) and why, e.g. "opened together on 6 days, last Tue" or "open together for 1 h 40 min on Mon".
 
 ```csharp
 public sealed record SessionSuggestion(
-    string Key,                    // hash of sorted normalised paths (G8)
-    IReadOnlyList<string> Files,   // in first-opened order within the latest burst
-    string? SuggestedName,
-    int DaysTogether,
-    DateOnly LastTogether);
+    string Key,                    // hash of sorted normalised paths (G9)
+    IReadOnlyList<string> Files,   // all files in the group
+    IReadOnlyList<string> NewFiles,// files not yet in TargetSessionId (all, for a new session)
+    string? TargetSessionId,       // null: new session
+    string? SuggestedName,         // for a new session
+    SuggestionReason Reason);      // DaysTogether + LastTogether, and/or LongestOpenTogether + its day
 ```
 
 Days are local dates through the given `TimeZoneInfo`, matching `RecentFilesStore.LocalDate`, so a burst at 23:55–00:05 belongs to the day it started.
 
-## 5. Data: `session-suggestions.json`
+## 7. UI
+
+### 7.1 The Suggestions panel
+
+A new panel type, `PanelTypes.Suggestions = "suggestions"`, added to `PanelTypes.Known` after `Sessions`, so it appears in Add panel too. Not in any built-in layout by default; it is opened from the Sessions panel.
+
+**Opening it** (G13): the Sessions panel header gets a **Suggestions** button with a count badge ("Suggestions · 3"), shown only when suggestions are on. Selecting it calls a new `WorkspaceLayoutService.ShowBeside(PanelTypes.Suggestions, sessionsPanelId)`:
+
+- If the layout has no Suggestions panel, it is inserted directly after the Sessions panel, same dock, same span.
+- If it is hidden, it is shown in its remembered place (the user may have moved it).
+- If it is already visible, the button scrolls it into view and focuses it.
+- One committed layout change with Undo, allowed outside Arrange mode (like Hide is reversible), and saved with the layout.
+
+The panel's own **Close** button hides it. In the separate Sessions window (`SessionsWindow`), the same button opens the panel's content as a side pane on the right of the window, since that window has no workspace.
+
+**Each suggestion card:**
+
+> **240015** · new session · 4 files
+> opened together on 6 days, last Tue
+> `A-101.pdf` · `A-102.pdf` · `Spec 08 71 00.docx` · `Door schedule.xlsx`
+> **[New session]** [Review…] [Dismiss]
+
+> **Tower B** · add 2 files · open together for 1 h 40 min on Mon
+> `+ A-301.pdf` · `+ A-302.pdf`
+> **[Add to Tower B]** [Add to… ▾] [Dismiss]
+
+- File names, not paths, with the full path as a tooltip; more than 4 shows "+ 3 more", which expands.
+- **New session** / **Add to ‹session›**: saves at once (G10); the card leaves; the status line says "Saved 240015 · Undo" or "Added 2 files to Tower B · Undo". The Sessions panel reloads and selects that session.
+- **Add to… ▾**: a menu of every session, those sharing files listed first, so a new-session suggestion can go into an existing session too.
+- **Review…**: `SessionEditorDialog` through a new `SessionEditorViewModel.ForSuggestion(store, suggestion)`, titled "Save Suggested Session" or "Add to Tower B".
+- **Dismiss**: the card leaves at once and the dismissal is saved; a failed save shows the usual persistence message.
+- **Drag a card** onto a session row in the Sessions panel to add its files there. The Sessions panel already handles drops for reordering (`CardDropPreview`), so this reuses that path.
+- Single files can be dragged out of a card onto a session row too, for the "just this one" case.
+
+**Empty and off states**: with suggestions off, the panel says so and has a **Turn on** link to Recent Files settings. With none found: "No suggestions yet. They appear when the same files are opened together on a few days, or kept open together for an hour."
+
+Styling uses the existing panel frame, card, caption and hint styles and the highlight colour; no new palette entries.
+
+### 7.2 Settings
+
+In `Views/Panels/RecentFilesSettings.xaml`, under "Record the documents and drawings I open", enabled only while that is ticked:
+
+- ☐ **Suggest sessions from files I use together**
+  - ☑ **Include files I keep open together for over an hour** — *"Checks which documents are open every 5 minutes while QuickerPlaces is running. Only the document in front is seen in Revu, Acrobat and Revit. Nothing leaves this PC."*
+
+Saved with the rest of the Recent Files settings, written to the suggestions store, not `recent-files.json`. Turning rule B off stops the sampler and deletes the recorded spans; turning suggestions off stops everything and keeps dismissals.
+
+## 8. Data: `session-suggestions.json`
 
 In `AppDataFolders.Local`, loaded with `JsonStoreLoader.Load<SessionSuggestionsDocument>(storage, 1, "dismissed", "Session suggestions", options)`.
 
@@ -79,119 +156,131 @@ In `AppDataFolders.Local`, loaded with `JsonStoreLoader.Load<SessionSuggestionsD
 {
   "schemaVersion": 1,
   "enabled": false,
+  "openTogether": true,
   "dismissed": [
     { "key": "b1946ac92492d2347c6235b4d2611184", "files": 4, "dismissedAt": "2026-10-14T09:12:00Z" }
+  ],
+  "openSpans": [
+    { "path": "C:\\X\\2024\\240015\\A-101.pdf", "from": "2026-10-13T08:05:00Z", "to": "2026-10-13T09:50:00Z" }
   ]
 }
 ```
 
-- `key` is a SHA-256 of the sorted, upper-cased normalised paths joined by `\n`, truncated to 32 hex characters. `files` is kept only so the G8 rule ("comes back if it grows") can be checked without paths.
-- Dismissals older than a year are dropped on save.
-- A damaged or newer file behaves as the other stores do: left untouched, suggestions off for the session, a notice in the Sessions panel. A missing file reads as off with no dismissals.
+- `key` is a SHA-256 of the sorted, upper-cased normalised paths joined by `\n`, truncated to 32 hex characters; `files` lets G9's "comes back if it grows" be checked without paths.
+- `openSpans` holds paths, as `recent-files.json` does, and only while rule B is on. Spans older than 62 days and dismissals older than a year are dropped on save. A rough size: 30 documents open over a working day in 4 spans each is about 120 spans a day, 7,500 over 62 days, under 1.5 MB.
+- A damaged or newer file behaves as the other stores do: left untouched, suggestions off for the session, a notice in the Suggestions panel. A missing file reads as off.
 
-## 6. UI
+## 9. Files
 
-**Setting** (`Views/Panels/RecentFilesSettings.xaml`, `RecentFilesSettingsViewModel`): under "Record the documents and drawings I open", a checkbox *"Suggest sessions from files I often open together"*, enabled only while Recent Files is enabled, with the hint *"Looks for files opened within a few minutes of each other on several days. Nothing leaves this PC."* It saves with the rest of the Recent Files settings, writing to the suggestions store rather than `recent-files.json`.
-
-**Sessions panel and window** (`SessionsPanel.xaml`, `SessionsWindow.xaml`, `SessionsViewModel`): a collapsible **Suggested** section above the list, shown only when the switch is on and there is at least one suggestion. Each card:
-
-> **240015** · 4 files · opened together on 6 days, last Tue
-> `A-101.pdf`, `A-102.pdf`, `Spec 08 71 00.docx`, `Door schedule.xlsx`
-> [Save as session] [Dismiss]
-
-- File names, not full paths, with the full path as a tooltip. More than 4 files shows "+ 3 more", which expands.
-- **Save as session** opens `SessionEditorDialog` through a new `SessionEditorViewModel.ForSuggestion(store, suggestion)`: `ForFileSet`'s behaviour plus the suggested name, titled "Save Suggested Session". After a save the panel reloads and the group disappears (G7).
-- **Dismiss** removes the card at once and saves the dismissal; a failed save shows the usual persistence message and the card stays gone for the session.
-- Styling uses the existing card, caption and hint styles and the highlight colour; no new palette entries.
-
-`SessionsViewModel` takes an optional `ISessionSuggestionSource` (null in existing tests and in contexts without Recent Files), so its current constructor callers and tests are unchanged.
-
-## 7. Files
-
-New, UI-free, linked into `QuickerPlaces.Tests` like the other services:
+New, UI-free, linked into `QuickerPlaces.Tests`:
 
 | File | Purpose |
 |---|---|
-| `Services/Sessions/Suggestions/SessionSuggester.cs` | §4, a pure static function |
+| `Services/Sessions/Suggestions/OpenedTogetherRule.cs` | Rule A (§4) |
+| `Services/Sessions/Suggestions/OpenSpanRecorder.cs` | Rule B's span keeping (§5) |
+| `Services/Sessions/Suggestions/OpenTogetherRule.cs` | Rule B's pairs, including always-open (§5, G4) |
+| `Services/Sessions/Suggestions/SessionSuggester.cs` | Groups, session matching, ranking (§6) |
 | `Services/Sessions/Suggestions/SessionSuggestionOptions.cs` | G5 constants |
-| `Services/Sessions/Suggestions/SessionSuggestion.cs` | The output record |
-| `Services/Sessions/Suggestions/SessionSuggestionKey.cs` | G8 hashing |
-| `Services/Sessions/Suggestions/SessionSuggestionStore.cs` | §5 load/save, switch, dismissals |
-| `Services/Sessions/Suggestions/SessionSuggestionSource.cs` | Ties `RecentFilesStore`, `SessionStore`, the store and `IShell` together, caches until `RecentFilesHost.Recorded` fires (G6) |
+| `Services/Sessions/Suggestions/SessionSuggestion.cs` | Output records |
+| `Services/Sessions/Suggestions/SessionSuggestionKey.cs` | G9 hashing |
+| `Services/Sessions/Suggestions/SessionSuggestionStore.cs` | §8 load/save, switches, dismissals, spans |
+| `Services/Sessions/Suggestions/SessionSuggestionSource.cs` | Ties the stores, `SessionStore` and `IShell` together; caches (G7); quick New/Add with Undo (G10) |
 | `Models/Sessions/SessionSuggestionsDocument.cs` | The JSON shape |
+| `ViewModels/SuggestionsViewModel.cs` | Cards, actions, status and Undo |
+
+New, app-only:
+
+| File | Purpose |
+|---|---|
+| `Services/Documents/DocumentWindows.cs` | `FindViewerWindows` moved out of `WindowsOpenDocumentProbe` so the probe and the sampler share it |
+| `Services/Sessions/Suggestions/OpenDocumentSampler.cs` | The 5-minute timer (§5) |
+| `Views/Panels/SuggestionsPanel.xaml(.cs)` | The panel |
 
 Changed:
 
 | File | Change |
 |---|---|
-| `ViewModels/SessionsViewModel.cs` | Suggested section: rows, Save, Dismiss, Refresh |
-| `ViewModels/SessionEditorViewModel.cs` | `ForSuggestion` factory |
-| `ViewModels/RecentFilesSettingsViewModel.cs` | The switch |
-| `Views/Panels/SessionsPanel.xaml(.cs)`, `Views/SessionsWindow.xaml(.cs)` | The section |
-| `Views/Panels/RecentFilesSettings.xaml` | The checkbox |
-| `Views/MainWindow.xaml.cs` | Create the store and source; pass them on |
+| `Models/Workspace/PanelInstance.cs` | `PanelTypes.Suggestions` |
+| `Services/Workspace/WorkspaceLayoutService.cs` | `ShowBeside` (G13) |
+| `Services/Workspace/PanelLayoutEngine.cs` | Minimum height for the new type |
+| `Views/WorkspaceView.xaml(.cs)` | Create and attach the panel |
+| `Views/Panels/SessionsPanel.xaml(.cs)`, `ViewModels/SessionsViewModel.cs` | Suggestions button and count; accept card drops |
+| `Views/SessionsWindow.xaml(.cs)` | Side pane |
+| `ViewModels/SessionEditorViewModel.cs` | `ForSuggestion` |
+| `ViewModels/RecentFilesSettingsViewModel.cs`, `Views/Panels/RecentFilesSettings.xaml` | The two switches |
+| `Services/Documents/WindowsOpenDocumentProbe.cs` | Uses `DocumentWindows` |
+| `Views/MainWindow.xaml.cs` | Create the store, source and sampler; stop the sampler on pause and exit |
 | `QuickerPlaces.Tests.csproj` | Link the new files |
 
-Not changed: `RecentFilesStore`, `RecentFilesHost`'s tick, `SessionStore`, `sessions.json`, `recent-files.json`, `settings.json`, the CLI.
+Not changed: `RecentFilesStore`, `RecentFilesHost`'s tick, `SessionStore`, `WindowsHeldFiles`, `sessions.json`, `recent-files.json`, `settings.json`, the CLI.
 
-## 8. Tests and measurement
+## 10. Tests and measurement
 
-**`SessionSuggesterTests`** (fixtures built with `ManualTimeProvider` and `TestZones`):
+**Rule A** (`OpenedTogetherRuleTests`, fixtures with `ManualTimeProvider` and `TestZones`): two files together on 3 days → pair; 2 days → none; 14-minute gap joins, 16 splits; a daily timesheet makes no pairs; a 41-file burst is ignored; a burst over local midnight counts on its first day; DST days; paths differing only in case are one file.
 
-- Two files opened together on 3 days → one suggestion; on 2 days → none (default options).
-- Gap of 14 min joins a burst; 16 min splits it.
-- A file opened every day with everything (timesheet) is not in any group (G4).
-- Three files strongly linked plus one weakly linked → the group has three.
-- Two separate projects in the same weeks → two groups, not one.
-- A group equal to, or inside, an existing session → dropped; a larger group than a session → kept.
-- Dismissed key → dropped; the same group plus a new file → shown again.
-- A burst of 41 files → ignored.
-- Burst over local midnight counts on its first day; DST change days counted correctly.
-- Ranking: more days first, then most recent.
-- Suggested name: shared folder; no shared folder but a `240015` segment; neither → null.
-- Paths differing only in case are one file.
+**Rule B** (`OpenSpanRecorderTests`, `OpenTogetherRuleTests`): consecutive samples extend a span; a missed sample closes it; 13 samples together (60 min) → pair, 12 → none; overlap counts only while both are open, not from first to last sight; a file open 7 h on most days makes no pairs; spans older than 62 days pruned.
 
-**`SessionSuggestionStoreTests`**: missing file → off; round trip; damaged and newer files left untouched with a notice; dismissals older than a year pruned.
+**Suggester** (`SessionSuggesterTests`): three strongly linked files plus one weak → three; two projects in the same weeks → two groups; one rule-A pair and one rule-B pair sharing a file → one group of three; equal to a session → dropped; half inside a session → add suggestion with only the missing files; dismissed → dropped, grown → shown again; ranking puts add suggestions first; names from shared folder, from `240015`, and the fallback; a name clash gets " (2)".
 
-**`SessionsViewModelTests` / `SessionEditorViewModelTests`**: section hidden when off or empty; Save opens the editor with files and name; Dismiss removes the row and persists; missing files dropped (G12) via `FakeShell`.
+**Store** (`SessionSuggestionStoreTests`): missing file → off; round trip; damaged and newer files left untouched with a notice; turning rule B off deletes spans.
 
-**Performance** (per CLAUDE.md, before claiming no cost): on Windows, time `SessionSuggester` with `dotnet-counters`/Stopwatch logging against (a) the user's real `recent-files.json` and (b) a synthetic worst case of 2,000 files × 500 opens, 10 repeated runs each, recording the machine, .NET version and spread. Target: under 50 ms for (a), and under 500 ms for (b) off the UI thread. Confirm the Sessions panel's time to show is unchanged with the switch off. If (b) is slow, the pair count is the place to cap (bursts are already capped at 40 files).
+**View models** (`SuggestionsViewModelTests`, `SessionsViewModelTests`, `SessionEditorViewModelTests`): New session creates and Undo deletes; Add adds and Undo restores the old file list; Dismiss persists; missing files dropped (G12) via `FakeShell`; the count on the Sessions button.
+
+**Layout** (`WorkspaceLayoutServiceTests`): `ShowBeside` inserts after Sessions in its column at its span; shows a hidden panel in its remembered place; is a no-op when visible; is undoable; works in rows and columns layouts; a layout without Sessions puts it last.
+
+**Performance** (per CLAUDE.md, before claiming no cost), on Windows with the same machine and build for before and after, 10 repeated runs each, recording the machine, .NET version and spread:
+
+- **Sampler**: time one sample (window listing + resolve) with 0, 10 and 40 document windows open. Target: under 30 ms, off the UI thread. Compare `dotnet-counters` CPU and allocation rates over 30 idle minutes with rule B off and on; the difference should be within run-to-run noise.
+- **Suggester**: time it against (a) the user's real data and (b) a synthetic worst case of 2,000 files × 500 opens plus 62 days of spans. Targets: under 50 ms for (a), under 500 ms for (b), off the UI thread.
+- **Workspace**: the Sessions panel's time to show, and the layout's reflow when the Suggestions panel opens, unchanged with suggestions off.
 
 Run `dotnet test src/QuickerPlaces.sln` from `C:\QuickerPlaces\src` after each step.
 
-## 9. Order of work
+## 11. Order of work
 
 Each step is one small reviewable commit:
 
-1. `SessionSuggester`, options, record, key, with `SessionSuggesterTests`. No UI.
-2. `SessionSuggestionStore` and document, with store tests.
-3. `SessionSuggestionSource` (caching, G12 existence check), with tests.
-4. Setting checkbox in Recent Files settings.
-5. Suggested section in the Sessions panel and window; `ForSuggestion`; view-model tests.
-6. Windows measurement (§8) and the checklist (§11); record results here and in `BUILD_SUMMARY.md`.
+1. Rule A, options, records, key, with tests. No UI.
+2. `SessionSuggester` (groups, session matching, ranking), with tests, using rule A only.
+3. `SessionSuggestionStore` and document (switches, dismissals), with tests.
+4. `SessionSuggestionSource` with quick New/Add and Undo, with tests.
+5. `PanelTypes.Suggestions`, `ShowBeside`, `SuggestionsViewModel`, `SuggestionsPanel`, the Sessions panel button; the settings switch for suggestions. Rule A is usable end to end here.
+6. Drag cards and files onto session rows; the Sessions window side pane.
+7. Rule B: `OpenSpanRecorder` and `OpenTogetherRule` with tests; spans in the store.
+8. `DocumentWindows` extracted (probe behaviour unchanged, its tests still pass); `OpenDocumentSampler`; the rule-B switch.
+9. Windows measurement (§10) and the checklist (§13); results here and in `BUILD_SUMMARY.md`.
+
+Rule B comes after rule A works end to end because it is the part with new background work and needs its own measurement gate.
 
 **Not in this version (possible follow-ups):**
 
-- "Add to session" when a group extends an existing session.
 - A status-line nudge when 2+ files of a suggested group are opened within the burst window.
 - Using the activity history beyond 62 days.
 - `qp sessions suggest` in the CLI (the suggester is UI-free, so this is cheap later).
 - Counting a time saving for the rewards idea discussed the same day.
 
-## 10. Open questions
+## 12. Open questions
 
-1. **Threshold:** 3 days together (default here) or 2, so suggestions appear sooner at the cost of more noise?
-2. **Placement:** Suggested section in both the Sessions panel and the Sessions window, or the window only?
+1. **Rule A threshold:** 3 days together (default here) or 2, so suggestions appear sooner at the cost of more noise?
+2. **Rule B, one hour once:** is a single hour-long overlap enough, or should it need two different days, like rule A needs three?
 3. **Burst gap:** 15 minutes fits "open my morning set"; should it be shorter (5–10 min) for people who switch projects often?
+4. **Default layout:** should any built-in layout include the Suggestions panel, or is opening it from the Sessions panel enough?
 
-## 11. Windows checklist
+## 13. Windows checklist
 
-- [ ] With Recent Files off, the suggestions checkbox is disabled and says why.
-- [ ] Open the same 3–4 files within a few minutes on 3 different days → a suggestion appears with the right name.
-- [ ] Save as session opens the editor with the files ticked and the name filled; unticking one and saving works; the suggestion disappears.
+- [ ] With Recent Files off, both switches are disabled and say why; the Sessions panel shows no Suggestions button.
+- [ ] Open the same 3–4 files within a few minutes on 3 different days → a suggestion appears with the right name and reason.
+- [ ] Keep two Word documents open together for over an hour → a suggestion appears the same day, reason "open together for 1 h …".
+- [ ] A PDF left open all day in Revu does not join every group.
+- [ ] The Suggestions button opens the panel right after Sessions, same column and width; Close hides it; it reopens where it was left; Undo removes it.
+- [ ] New session saves at once with the suggested name; Undo deletes it.
+- [ ] A group overlapping a session shows "Add n files to ‹session›"; Add works; Undo restores the old list.
+- [ ] Add to… ▾ lists sessions sharing files first.
+- [ ] Dragging a card, and a single file, onto a session row adds them.
+- [ ] Review… opens the editor; unticking a file and saving works.
 - [ ] Dismiss removes it and it stays gone after restarting QuickerPlaces.
 - [ ] A suggestion whose files were moved or deleted is not shown.
-- [ ] A daily file (timesheet) does not join groups.
-- [ ] Turning the switch off hides the section; turning it on again shows the same suggestions and keeps dismissals.
+- [ ] Pause tracking from the tray stops the sampler; resuming starts it.
+- [ ] Turning rule B off deletes its spans; turning suggestions off hides the button and panel content and keeps dismissals.
 - [ ] A damaged `session-suggestions.json` is left untouched and shows a notice; sessions still work.
-- [ ] §8 measurements recorded.
+- [ ] §10 measurements recorded.
