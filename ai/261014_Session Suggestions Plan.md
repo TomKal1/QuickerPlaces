@@ -317,8 +317,9 @@ Rule B comes after rule A works end to end because it is the part with new backg
 
 Settled on 2026-10-14: Balanced is the default everywhere; one overall level is shared by both rules, with optional per-rule levels; the Suggestions panel is always reachable from a gear on the Sessions panel.
 
-1. **Levels:** are three levels right, or would five (Lowest … Highest) be wanted? Three is proposed: each is easy to describe, and five would differ by amounts too small to notice.
-2. **Default layout:** should any built-in layout include the Suggestions panel, or is opening it from the Sessions panel enough?
+Also settled: **three levels** (Low, Balanced, High). Each is easy to describe; five would differ by amounts too small to notice.
+
+1. **Default layout:** should any built-in layout include the Suggestions panel, or is opening it from the Sessions panel enough?
 
 ## 13. Windows checklist
 
