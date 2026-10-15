@@ -148,6 +148,10 @@
     <Compile Include="..\QuickerPlaces\Services\Workspace\WorkspaceLayoutService.cs" Link="Linked\Services\Workspace\WorkspaceLayoutService.cs" />
     <Compile Include="..\QuickerPlaces\Services\Workspace\PanelLayoutEngine.cs" Link="Linked\Services\Workspace\PanelLayoutEngine.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\SessionFileSet.cs" Link="Linked\Services\Sessions\SessionFileSet.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SuggestionSensitivity.cs" Link="Linked\Services\Sessions\Suggestions\SuggestionSensitivity.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionOptions.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionOptions.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestion.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestion.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionKey.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionKey.cs" />
     <!--
       Session sharing (ai/261005_Session Sharing Plan.md): the .qpsession
       format, the OneDrive path mapping, finding shared files, and the two
