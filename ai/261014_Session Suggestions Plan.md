@@ -210,7 +210,8 @@ In `AppDataFolders.Local`, loaded with `JsonStoreLoader.Load<SessionSuggestionsD
   "usedTogetherSensitivity": null,
   "openTogetherSensitivity": null,
   "dismissed": [
-    { "key": "b1946ac92492d2347c6235b4d2611184", "files": 4, "dismissedAt": "2026-10-14T09:12:00Z" }
+    { "key": "b1946ac92492d2347c6235b4d2611184", "files": 4, "dismissedAt": "2026-10-14T09:12:00Z",
+      "fileKeys": ["5d41402abc4b2a76b9719d911017c592", "…"] }
   ],
   "openSpans": [
     { "path": "C:\\X\\2024\\240015\\A-101.pdf", "from": "2026-10-13T08:05:00Z", "to": "2026-10-13T09:50:00Z" }
@@ -218,7 +219,7 @@ In `AppDataFolders.Local`, loaded with `JsonStoreLoader.Load<SessionSuggestionsD
 }
 ```
 
-- `key` is a SHA-256 of the sorted, upper-cased normalised paths joined by `\n`, truncated to 32 hex characters; `files` lets G9's "comes back if it grows" be checked without paths.
+- `key` is a SHA-256 of the sorted, upper-cased normalised paths joined by `\n`, truncated to 32 hex characters. `fileKeys` holds the same hash of each file on its own, so G9's "comes back only if it grows" can be checked without paths: a suggestion whose files are all in one dismissal's `fileKeys` stays hidden. Older entries without `fileKeys` match by `key` only.
 - `openSpans` holds paths, as `recent-files.json` does, and only while rule B is on. Spans older than 14 days (G17) and dismissals older than a year are dropped on save. A rough size: 30 documents open over a working day in 4 spans each is about 120 spans a day, about 1,700 over 14 days, under 350 KB.
 - A damaged or newer file behaves as the other stores do: left untouched, suggestions off for the session, a notice in the Suggestions panel. A missing file reads as off.
 
