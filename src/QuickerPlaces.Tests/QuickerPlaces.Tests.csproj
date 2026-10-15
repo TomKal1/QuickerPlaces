@@ -152,6 +152,8 @@
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionOptions.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionOptions.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestion.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestion.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionKey.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionKey.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionStore.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionStore.cs" />
+    <Compile Include="..\QuickerPlaces\Models\Sessions\SessionSuggestionsDocument.cs" Link="Linked\Models\Sessions\SessionSuggestionsDocument.cs" />
     <!--
       Session sharing (ai/261005_Session Sharing Plan.md): the .qpsession
       format, the OneDrive path mapping, finding shared files, and the two
