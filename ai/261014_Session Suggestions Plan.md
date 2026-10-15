@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Session suggestions from files opened together
-status: proposed (2026-10-14), revised the same day for the hour-long rule (§5), the Suggestions panel (§7) and user-chosen sensitivity (§6.1), then for the always-visible gear on the Sessions panel (§7.1) and per-rule sensitivity (§6.1), and on 2026-10-15 for a two-week history (G17); not started. Open questions in §12
+status: proposed (2026-10-14), revised the same day for the hour-long rule (§5), the Suggestions panel (§7) and user-chosen sensitivity (§6.1), then for the always-visible gear on the Sessions panel (§7.1) and per-rule sensitivity (§6.1), and on 2026-10-15 for a two-week history (G17) and non-overlapping cards (G18); not started. Open questions in §12
 created: 2026-10-14
 parent: ai/260928_PDF Project Sessions Plan.md
 ---
@@ -56,6 +56,7 @@ Today a session is made by hand: open the files, then **Save open files** (the o
 | G15 | **Sensitivity changes only how pairs are judged, never what is recorded.** The sample interval (5 min), the 14-day history (G17) and the 40-file burst cap are the same at every level. Changing it re-ranks at once from data already held, and keeps dismissals. | Background cost and what is stored don't depend on a preference, so High is no more expensive than Low, and moving the slider back and forth loses nothing. |
 | G16 | **The suggestion settings live in one shared control, shown both in the Suggestions panel and in Recent Files settings.** | The gear is where people will look; Recent Files settings is where the consent sits. One control bound to one view model keeps the two in step. |
 | G17 | **Suggestions look back two weeks at most.** Both rules read only the last 14 days, and rule B's spans are kept 14 days. Recent Files keeps its own 62 days for the Library and Recents, unchanged. | Thomas, 2026-10-15: *"Suggestions only need to go back two weeks maybe, at most for history."* What someone works on together changes with the project stage; an older pattern is more likely to be stale than useful. Low's 4 days together still fit easily in 14. |
+| G18 | **New-session suggestions never share a file, and add suggestions for one session merge into one card.** A lower-ranked new-session suggestion that shares a file with a higher-ranked one is dropped; add suggestions with the same target session become one card with the union of their files, ranked as the best of them, and checked against dismissals again. | Found in T4's review: without it, one file linked to many others (a spec sheet) gave a row of near-identical cards ("240015", "240015 (2)", …), and Low could show more cards than High on the same data (a chain 1–2–3 is one group at High but two at Low), against "Low — fewer, surer". Overseer's call within §6.1's intent, 2026-10-15; Thomas may overrule. |
 
 ## 4. Rule A: opened together (from recorded opens)
 
