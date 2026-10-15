@@ -52,8 +52,12 @@ public sealed record SessionSuggestionOptions
     /// <summary>A burst touching more files than this is a sweep, not a working set.</summary>
     public int MaxBurstFiles { get; init; } = 40;
 
-    /// <summary>How many days of history the rules look at.</summary>
-    public int HistoryDays { get; init; } = 62;
+    /// <summary>
+    /// How many days of history the rules look at, and how long open spans are
+    /// kept: two weeks (Thomas, 2026-10-15). Recent Files keeps more, but a
+    /// working set older than that is no longer the one worth suggesting.
+    /// </summary>
+    public int HistoryDays { get; init; } = 14;
 
     public static SessionSuggestionOptions Balanced { get; } = For(SuggestionSensitivity.Balanced);
 

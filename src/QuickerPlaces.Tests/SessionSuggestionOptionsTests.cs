@@ -120,7 +120,7 @@ public sealed class SessionSuggestionOptionsTests
         Assert.Equal(2, o.MinGroupFiles);
         Assert.Equal(15, o.MaxGroupFiles);
         Assert.Equal(40, o.MaxBurstFiles);
-        Assert.Equal(62, o.HistoryDays);
+        Assert.Equal(14, o.HistoryDays);
     }
 
     [Theory]

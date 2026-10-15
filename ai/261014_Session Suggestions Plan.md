@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Session suggestions from files opened together
-status: proposed (2026-10-14), revised the same day for the hour-long rule (§5), the Suggestions panel (§7) and user-chosen sensitivity (§6.1), then for the always-visible gear on the Sessions panel (§7.1) and per-rule sensitivity (§6.1); not started. Open questions in §12
+status: proposed (2026-10-14), revised the same day for the hour-long rule (§5), the Suggestions panel (§7) and user-chosen sensitivity (§6.1), then for the always-visible gear on the Sessions panel (§7.1) and per-rule sensitivity (§6.1), and on 2026-10-15 for a two-week history (G17); not started. Open questions in §12
 created: 2026-10-14
 parent: ai/260928_PDF Project Sessions Plan.md
 ---
@@ -25,7 +25,7 @@ Today a session is made by hand: open the files, then **Save open files** (the o
 | Piece | Where | What it gives this feature |
 |---|---|---|
 | Recorded opens with real times | `RecentFilesStore.Record`; times come from the Recent Items shortcut's `LastWriteTimeUtc` (`WindowsRecentItems.cs`), not from the one-minute poll | When each file was opened (rule A) |
-| 62 days of opens per file | `RecentFileRecord.Opens`, `RecentFilesStore.DetailDays`, `MaxOpensPerFile = 500` | Enough history to see a pattern repeat over weeks |
+| 62 days of opens per file | `RecentFileRecord.Opens`, `RecentFilesStore.DetailDays`, `MaxOpensPerFile = 500` | More than enough: suggestions read only the last 14 days (G17) |
 | A read of all of it | `RecentFilesStore.QueryHistory()` → `RecentFileHistory(Path, Kind, Opens)` | Rule A's only input |
 | Window-title evidence | `WindowsOpenDocumentProbe.FindViewerWindows` (EnumWindows, Word/Excel window classes, process names) and `OpenDocumentResolver.Resolve(OpenDocumentEvidence, …)` | Which documents are open right now, from window titles matched against Recent Items (rule B) |
 | Path rules | `DocumentPaths.Normalize` / `DocumentPaths.Equal` (case-insensitive) | The same file identity sessions and the Library already use |
@@ -53,8 +53,9 @@ Today a session is made by hand: open the files, then **Save open files** (the o
 | G12 | **Files that no longer exist are left out at display time**, and a group that drops below 2 files is not shown. | Projects get archived; a suggestion with dead paths is worse than none. Checked through `IShell.FileExists`, so tests use `FakeShell`. |
 | G13 | **Suggestions get their own panel type, `suggestions`, always reachable from a gear button on the Sessions panel** — whether suggestions are on, off or unavailable. It opens directly after the Sessions panel, in the same column, at the same width, without entering Arrange mode. Closing it hides it. | "A separate suggestions panel that opens by the sessions." Using the workspace's own panel model means it can still be moved, resized or added from Add panel like any other, and the layout remembers it. |
 | G14 | **One new machine-local file, `session-suggestions.json`, holds the switches, the dismissals and rule B's open spans.** Nothing is added to `settings.json`, `recent-files.json` or `sessions.json`. | `sessions.json` is the user's data and is what gets shared; this is local observation. Keeping the switches here avoids a schema bump in `recent-files.json`. |
-| G15 | **Sensitivity changes only how pairs are judged, never what is recorded.** The sample interval (5 min), the 62-day retention and the 40-file burst cap are the same at every level. Changing it re-ranks at once from data already held, and keeps dismissals. | Background cost and what is stored don't depend on a preference, so High is no more expensive than Low, and moving the slider back and forth loses nothing. |
+| G15 | **Sensitivity changes only how pairs are judged, never what is recorded.** The sample interval (5 min), the 14-day history (G17) and the 40-file burst cap are the same at every level. Changing it re-ranks at once from data already held, and keeps dismissals. | Background cost and what is stored don't depend on a preference, so High is no more expensive than Low, and moving the slider back and forth loses nothing. |
 | G16 | **The suggestion settings live in one shared control, shown both in the Suggestions panel and in Recent Files settings.** | The gear is where people will look; Recent Files settings is where the consent sits. One control bound to one view model keeps the two in step. |
+| G17 | **Suggestions look back two weeks at most.** Both rules read only the last 14 days, and rule B's spans are kept 14 days. Recent Files keeps its own 62 days for the Library and Recents, unchanged. | Thomas, 2026-10-15: *"Suggestions only need to go back two weeks maybe, at most for history."* What someone works on together changes with the project stage; an older pattern is more likely to be stale than useful. Low's 4 days together still fit easily in 14. |
 
 ## 4. Rule A: opened together (from recorded opens)
 
@@ -73,7 +74,7 @@ Input: `IReadOnlyList<RecentFileHistory>`.
 - Runs every `SampleInterval` (5 min) while rule B is on, Recent Files is on, tracking isn't paused, and the user is present (`IUserPresence`).
 - Lists document windows as `WindowsOpenDocumentProbe.FindViewerWindows` does (extracted so both share it) and resolves them with `OpenDocumentResolver.Resolve`, giving it the windows and Recent Items but no held files (G6). Only candidates marked `IsLikelyOpen` and in Recent Files' scope count.
 - `OpenSpanRecorder.Observe(now, paths)` extends each path's open span when it was also seen in the previous sample, and starts a new span otherwise. A path not seen, or a missed sample (sleep, pause, away), closes its span.
-- Spans are kept 62 days, like Recent Files' detail, and written to `session-suggestions.json` when a span closes and at most every 15 minutes.
+- Spans are kept 14 days, the suggestions' history (G17), and written to `session-suggestions.json` when a span closes and at most every 15 minutes.
 
 **The rule**: two files make a **strong pair (B)** when one of their spans overlaps for at least `TogetherOpen` on at least `TogetherOpenDays` different days (60 min on 1 day at Balanced; §6.1), and neither file is "always open" (G4). The pair's evidence is the longest overlap and its day.
 
@@ -129,7 +130,7 @@ So out of the box every threshold is Balanced; someone who finds the hour-long r
 | Grouping: links needed to join a group | all members | ⅔ of members | ½ of members |
 | Suggestions shown | 5 | 10 | 15 |
 
-Fixed at every level (G15): sample interval 5 min, 2–15 files per group, bursts over 40 files ignored, 62 days of history.
+Fixed at every level (G15): sample interval 5 min, 2–15 files per group, bursts over 40 files ignored, 14 days of history (G17).
 
 Rule B at High (30 min) is 7 consecutive samples, so a single missed sample matters more; that is the accepted cost of "sooner".
 
@@ -217,7 +218,7 @@ In `AppDataFolders.Local`, loaded with `JsonStoreLoader.Load<SessionSuggestionsD
 ```
 
 - `key` is a SHA-256 of the sorted, upper-cased normalised paths joined by `\n`, truncated to 32 hex characters; `files` lets G9's "comes back if it grows" be checked without paths.
-- `openSpans` holds paths, as `recent-files.json` does, and only while rule B is on. Spans older than 62 days and dismissals older than a year are dropped on save. A rough size: 30 documents open over a working day in 4 spans each is about 120 spans a day, 7,500 over 62 days, under 1.5 MB.
+- `openSpans` holds paths, as `recent-files.json` does, and only while rule B is on. Spans older than 14 days (G17) and dismissals older than a year are dropped on save. A rough size: 30 documents open over a working day in 4 spans each is about 120 spans a day, about 1,700 over 14 days, under 350 KB.
 - A damaged or newer file behaves as the other stores do: left untouched, suggestions off for the session, a notice in the Suggestions panel. A missing file reads as off.
 
 ## 9. Files
@@ -270,7 +271,7 @@ Not changed: `RecentFilesStore`, `RecentFilesHost`'s tick, `SessionStore`, `Wind
 
 **Rule A** (`OpenedTogetherRuleTests`, fixtures with `ManualTimeProvider` and `TestZones`): two files together on 3 days → pair; 2 days → none; 14-minute gap joins, 16 splits; a daily timesheet makes no pairs; a 41-file burst is ignored; a burst over local midnight counts on its first day; DST days; paths differing only in case are one file.
 
-**Rule B** (`OpenSpanRecorderTests`, `OpenTogetherRuleTests`): consecutive samples extend a span; a missed sample closes it; 13 samples together (60 min) → pair, 12 → none; overlap counts only while both are open, not from first to last sight; a file open 7 h on most days makes no pairs; spans older than 62 days pruned.
+**Rule B** (`OpenSpanRecorderTests`, `OpenTogetherRuleTests`): consecutive samples extend a span; a missed sample closes it; 13 samples together (60 min) → pair, 12 → none; overlap counts only while both are open, not from first to last sight; a file open 7 h on most days makes no pairs; spans older than 14 days pruned.
 
 **Suggester** (`SessionSuggesterTests`): three strongly linked files plus one weak → three; two projects in the same weeks → two groups; one rule-A pair and one rule-B pair sharing a file → one group of three; equal to a session → dropped; half inside a session → add suggestion with only the missing files; dismissed → dropped, grown → shown again; ranking puts add suggestions first; names from shared folder, from `240015`, and the fallback; a name clash gets " (2)".
 
@@ -285,7 +286,7 @@ Not changed: `RecentFilesStore`, `RecentFilesHost`'s tick, `SessionStore`, `Wind
 **Performance** (per CLAUDE.md, before claiming no cost), on Windows with the same machine and build for before and after, 10 repeated runs each, recording the machine, .NET version and spread:
 
 - **Sampler**: time one sample (window listing + resolve) with 0, 10 and 40 document windows open. Target: under 30 ms, off the UI thread. Compare `dotnet-counters` CPU and allocation rates over 30 idle minutes with rule B off and on; the difference should be within run-to-run noise.
-- **Suggester**: time it against (a) the user's real data and (b) a synthetic worst case of 2,000 files × 500 opens plus 62 days of spans. Targets: under 50 ms for (a), under 500 ms for (b), off the UI thread.
+- **Suggester**: time it against (a) the user's real data and (b) a synthetic worst case of 2,000 files × 500 opens plus 14 days of spans. Targets: under 50 ms for (a), under 500 ms for (b), off the UI thread.
 - **Workspace**: the Sessions panel's time to show, and the layout's reflow when the Suggestions panel opens, unchanged with suggestions off.
 
 Run `dotnet test src/QuickerPlaces.sln` from `C:\QuickerPlaces\src` after each step.
@@ -309,7 +310,6 @@ Rule B comes after rule A works end to end because it is the part with new backg
 **Not in this version (possible follow-ups):**
 
 - A status-line nudge when 2+ files of a suggested group are opened within the burst window.
-- Using the activity history beyond 62 days.
 - `qp sessions suggest` in the CLI (the suggester is UI-free, so this is cheap later).
 - Counting a time saving for the rewards idea discussed the same day.
 

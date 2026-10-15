@@ -134,7 +134,7 @@ The design's §11 steps, split so each task is one reviewable diff. The "Paralle
 | **T8** | *WPF, compile-checked.* `SuggestionsPanel`, `SuggestionSettings` control, the gear on `SessionsPanel` with badge and context menu, hosting in `RecentFilesSettings`, wiring in `WorkspaceView` and `MainWindow`. | §7 | T6, T7 | — |
 | **M1** | *Milestone: rule A works end to end* (compile-checked). Overseer updates `BUILD_SUMMARY.md` and the design's status, and asks Thomas whether to pause here for a Windows check before rule B. | | | |
 | **T9** | *WPF, compile-checked.* Drag cards and single files onto session rows; the side pane in `SessionsWindow`. | §7.1 | T8 | T10a |
-| **T10a** | `OpenSpanRecorder`: spans from samples, missed samples close spans, 62-day pruning. | §5 | T1 | T2–T5 |
+| **T10a** | `OpenSpanRecorder`: spans from samples, missed samples close spans, 14-day pruning (G17). | §5 | T1 | T2–T5 |
 | **T10b** | `OpenTogetherRule` (rule B) and its always-open filter; spans saved in the store; rule B pairs fed into `SessionSuggester`. | §5, G1, G4 | T4, T10a, T3 | T9 |
 | **T11a** | Move `FindViewerWindows` out of `WindowsOpenDocumentProbe` into `DocumentWindows`. **Behaviour unchanged.** The review checks it's a pure move. | G6 | T0 | any |
 | **T11b** | *App-only, compile-checked.* `OpenDocumentSampler`: 5-minute timer off the UI thread, pause and presence, scope, stopping on exit; the rule-B switch in the settings control. | §5, G2, G6 | T10b, T11a, T8 | — |
