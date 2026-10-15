@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using QuickerPlaces.Models;
@@ -26,16 +28,17 @@ public partial class SettingsDialog : Window
     private readonly bool _ready;
     private readonly Action<Window>? _showRecentFiles;
     private readonly Action<Window>? _showFolderActivity;
-    private readonly Action<Window>? _showRevit;
+    private readonly Func<Window, Action, Task>? _showRevit;
     private readonly Action<Window>? _showSuggestions;
     private readonly Action? _customiseLayout;
     private string _hotkeyText;
     private bool _customiseRequested;
+    private bool _openingRevit;
 
     private SettingsDialog(Window owner, string? currentHotkey, bool minimizeToTray, bool startWithWindows,
         AppTheme theme, HighlightPreset highlight, Action<AppTheme, HighlightPreset> preview,
         Func<SettingsChoice, string?> tryApply, Action<Window>? showRecentFiles, Action? customiseLayout, Action<Window>? showFolderActivity,
-        Action<Window>? showRevit, Action<Window>? showSuggestions)
+        Func<Window, Action, Task>? showRevit, Action<Window>? showSuggestions)
     {
         InitializeComponent();
 
@@ -85,13 +88,13 @@ public partial class SettingsDialog : Window
     /// <paramref name="customiseLayout"/> are the workspace's own settings;
     /// the layout one runs once this has saved and closed.
     /// <paramref name="showFolderActivity"/> opens the independently saved folder tracking scope.
-    /// <paramref name="showRevit"/> opens the independently saved Revit settings.
+    /// <paramref name="showRevit"/> calls its loading-completed callback before opening the independently saved Revit settings.
     /// <paramref name="showSuggestions"/> opens the independently saved session suggestions.
     /// </summary>
     public static SettingsChoice? Show(Window owner, string? currentHotkey, bool minimizeToTray, bool startWithWindows,
         AppTheme theme, HighlightPreset highlight, Action<AppTheme, HighlightPreset> preview,
         Func<SettingsChoice, string?> tryApply, Action<Window>? showRecentFiles = null, Action? customiseLayout = null,
-        Action<Window>? showFolderActivity = null, Action<Window>? showRevit = null, Action<Window>? showSuggestions = null)
+        Action<Window>? showFolderActivity = null, Func<Window, Action, Task>? showRevit = null, Action<Window>? showSuggestions = null)
     {
         var dialog = new SettingsDialog(owner, currentHotkey, minimizeToTray, startWithWindows, theme, highlight, preview, tryApply,
             showRecentFiles, customiseLayout, showFolderActivity, showRevit, showSuggestions);
@@ -210,7 +213,41 @@ public partial class SettingsDialog : Window
 
     private void FolderActivity_Click(object sender, RoutedEventArgs e) => _showFolderActivity?.Invoke(this);
 
-    private void Revit_Click(object sender, RoutedEventArgs e) => _showRevit?.Invoke(this);
+    private async void Revit_Click(object sender, RoutedEventArgs e)
+    {
+        if (_openingRevit || _showRevit is null)
+            return;
+
+        _openingRevit = true;
+        SectionsScroller.IsEnabled = false;
+        FooterButtons.IsEnabled = false;
+        ErrorText.Visibility = Visibility.Collapsed;
+        RevitLoadingStatus.Visibility = Visibility.Visible;
+        try
+        {
+            await _showRevit(this, () => RevitLoadingStatus.Visibility = Visibility.Collapsed);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Warn($"Could not open Revit settings ({ex.GetType().Name}, 0x{ex.HResult:X8}).");
+            ShowError("Could not load Revit settings. Please try again.");
+        }
+        finally
+        {
+            RevitLoadingStatus.Visibility = Visibility.Collapsed;
+            SectionsScroller.IsEnabled = true;
+            FooterButtons.IsEnabled = true;
+            _openingRevit = false;
+            RevitButton.Focus();
+        }
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (_openingRevit)
+            e.Cancel = true;
+    }
     private void Suggestions_Click(object sender, RoutedEventArgs e) => _showSuggestions?.Invoke(this);
 
     private void Save()

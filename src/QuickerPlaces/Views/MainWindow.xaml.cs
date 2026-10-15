@@ -370,9 +370,15 @@ public partial class MainWindow : Window
             }
         });
 
-    private void ShowRevitSettings(Window owner)
-        => RevitSettingsDialog.Show(owner, new RevitSettingsViewModel(_settings, _settingsService, _revitMachine,
+    private async Task ShowRevitSettings(Window owner, Action loadingCompleted)
+    {
+        // Discover installations and verify add-in publishers without blocking
+        // the settings window's loading indicator. Bind only after discovery.
+        var editor = await Task.Run(() => new RevitSettingsViewModel(_settings, _settingsService, _revitMachine,
             new RevitHandlerRegistry(_revitFolder, _revitMachine.Probe)));
+        loadingCompleted();
+        RevitSettingsDialog.Show(owner, editor);
+    }
 
     private void SetGlobalHotkeyText(string? text)
     {
