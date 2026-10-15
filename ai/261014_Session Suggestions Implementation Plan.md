@@ -146,7 +146,7 @@ The design's §11 steps, split so each task is one reviewable diff. The "Paralle
 
 - **T2, T10b:** threshold edges on both sides; local midnight and DST; case-only path differences; the 40-file burst cap.
 - **T3:** loader outcomes match the other stores; unknown sensitivity strings read leniently; turning rule B off empties `openSpans`.
-- **T4:** the order-dependence of greedy grouping. The same data in a different order must give the same groups. Monotonic sensitivity: Low never shows more than High on the same data.
+- **T4:** the order-dependence of greedy grouping. The same data in a different order must give the same groups. No near-duplicate cards (G18). Card counts are not monotonic across levels, by design (G18).
 - **T5:** Undo after a failed save; a session renamed or deleted between showing a card and pressing Add; the cache cleared when it should be.
 - **T6:** works in rows and columns layouts; undoable; no change outside Arrange mode except `ShowBeside`.
 - **T8, T9, T11b:** binding paths exist on the view models; resource keys exist (`Icon.Settings`, the card styles); nothing runs on the UI thread that could wait on Windows; the sampler stops when tracking is paused, on sign-out and on exit.
