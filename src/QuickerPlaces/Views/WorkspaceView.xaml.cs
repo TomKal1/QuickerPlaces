@@ -89,6 +89,12 @@ public partial class WorkspaceView : UserControl
     /// <summary>The shelf on screen, if any: the one the search box's Down key moves into.</summary>
     private FileShelfPanel? ShownShelf => _shelves.FirstOrDefault(s => s.IsVisible);
     private SessionsPanel? _sessionsPanel;
+    public event Action? SourcesChanged;
+    public void NoteSuggestionSaved(string? sessionId)
+    {
+        RequestReload();
+        if (sessionId is not null) _sessionsPanel?.NoteSaved(sessionId, null);
+    }
     private ActivityStore? _activityStore;
     private ActivityTrackingHost? _activityHost;
     private INetworkDriveResolver? _networkDrives;
@@ -203,6 +209,7 @@ public partial class WorkspaceView : UserControl
     /// <summary>Reads the Library's sources again soon: after Recents' window closes, or anything else that changed them.</summary>
     public void RequestReload()
     {
+        SourcesChanged?.Invoke();
         if (_reloadQueued || _workspace is null)
             return;
 
@@ -212,6 +219,7 @@ public partial class WorkspaceView : UserControl
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             _reloadQueued = false;
+            _sessionsPanel?.Reload();
             _workspace?.Library.Reload();
         });
     }

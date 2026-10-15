@@ -1,0 +1,22 @@
+<Window x:Class="QuickerPlaces.Views.SuggestionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:panels="clr-namespace:QuickerPlaces.Views.Panels"
+        Title="Session Suggestions" Width="620" Height="760" MinWidth="460" MinHeight="420"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="20,18,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,14">
+            <TextBlock Text="Session Suggestions" Style="{StaticResource TextBlock.WindowTitle}" />
+            <TextBlock Text="Follows your Recent Files file types and folder scope. With Tracked folders only, suggestions use your currently enabled tracked folders; with Anywhere, they can use files from any folder."
+                       Style="{StaticResource TextBlock.Hint}" Margin="0,6,0,0" />
+        </StackPanel>
+        <panels:SuggestionsPanel x:Name="Suggestions" Grid.Row="1" />
+        <Button Grid.Row="2" Content="Close" Click="Close_Click" IsCancel="True" MinWidth="84"
+                HorizontalAlignment="Right" Margin="0,12,0,0" />
+    </Grid>
+</Window>

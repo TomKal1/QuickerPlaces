@@ -801,10 +801,13 @@ public sealed class LibraryViewModel : ObservableObject
 
     public bool RecentFilesAvailable => _recentFiles.IsAvailable;
 
+    /// <summary>The same immediately saved suggestion settings shown beside Sessions (G16).</summary>
+    public SuggestionSettingsViewModel? SuggestionSettings { get; set; }
+
     public string? RecentFilesNotice => _recentFiles.Notice;
 
     public RecentFilesSettingsViewModel CreateRecentFilesSettingsEditor()
-        => new(_recentFiles, () => { OnRecentFilesSettingsChanged(); Reload(); });
+        => new(_recentFiles, () => { OnRecentFilesSettingsChanged(); Reload(); }) { SuggestionSettings = SuggestionSettings };
 
     /// <summary>Recent Files on or off. Turning it on starts from now; turning it off keeps what was recorded.</summary>
     public bool RecentFilesEnabled

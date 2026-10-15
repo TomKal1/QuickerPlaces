@@ -31,6 +31,7 @@ public sealed class RecentFilesSettingsViewModel : ObservableObject
     }
 
     public bool RecentFilesAvailable => _store.IsAvailable;
+    public SuggestionSettingsViewModel? SuggestionSettings { get; set; }
     public string? RecentFilesNotice => _store.Notice;
     public bool RecentFilesEnabled
     {

@@ -19,6 +19,7 @@ using QuickerPlaces.Services.Revit.Dialogs;
 using QuickerPlaces.Services.Revit.Handlers;
 using QuickerPlaces.Services.Revit.Opening;
 using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Sessions.Suggestions;
 using QuickerPlaces.Services.Workspace;
 using QuickerPlaces.ViewModels;
 using QuickerPlaces.Views.Panels;
@@ -53,6 +54,11 @@ public partial class MainWindow : Window
     private WindowState _stateBeforeMinimize = WindowState.Normal;
     private readonly Action _focusSearch;
     private readonly WorkspaceView? _workspaceView;
+    private readonly SuggestionsViewModel _suggestions;
+    private readonly SuggestionSettingsViewModel _suggestionSettings;
+    private bool _suggestionRefreshQueued;
+    private bool _suggestionRefreshWanted;
+    private bool _suggestionsStopped;
 
     public MainWindow(MainViewModel viewModel, AppSettings settings, SettingsService settingsService,
         ActivityStore activityStore, ActivityTrackingHost activityHost, SessionStore sessionStore,
@@ -71,6 +77,14 @@ public partial class MainWindow : Window
         _recentFilesStore = recentFilesStore;
         _recentFilesHost = recentFilesHost;
         _themeManager = themeManager;
+        var suggestionStore = SessionSuggestionStore.CreateDefault();
+        _suggestionSettings = new SuggestionSettingsViewModel(suggestionStore, () => recentFilesStore.IsTracking);
+        _suggestions = new SuggestionsViewModel(new SessionSuggestionSource(recentFilesStore, suggestionStore, sessionStore,
+            new WindowsShell(), TimeProvider.System, activityStore.EnabledRoots), _suggestionSettings);
+        _suggestionSettings.Changed += ScheduleSuggestionRefresh;
+        _recentFilesHost.Recorded += Suggestions_Recorded;
+        _suggestions.SessionsChanged += Suggestions_SessionsChanged;
+        Loaded += (_, _) => ScheduleSuggestionRefresh();
         _revitOpener = new RevitOpenCoordinator(_revitMachine, _revitFolder, _revitReleases, DialogDetectors.ForThisMachine(),
             settings, settingsService, new MessageFormRevitPrompts());
         RestoreWindowState(settings);
@@ -91,6 +105,8 @@ public partial class MainWindow : Window
         var shell = new WindowsShell();
         var library = new LibraryViewModel(placesService, sessionStore, activityStore, recentFilesStore,
             new PlaceLauncher(placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher), revitReleases: _revitReleases, revitOpener: _revitOpener);
+        library.SuggestionSettings = _suggestionSettings;
+        library.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(LibraryViewModel.RecentFilesEnabled)) ScheduleSuggestionRefresh(); };
         InputBindings.Add(new KeyBinding(new RelayCommand(library.ClearPeriod, () => library.HasPeriod), Key.Escape, ModifierKeys.None));
         _workspaceView = new WorkspaceView();
         var workspace = new WorkspaceViewModel(workspaceLayout, library);
@@ -98,6 +114,7 @@ public partial class MainWindow : Window
         _workspaceView.Attach(workspace, viewModel, sessionStore,
             new WindowsOpenDocumentProbe(recentItems, _revitReleases), recentFilesHost, activityHost,
             activityStore, new NetworkDriveResolver(), UpdateActivityIndicator, _revitOpener, _revitReleases);
+        _workspaceView.SourcesChanged += ScheduleSuggestionRefresh;
 
         // Desk shows favourites as a panel; the strip is for layouts that don't (Desk layout design §5).
         void ShowFavouritesStrip() => FavouritesStrip.Visibility = workspace.ShowsFavouritesPanel ? Visibility.Collapsed : Visibility.Visible;
@@ -117,7 +134,45 @@ public partial class MainWindow : Window
     }
 
     /// <summary>At exit, before the tracking hosts go: writes the workspace's waiting changes and stops its refreshes.</summary>
-    public void CloseWorkspace() => _workspaceView?.Close();
+    public void CloseWorkspace()
+    {
+        _suggestionsStopped = true;
+        _suggestionRefreshWanted = false;
+        _recentFilesHost.Recorded -= Suggestions_Recorded;
+        _suggestionSettings.Changed -= ScheduleSuggestionRefresh;
+        _suggestions.SessionsChanged -= Suggestions_SessionsChanged;
+        _suggestions.Invalidate();
+        _workspaceView?.Close();
+    }
+
+    private void Suggestions_Recorded(int count) => Dispatcher.BeginInvoke(() => { if (!_closed && !_suggestionsStopped) ScheduleSuggestionRefresh(); });
+    private void Suggestions_SessionsChanged()
+    {
+        if (_workspaceView is { } workspace) workspace.NoteSuggestionSaved(_suggestions.SavedSessionId);
+        else ScheduleSuggestionRefresh();
+    }
+
+    private void ScheduleSuggestionRefresh()
+    {
+        if (_closed || _suggestionsStopped) return;
+        _suggestionSettings.RefreshAvailability();
+        _suggestions.Invalidate();
+        _suggestionRefreshWanted = true;
+        if (_suggestionRefreshQueued) return;
+        _suggestionRefreshQueued = true;
+        Dispatcher.BeginInvoke(async () =>
+        {
+            try
+            {
+                while (_suggestionRefreshWanted && !_closed && !_suggestionsStopped)
+                {
+                    _suggestionRefreshWanted = false;
+                    await _suggestions.RefreshAsync();
+                }
+            }
+            finally { _suggestionRefreshQueued = false; }
+        });
+    }
 
     private void ActivityButton_Click(object sender, RoutedEventArgs e)
     {
@@ -194,8 +249,21 @@ public partial class MainWindow : Window
     }
 
     private void SessionsButton_Click(object sender, RoutedEventArgs e)
-        => SessionsWindow.Show(this, _sessionStore, new WindowsShell(), new WindowsOpenDocumentProbe(_recentItems, _revitReleases),
+    {
+        SessionsWindow.Show(this, _sessionStore, new WindowsShell(), new WindowsOpenDocumentProbe(_recentItems, _revitReleases),
             _revitOpener, _revitReleases);
+        ScheduleSuggestionRefresh();
+    }
+
+    private void SuggestionRecentSettings(object sender, RoutedEventArgs e)
+    {
+        var shell = new WindowsShell();
+        var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
+            new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher));
+        library.SuggestionSettings = _suggestionSettings;
+        RecentFilesDialog.Show(sender as Window ?? this, library);
+        ScheduleSuggestionRefresh();
+    }
 
     private void LibraryButton_Click(object sender, RoutedEventArgs e)
     {
@@ -203,7 +271,9 @@ public partial class MainWindow : Window
         var shell = new WindowsShell();
         var library = new LibraryViewModel(_placesService, _sessionStore, _activityStore, _recentFilesStore,
             new PlaceLauncher(_placesService, shell), shell, work: new DispatcherBackgroundWork(Dispatcher), revitReleases: _revitReleases, revitOpener: _revitOpener);
+        library.SuggestionSettings = _suggestionSettings;
         LibraryWindow.Show(this, library, _recentFilesHost, _activityHost, viewModel.NotePlaceOpened);
+        ScheduleSuggestionRefresh();
     }
 
     /// <summary>Brings the window up to date after qp changed something through the app (App.xaml.cs, Services/Remote).</summary>
@@ -212,7 +282,10 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel viewModel)
             viewModel.NoteChangedElsewhere(effect.AddedPlace, effect.ChangedPlace, effect.Persistence);
         if (effect.SessionsChanged)
+        {
             _workspaceView?.NoteSessionOpened();
+            ScheduleSuggestionRefresh();
+        }
     }
 
     public void UpdateActivityIndicator()
@@ -224,6 +297,7 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(ActivityButton, text);
         ActivityDot.Visibility = count > 0 && !_activityHost.IsPaused ? Visibility.Visible : Visibility.Collapsed;
         _trayIcon?.Refresh(_settings);
+        ScheduleSuggestionRefresh(); // Tracked folders may have been enabled, disabled or removed.
     }
 
     public AppSettings Settings => _settings;
@@ -318,7 +392,9 @@ public partial class MainWindow : Window
             _themeManager.Apply, ApplySettingsChoice,
             _workspaceView is null ? null : _workspaceView.ShowRecentFiles,
             _workspaceView is null ? null : _workspaceView.BeginCustomise,
-            ShowFolderActivitySettings, ShowRevitSettings);
+            ShowFolderActivitySettings, ShowRevitSettings,
+            owner => SuggestionsWindow.Show(owner, _suggestions, _sessionStore, new WindowsOpenDocumentProbe(_recentItems, _revitReleases),
+                recentOwner => SuggestionRecentSettings(recentOwner, new RoutedEventArgs()), modal: true));
         if (saved is null)
         {
             // The app is exiting (tray Exit, session end) and closed this

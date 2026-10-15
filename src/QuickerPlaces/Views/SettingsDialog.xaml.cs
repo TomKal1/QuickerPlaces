@@ -27,6 +27,7 @@ public partial class SettingsDialog : Window
     private readonly Action<Window>? _showRecentFiles;
     private readonly Action<Window>? _showFolderActivity;
     private readonly Action<Window>? _showRevit;
+    private readonly Action<Window>? _showSuggestions;
     private readonly Action? _customiseLayout;
     private string _hotkeyText;
     private bool _customiseRequested;
@@ -34,7 +35,7 @@ public partial class SettingsDialog : Window
     private SettingsDialog(Window owner, string? currentHotkey, bool minimizeToTray, bool startWithWindows,
         AppTheme theme, HighlightPreset highlight, Action<AppTheme, HighlightPreset> preview,
         Func<SettingsChoice, string?> tryApply, Action<Window>? showRecentFiles, Action? customiseLayout, Action<Window>? showFolderActivity,
-        Action<Window>? showRevit)
+        Action<Window>? showRevit, Action<Window>? showSuggestions)
     {
         InitializeComponent();
 
@@ -48,11 +49,13 @@ public partial class SettingsDialog : Window
         _showRecentFiles = showRecentFiles;
         _showFolderActivity = showFolderActivity;
         _showRevit = showRevit;
+        _showSuggestions = showSuggestions;
         _customiseLayout = customiseLayout;
-        WorkspaceSection.Visibility = showRecentFiles is null && showFolderActivity is null && showRevit is null ? Visibility.Collapsed : Visibility.Visible;
+        WorkspaceSection.Visibility = showRecentFiles is null && showFolderActivity is null && showRevit is null && showSuggestions is null ? Visibility.Collapsed : Visibility.Visible;
         RecentFilesButton.Visibility = showRecentFiles is null ? Visibility.Collapsed : Visibility.Visible;
         FolderActivityButton.Visibility = showFolderActivity is null ? Visibility.Collapsed : Visibility.Visible;
         RevitButton.Visibility = showRevit is null ? Visibility.Collapsed : Visibility.Visible;
+        SuggestionsButton.Visibility = showSuggestions is null ? Visibility.Collapsed : Visibility.Visible;
         LayoutArea.Visibility = customiseLayout is null ? Visibility.Collapsed : Visibility.Visible;
         _hotkeyText = HotkeyGesture.IsDisabled(currentHotkey) ? Disabled : currentHotkey!.Trim();
         ShowHotkey(_hotkeyText);
@@ -83,14 +86,15 @@ public partial class SettingsDialog : Window
     /// the layout one runs once this has saved and closed.
     /// <paramref name="showFolderActivity"/> opens the independently saved folder tracking scope.
     /// <paramref name="showRevit"/> opens the independently saved Revit settings.
+    /// <paramref name="showSuggestions"/> opens the independently saved session suggestions.
     /// </summary>
     public static SettingsChoice? Show(Window owner, string? currentHotkey, bool minimizeToTray, bool startWithWindows,
         AppTheme theme, HighlightPreset highlight, Action<AppTheme, HighlightPreset> preview,
         Func<SettingsChoice, string?> tryApply, Action<Window>? showRecentFiles = null, Action? customiseLayout = null,
-        Action<Window>? showFolderActivity = null, Action<Window>? showRevit = null)
+        Action<Window>? showFolderActivity = null, Action<Window>? showRevit = null, Action<Window>? showSuggestions = null)
     {
         var dialog = new SettingsDialog(owner, currentHotkey, minimizeToTray, startWithWindows, theme, highlight, preview, tryApply,
-            showRecentFiles, customiseLayout, showFolderActivity, showRevit);
+            showRecentFiles, customiseLayout, showFolderActivity, showRevit, showSuggestions);
         dialog.ShowDialog();
         if (dialog.SavedSettings is not null && dialog._customiseRequested)
             customiseLayout?.Invoke();
@@ -207,6 +211,7 @@ public partial class SettingsDialog : Window
     private void FolderActivity_Click(object sender, RoutedEventArgs e) => _showFolderActivity?.Invoke(this);
 
     private void Revit_Click(object sender, RoutedEventArgs e) => _showRevit?.Invoke(this);
+    private void Suggestions_Click(object sender, RoutedEventArgs e) => _showSuggestions?.Invoke(this);
 
     private void Save()
     {

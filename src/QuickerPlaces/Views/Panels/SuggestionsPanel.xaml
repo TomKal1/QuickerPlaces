@@ -1,0 +1,63 @@
+<UserControl x:Class="QuickerPlaces.Views.Panels.SuggestionsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:QuickerPlaces.Views.Panels">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolVisibility" />
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="4">
+            <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <Button Content="Refresh" Click="Refresh_Click" Margin="0,0,8,0" />
+                <Button Content="Undo" Click="Undo_Click" IsEnabled="{Binding CanUndo}" />
+            </StackPanel>
+            <TextBlock Text="Finding suggestions…" Style="{StaticResource TextBlock.Hint}"
+                       Visibility="{Binding IsBusy, Converter={StaticResource BoolVisibility}}" />
+            <TextBlock Text="{Binding EmptyMessage}" TextWrapping="Wrap" Margin="0,0,0,8">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBlock.Hint}">
+                        <Style.Triggers><DataTrigger Binding="{Binding HasSuggestions}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <Button Content="Open Recent Files settings" Click="RecentSettings_Click" HorizontalAlignment="Left" Margin="0,0,0,10"
+                    Visibility="{Binding NeedsRecentFiles, Converter={StaticResource BoolVisibility}}" />
+            <ItemsControl ItemsSource="{Binding Cards}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource Bg.Raised}" BorderBrush="{DynamicResource Border.Default}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{DynamicResource Text.Primary}" />
+                                <TextBlock Text="{Binding ReasonText}" Style="{StaticResource TextBlock.Hint}" Margin="0,4,0,8" />
+                                <ItemsControl ItemsSource="{Binding Files}" Margin="0,0,0,10">
+                                    <ItemsControl.ItemTemplate><DataTemplate>
+                                        <TextBlock Text="{Binding FileName}" ToolTip="{Binding Path}" TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}" />
+                                    </DataTemplate></ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Expander Header="{Binding MoreLabel}" Margin="0,0,0,8" Visibility="{Binding HasMoreFiles, Converter={StaticResource BoolVisibility}}">
+                                    <ItemsControl ItemsSource="{Binding MoreFiles}">
+                                        <ItemsControl.ItemTemplate><DataTemplate>
+                                            <TextBlock Text="{Binding FileName}" ToolTip="{Binding Path}" TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}" />
+                                        </DataTemplate></ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                                <WrapPanel>
+                                    <Button Content="{Binding ActionLabel}" Click="Accept_Click" Style="{StaticResource Button.Primary}" Margin="0,0,6,6" />
+                                    <Button Content="Add to…" Click="AddTo_Click" Margin="0,0,6,6" />
+                                    <Button Content="Review…" Click="Review_Click" Margin="0,0,6,6" />
+                                    <Button Content="Dismiss" Click="Dismiss_Click" Margin="0,0,0,6" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}" Margin="0,4,0,8" />
+            <TextBlock Text="{Binding SensitivityHint}" Style="{StaticResource TextBlock.Hint}" />
+            <Expander x:Name="SettingsExpander" Header="{Binding Settings.Summary}">
+                <local:SuggestionSettings DataContext="{Binding Settings}" Margin="0,8,0,0" />
+            </Expander>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

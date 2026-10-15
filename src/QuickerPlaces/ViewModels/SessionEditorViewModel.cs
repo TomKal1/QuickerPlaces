@@ -6,6 +6,7 @@ using System.Linq;
 using QuickerPlaces.Mvvm;
 using QuickerPlaces.Services.Documents;
 using QuickerPlaces.Services.Sessions;
+using QuickerPlaces.Services.Sessions.Suggestions;
 
 namespace QuickerPlaces.ViewModels;
 
@@ -28,7 +29,8 @@ public sealed class SessionEditorViewModel : ObservableObject
     private string? _scanSummary;
     private string? _errorMessage;
     private bool _isScanning;
-    private readonly bool _fromFileSet;
+    private bool _fromFileSet;
+    private string? _suggestionTitle;
 
     /// <param name="editing">The session to edit, or null for a new one.</param>
     public SessionEditorViewModel(SessionStore store, SessionSnapshot? editing)
@@ -50,6 +52,20 @@ public sealed class SessionEditorViewModel : ObservableObject
     /// </summary>
     public static SessionEditorViewModel ForFileSet(SessionStore store, SessionFileSet fileSet) => new(store, fileSet);
 
+    /// <summary>Review a suggestion with every file ticked, without running an open-file scan (G10).</summary>
+    public static SessionEditorViewModel ForSuggestion(SessionStore store, SessionSuggestion suggestion)
+    {
+        var target = suggestion.TargetSessionId is { } id ? store.Find(id) : null;
+        if (suggestion.TargetSessionId is not null && target is null)
+            throw new InvalidOperationException("That session no longer exists.");
+        var editor = new SessionEditorViewModel(store, target) { _fromFileSet = true };
+        editor._suggestionTitle = target is null ? "Save Suggested Session" : $"Add to {target.Name}";
+        if (target is null) editor.Name = suggestion.SuggestedName ?? "Suggested session";
+        editor.AddFiles(suggestion.Files);
+        editor.ScanSummary = "Suggested files. Untick any you don't want, then Save.";
+        return editor;
+    }
+
     private SessionEditorViewModel(SessionStore store, SessionFileSet fileSet)
         : this(store, editing: null)
     {
@@ -64,7 +80,7 @@ public sealed class SessionEditorViewModel : ObservableObject
     /// <summary>True for a new session of what is open now: the dialog looks for open files as soon as it opens.</summary>
     public bool ScansOnOpen => IsNew && !_fromFileSet;
 
-    public string Title => !IsNew ? "Edit Session" : _fromFileSet ? "Save Files as Session" : "Save Open Files";
+    public string Title => _suggestionTitle ?? (!IsNew ? "Edit Session" : _fromFileSet ? "Save Files as Session" : "Save Open Files");
 
     public string Name
     {

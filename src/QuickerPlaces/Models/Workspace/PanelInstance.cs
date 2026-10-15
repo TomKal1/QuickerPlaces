@@ -83,6 +83,7 @@ public static class PanelTypes
     public const string Activity = "activity";
     public const string Shelf = "shelf";
     public const string Sessions = "sessions";
+    public const string Suggestions = "suggestions";
     public const string Places = "places";
     public const string Favourites = "favourites";
     public const string Files = "files";
@@ -90,13 +91,14 @@ public static class PanelTypes
     public const string Searches = "searches";
 
     /// <summary>Every type this build can recognise, in Add panel order.</summary>
-    public static readonly IReadOnlyList<string> Known = new[] { Activity, Shelf, Sessions, Places, Favourites, Files, Collections, Searches };
+    public static readonly IReadOnlyList<string> Known = new[] { Activity, Shelf, Sessions, Suggestions, Places, Favourites, Files, Collections, Searches };
 
     /// <summary>
     /// The types that have a working panel. Collections and Saved searches
     /// arrive in M6; until then they are known (so a file naming them is not
     /// repaired away) but not offered, and neither is a built-in layout that
     /// needs them (plan M1: no dead placeholders shipped as features).
+    /// Suggestions remains known for older layouts; its UI now opens in its own window.
     /// </summary>
     public static readonly IReadOnlyList<string> Available = new[] { Activity, Shelf, Sessions, Places, Favourites, Files };
 
@@ -113,6 +115,7 @@ public static class PanelTypes
         Activity => "Activity",
         Shelf => "Recents",
         Sessions => "Sessions",
+        Suggestions => "Suggestions",
         Places => "Saved places",
         Favourites => "Favourites",
         Files => "Files",

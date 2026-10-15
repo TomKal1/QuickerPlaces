@@ -457,7 +457,11 @@ public sealed class WorkspaceViewModel : ObservableObject
     }
 
     private IReadOnlyList<PanelPlacement> Pack()
-        => IsColumns ? PanelLayoutEngine.PackColumns(_layout.Panels, _width, allowRail: !IsArranging, foldLeft: IsLeftFolded) : PanelLayoutEngine.Pack(_layout.Panels, _width);
+        => IsColumns ? PanelLayoutEngine.PackColumns(CanvasPanels, _width, allowRail: !IsArranging, foldLeft: IsLeftFolded) : PanelLayoutEngine.Pack(CanvasPanels, _width);
+
+    // Older layouts may remember the former Suggestions panel. Keep their data,
+    // but omit it before packing so the new separate window leaves no canvas gap.
+    private IReadOnlyList<PanelInstance> CanvasPanels => _layout.Panels.Where(p => p.Type != PanelTypes.Suggestions).ToList();
 
     /// <summary>A panel of a columns layout, whose arrows move it within its own column.</summary>
     private static WorkspacePanelViewModel ColumnPanel(PanelPlacement placement, IReadOnlyList<PanelInstance> visible)
@@ -714,7 +718,7 @@ public sealed class WorkspaceViewModel : ObservableObject
     private void RebuildPanels()
     {
         var placements = Pack();
-        var visible = _layout.VisiblePanels;
+        var visible = _layout.VisiblePanels.Where(p => p.Type != PanelTypes.Suggestions).ToList();
         _panels = placements
             .Select((p, i) => IsColumns
                 ? ColumnPanel(p, visible)
