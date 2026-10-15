@@ -369,6 +369,58 @@ public sealed class WorkspaceLayoutService
     public bool AddPanelNow(string type, out PersistenceResult persistence) => EditNow(() => AddPanel(type), out persistence);
 
     /// <summary>
+    /// Opens a panel beside another without Arrange mode (session suggestions
+    /// G13, §7.1): one committed step, kept and written at once, named "Show
+    /// Suggestions" for Undo. With no panel of <paramref name="type"/> in the
+    /// layout, a new one goes directly after the anchor, in its column and at
+    /// its width; an unknown anchor puts it last (the main column of a columns
+    /// layout). A hidden one is shown where it was left. One already visible is
+    /// left alone (false), so the caller can scroll to it. Returns true when the layout changed (inserted or unhidden); false,
+    /// with <paramref name="persistence"/> Ok, when it was already visible or the
+    /// type is not one this build knows (D6). In Arrange mode it is a draft edit,
+    /// as <see cref="HideNow"/>: Done keeps it, Revert drops it, and nothing is
+    /// written yet.
+    /// </summary>
+    public bool ShowBeside(string type, string anchorPanelId, out PersistenceResult persistence)
+    {
+        if (!PanelTypes.IsKnown(type))
+        {
+            persistence = PersistenceResult.Ok();
+            return false;
+        }
+
+        return EditNow(() => ShowBesideInDraft(type, anchorPanelId), out persistence);
+    }
+
+    private bool ShowBesideInDraft(string type, string anchorPanelId)
+    {
+        var draft = Clone(_panels);
+        var existing = draft.Find(p => p.Type == type);
+        if (existing is not null)
+        {
+            if (!existing.Hidden)
+                return false;
+
+            existing.Hidden = false;
+        }
+        else
+        {
+            var ids = draft.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+            var anchorAt = draft.FindIndex(p => p.Id == anchorPanelId);
+            var anchor = anchorAt >= 0 ? draft[anchorAt] : null;
+            draft.Insert(anchorAt >= 0 ? anchorAt + 1 : draft.Count, new PanelInstance
+            {
+                Id = WorkspaceValidation.NewPanelId(type, ids),
+                Type = type,
+                Span = anchor?.Span ?? PanelTypes.DefaultSpan(type),
+                Dock = anchor is not null ? anchor.Dock : ActiveIsColumns ? PanelDocks.Main : null,
+            });
+        }
+
+        return ApplyDraft(draft, $"Show {PanelTypes.DisplayName(type)}");
+    }
+
+    /// <summary>
     /// Restore saved layout (D2): shows the active layout's definition again,
     /// clearing its working changes (for a built-in, Restore built-in layout).
     /// In Arrange mode it changes the draft; otherwise it is written at once.

@@ -156,7 +156,7 @@ public static class PanelLayoutEngine
     {
         PanelTypes.Activity => 280,
         PanelTypes.Shelf => 460,
-        PanelTypes.Sessions => 300,
+        PanelTypes.Sessions or PanelTypes.Suggestions => 300,
         PanelTypes.Places or PanelTypes.Files => 560,
         PanelTypes.Favourites => 200,
         _ => 280,
