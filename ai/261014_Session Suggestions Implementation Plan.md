@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Session suggestions implementation plan (overseer, writer, reviewer)
-status: proposed (2026-10-14); not started. Needs Thomas's go-ahead to run (§9)
+status: M1 implemented in the local working tree (2026-10-14); T5 rebuilt, T7/T8 added, Windows build and tests pass. Live user check pending before the next milestone (§9). See the resume checkpoint.
 created: 2026-10-14
 parent: ai/261014_Session Suggestions Plan.md
 ---
@@ -129,11 +129,11 @@ The design's §11 steps, split so each task is one reviewable diff. The "Paralle
 | **T3** | `SessionSuggestionsDocument` and `SessionSuggestionStore`: switches, the three sensitivities, dismissals, `openSpans` field (stored, not yet filled), pruning. | §8, G14 | T1 | T2, T6, T10a |
 | **T4** | `SessionSuggester`: grouping, matching against sessions (new vs add), dismissals, ranking, naming with " (2)" for a clash. | §6, G8, G9, G11 | T2 | T6, T10a |
 | **T5** | `SessionSuggestionSource`: ties the stores and `SessionStore` together, caches until Recent Files records (G7), drops missing files through `IShell.FileExists` (G12), quick New and Add through `SessionStore.TryCreate`/`TryUpdate` with Undo. | G7, G10, G12 | T3, T4 | T6 |
-| **T6** | `PanelTypes.Suggestions`, `WorkspaceLayoutService.ShowBeside`, the panel's minimum height in `PanelLayoutEngine`. | §7.1, G13 | T0 | T2–T5 |
+| **T6** | Historical panel type, `ShowBeside` and minimum height, already committed. After M1 Thomas changed G13 to a separate window; legacy layout entries are retained but suppressed from canvas packing and Add panel. | §7.1, G13 | T0 | T2–T5 |
 | **T7** | View models: `SuggestionsViewModel` (cards, actions, status, Undo), `SuggestionSettingsViewModel` (G16), `SessionEditorViewModel.ForSuggestion`, the gear's count in `SessionsViewModel`. | §7, G10, G16 | T5 | — |
 | **T8** | *WPF, compile-checked.* `SuggestionsPanel`, `SuggestionSettings` control, the gear on `SessionsPanel` with badge and context menu, hosting in `RecentFilesSettings`, wiring in `WorkspaceView` and `MainWindow`. | §7 | T6, T7 | — |
 | **M1** | *Milestone: rule A works end to end* (compile-checked). Overseer updates `BUILD_SUMMARY.md` and the design's status, and asks Thomas whether to pause here for a Windows check before rule B. | | | |
-| **T9** | *WPF, compile-checked.* Drag cards and single files onto session rows; the side pane in `SessionsWindow`. | §7.1 | T8 | T10a |
+| **T9** | *WPF, compile-checked.* Drag cards and single files from the separate Suggestions window onto session rows. The original side-pane requirement was superseded by Thomas after M1 (G13). | §7.1 | T8 | T10a |
 | **T10a** | `OpenSpanRecorder`: spans from samples, missed samples close spans, 14-day pruning (G17). | §5 | T1 | T2–T5 |
 | **T10b** | `OpenTogetherRule` (rule B) and its always-open filter; spans saved in the store; rule B pairs fed into `SessionSuggester`. | §5, G1, G4 | T4, T10a, T3 | T9 |
 | **T11a** | Move `FindViewerWindows` out of `WindowsOpenDocumentProbe` into `DocumentWindows`. **Behaviour unchanged.** The review checks it's a pure move. | G6 | T0 | any |
@@ -148,7 +148,7 @@ The design's §11 steps, split so each task is one reviewable diff. The "Paralle
 - **T3:** loader outcomes match the other stores; unknown sensitivity strings read leniently; turning rule B off empties `openSpans`.
 - **T4:** the order-dependence of greedy grouping. The same data in a different order must give the same groups. No near-duplicate cards (G18). Card counts are not monotonic across levels, by design (G18).
 - **T5:** Undo after a failed save; a session renamed or deleted between showing a card and pressing Add; the cache cleared when it should be.
-- **T6:** works in rows and columns layouts; undoable; no change outside Arrange mode except `ShowBeside`.
+- **T6 compatibility after G13 changed:** old Suggestions panels are omitted in rows and columns without gaps or saved-layout rewrites; the new window is reused on repeated clicks and changes no layout.
 - **T8, T9, T11b:** binding paths exist on the view models; resource keys exist (`Icon.Settings`, the card styles); nothing runs on the UI thread that could wait on Windows; the sampler stops when tracking is paused, on sign-out and on exit.
 - **T11a:** a line-by-line move; the probe's existing tests still pass unchanged.
 

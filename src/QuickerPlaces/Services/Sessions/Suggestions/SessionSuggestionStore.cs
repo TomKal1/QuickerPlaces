@@ -74,6 +74,47 @@ public sealed class SessionSuggestionStore
     private readonly List<DismissedSuggestion> _dismissed;
     private List<OpenSpan> _spans;
     private bool _hasUnsavedChanges;
+    private long _revision;
+
+    /// <summary>Changes to calculation inputs, including changes whose disk write failed.</summary>
+    public long Revision { get { lock (_sync) return _revision; } }
+
+    /// <summary>A detached dismissal predicate, safe to use during background calculation.</summary>
+    public Func<IReadOnlyList<string>, bool> DismissalSnapshot()
+    {
+        lock (_sync)
+        {
+            var from = _time.GetUtcNow().AddDays(-DismissalDays);
+            var entries = _dismissed.Where(d => d.DismissedAt >= from)
+                .Select(d => (d.Key, Files: d.FileKeys?.ToHashSet(StringComparer.Ordinal))).ToArray();
+            return paths =>
+            {
+                var key = SessionSuggestionKey.For(paths);
+                var hashes = paths.Select(p => SessionSuggestionKey.For(new[] { p })).ToArray();
+                return entries.Any(d => d.Key == key || d.Files is { Count: > 0 } && hashes.All(d.Files.Contains));
+            };
+        }
+    }
+
+    public bool IsDismissed(IReadOnlyList<string> files) => DismissalSnapshot()(files);
+
+    /// <summary>Remembers the group and its subsets; a grown group can be suggested again (G9).</summary>
+    public PersistenceResult Dismiss(IReadOnlyList<string> files)
+    {
+        lock (_sync)
+        {
+            if (!IsAvailable) return PersistenceResult.Fail(Notice!);
+            var key = SessionSuggestionKey.For(files);
+            _dismissed.RemoveAll(d => d.Key == key);
+            _dismissed.Add(new DismissedSuggestion
+            {
+                Key = key, Files = files.Count, DismissedAt = _time.GetUtcNow(),
+                FileKeys = files.Select(p => SessionSuggestionKey.For(new[] { p })).Distinct().ToList(),
+            });
+            _revision++;
+            return SaveNow();
+        }
+    }
 
     public SessionSuggestionStore(IPlacesStorage storage, TimeProvider time)
     {
@@ -178,6 +219,7 @@ public sealed class SessionSuggestionStore
                 return PersistenceResult.Fail(Notice!);
 
             _settings = settings;
+            _revision++;
             if (!IsRuleBOn(settings))
                 _spans = new List<OpenSpan>();
 
@@ -208,6 +250,7 @@ public sealed class SessionSuggestionStore
 
             _dismissed.RemoveAll(d => string.Equals(d.Key, key, StringComparison.Ordinal));
             _dismissed.Add(new DismissedSuggestion { Key = key, Files = fileCount, DismissedAt = _time.GetUtcNow() });
+            _revision++;
             return SaveNow();
         }
     }
@@ -225,6 +268,7 @@ public sealed class SessionSuggestionStore
                 return;
 
             _spans = NormalizeSpans(spans);
+            _revision++;
             _hasUnsavedChanges = true;
         }
     }

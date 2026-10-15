@@ -161,6 +161,38 @@ Found files are ticked. Change the name or tags if you like, then click **Save s
 
 Sessions are saved in `%AppData%\QuickerPlaces\QuickerPlaces\sessions.json`, beside your places, the moment you save, edit, reopen or delete one. They aren't part of **Export places**. If a save fails, the Sessions window says so in red; the change is kept and tried again with the next change and when QuickerPlaces closes.
 
+### Session suggestions
+
+Open **Settings → Tracking and Revit → Session suggestions**, beside **Revit**, to review suggestions and adjust their conditions in a separate window. Suggestion choices save immediately and independently of the main Settings dialog's Save/Cancel buttons. Opening suggestions does not change your workspace layout.
+
+**Suggestions follow your current tracked file and folder settings.** They use the file types selected in **Recent Files** and its folder scope:
+
+- **Tracked folders only:** only files under currently enabled tracked folders in Recents, including their configured equivalent paths. Disabling or removing a tracked folder also excludes its retained opens from suggestions.
+- **Anywhere:** selected file types can contribute from any folder; the tracked-folder list does not restrict this setting.
+- Turning a file type off excludes that type from suggestions, including its retained history. Turning Recent Files off stops suggestions. These changes do not delete recorded history.
+
+There is no separate folder or file-type list for suggestions. The suggestion settings shown in this window and in Recent Files settings are shared and save immediately. Suggestions use up to two weeks of recorded opens; in this build, live detection of files kept open together is still pending.
+
+**Conditions by sensitivity** shows both rules in tables. **Days needed** counts different days within the last 14 days. The highlighted row shows each rule's effective level, including any individual override.
+
+| Used together | Max gap between opens in a work burst | Days needed | Minimum together share |
+|---|---|---|---|
+| Low | 10 minutes | 4 days | 60% |
+| Balanced | 15 minutes | 3 days | 50% |
+| High | 30 minutes | 2 days | 35% |
+
+A work burst continues while each gap stays within the limit. Together share is the fraction of the less frequently used file's active days when the pair was opened together.
+
+| Open together | Continuous overlap on each day | Days needed | Always-open cutoff |
+|---|---|---|---|
+| Low | 90 minutes | 2 days | Over 5 hours/day |
+| Balanced | 60 minutes | 1 day | Over 6 hours/day |
+| High | 30 minutes | 1 day | Over 8 hours/day |
+
+Files exceeding the always-open cutoff on more than half their observed days are excluded from that rule.
+
+Use **New session** or **Add to…** to save a suggestion, **Review…** to check its files first, or **Dismiss** to hide it. **Undo** reverses the last quick New/Add action, provided its session has not since been edited or deleted.
+
 ## Recent Files
 
 **Recent Files is off until you turn it on.** It is to files what Folder Activity (Recents) is to folders: when on, it notes which PDF, Word and Excel files you open, and when, so you can find them again in the **Library**. It is separate from sessions — it never adds anything to a session, and saving a session records nothing here.

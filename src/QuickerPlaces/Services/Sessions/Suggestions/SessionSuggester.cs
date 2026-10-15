@@ -38,7 +38,8 @@ public static class SessionSuggester
         IReadOnlyList<SessionSnapshot> sessions,
         Func<string, bool> isDismissed,
         SessionSuggestionOptions options,
-        DateOnly today)
+        DateOnly today,
+        Func<IReadOnlyList<string>, bool>? areDismissed = null)
     {
         ArgumentNullException.ThrowIfNull(pairs);
         ArgumentNullException.ThrowIfNull(sessions);
@@ -91,7 +92,7 @@ public static class SessionSuggester
                 continue;
 
             var key = SessionSuggestionKey.For(files);
-            if (isDismissed(key))
+            if (isDismissed(key) || areDismissed?.Invoke(files) == true)
                 continue;
 
             var target = shared.Count == 0 ? -1 : shared.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key).First().Key;
@@ -129,7 +130,7 @@ public static class SessionSuggester
         var shown = new List<Candidate>();
         foreach (var c in merged)
         {
-            if (c.IsMerged && isDismissed(c.Key))
+            if (c.IsMerged && (isDismissed(c.Key) || areDismissed?.Invoke(c.Files) == true))
                 continue;
             // A card MinGroupFiles hides must not claim files from a visible one.
             if (c.Files.Count < options.MinGroupFiles)

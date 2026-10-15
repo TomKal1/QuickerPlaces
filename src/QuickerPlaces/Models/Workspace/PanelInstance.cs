@@ -97,10 +97,8 @@ public static class PanelTypes
     /// The types that have a working panel. Collections and Saved searches
     /// arrive in M6; until then they are known (so a file naming them is not
     /// repaired away) but not offered, and neither is a built-in layout that
-    /// needs them (plan M1: no dead placeholders shipped as features). The same
-    /// holds for Suggestions until its view exists: it is opened from the
-    /// Sessions panel through <c>ShowBeside</c> (session suggestions G13), not
-    /// from Add panel.
+    /// needs them (plan M1: no dead placeholders shipped as features).
+    /// Suggestions remains known for older layouts; its UI now opens in its own window.
     /// </summary>
     public static readonly IReadOnlyList<string> Available = new[] { Activity, Shelf, Sessions, Places, Favourites, Files };
 

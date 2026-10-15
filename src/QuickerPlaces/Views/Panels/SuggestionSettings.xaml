@@ -1,0 +1,111 @@
+<UserControl x:Class="QuickerPlaces.Views.Panels.SuggestionSettings"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="ConditionCell" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="6,7" />
+            <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style x:Key="ConditionHeader" TargetType="TextBlock" BasedOn="{StaticResource ConditionCell}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <DataTemplate x:Key="ConditionRow">
+            <Border BorderBrush="{DynamicResource Border.Default}" BorderThickness="0,1,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource Highlight.Soft}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.1*" /><ColumnDefinition Width="1.2*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="1.1*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Level}" Style="{StaticResource ConditionCell}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="{Binding Timing}" Style="{StaticResource ConditionCell}" />
+                    <TextBlock Grid.Column="2" Text="{Binding DaysNeeded}" Style="{StaticResource ConditionCell}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="3" Text="{Binding Additional}" Style="{StaticResource ConditionCell}" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <StackPanel IsEnabled="{Binding IsAvailable}">
+        <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}" />
+        <CheckBox Content="Suggest sessions from files I use together" IsChecked="{Binding Enabled}" Margin="0,6,0,4" />
+        <TextBlock Text="Uses the last two weeks of Recent Files on this PC, following its selected file types and folder scope (Tracked folders only or Anywhere). Nothing is sent anywhere. Suggestions and sensitivity changes save immediately."
+                   Style="{StaticResource TextBlock.Hint}" Margin="24,0,0,8" />
+        <StackPanel IsEnabled="{Binding Enabled}">
+            <CheckBox Content="Also notice files kept open together" IsChecked="{Binding OpenTogether}" Margin="0,0,0,4" />
+            <TextBlock Text="{Binding OpenTogetherHint}" Style="{StaticResource TextBlock.Hint}" Margin="24,0,0,4" />
+            <TextBlock Text="Checked every 5 minutes while you are here. Only the front tab of a PDF viewer is seen."
+                       Style="{StaticResource TextBlock.Hint}" Margin="24,0,0,10" />
+            <TextBlock Text="Sensitivity" Style="{StaticResource TextBlock.FieldLabel}" />
+            <WrapPanel Margin="0,6,0,10">
+                <RadioButton Content="Low" IsChecked="{Binding IsLow}" Margin="0,0,14,4"
+                             ToolTip="Fewer suggestions. Files must be used together often, or open together for an hour and a half on two days." />
+                <RadioButton Content="Balanced" IsChecked="{Binding IsBalanced}" Margin="0,0,14,4"
+                             ToolTip="Files used together on three days, or open together for an hour." />
+                <RadioButton Content="High" IsChecked="{Binding IsHigh}" Margin="0,0,0,4"
+                             ToolTip="More suggestions, sooner. Files used together on two days, or open together for half an hour. Expect some you'll dismiss." />
+            </WrapPanel>
+            <TextBlock Text="Conditions by sensitivity" Style="{StaticResource TextBlock.FieldLabel}" Margin="0,4,0,4" />
+            <TextBlock Text="Both rules look back 14 days. Highlighted rows show the active level for each rule, including any override below."
+                       Style="{StaticResource TextBlock.Hint}" Margin="0,0,0,10" />
+            <TextBlock Text="Used together — files opened around the same time" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6" />
+            <Border BorderBrush="{DynamicResource Border.Default}" BorderThickness="1" CornerRadius="4">
+                <StackPanel>
+                    <Grid Background="{DynamicResource Bg.Raised}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.1*" /><ColumnDefinition Width="1.2*" />
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="1.1*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Level" Style="{StaticResource ConditionHeader}" />
+                        <TextBlock Grid.Column="1" Text="Max gap between opens" Style="{StaticResource ConditionHeader}" />
+                        <TextBlock Grid.Column="2" Text="Days needed" Style="{StaticResource ConditionHeader}" />
+                        <TextBlock Grid.Column="3" Text="Min. together share" Style="{StaticResource ConditionHeader}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding UsedTogetherConditions}" ItemTemplate="{StaticResource ConditionRow}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="Days needed means different days. A work burst continues while each gap between opens stays within the limit. Together share is the fraction of the less frequently used file's active days when the pair was opened together."
+                       Style="{StaticResource TextBlock.Hint}" Margin="0,6,0,12" />
+            <TextBlock Text="Open together — files kept open at the same time" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6" />
+            <Border BorderBrush="{DynamicResource Border.Default}" BorderThickness="1" CornerRadius="4" IsEnabled="{Binding OpenTogether}">
+                <StackPanel>
+                    <Grid Background="{DynamicResource Bg.Raised}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.1*" /><ColumnDefinition Width="1.2*" />
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="1.1*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Level" Style="{StaticResource ConditionHeader}" />
+                        <TextBlock Grid.Column="1" Text="Continuous time open" Style="{StaticResource ConditionHeader}" />
+                        <TextBlock Grid.Column="2" Text="Days needed" Style="{StaticResource ConditionHeader}" />
+                        <TextBlock Grid.Column="3" Text="Always-open cutoff" Style="{StaticResource ConditionHeader}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding OpenTogetherConditions}" ItemTemplate="{StaticResource ConditionRow}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="The overlap must last this long without a break on each required day. A file is excluded as always open if it exceeds the cutoff on more than half the days it was seen."
+                       Style="{StaticResource TextBlock.Hint}" Margin="0,6,0,12" />
+            <Expander Header="Adjust each rule separately" IsExpanded="{Binding HasOverrides, Mode=OneWay}">
+                <StackPanel Margin="0,8,0,0">
+                    <TextBlock Text="Used together" Style="{StaticResource TextBlock.FieldLabel}" />
+                    <ComboBox ItemsSource="{Binding RuleChoices}" DisplayMemberPath="Label" SelectedItem="{Binding UsedTogetherChoice}" Margin="0,4,0,8" />
+                    <TextBlock Text="Open together" Style="{StaticResource TextBlock.FieldLabel}" />
+                    <ComboBox ItemsSource="{Binding RuleChoices}" DisplayMemberPath="Label" SelectedItem="{Binding OpenTogetherChoice}"
+                              IsEnabled="{Binding OpenTogether}" Margin="0,4,0,8" />
+                    <TextBlock Text="{Binding OverallLabel, StringFormat=Overall level: {0}}" Style="{StaticResource TextBlock.Hint}" />
+                    <Button Content="Reset to overall" Click="Reset_Click" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                </StackPanel>
+            </Expander>
+        </StackPanel>
+        <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Foreground="{DynamicResource Text.Secondary}" Margin="0,6,0,0" />
+    </StackPanel>
+</UserControl>

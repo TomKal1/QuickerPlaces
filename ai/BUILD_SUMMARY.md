@@ -871,3 +871,68 @@ Plan: [261006_Activity History Plan.md](261006_Activity%20History%20Plan.md). Br
 ## Status snapshot — 2026-09-28
 
 Phases 1, 2, 3 and 9 and the UI refresh are on `main`. Project sessions, Recent Files, the Library and held files are on `ccr-8d834d76-kqbdun`, now merged with `main` and restyled: it builds with 0 warnings and all 877 tests pass. Next: try the restyled Library, Project Sessions and session dialog on Windows, then merge the branch; then Phase 4, general file support (roadmap §1.1). The held-files checks that need a work machine (mapped drives, DFS, Studio Sessions) are still open.
+
+## Session suggestions M1 continuation (2026-10-14)
+
+Branch `ccr-6f869762-m72lq5`, starting from `e3f309b`. T1–T4, T6,
+T10a/T10b and T11a were already committed. The approved-but-uncommitted T5
+described in the handoff was absent locally and on the working GitHub branch;
+Thomas authorized rebuilding it and continuing.
+
+T5 now calculates from snapshots in the background without holding the cache
+lock, exposes only cached counts to the badge, and discards stale results both
+from the cache and from returned refresh tasks. Per-file dismissal hashes hide
+subsets before ranking. New/Add preserve persistence failures and offer guarded
+Undo; an edited or deleted target is refused with a message.
+
+T7/T8 add the UI-free view models, suggestion-aware review editor, Sessions
+gear/count, Suggestions panel, quick actions and shared sensitivity settings,
+with Recent Files consent and change-triggered refreshes. The standalone
+Sessions side pane is connected too; T9's drag/drop remains. This is local,
+uncommitted M1 work, awaiting the user's live Windows check before continuing.
+
+Windows validation: 2,231 tests passed (38 added); build 0 warnings, 0 errors.
+Three deliberately broken variants were caught by their regressions. Synthetic
+WPF renders in Dark/Light and off/populated states reported no binding warnings.
+One intermediate run hit an existing Revit log-sharing failure; the later full
+run passed. No real-data checklist or performance measurements were performed.
+The live open-document sampler remains T11b; the existing setting/algorithm do
+not yet record new five-minute samples. Details and the next tasks are in
+`261014_Session Suggestions Resume.md`.
+
+### Follow-up: separate Suggestions window and tracking scope
+
+After seeing the M1 panel, Thomas requested Suggestions in its own window.
+The Sessions button and context-menu entry now open or activate an owned,
+resizable `SuggestionsWindow`, both from the workspace and Project Sessions.
+Repeated clicks reuse the window. Old saved Suggestions panels are omitted
+before rows/columns packing without rewriting saved layouts; Suggestions is
+no longer offered in Add panel.
+
+Both rules filter retained history/spans against current Recent Files kinds
+and folder scope. Tracked folders only uses currently enabled roots and their
+equivalent prefixes through the recording scope matcher; Anywhere permits
+selected types from all folders. Cache acceptance also checks these snapshots,
+so settings/root changes reject an in-flight result. The window, shared settings,
+user guide and design G13 now document the behavior. The live sampler remains
+pending, as before.
+
+Follow-up validation: 2,239 tests passed; solution build 0 warnings/errors.
+The WPF harness confirmed repeated open requests reuse one window and rendered
+the new window without binding warnings. Changes remain uncommitted.
+
+The shared sensitivity settings now show comparison tables for both rules,
+with explicit Days needed, timing and additional condition columns. Effective
+levels are highlighted independently, including overrides; displayed thresholds
+come from the actual options. The user guide includes the same tables.
+
+Thomas then moved the Suggestions entry to **Settings → Tracking and Revit**,
+beside Revit. The Sessions shortcut and its badge wiring were removed. The new
+link opens the existing Suggestions window over Settings; its changes still
+save independently of the main dialog's Save/Cancel choices. The user guide and
+design G13 reflect the new navigation.
+
+Navigation validation: build 0 warnings/errors; the WPF harness rendered the
+four-button Settings grid and exercised the Session suggestions link through
+opening/closing its modal child, with no binding warnings. All 2,239 tests
+passed on rerun after the known intermittent Revit log-sharing test failure.

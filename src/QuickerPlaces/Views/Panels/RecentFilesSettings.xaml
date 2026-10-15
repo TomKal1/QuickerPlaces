@@ -1,6 +1,7 @@
 <UserControl x:Class="QuickerPlaces.Views.Panels.RecentFilesSettings"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:QuickerPlaces.Views.Panels">
     <UserControl.Resources>
         <Style x:Key="ScopeChoice" TargetType="RadioButton">
             <Setter Property="FocusVisualStyle" Value="{StaticResource {x:Static SystemParameters.FocusVisualStyleKey}}" />
@@ -91,6 +92,9 @@
                     </StackPanel>
                 </RadioButton>
             </UniformGrid>
+            <Expander Header="Session suggestions (saved immediately)" Margin="0,16,0,0">
+                <local:SuggestionSettings DataContext="{Binding SuggestionSettings}" Margin="0,8,0,0" />
+            </Expander>
         </StackPanel>
     </Border>
 </UserControl>

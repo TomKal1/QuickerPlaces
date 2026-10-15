@@ -280,6 +280,21 @@ public sealed class SessionSuggesterTests
     }
 
     [Fact]
+    public void FileHashDismissal_IsAppliedBeforeRankingCanHideAnotherCard()
+    {
+        const string hidden = @"D:\dismissed.pdf";
+        var pairs = Triangle();
+        pairs.Add(A(hidden, F(3), days: 20));
+        var store = new SessionSuggestionStore(new QuickerPlaces.Tests.Fakes.FakePlacesStorage(),
+            new QuickerPlaces.Tests.Fakes.ManualTimeProvider());
+        store.Dismiss(new[] { hidden, F(3) });
+
+        var result = SessionSuggester.Suggest(pairs, [], _ => false, Balanced, Today, store.DismissalSnapshot());
+
+        Assert.Equal(new[] { F(1), F(2), F(3) }, Assert.Single(result).Files);
+    }
+
+    [Fact]
     public void TheSameGroupPlusOneMoreFile_HasANewKey_AndIsShown()
     {
         var dismissed = SessionSuggestionKey.For([F(1), F(2), F(3)]);

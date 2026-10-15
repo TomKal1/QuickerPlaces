@@ -44,6 +44,9 @@ public sealed class DismissedSuggestion
     public int Files { get; set; }
 
     public DateTimeOffset DismissedAt { get; set; }
+
+    /// <summary>Individual file hashes for hiding subsets without keeping paths (G9).</summary>
+    public List<string>? FileKeys { get; set; }
 }
 
 /// <summary>One stretch during which a file stayed open, for the "open together" rule.</summary>

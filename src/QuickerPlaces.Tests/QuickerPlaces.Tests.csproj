@@ -153,6 +153,9 @@
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestion.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestion.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionKey.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionKey.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionStore.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionStore.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggestionSource.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggestionSource.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\SuggestionsViewModel.cs" Link="Linked\ViewModels\SuggestionsViewModel.cs" />
+    <Compile Include="..\QuickerPlaces\ViewModels\SuggestionSettingsViewModel.cs" Link="Linked\ViewModels\SuggestionSettingsViewModel.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\OpenSpanRecorder.cs" Link="Linked\Services\Sessions\Suggestions\OpenSpanRecorder.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\OpenedTogetherRule.cs" Link="Linked\Services\Sessions\Suggestions\OpenedTogetherRule.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\OpenTogetherRule.cs" Link="Linked\Services\Sessions\Suggestions\OpenTogetherRule.cs" />

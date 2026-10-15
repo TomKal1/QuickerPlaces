@@ -45,6 +45,25 @@ public sealed class WorkspaceViewModelTests
             CultureInfo.InvariantCulture);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LegacySuggestionPanel_IsOmittedWithoutChangingSavedLayout(bool columns)
+    {
+        var layout = new WorkspaceLayoutService(new WorkspaceStore(_layoutStorage, null, _time));
+        if (columns) layout.Activate(BuiltInLayouts.DeskId);
+        var baseline = NewWorkspace().Panels.Select(p => (p.Type, p.Row, p.Column, p.Span)).ToArray();
+        Assert.True(layout.ShowBeside(PanelTypes.Suggestions, "sessions", out _));
+        var saved = _layoutStorage.LastWritten;
+        var writes = _layoutStorage.WriteCount;
+        var workspace = NewWorkspace();
+        Assert.DoesNotContain(workspace.Panels, p => p.Type == PanelTypes.Suggestions);
+        Assert.Equal(baseline, workspace.Panels.Select(p => (p.Type, p.Row, p.Column, p.Span)));
+        Assert.DoesNotContain(workspace.AddablePanels, p => p.Type == PanelTypes.Suggestions);
+        Assert.Equal(saved, _layoutStorage.LastWritten);
+        Assert.Equal(writes, _layoutStorage.WriteCount);
+    }
+
     [Fact]
     public void FirstRun_ShowsActivityAtlas_WithItsPanelsPlaced()
     {

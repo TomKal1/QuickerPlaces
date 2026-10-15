@@ -269,7 +269,7 @@ public sealed class ShowBesideTests
     }
 
     [Fact]
-    public void Suggestions_IsKnownButNotAddable()
+    public void Suggestions_RemainsKnownForOldLayoutsButIsNotAddable()
     {
         var service = NewService(NewStorage());
 

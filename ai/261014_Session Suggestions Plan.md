@@ -1,6 +1,6 @@
 ---
 title: QuickerPlaces — Session suggestions from files opened together
-status: proposed (2026-10-14), revised the same day for the hour-long rule (§5), the Suggestions panel (§7) and user-chosen sensitivity (§6.1), then for the always-visible gear on the Sessions panel (§7.1) and per-rule sensitivity (§6.1), and on 2026-10-15 for a two-week history (G17) and non-overlapping cards (G18); not started. Open questions in §12
+status: M1 implemented in the local working tree (2026-10-14): rule A, source, view models and WPF panel wiring. Rule B's algorithm is committed; its live sampler and drag/drop remain. Windows build/tests and synthetic WPF renders pass; real-use checklist and measurements remain open. See 261014_Session Suggestions Resume.md.
 created: 2026-10-14
 parent: ai/260928_PDF Project Sessions Plan.md
 ---
@@ -51,7 +51,7 @@ Today a session is made by hand: open the files, then **Save open files** (the o
 | G10 | **Quick actions save at once, with Undo.** **New session** creates it with the suggested name; **Add to ‹session›** adds the missing files. Both show "Saved · Undo" in the panel's status line. **Review…** opens the editor for anyone who wants to untick files or rename first. | "Quickly add them to a session." The editor stays one click away, and Undo covers a wrong guess. |
 | G11 | **The suggested name is the files' deepest shared folder name**, or the first project-number-like segment (5–6 digits, e.g. `240015`) if they share none, or "Suggested session" with the date. An existing session name gets " (2)", as the store requires unique names. | Matches how projects are laid out (`C:\X\2024\240015\…`). `AliasSuggestion.FromFolderPath` already gives the deepest folder name. |
 | G12 | **Files that no longer exist are left out at display time**, and a group that drops below 2 files is not shown. | Projects get archived; a suggestion with dead paths is worse than none. Checked through `IShell.FileExists`, so tests use `FakeShell`. |
-| G13 | **Suggestions get their own panel type, `suggestions`, always reachable from a gear button on the Sessions panel** — whether suggestions are on, off or unavailable. It opens directly after the Sessions panel, in the same column, at the same width, without entering Arrange mode. Closing it hides it. | "A separate suggestions panel that opens by the sessions." Using the workspace's own panel model means it can still be moved, resized or added from Add panel like any other, and the layout remembers it. |
+| G13 | **Settings → Tracking and Revit → Session suggestions opens the separate Suggestions window**, beside Revit. Suggestions save independently of the main Settings Save/Cancel choices. The Sessions shortcut is removed. Opening/closing suggestions never changes the workspace layout. | Thomas first requested a separate window, then requested moving its entry into the marked Settings grid position. Older saved `suggestions` panels remain in layout data but are omitted from canvas packing and Add panel. |
 | G14 | **One new machine-local file, `session-suggestions.json`, holds the switches, the dismissals and rule B's open spans.** Nothing is added to `settings.json`, `recent-files.json` or `sessions.json`. | `sessions.json` is the user's data and is what gets shared; this is local observation. Keeping the switches here avoids a schema bump in `recent-files.json`. |
 | G15 | **Sensitivity changes only how pairs are judged, never what is recorded.** The sample interval (5 min), the 14-day history (G17) and the 40-file burst cap are the same at every level. Changing it re-ranks at once from data already held, and keeps dismissals. | Background cost and what is stored don't depend on a preference, so High is no more expensive than Low, and moving the slider back and forth loses nothing. |
 | G16 | **The suggestion settings live in one shared control, shown both in the Suggestions panel and in Recent Files settings.** | The gear is where people will look; Recent Files settings is where the consent sits. One control bound to one view model keeps the two in step. |
@@ -139,18 +139,17 @@ Levels are stored as `"low"`, `"balanced"` or `"high"`. The overall level reads 
 
 ## 7. UI
 
-### 7.1 The Suggestions panel
+### 7.1 The Suggestions window
 
-A new panel type, `PanelTypes.Suggestions = "suggestions"`, added to `PanelTypes.Known` after `Sessions`, so it appears in Add panel too. Not in any built-in layout by default; it is opened from the Sessions panel.
+`SuggestionsWindow` hosts the existing `SuggestionsPanel` content. Suggestions is not offered in Add panel or built-in layouts. The old `suggestions` panel type remains known for saved-layout compatibility, but is omitted before canvas packing so it leaves no gap and requires no destructive layout migration.
 
-**Opening it** (G13): the Sessions panel header gets a gear button (the existing `Icon.Settings`), **always visible**, tooltip "Session suggestions". When suggestions are on and some are found, it carries a small count badge in the highlight colour ("3"). Keyboard: it is in the header's tab order, and the Sessions panel's context menu has **Suggestions…** too. Selecting it calls a new `WorkspaceLayoutService.ShowBeside(PanelTypes.Suggestions, sessionsPanelId)`:
+**Opening it** (G13): Settings has a **Session suggestions** link beside **Revit** in the **Tracking and Revit** section. It opens the resizable Suggestions window modally over Settings, just as the other independent settings pages do. Closing Suggestions returns to Settings. Its changes save immediately and are independent of the main Settings Save/Cancel buttons. The Sessions header and context menu no longer contain suggestion shortcuts.
 
-- If the layout has no Suggestions panel, it is inserted directly after the Sessions panel, same dock, same span.
-- If it is hidden, it is shown in its remembered place (the user may have moved it).
-- If it is already visible, the button scrolls it into view and focuses it.
-- One committed layout change with Undo, allowed outside Arrange mode (like Hide is reversible), and saved with the layout.
+- **Close** closes the suggestions window. Opening and closing it changes no workspace layout, arrangement or Undo history.
+- Settings is the entry point in both workspace and classic modes; the separate Project Sessions window has no suggestion shortcut.
+- Previously saved Suggestions panels are suppressed in rows and columns layouts without rewriting their saved data.
 
-The panel's own **Close** button hides it. In the separate Sessions window (`SessionsWindow`), the same gear opens the panel's content as a side pane on the right of the window, since that window has no workspace.
+**Tracking scope:** both suggestion rules follow the current Recent Files file-type selection and folder scope. With **Tracked folders only**, only currently enabled tracked roots and their equivalent prefixes qualify, through the same `RecentFilesStore.IsInScope` matcher used for recording. **Anywhere** permits selected types from all folders. These filters also apply to retained opens and spans, before grouping/ranking. Changing file types, folder scope or enabled roots invalidates cached results, and a result calculated against superseded settings is discarded. History itself is kept.
 
 **Each suggestion card:**
 
@@ -194,6 +193,15 @@ One control, `Views/Panels/SuggestionSettings.xaml`, shown in the Suggestions pa
     - **Reset to overall** sets both back to *Same as overall*.
 
   The rule-B hint follows its effective level ("…for over an hour" at Balanced, "…for half an hour" at High).
+
+The shared settings control also shows **Conditions by sensitivity** as two
+tables, one for each rule. Both have explicit **Days needed** columns; rule A
+also shows the maximum gap between opens and minimum together share, and rule B
+shows continuous overlap and the always-open cutoff. Rows come from
+`SessionSuggestionOptions`, and each rule's effective level is highlighted,
+including overrides. Explain that days are distinct days within the 14-day
+window, and explain together share and the always-open exclusion below the
+tables. These conditions are visible without opening the per-rule controls.
 
 Saved with the rest of the Recent Files settings, written to the suggestions store, not `recent-files.json`. Turning rule B off stops the sampler and deletes the recorded spans; turning suggestions off stops everything and keeps dismissals.
 
@@ -256,15 +264,15 @@ Changed:
 | File | Change |
 |---|---|
 | `Models/Workspace/PanelInstance.cs` | `PanelTypes.Suggestions` |
-| `Services/Workspace/WorkspaceLayoutService.cs` | `ShowBeside` (G13) |
+| `Views/SuggestionsWindow.xaml(.cs)` | Separate owned window with reuse/activation (G13); the earlier ShowBeside wiring is superseded |
 | `Services/Workspace/PanelLayoutEngine.cs` | Minimum height for the new type |
 | `Views/WorkspaceView.xaml(.cs)` | Create and attach the panel |
 | `Views/Panels/SessionsPanel.xaml(.cs)`, `ViewModels/SessionsViewModel.cs` | Always-visible gear and count badge; context-menu entry; accept card drops |
-| `Views/SessionsWindow.xaml(.cs)` | Side pane |
+| `Views/SessionsWindow.xaml(.cs)` | The settings button opens the separate Suggestions window |
 | `ViewModels/SessionEditorViewModel.cs` | `ForSuggestion` |
 | `ViewModels/RecentFilesSettingsViewModel.cs`, `Views/Panels/RecentFilesSettings.xaml` | Host the shared settings control |
 | `Services/Documents/WindowsOpenDocumentProbe.cs` | Uses `DocumentWindows` |
-| `Views/MainWindow.xaml.cs` | Create the store, source and sampler; stop the sampler on pause and exit |
+| `Views/MainWindow.xaml.cs` | Create the store/source with current tracked roots, open the Suggestions window and refresh after tracking changes; sampler wiring remains T11b |
 | `QuickerPlaces.Tests.csproj` | Link the new files |
 
 Not changed: `RecentFilesStore`, `RecentFilesHost`'s tick, `SessionStore`, `WindowsHeldFiles`, `sessions.json`, `recent-files.json`, `settings.json`, the CLI.
@@ -283,13 +291,13 @@ Not changed: `RecentFilesStore`, `RecentFilesHost`'s tick, `SessionStore`, `Wind
 
 **Sensitivity** (`SessionSuggestionOptionsTests`, `SessionSuggesterTests`): each level returns §6.1's values; with no per-rule levels both rules use the overall one; a rule's own level changes only that rule's thresholds, and the shared rows still follow the overall level; setting open-together to Low leaves rule A's result unchanged; one fixture of files together on exactly 2 days and open together for 45 minutes gives a suggestion at High and none at Balanced or Low; a pair open together 70 minutes on one day appears at Balanced and High but not Low; a pair Low accepts is accepted at Balanced and High too (pairs, not card counts, are monotonic, G18; the one exception is a wider burst gap joining bursts past the 40-file cap); changing the level keeps dismissals; the sampler's interval is the same at every level (G15).
 
-**Layout** (`WorkspaceLayoutServiceTests`): `ShowBeside` inserts after Sessions in its column at its span; shows a hidden panel in its remembered place; is a no-op when visible; is undoable; works in rows and columns layouts; a layout without Sessions puts it last.
+**Window and compatibility:** repeated clicks activate the same owned window; closing/reopening works; old Suggestions panels are omitted without canvas gaps or saved-data changes in both rows and columns layouts. Scope regression tests cover both rules, retained history after deselecting a file type, enabled-root changes, equivalent prefixes, Anywhere, and settings changes during an in-flight refresh.
 
 **Performance** (per CLAUDE.md, before claiming no cost), on Windows with the same machine and build for before and after, 10 repeated runs each, recording the machine, .NET version and spread:
 
 - **Sampler**: time one sample (window listing + resolve) with 0, 10 and 40 document windows open. Target: under 30 ms, off the UI thread. Compare `dotnet-counters` CPU and allocation rates over 30 idle minutes with rule B off and on; the difference should be within run-to-run noise.
 - **Suggester**: time it against (a) the user's real data and (b) a synthetic worst case of 2,000 files × 500 opens plus 14 days of spans. Targets: under 50 ms for (a), under 500 ms for (b), off the UI thread.
-- **Workspace**: the Sessions panel's time to show, and the layout's reflow when the Suggestions panel opens, unchanged with suggestions off.
+- **Workspace**: the Sessions panel's time to show is unchanged with suggestions off; opening Suggestions changes no layout.
 
 Run `dotnet test src/QuickerPlaces.sln` from `C:\QuickerPlaces\src` after each step.
 
@@ -301,8 +309,8 @@ Each step is one small reviewable commit:
 2. `SessionSuggester` (groups, session matching, ranking), with tests, using rule A only.
 3. `SessionSuggestionStore` and document (switches, dismissals), with tests.
 4. `SessionSuggestionSource` with quick New/Add and Undo, with tests.
-5. `PanelTypes.Suggestions`, `ShowBeside`, `SuggestionsViewModel`, `SuggestionsPanel`, the Sessions panel button; the gear, the shared settings control with the overall and per-rule levels. Rule A is usable end to end here.
-6. Drag cards and files onto session rows; the Sessions window side pane.
+5. `SuggestionsViewModel`, `SuggestionsWindow` hosting `SuggestionsPanel`, and the Sessions settings button; shared overall/per-rule settings and tracked-file/folder scope. Rule A is usable end to end here. Suppress legacy workspace Suggestions panels.
+6. Drag cards and files from the suggestions window onto session rows.
 7. Rule B: `OpenSpanRecorder` and `OpenTogetherRule` with tests; spans in the store.
 8. `DocumentWindows` extracted (probe behaviour unchanged, its tests still pass); `OpenDocumentSampler`; the rule-B switch.
 9. Windows measurement (§10) and the checklist (§13); results here and in `BUILD_SUMMARY.md`.
@@ -321,15 +329,16 @@ Settled on 2026-10-14: Balanced is the default everywhere; one overall level is 
 
 Also settled: **three levels** (Low, Balanced, High). Each is easy to describe; five would differ by amounts too small to notice.
 
-1. **Default layout:** should any built-in layout include the Suggestions panel, or is opening it from the Sessions panel enough?
+Settled after M1: Suggestions opens in its own window. No built-in layout includes it.
 
 ## 13. Windows checklist
 
-- [ ] The gear is on the Sessions panel in every state: with Recent Files off it opens the panel explaining what's needed, with an Open Recent Files settings button; with suggestions off it opens the panel with the settings expanded.
+- [ ] Settings → Tracking and Revit → Session suggestions is available in every state: with Recent Files off it explains what's needed and offers Open Recent Files settings; with suggestions off its settings are expanded.
 - [ ] Open the same 3–4 files within a few minutes on 3 different days → a suggestion appears with the right name and reason.
 - [ ] Keep two Word documents open together for over an hour → a suggestion appears the same day, reason "open together for 1 h …".
 - [ ] A PDF left open all day in Revu does not join every group.
-- [ ] The gear shows a count when there are suggestions, and opens the panel right after Sessions, same column and width; Close hides it; it reopens where it was left; Undo removes it.
+- [ ] The Settings link opens a separate Suggestions window; closing it returns to Settings and the workspace layout stays unchanged. No Sessions header/context-menu shortcut remains.
+- [ ] Suggestions follow the current Recent Files types and folder scope. Deselecting a type or disabling a tracked root excludes its retained history; Anywhere permits files outside tracked roots. Both rules apply the same filters.
 - [ ] New session saves at once with the suggested name; Undo deletes it.
 - [ ] A group overlapping a session shows "Add n files to ‹session›"; Add works; Undo restores the old list.
 - [ ] Add to… ▾ lists sessions sharing files first.
