@@ -156,6 +156,7 @@
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\OpenSpanRecorder.cs" Link="Linked\Services\Sessions\Suggestions\OpenSpanRecorder.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\OpenedTogetherRule.cs" Link="Linked\Services\Sessions\Suggestions\OpenedTogetherRule.cs" />
     <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\OpenTogetherRule.cs" Link="Linked\Services\Sessions\Suggestions\OpenTogetherRule.cs" />
+    <Compile Include="..\QuickerPlaces\Services\Sessions\Suggestions\SessionSuggester.cs" Link="Linked\Services\Sessions\Suggestions\SessionSuggester.cs" />
     <Compile Include="..\QuickerPlaces\Models\Sessions\SessionSuggestionsDocument.cs" Link="Linked\Models\Sessions\SessionSuggestionsDocument.cs" />
     <!--
       Session sharing (ai/261005_Session Sharing Plan.md): the .qpsession
