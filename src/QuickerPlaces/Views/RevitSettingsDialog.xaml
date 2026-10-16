@@ -32,7 +32,7 @@
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Central-model handler" Width="2*">
                             <DataGridTemplateColumn.CellTemplate><DataTemplate>
-                                <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" DisplayMemberPath="Label"
+                                <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice, UpdateSourceTrigger=PropertyChanged}" DisplayMemberPath="Label"
                                           ToolTip="{Binding HandlerHint}" AutomationProperties.Name="{Binding Title, StringFormat=Handler for {0}}" />
                             </DataTemplate></DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
